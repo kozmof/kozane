@@ -39,6 +39,22 @@ if (!process.execArgv.includes(flag)) {
   const legacyUtils = await legacy("db/api/utils.js");
   const legacyFailures = await legacy("db/failures.js");
   const legacyServices = await legacy("services/index.js");
+  for (const [name, entries] of Object.entries(database.records)) {
+    const path = name
+      .replace(
+        /^(card|composite|inventory)([A-Z])/,
+        (_, group, letter) => `${group}/${letter.toLowerCase()}`,
+      )
+      .replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    const aliases = await legacy(`db/api/${path}.js`);
+    assert.deepEqual(
+      Object.keys(aliases).sort(),
+      Object.keys(entries).sort(),
+      `Node table exports differ: ${name}`,
+    );
+    for (const [key, value] of Object.entries(aliases))
+      assert.equal(value, entries[key], `Node table helper must use public core: ${name}.${key}`);
+  }
   for (const path of [
     "lib/inventory.js",
     "lib/squash.js",
@@ -59,7 +75,17 @@ if (!process.execArgv.includes(flag)) {
   for (const [path, names] of [
     ["canvas", ["CANVAS_W", "CANVAS_H", "SCOPE_AREA_MIN_SIZE", "clamp", "WARP_HINT_MAX_CHARS"]],
     ["workspace", ["PATH_KINDS", "DEFAULT_LAYER_NAME", "DEFAULT_PARTITION_NAME"]],
-    ["tag", ["TAG_SIGIL", "TAG_SEGMENT_CHARS_MAX", "TAG_LEVELS_MAX", "TAG_EXCERPT_CHARS_MAX"]],
+    [
+      "tag",
+      [
+        "TAG_SIGIL",
+        "TAG_SEGMENT_CHARS_MAX",
+        "TAG_LEVELS_MAX",
+        "TAG_EXCERPT_CHARS_MAX",
+        "TAG_CARD_HITS_MAX",
+        "TAG_CARD_ROWS_PAGE",
+      ],
+    ],
   ]) {
     const aliases = await legacy(`lib/constants/${path}.js`);
     for (const name of names)

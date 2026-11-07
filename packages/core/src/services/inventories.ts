@@ -23,7 +23,7 @@ import {
   deleteInventoryInTx,
   stowCardsInTx,
   takeCardsInTx,
-} from "../../../../src/db/api/inventory.js";
+} from "../api/inventory.js";
 import {
   optionalBoundedName,
   optionalNumber,
@@ -183,7 +183,7 @@ export async function take(
   return withTx(db, (tx) => takeInTx(tx, context, namespaceId, prepared));
 }
 
-import { repairInventoriesInTx } from "../../../../src/db/api/inventory.js";
+import { repairInventoriesInTx } from "../api/inventory.js";
 export function repairInTx(tx: Tx, _context: ServiceContext) {
   return repairInventoriesInTx({ db: tx });
 }

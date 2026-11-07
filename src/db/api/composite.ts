@@ -1,11 +1,17 @@
-/**
- * Coordinate transactional writes across tables when placing the operation in a table module
- * would create circular imports.
- *
- * Preserve related data during card deletion, squash, and partition deletion. Keep operations
- * beside their table when dependencies remain one-way.
- */
-export * from "./composite/cards.js";
-export * from "./composite/squash.js";
-export * from "./composite/move.js";
-export * from "./composite/reassign.js";
+import { records } from "@kozane/core/database";
+export const deleteNamespaceCards: typeof records.composite.deleteNamespaceCards =
+  records.composite.deleteNamespaceCards;
+export const deleteNamespaceCardsInTx: typeof records.composite.deleteNamespaceCardsInTx =
+  records.composite.deleteNamespaceCardsInTx;
+export const squashNamespaceCard: typeof records.composite.squashNamespaceCard =
+  records.composite.squashNamespaceCard;
+export type SquashCardResult = records.composite.SquashCardResult;
+export const moveCardsToNamespace: typeof records.composite.moveCardsToNamespace =
+  records.composite.moveCardsToNamespace;
+export const moveCardsToNamespaceInTx: typeof records.composite.moveCardsToNamespaceInTx =
+  records.composite.moveCardsToNamespaceInTx;
+export type MoveCardsResult = records.composite.MoveCardsResult;
+export const deletePartitionWithReassign: typeof records.composite.deletePartitionWithReassign =
+  records.composite.deletePartitionWithReassign;
+export const deleteLayerWithReassign: typeof records.composite.deleteLayerWithReassign =
+  records.composite.deleteLayerWithReassign;

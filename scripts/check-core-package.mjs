@@ -55,10 +55,8 @@ try {
   assert.ok(entries.has("package/LICENCE"));
   assert.ok(entries.has("package/README.md"));
   assert.ok(
-    [...entries]
-      .filter((path) => path.startsWith("package/dist/src/services/"))
-      .every((path) => /\/errors\.(?:js|d\.ts)$/.test(path)),
-    "Core must own services instead of compiling Node compatibility implementations",
+    [...entries].every((path) => !path.startsWith("package/dist/src/")),
+    "Core must not compile application compatibility modules",
   );
   assert.ok(
     [...entries].every(
@@ -197,7 +195,7 @@ ${client.snapshots}
   }
   const publicTypes = readFileSync(resolve(installed, manifest.exports["."].types), "utf8");
   // Each fresh process must initialize the public entry without a prior root import.
-  for (const entry of ["@kozane/core/services", "@kozane/core/schema"])
+  for (const entry of ["@kozane/core/database", "@kozane/core/services", "@kozane/core/schema"])
     run(
       process.execPath,
       ["--input-type=module", "--eval", `await import(${JSON.stringify(entry)})`],
@@ -335,7 +333,7 @@ ${client.snapshots}
     `
     import type { CardCreateInput, Namespace, ValidationError, CardPositionUpdate, CardData, NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceTruncation, TakenCard, Footprint, SlotPlacement } from '@kozane/core';
     import { planStow, squashCardPositions, scanTagPositions, groupHitRows, applyPalette, chunked, CARD_WIDTH_RANGE, type BoardRect, type CardContentCheck, type PathKind, type TagPosition, type TagHit } from '@kozane/core';
-    import { createServiceContext, withTx, withReadTx, type DB } from '@kozane/core/database';
+    import { createServiceContext, withTx, withReadTx, records, type DB } from '@kozane/core/database';
     import { cards, namespaces } from '@kozane/core/services';
     import { cardTable } from '@kozane/core/schema';
     import { migrations, schemaVersion, validateMigrationHistory, applyMigrations, validateDatabaseMigrationHistory, canonicalSchemaManifest, compareSchemaManifests, validateDatabaseSchema, type MigrationRecord } from '@kozane/core/migrations';
@@ -376,6 +374,16 @@ ${client.snapshots}
     const invalidPathKind: PathKind = 'relative';
     void rect; void range; void pathKind; void content; void chunkValue; void invalidRect; void invalidPathKind;
     const context = createServiceContext();
+    void withReadTx(db, async tx => {
+      const rows: Namespace[] = await records.namespace.getAllNamespaces({db:tx});
+      // @ts-expect-error Read transactions cannot call table-level writes.
+      await records.namespace.addNamespace({db:tx,name:'invalid'});
+      void rows;
+    });
+    const batch: records.utils.BatchResult<'foreign-cards', {ids:string[]}> = {ok:true,ids:['c']};
+    // @ts-expect-error Table batch reasons remain a closed union.
+    const invalidBatch: records.utils.BatchResult<'unknown'> = {ok:false,reason:'unknown'};
+    void batch; void invalidBatch;
     void cards.create(db, context, 'n', input);
     void namespaces.list(db, context).then((rows: Namespace[]) => rows);
     void withTx(db, tx => cards.createInTx(tx, context, 'n', input));

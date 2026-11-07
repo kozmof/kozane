@@ -1,17 +1,17 @@
 import type { DB } from "../database.js";
 import { withReadTx } from "../database.js";
 
-import { getNamespace } from "../../../../src/db/api/namespace.js";
-import { getAllPartitions } from "../../../../src/db/api/partition.js";
-import { getAllLayers } from "../../../../src/db/api/layer.js";
-import { getAllWarps } from "../../../../src/db/api/warp.js";
-import { getAllInventories } from "../../../../src/db/api/inventory.js";
-import { getScopesInNamespace } from "../../../../src/db/api/scope.js";
-import { getScopeAreasInNamespace } from "../../../../src/db/api/scope-area.js";
-import { getCardDataByPartitions } from "../../../../src/db/api/card.js";
-import { getGlueRelsByNamespace } from "../../../../src/db/api/glue.js";
-import { getScopeRelsByNamespace } from "../../../../src/db/api/scope-rel.js";
-import { getTaskspacesInNamespace } from "../../../../src/db/api/taskspace.js";
+import { getNamespace } from "../api/namespace.js";
+import { getAllPartitions } from "../api/partition.js";
+import { getAllLayers } from "../api/layer.js";
+import { getAllWarps } from "../api/warp.js";
+import { getAllInventories } from "../api/inventory.js";
+import { getScopesInNamespace } from "../api/scope.js";
+import { getScopeAreasInNamespace } from "../api/scope-area.js";
+import { getCardDataByPartitions } from "../api/card.js";
+import { getGlueRelsByNamespace } from "../api/glue.js";
+import { getScopeRelsByNamespace } from "../api/scope-rel.js";
+import { getTaskspacesInNamespace } from "../api/taskspace.js";
 import type { ServiceContext } from "./context.js";
 export async function readRows(
   db: DB,

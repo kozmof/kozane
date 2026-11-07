@@ -1,12 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import type { Tx } from "../database.js";
 import { partitionTable, cardTable } from "../schema.js";
-import { addCardsInTx, onCanvas } from "../../../../src/db/api/card.js";
-import { addScopeRels } from "../../../../src/db/api/scope-rel.js";
-import { getPartition } from "../../../../src/db/api/partition.js";
-import { getLayer } from "../../../../src/db/api/layer.js";
-import { getScope } from "../../../../src/db/api/scope.js";
-import { addSquashInventoryInTx } from "../../../../src/db/api/inventory.js";
+import { addCardsInTx, onCanvas } from "../api/card.js";
+import { addScopeRels } from "../api/scope-rel.js";
+import { getPartition } from "../api/partition.js";
+import { getLayer } from "../api/layer.js";
+import { getScope } from "../api/scope.js";
+import { addSquashInventoryInTx } from "../api/inventory.js";
 import { squashCardPositions, squashInventorySlots } from "../squash.js";
 import { clamp, contentLimitIssue } from "../constants/index.js";
 import type { ServiceContext } from "./context.js";

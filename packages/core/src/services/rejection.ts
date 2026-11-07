@@ -1,5 +1,5 @@
 import { ValidationError } from "./errors.js";
-import type { BatchRejection } from "../../../../src/db/api/utils.js";
+import type { BatchRejection } from "../api/utils.js";
 
 /**
  * Map transaction refusal reasons to consistent batch error messages and 400 responses. Cover

@@ -1,20 +1,20 @@
 import type { AnyDB } from "../database.js";
 import type { ServiceContext } from "./context.js";
-import { getAllNamespaces } from "../../../../src/db/api/namespace.js";
+import { getAllNamespaces } from "../api/namespace.js";
 import {
   getAllPartitions,
   getPartitionCardCounts,
   type PartitionCardCount,
-} from "../../../../src/db/api/partition.js";
-import { getCardChangeCounts, type CardChangeCount } from "../../../../src/db/api/card.js";
+} from "../api/partition.js";
+import { getCardChangeCounts, type CardChangeCount } from "../api/card.js";
 import {
   getAllScopes,
   getScopePartitionUsage,
   getScopeNamespaceUsage,
   type ScopePartitionUsage,
   type ScopeNamespaceUsage,
-} from "../../../../src/db/api/scope.js";
-import { getCardTagHits, type CardTagHits } from "../../../../src/db/api/tag.js";
+} from "../api/scope.js";
+import { getCardTagHits, type CardTagHits } from "../api/tag.js";
 import type { Namespace, Scope } from "../database-types.js";
 import { applyPalette } from "../palette.js";
 export type TreemapPartition = PartitionCardCount & { bg: string; dot: string };

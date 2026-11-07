@@ -10,11 +10,8 @@ export type {
   CardSetStackingInput,
   CardSquashInput,
 } from "./inputs.js";
-import {
-  deleteNamespaceCardsInTx,
-  moveCardsToNamespaceInTx,
-} from "../../../../src/db/api/composite.js";
-import { reassignCardsToPartitionInTx } from "../../../../src/db/api/card.js";
+import { deleteNamespaceCardsInTx, moveCardsToNamespaceInTx } from "../api/composite.js";
+import { reassignCardsToPartitionInTx } from "../api/card.js";
 import { prepareInput } from "./prepare-input.js";
 import { optionalNullableNumber, optionalString } from "./validation.js";
 import {
@@ -22,31 +19,31 @@ import {
   updateCardInTx,
   withCardInventory,
   type CardStacking,
-} from "../../../../src/db/api/card.js";
-import { refitStoredCardInTx, type Refit } from "../../../../src/db/api/inventory.js";
-import { squashNamespaceCard, type SquashCardResult } from "../../../../src/db/api/composite.js";
+} from "../api/card.js";
+import { refitStoredCardInTx, type Refit } from "../api/inventory.js";
+import { squashNamespaceCard, type SquashCardResult } from "../api/composite.js";
 import { BATCH_MAX, CARD_WIDTH_RANGE } from "../constants/index.js";
 import { requireCardInNamespace } from "./guards.js";
 import { NotFoundError } from "./errors.js";
-import { reassignCardsStackOrder } from "../../../../src/db/api/card.js";
+import { reassignCardsStackOrder } from "../api/card.js";
 import {
   requireObjectArray,
   requireFiniteNumber,
   requireUniqueStrings,
   requireStringArray,
 } from "./validation.js";
-import { updateNamespaceCardPositionsInTx } from "../../../../src/db/api/card.js";
-import { deleteNamespaceCards } from "../../../../src/db/api/composite.js";
+import { updateNamespaceCardPositionsInTx } from "../api/card.js";
+import { deleteNamespaceCards } from "../api/composite.js";
 import type { CardWithGlue } from "../types.js";
 
-import { getPartition } from "../../../../src/db/api/partition.js";
-import { getDefaultLayer, getLayer } from "../../../../src/db/api/layer.js";
-import { getScope } from "../../../../src/db/api/scope.js";
-import { addScopeRel } from "../../../../src/db/api/scope-rel.js";
+import { getPartition } from "../api/partition.js";
+import { getDefaultLayer, getLayer } from "../api/layer.js";
+import { getScope } from "../api/scope.js";
+import { addScopeRel } from "../api/scope-rel.js";
 import { withTx } from "../database.js";
-import { addCardInTx } from "../../../../src/db/api/card.js";
+import { addCardInTx } from "../api/card.js";
 
-import { stowCardsInTx } from "../../../../src/db/api/inventory.js";
+import { stowCardsInTx } from "../api/inventory.js";
 import { checkCardContent, clamp } from "../constants/index.js";
 import { optionalNumber, optionalId, requireString } from "./validation.js";
 import { rejectBatch } from "./rejection.js";

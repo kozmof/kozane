@@ -8,7 +8,7 @@ import {
   getNamespace,
   deleteNamespace,
   setDefaultNamespace,
-} from "../../../../src/db/api/namespace.js";
+} from "../api/namespace.js";
 import { requireBoundedName } from "./validation.js";
 import { NotFoundError } from "./errors.js";
 

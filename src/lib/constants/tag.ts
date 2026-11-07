@@ -1,3 +1,4 @@
+export { TAG_CARD_HITS_MAX, TAG_CARD_ROWS_PAGE } from "@kozane/core";
 export {
   TAG_SIGIL,
   TAG_SEGMENT_CHARS_MAX,
@@ -47,19 +48,6 @@ export const TAG_SCAN_WORKSPACE_NODES_MAX = 4 * TAG_SCAN_NODES_MAX;
  * counts are understood as lower bounds.
  */
 export const TAG_SCAN_HITS_MAX = 100_000;
-
-/**
- * Maximum card hits gathered across the workspace. Bound the result array, derived tree, and
- * serialized payload, matching the file-side hit limit.
- */
-export const TAG_CARD_HITS_MAX = 100_000;
-
-/**
- * Maximum card rows held per tag-query page. Page by ID to bound memory while continuing
- * until the hit limit or end of results. A fixed row cap would miss tags after prefilter
- * matches that yield no hits.
- */
-export const TAG_CARD_ROWS_PAGE = 1_000;
 
 /**
  * Maximum example paths reported with a scan truncation. Keep enough to locate the problem

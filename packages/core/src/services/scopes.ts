@@ -6,23 +6,15 @@ export type {
   ScopeCreateAreaInput,
   ScopeUpdateAreaInput,
 } from "./inputs.js";
-import { deleteScope } from "../../../../src/db/api/scope.js";
+import { deleteScope } from "../api/scope.js";
 import { withTx } from "../database.js";
 import { prepareInput } from "./prepare-input.js";
 import type { DB, Tx } from "../database.js";
 import type { ServiceContext } from "./context.js";
-import {
-  addScope,
-  getScope,
-  updateScopeName,
-  deleteScopeFromNamespace,
-} from "../../../../src/db/api/scope.js";
-import {
-  addScopeMembersInTx,
-  removeScopeMembersFromNamespaceInTx,
-} from "../../../../src/db/api/scope-rel.js";
-import { addScopeArea, moveScopeArea, deleteScopeArea } from "../../../../src/db/api/scope-area.js";
-import { isUniqueConstraintError } from "../../../../src/db/api/utils.js";
+import { addScope, getScope, updateScopeName, deleteScopeFromNamespace } from "../api/scope.js";
+import { addScopeMembersInTx, removeScopeMembersFromNamespaceInTx } from "../api/scope-rel.js";
+import { addScopeArea, moveScopeArea, deleteScopeArea } from "../api/scope-area.js";
+import { isUniqueConstraintError } from "../api/utils.js";
 import { requireBoundedName, requireStringArray, optionalNumber } from "./validation.js";
 import { rejectBatch } from "./rejection.js";
 import { ConflictError, NotFoundError, ValidationError } from "./errors.js";

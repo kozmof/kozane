@@ -3,7 +3,7 @@ import { withTx } from "../database.js";
 import { prepareInput } from "./prepare-input.js";
 import type { DB, Tx } from "../database.js";
 import type { ServiceContext } from "./context.js";
-import { glueNamespaceCardsInTx, unglueNamespaceCardsInTx } from "../../../../src/db/api/glue.js";
+import { glueNamespaceCardsInTx, unglueNamespaceCardsInTx } from "../api/glue.js";
 import { requireStringArray } from "./validation.js";
 import { rejectBatch } from "./rejection.js";
 

@@ -1,8 +1,8 @@
 import type { AnyDB } from "../database.js";
 import type { ServiceContext } from "./context.js";
-import { getAllNamespaces } from "../../../../src/db/api/namespace.js";
-import { getAllWorkspaceWarps } from "../../../../src/db/api/warp.js";
-import { getCardMarkersByNamespaces } from "../../../../src/db/api/card.js";
+import { getAllNamespaces } from "../api/namespace.js";
+import { getAllWorkspaceWarps } from "../api/warp.js";
+import { getCardMarkersByNamespaces } from "../api/card.js";
 export async function readRows(db: AnyDB, _context: ServiceContext, namespaceId: string) {
   const namespaces = await getAllNamespaces({ db });
   const warps = await getAllWorkspaceWarps({ db });

@@ -1,11 +1,11 @@
 import type { TagHit, TagScanTruncation } from "../types.js";
-import { getAllNamespaces } from "../../../../src/db/api/namespace.js";
-import { getAllPartitions } from "../../../../src/db/api/partition.js";
-import { getCardPartitionNames } from "../../../../src/db/api/card.js";
+import { getAllNamespaces } from "../api/namespace.js";
+import { getAllPartitions } from "../api/partition.js";
+import { getCardPartitionNames } from "../api/card.js";
 import { applyPalette } from "../palette.js";
 import type { AnyDB } from "../database.js";
 import type { ServiceContext } from "./context.js";
-import { getCardTagHits, type CardTagHits } from "../../../../src/db/api/tag.js";
+import { getCardTagHits, type CardTagHits } from "../api/tag.js";
 export function get(db: AnyDB, _context: ServiceContext, namespaceId?: string) {
   return getCardTagHits({ db, namespaceId });
 }

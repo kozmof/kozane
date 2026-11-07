@@ -11,7 +11,7 @@ function clampPosition(posX: number, posY: number, context: ServiceContext) {
     posY: Math.round(clamp(posY, 0, context.canvasHeight)),
   };
 }
-import { addWarp, moveWarp, deleteWarp } from "../../../../src/db/api/warp.js";
+import { addWarp, moveWarp, deleteWarp } from "../api/warp.js";
 import { optionalNumber } from "./validation.js";
 
 export async function createInTx(

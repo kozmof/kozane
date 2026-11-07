@@ -2,13 +2,13 @@
 
 Kozane database contracts, schema and domain services for Node and browsers.
 
-| Export                    | Contents                                                                  |
-| ------------------------- | ------------------------------------------------------------------------- |
-| `@kozane/core`            | Domain types, errors and shared domain helpers                            |
-| `@kozane/core/database`   | Adapter factory, branded handles, transaction helpers and service context |
-| `@kozane/core/schema`     | Drizzle tables and relations                                              |
-| `@kozane/core/services`   | Domain services and input validation                                      |
-| `@kozane/core/migrations` | Migration application, history validation and schema comparison           |
+| Export                    | Contents                                                        |
+| ------------------------- | --------------------------------------------------------------- |
+| `@kozane/core`            | Domain types, errors and shared domain helpers                  |
+| `@kozane/core/database`   | Adapter factory, transactions, service context and table APIs   |
+| `@kozane/core/schema`     | Drizzle tables and relations                                    |
+| `@kozane/core/services`   | Domain services and input validation                            |
+| `@kozane/core/migrations` | Migration application, history validation and schema comparison |
 
 The host supplies its database driver and transaction hooks through the adapter factory.
 The package declares Drizzle and UUID as runtime dependencies and includes JavaScript and
@@ -30,6 +30,11 @@ Domain limits and defaults are available from the root entry, including `CONTENT
 `BATCH_MAX`, `CARD_WIDTH_RANGE`, canvas bounds and `PATH_KINDS`. Use `createServiceContext`
 from `@kozane/core/database` to apply configured write limits. The host owns server settings
 and gesture thresholds.
+
+Import `records` from `@kozane/core/database` for table-level reference lookups and Node
+compatibility. Its namespaces include `records.namespace`, `records.partition` and
+`records.card`. Use `composeWrite` to resolve references and invoke a transaction-bound
+service on one write transaction. Resource services own configured validation and mutations.
 
 Import resource operations from `@kozane/core/services`. The `validation` and `guards`
 namespaces provide the same checks for host filesystem adapters. The `rejection` namespace

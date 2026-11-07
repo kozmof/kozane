@@ -5,7 +5,14 @@ import { createClient } from "@libsql/client";
 import { drizzle as libsqlDrizzle } from "drizzle-orm/libsql";
 import { drizzle as proxyDrizzle } from "drizzle-orm/sqlite-proxy";
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
-import { createDatabaseAdapter, createServiceContext, withTx } from "@kozane/core/database";
+import {
+  createDatabaseAdapter,
+  createServiceContext,
+  withTx,
+  withReadTx,
+  composeWrite,
+  records,
+} from "@kozane/core/database";
 import {
   applyMigrations,
   validateDatabaseSchema,
@@ -91,9 +98,18 @@ for (const driver of ["libsql", "wasm"]) {
     const ns = await namespaces.create(db, context, { name: `Packed ${driver}` });
     const initial = await snapshot.get(db, context, ns.id);
     const partitionId = initial.snapshot.partitions[0].id;
-    const card = await cards.create(db, context, ns.id, {
-      partitionId,
-      content: "Public driver 日本語",
+    assert.ok(
+      (await withReadTx(db, (tx) => records.namespace.getAllNamespaces({ db: tx }))).some(
+        (row) => row.id === ns.id,
+      ),
+    );
+    const card = await composeWrite(db, async (tx) => {
+      const partition = await records.partition.getDefaultPartition({ db: tx, namespaceId: ns.id });
+      assert.equal(partition.id, partitionId);
+      return cards.createInTx(tx, context, ns.id, {
+        partitionId: partition.id,
+        content: "Public driver 日本語",
+      });
     });
     await cards.update(db, context, ns.id, card.id, { width: 240 });
     await cards.update(db, context, ns.id, card.id, { width: null });

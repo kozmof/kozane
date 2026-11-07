@@ -5,9 +5,9 @@ import type { DB, Tx } from "../database.js";
 import type { ServiceContext } from "./context.js";
 import { requireBoundedName } from "./validation.js";
 import { ConflictError } from "./errors.js";
-import { isUniqueConstraintError } from "../../../../src/db/api/utils.js";
-import { addLayer, updateLayerName } from "../../../../src/db/api/layer.js";
-import { deleteLayerWithReassign } from "../../../../src/db/api/composite.js";
+import { isUniqueConstraintError } from "../api/utils.js";
+import { addLayer, updateLayerName } from "../api/layer.js";
+import { deleteLayerWithReassign } from "../api/composite.js";
 export async function create(
   db: DB,
   _context: ServiceContext,
@@ -53,7 +53,7 @@ export async function remove(
   return { ok: true as const, ...result };
 }
 
-import { reorderLayersInTx, type ReorderRejection } from "../../../../src/db/api/layer.js";
+import { reorderLayersInTx, type ReorderRejection } from "../api/layer.js";
 import { requireStringArray } from "./validation.js";
 import { ValidationError } from "./errors.js";
 const REORDER_REJECTION_MESSAGE: Record<ReorderRejection, string> = {

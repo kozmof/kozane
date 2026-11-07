@@ -64,3 +64,6 @@ export {
 export function composeWrite<T>(db: DB, operation: (tx: Tx) => Promise<T>): Promise<T> {
   return withTx(db, operation);
 }
+
+/** Table-level operations for adapter reference resolution and Node compatibility. */
+export * as records from "./api/index.js";

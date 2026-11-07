@@ -10,13 +10,7 @@
     "skipLibCheck": true,
     "declaration": true,
     "types": [],
-    "verbatimModuleSyntax": true,
-    "paths": {
-      "@kozane/core": ["./src/index.ts"],
-      "@kozane/core/database": ["./src/database.ts"],
-      "@kozane/core/schema": ["./src/schema.ts"],
-      "@kozane/core/services": ["./src/services.ts"]
-    }
+    "verbatimModuleSyntax": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist"]

@@ -4,9 +4,9 @@ import type { DB } from "../database.js";
 import type { ServiceContext } from "./context.js";
 import { requireBoundedName } from "./validation.js";
 import { ConflictError } from "./errors.js";
-import { isUniqueConstraintError } from "../../../../src/db/api/utils.js";
-import { addPartition, updatePartitionName } from "../../../../src/db/api/partition.js";
-import { deletePartitionWithReassign } from "../../../../src/db/api/composite.js";
+import { isUniqueConstraintError } from "../api/utils.js";
+import { addPartition, updatePartitionName } from "../api/partition.js";
+import { deletePartitionWithReassign } from "../api/composite.js";
 export async function create(
   db: DB,
   _context: ServiceContext,
