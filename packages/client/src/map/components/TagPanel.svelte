@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
-  import { CARDS_TRUNCATED_LABEL, type TagNode } from "$lib/tag";
+  import { css } from "../../styles/css.js";
+  import { CARDS_TRUNCATED_LABEL, type TagNode } from "../../tag/index.js";
   import {
     childrenShown,
     TAG_PANEL_LEFT,

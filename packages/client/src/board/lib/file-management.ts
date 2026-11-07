@@ -3,7 +3,7 @@ import type {
   TaskspaceDirectoryOutcome,
   TaskspaceEntryKind,
   TaskspaceSummary,
-} from "$lib/types";
+} from "@kozane/core";
 import type { OpenFileRef } from "../../editor/index.js";
 
 /**

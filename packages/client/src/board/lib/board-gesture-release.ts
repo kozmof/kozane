@@ -4,7 +4,7 @@
  * and then hands it here.
  */
 import { tick } from "svelte";
-import type { ScopeArea } from "$lib/types";
+import type { ScopeArea } from "@kozane/core";
 import type { BoardRect } from "../../constants/index.js";
 import type {
   AreaDragGesture,

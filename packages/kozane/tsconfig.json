@@ -12,10 +12,12 @@
     "strict": true,
     "moduleResolution": "bundler"
   },
+  "exclude": ["../client/src/styles/generated/**/*.js"],
   "include": [
     "src/**/*",
 
     "../client/src/**/*",
+    "../client/tests/**/*",
     ".svelte-kit/ambient.d.ts",
     ".svelte-kit/non-ambient.d.ts",
     ".svelte-kit/types/**/$types.d.ts",

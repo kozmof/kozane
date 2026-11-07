@@ -1,11 +1,13 @@
 import {
   StaticBackend,
   createDemoNavigation,
+  type PollLifecycle,
+} from "../../../client/src/index.js";
+import {
   DEFAULT_UI_CONFIG,
   type BoardPageData,
   type BoardViewProps,
-  type PollLifecycle,
-} from "../../../client/src/index.js";
+} from "../../../client/src/ui.js";
 import { boardCanvasProps } from "./board-canvas-props.js";
 
 /** Fully typed host props for rendering the public board without a router framework. */

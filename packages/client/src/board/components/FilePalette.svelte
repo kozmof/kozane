@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css, cx } from "styled-system/css";
-  import type { Scope, ScopeRel, TaskspaceSummary } from "$lib/types";
+  import { css, cx } from "../../styles/css.js";
+  import type { Scope, ScopeRel, TaskspaceSummary } from "@kozane/core";
   import type {
     TaskspaceCreateKind,
     TaskspaceTreeContext,

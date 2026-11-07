@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { css, cx } from "styled-system/css";
-  import type { TaskspaceEntryKind } from "$lib/types";
+  import { css, cx } from "../../styles/css.js";
+  import type { TaskspaceEntryKind } from "@kozane/core";
   import type {
     TaskspaceCreateKind,
     TaskspaceTreeContext,

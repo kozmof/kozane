@@ -1,3 +1,8 @@
+import {
+  StaticBackend,
+  createDemoNavigation,
+  type NavigationDriver,
+} from "../../../client/src/index.js";
 import { capabilityViewProps } from "./capability-view-props.js";
 import { render } from "svelte/server";
 import {
@@ -10,12 +15,9 @@ import {
   MapView,
   BoardCanvas,
   BoardView,
-  StaticBackend,
-  createDemoNavigation,
-  type NavigationDriver,
-} from "../../../client/src/index.js";
+} from "../../../client/src/ui.js";
 
-import { tagDataset } from "../../../client/src/backend/tags.fixtures.js";
+import { tagDataset } from "../../../client/tests/backend/tags.fixtures.js";
 import { tagsView } from "../../../client/src/backend/views/tags.js";
 import { boardViewProps } from "./board-view-props.js";
 import { boardCanvasProps } from "./board-canvas-props.js";

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
-  import type { Inventory } from "$lib/types";
+  import { css } from "../../styles/css.js";
+  import type { Inventory } from "@kozane/core";
 
   let {
     inventory,

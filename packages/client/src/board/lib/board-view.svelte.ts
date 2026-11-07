@@ -1,5 +1,5 @@
-import { applyPalette } from "$lib/palette";
-import type { Inventory } from "$lib/types";
+import { applyPalette } from "@kozane/core";
+import type { Inventory } from "@kozane/core";
 import { cardMetrics, warpEntriesForNamespace, type WarpListEntry } from "../../warp-list.js";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 

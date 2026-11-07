@@ -1,4 +1,4 @@
-import type { CardWithGlue, GlueRel } from "$lib/types";
+import type { CardWithGlue, GlueRel } from "@kozane/core";
 import { readArray, readFiniteNumber, readString } from "../response.js";
 
 /** Optimistic-update helpers shared by the board's action modules. */

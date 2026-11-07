@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css, cx } from "styled-system/css";
-  import type { CardWithGlue, PartitionWithColor } from "$lib/types";
+  import { css, cx } from "../../styles/css.js";
+  import type { CardWithGlue, PartitionWithColor } from "@kozane/core";
 
   let {
     visible,

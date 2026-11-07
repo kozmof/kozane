@@ -12,12 +12,12 @@ import type {
   TaskspaceSummary,
   Warp,
   Inventory,
-} from "$lib/types";
+} from "@kozane/core";
 import { TaskspaceTreeState } from "./lib/taskspace-tree.svelte.js";
 import { InFlight } from "./lib/in-flight.js";
 
 // Re-exported for the components and tests that already name it through this module.
-export type { NamespaceDataSnapshot } from "$lib/types";
+export type { NamespaceDataSnapshot } from "@kozane/core";
 
 /** The layer new cards land on, falling back to the namespace's default layer. */
 export function resolveActiveLayerId(layers: Layer[], preferredId: string | null): string | null {

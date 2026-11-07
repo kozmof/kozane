@@ -67,3 +67,6 @@ test-results/
 /packages/kozane/build/
 /packages/kozane/build-ssg/
 /packages/kozane/drizzle/
+
+/packages/client/src/styles/generated/
+/packages/client/.svelte-kit/

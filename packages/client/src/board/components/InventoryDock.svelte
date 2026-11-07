@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
-  import { cardSpan } from "$lib/inventory";
+  import { css } from "../../styles/css.js";
+  import { cardSpan } from "@kozane/core";
   import { INVENTORY_CELL } from "../../constants/index.js";
-  import type { Inventory } from "$lib/types";
+  import type { Inventory } from "@kozane/core";
   import type { NamespaceState } from "../namespace-state.svelte.js";
   import type { createBackendInventoryActions } from "../lib/backend-inventory-actions.js";
   import type { InventoryDrag } from "../lib/inventory-drop.js";

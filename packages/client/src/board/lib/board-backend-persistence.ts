@@ -6,7 +6,7 @@ import { readPlacements } from "../../backend/decoders/placements.js";
 import type { BoardRect } from "../../constants/index.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import type { CardPositionPatch } from "./namespace-page.js";
-import type { CardWithGlue } from "$lib/types.js";
+import type { CardWithGlue } from "@kozane/core";
 
 /** Optimistic UI persistence through transport-free resource methods. */
 export function createBackendBoardPersistence(

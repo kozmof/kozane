@@ -1,6 +1,6 @@
-import { compareIds } from "$lib/order";
-import { tagMatcher } from "$lib/tag";
-import type { TagHit } from "$lib/types";
+import { compareIds } from "@kozane/core";
+import { tagMatcher } from "../../tag/index.js";
+import type { TagHit } from "@kozane/core";
 import { MAP_TAG_LINKS_MAX } from "../../constants/index.js";
 import type { Point, Rect } from "./treemap.js";
 

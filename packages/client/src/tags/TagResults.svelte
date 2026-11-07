@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { css } from "styled-system/css";
-  import { taggedWith, type TagHitOf, type TagHitRow, type TaskspaceHitGroup } from "$lib/tag";
-  import type { TagHit } from "$lib/types";
+  import { css } from "../styles/css.js";
+  import { taggedWith, type TagHitOf, type TagHitRow, type TaskspaceHitGroup } from "../tag/index.js";
+  import type { TagHit } from "@kozane/core";
   import type { TagsPageData } from "./types.js";
   import {
     cardRowClass,

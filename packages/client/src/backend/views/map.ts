@@ -1,6 +1,6 @@
-import type { TreemapSnapshot, TreemapPartition } from "../../../../kozane/src/services/map.js";
+import type { TreemapSnapshot, TreemapPartition } from "@kozane/core";
 import { BackendError } from "../contract.js";
-import { normalizeTag } from "../../../../kozane/src/lib/tag.js";
+import { normalizeTag } from "../../tag/index.js";
 
 /** Partition identity, size, and board colour used by the map. */
 export type MapPartition = TreemapPartition;

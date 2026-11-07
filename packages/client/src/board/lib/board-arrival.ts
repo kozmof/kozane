@@ -3,7 +3,7 @@ import type {
   BoardArrivalParameter,
   NavigationAdapter,
 } from "../../navigation.js";
-import type { CardWithGlue, Inventory, TaskspaceSummary } from "$lib/types";
+import type { CardWithGlue, Inventory, TaskspaceSummary } from "@kozane/core";
 
 /**
  * What a link asked the board to open on arrival: `?card=` names a card, and

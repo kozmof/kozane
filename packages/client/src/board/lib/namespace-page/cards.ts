@@ -1,7 +1,7 @@
 /** Glue groups, card positions for saving and rollback, and stacking bounds. */
-import type { GlueRel } from "$db/api/types.js";
-import type { CardData, CardWithGlue } from "$lib/types.js";
-import type { CardPositionUpdate } from "$db/api/card.js";
+import type { GlueRel } from "@kozane/core";
+import type { CardData, CardWithGlue } from "@kozane/core";
+import type { CardPositionUpdate } from "@kozane/core";
 import type { CardPosition } from "./geometry.js";
 
 export function glueIdByCardId<T extends { cardId: string; glueId: string }>(glueRels: T[]) {

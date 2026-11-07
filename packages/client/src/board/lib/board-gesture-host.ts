@@ -1,4 +1,4 @@
-import type { CardWithGlue, Inventory, ScopeArea, Warp } from "$lib/types";
+import type { CardWithGlue, Inventory, ScopeArea, Warp } from "@kozane/core";
 import type { BoardRect } from "../../constants/index.js";
 import type { SelectionState } from "../namespace-state.svelte.js";
 import type { BoardPoint, CanvasViewport } from "./canvas-viewport.js";

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
-  import type { PartitionWithColor } from "$lib/types";
+  import { css } from "../../styles/css.js";
+  import type { PartitionWithColor } from "@kozane/core";
 
   interface Props {
     partitions: PartitionWithColor[];

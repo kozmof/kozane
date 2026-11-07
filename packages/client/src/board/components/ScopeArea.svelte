@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
-  import { token } from "styled-system/tokens";
-  import type { ScopeArea } from "$lib/types";
+  import { css } from "../../styles/css.js";
+  import { token } from "../../styles/tokens.js";
+  import type { ScopeArea } from "@kozane/core";
 
   let {
     area,

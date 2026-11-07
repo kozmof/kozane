@@ -1,10 +1,9 @@
 import { defineConfig } from "@pandacss/dev";
-import shared from "../../panda.config";
+import shared from "./panda.shared";
 export default defineConfig({
   ...shared,
-  include: [
-    "packages/kozane/src/lib/**/*.{js,ts,svelte}",
-    "packages/client/src/**/*.{js,ts,svelte}",
-  ],
-  exclude: ["**/*.test.*", "**/*.fixtures.*"],
+  include: ["packages/client/src/**/*.{js,ts,svelte}"],
+  outdir: "packages/client/styled-system",
+  outExtension: "js",
+  exclude: ["**/styles/generated/**"],
 });

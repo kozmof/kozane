@@ -3,7 +3,7 @@ import type {
   TaskspaceFileNode,
   TaskspaceFileTree,
   TaskspaceTruncation,
-} from "../../../kozane/src/lib/types.js";
+} from "@kozane/core";
 
 /** Find a node in an embedded export tree. An empty path names the taskspace root. */
 export function findStaticNode(

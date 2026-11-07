@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { css, cx } from "styled-system/css";
+  import { css, cx } from "../styles/css.js";
   import type { Caret, EditorDocument } from "./document-store.svelte.js";
   import { orderCarets, sameCaret } from "./document-store.svelte.js";
   import {

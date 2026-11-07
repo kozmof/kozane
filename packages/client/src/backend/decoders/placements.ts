@@ -1,4 +1,4 @@
-import type { InventoryPlacement } from "../../../../kozane/src/lib/inventory.js";
+import type { InventoryPlacement } from "@kozane/core";
 import { readArray, readString, readFiniteNumber } from "./response.js";
 export function readPlacements(value: unknown): InventoryPlacement[] | undefined {
   const rows = readArray(value, "placements");

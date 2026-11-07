@@ -1,4 +1,4 @@
-import { css } from "styled-system/css";
+import { css } from "../../styles/css.js";
 
 /** Styles shared by a scope frame's file strip and its cells. */
 

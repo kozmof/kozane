@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { css, cx } from "styled-system/css";
+  import { css, cx } from "../../styles/css.js";
 
   // Point right when closed and rotate down when open.
   let { expanded }: { expanded: boolean } = $props();

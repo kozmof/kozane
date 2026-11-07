@@ -1,5 +1,5 @@
 import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "../../constants/index.js";
-import type { TaskspaceTruncation } from "$lib/types";
+import type { TaskspaceTruncation } from "@kozane/core";
 
 /**
  * Describe directory truncation reasons consistently in both the tree panel and frame file

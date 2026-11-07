@@ -1,4 +1,4 @@
-import type { ScopeArea, TaskspaceSummary } from "$lib/types";
+import type { ScopeArea, TaskspaceSummary } from "@kozane/core";
 import type {
   TaskspaceCreated,
   TaskspaceCreateKind,

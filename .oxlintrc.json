@@ -206,6 +206,7 @@
       "excludeFiles": ["**/*.test.ts", "packages/client/src/backend/**"],
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [
+          { "group": ["**/kozane/src/**", "$lib/**", "$db/**", "styled-system/**"], "message": "Client source imports public core entries and relative client modules." },
           { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Shared client views use injected browser-safe adapters." },
           { "group": ["**/db/**", "$db/**"], "allowTypeImports": true, "message": "Shared client views may import database types only." }
         ] }],
@@ -222,6 +223,7 @@
       "excludeFiles": ["**/*.test.ts"],
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [
+          { "group": ["**/kozane/src/**", "$lib/**", "$db/**", "styled-system/**"], "message": "Client adapters import public core entries and relative client modules." },
           { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Backend adapters must stay browser-safe." },
           { "group": ["**/db/**", "$db/**"], "allowTypeImports": true, "message": "Backend adapters may import database types only." }
         ] }]
@@ -242,6 +244,7 @@
     "build-ssg/",
     "dist/",
     "styled-system/",
+    "packages/client/src/styles/generated/",
     ".svelte-kit/",
     "drizzle/",
     "coverage/",

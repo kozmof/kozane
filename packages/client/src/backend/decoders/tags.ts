@@ -1,5 +1,5 @@
-import type { TagsViewData } from "../../../../kozane/src/services/tags.js";
-import type { TagScanTruncation } from "../../../../kozane/src/lib/types.js";
+import type { TagsViewData } from "@kozane/core";
+import type { TagScanTruncation } from "@kozane/core";
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const strings = (value: unknown, fields: string[]) =>

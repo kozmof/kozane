@@ -1,4 +1,4 @@
-import type { ScopeRel } from "$lib/types";
+import type { ScopeRel } from "@kozane/core";
 
 /** How much of a selection a scope already holds. */
 export type ScopeLink = "all" | "some" | "none";

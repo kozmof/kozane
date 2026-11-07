@@ -6,7 +6,7 @@
   import type { Snippet } from "svelte";
   import { untrack } from "svelte";
   import { NamespaceIndex } from "../backend/namespace-index.svelte.js";
-  import { css } from "styled-system/css";
+  import { css } from "../styles/css.js";
   import NavIcon from "../components/NavIcon.svelte";
 
   let { backend, initialNamespaces, navigation, workspaceName = null, workspaceLabel = "Kozane", formError = null, lifetimeNotice, createAction, emptyState, retryIntervalMs = 1000 }: {

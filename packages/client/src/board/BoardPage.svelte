@@ -5,7 +5,7 @@
   import BackendNotice from "../BackendNotice.svelte";
   import { onMount, onDestroy, tick, untrack } from "svelte";
   import type { BoardViewProps } from "./types.js";
-  import { css } from "styled-system/css";
+  import { css } from "../styles/css.js";
   import {
     type BoardArrivalParameter,
   } from "../navigation.js";

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css, cx } from "styled-system/css";
-  import type { Scope, TaskspaceEntryKind, TaskspaceSummary } from "$lib/types";
+  import { css, cx } from "../../styles/css.js";
+  import type { Scope, TaskspaceEntryKind, TaskspaceSummary } from "@kozane/core";
   import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
   import type { OpenFileRef } from "../../editor/index.js";
   import {

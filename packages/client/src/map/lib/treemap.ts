@@ -1,4 +1,4 @@
-import { compareIds } from "$lib/order";
+import { compareIds } from "@kozane/core";
 
 /** Pure squarified treemap calculations shared by server and browser rendering. */
 

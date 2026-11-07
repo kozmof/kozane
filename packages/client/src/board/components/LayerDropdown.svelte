@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
-  import type { Layer } from "$lib/types";
+  import { css } from "../../styles/css.js";
+  import type { Layer } from "@kozane/core";
 
   interface Props {
     /** Topmost first, the way the canvas stacks them. */

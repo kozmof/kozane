@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
-  import type { CardWithGlue } from "$lib/types";
+  import { css } from "../../styles/css.js";
+  import type { CardWithGlue } from "@kozane/core";
   import type { UiConfig } from "../../ui-config.js";
 
   /**

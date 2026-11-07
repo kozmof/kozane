@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { css, cx } from "styled-system/css";
+  import { css, cx } from "../../styles/css.js";
 
   let {
     what,

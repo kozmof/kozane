@@ -42,7 +42,7 @@ export default defineConfig({
     ],
   },
   test: {
-    include: ["packages/kozane/src/**/*.test.ts", "packages/client/src/**/*.test.ts"],
+    include: ["packages/kozane/src/**/*.test.ts", "packages/client/tests/**/*.test.ts"],
     setupFiles: ["packages/kozane/src/test-utils/setup.ts"],
     environment: "jsdom",
     maxWorkers: 4,
@@ -97,6 +97,7 @@ export default defineConfig({
         // their source coverage.
         "packages/kozane/src/**/*.svelte",
         "packages/client/src/**/*.svelte",
+        "packages/client/src/styles/generated/**",
       ],
       reporter: ["text", "html", "lcov"],
       thresholds: {

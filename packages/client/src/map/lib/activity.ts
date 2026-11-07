@@ -1,5 +1,5 @@
 import type { MapTagCard } from "./graph.js";
-import type { TagHit } from "$lib/types";
+import type { TagHit } from "@kozane/core";
 
 export type ActivityCount = { day: string; cards: number };
 export type ActivityCell = {

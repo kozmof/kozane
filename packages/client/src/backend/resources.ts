@@ -28,18 +28,53 @@ import type {
   InventoryStowInput,
   InventoryTakeInput,
   NamespaceCreateInput,
-} from "../../../kozane/src/services/inputs.js";
-export type * from "../../../kozane/src/services/inputs.js";
-import type * as CardsServices from "../../../kozane/src/services/cards.js";
-import type * as GluesServices from "../../../kozane/src/services/glues.js";
-import type * as LayersServices from "../../../kozane/src/services/layers.js";
-import type * as PartitionsServices from "../../../kozane/src/services/partitions.js";
-import type * as ScopesServices from "../../../kozane/src/services/scopes.js";
-import type * as WarpsServices from "../../../kozane/src/services/warps.js";
-import type * as InventoriesServices from "../../../kozane/src/services/inventories.js";
-import type * as NamespaceServices from "../../../kozane/src/services/namespaces.js";
-import type { TagsViewData } from "../../../kozane/src/services/tags.js";
-import type { TreemapSnapshot } from "../../../kozane/src/services/map.js";
+} from "@kozane/core";
+export type {
+  PositionInput,
+  CardIdsInput,
+  NamedInput,
+  CardCreateInput,
+  CardUpdateFields,
+  CardUpdateInput,
+  CardUpdatePositionsInput,
+  CardRemoveInput,
+  CardMoveInput,
+  CardSetLayerInput,
+  CardSetPartitionInput,
+  CardSetStackingInput,
+  CardSquashInput,
+  GlueCreateInput,
+  GlueRemoveInput,
+  LayerCreateInput,
+  LayerRenameInput,
+  LayerReorderInput,
+  PartitionCreateInput,
+  PartitionRenameInput,
+  ScopeCreateInput,
+  ScopeRenameInput,
+  ScopeAddMembersInput,
+  ScopeRemoveMembersInput,
+  ScopeCreateAreaInput,
+  ScopeUpdateAreaInput,
+  WarpCreateInput,
+  WarpUpdateInput,
+  InventoryCreateInput,
+  InventoryUpdateInput,
+  InventoryStowInput,
+  InventoryTakeCardInput,
+  InventoryTakeInput,
+  NamespaceCreateInput,
+} from "@kozane/core";
+import type { cards as CardsServices } from "@kozane/core/services";
+import type { glues as GluesServices } from "@kozane/core/services";
+import type { layers as LayersServices } from "@kozane/core/services";
+import type { partitions as PartitionsServices } from "@kozane/core/services";
+import type { scopes as ScopesServices } from "@kozane/core/services";
+import type { warps as WarpsServices } from "@kozane/core/services";
+import type { inventories as InventoriesServices } from "@kozane/core/services";
+import type { namespaces as NamespaceServices } from "@kozane/core/services";
+import type { TagsViewData } from "@kozane/core";
+import type { TreemapSnapshot } from "@kozane/core";
 import type { WarpListEntry } from "../warp-list.js";
 export type * from "./taskspaces-api.js";
 

@@ -1,4 +1,4 @@
-import { tagMatches, type TagNode } from "$lib/tag";
+import { tagMatches, type TagNode } from "../../tag/index.js";
 import type { Point } from "./treemap.js";
 
 /**

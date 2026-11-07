@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
+  import { css } from "../../styles/css.js";
   import CardComposer from "./CardComposer.svelte";
-  import type { CardWithGlue, PartitionWithColor, GlueRel, Layer } from "$lib/types";
+  import type { CardWithGlue, PartitionWithColor, GlueRel, Layer } from "@kozane/core";
   import type { UiConfig } from "../../ui-config.js";
 
   interface Props {

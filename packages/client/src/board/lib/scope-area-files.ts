@@ -1,4 +1,9 @@
-import type { ScopeArea, TaskspaceEntry, TaskspaceSummary, TaskspaceTruncation } from "$lib/types";
+import type {
+  ScopeArea,
+  TaskspaceEntry,
+  TaskspaceSummary,
+  TaskspaceTruncation,
+} from "@kozane/core";
 import type { TaskspaceNode } from "./taskspace-tree.svelte.js";
 
 /**

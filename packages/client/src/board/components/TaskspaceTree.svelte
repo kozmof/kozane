@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { css, cx } from "styled-system/css";
+  import { css, cx } from "../../styles/css.js";
   import type {
     TaskspaceCreateKind,
     TaskspaceTreeContext,

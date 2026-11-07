@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
-  import type { CardWithGlue, PartitionWithColor } from "$lib/types";
+  import { css } from "../../styles/css.js";
+  import type { CardWithGlue, PartitionWithColor } from "@kozane/core";
   import { segmentText } from "../../text-segments.js";
 
   interface Props {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { css, cx } from "styled-system/css";
+  import { css, cx } from "../styles/css.js";
   import type { EditorSession } from "./editor-session.svelte.js";
   import type { VimState } from "./vim.js";
 

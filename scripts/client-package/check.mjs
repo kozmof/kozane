@@ -60,7 +60,9 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
                   ? target + ".d.ts"
                   : target;
               assert.ok(
-                existsSync(declaration),
+                [declaration, declaration + ".d.ts", join(declaration, "index.d.ts")].some(
+                  existsSync,
+                ),
                 `Missing client declaration: ${value} from ${file}`,
               );
             }
@@ -79,12 +81,12 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
     }
   }
   walk(join(installed, "dist"));
-  const mapDeclaration = join(installed, "dist/lib/backend/views/map.d.ts");
+  const mapDeclaration = join(installed, "dist/backend/views/map.d.ts");
   const originalDeclaration = readFileSync(mapDeclaration);
   try {
     rmSync(mapDeclaration);
     assert.throws(
-      () => inspect(join(installed, "dist/lib/client/map/types.d.ts")),
+      () => inspect(join(installed, "dist/map/types.d.ts")),
       /Missing client declaration/,
     );
   } finally {

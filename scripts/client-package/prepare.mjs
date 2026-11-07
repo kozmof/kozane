@@ -14,7 +14,7 @@ export function prepareClientConsumer({ consumer, repository, run, coreReference
   const manifest = JSON.parse(run("tar", ["-xOf", archive, "package/package.json"]));
   const entries = run("tar", ["-tzf", archive]).trim().split("\n");
   assert.ok(entries.includes("package/LICENCE") && entries.includes("package/README.md"));
-  assert.ok(entries.includes("package/dist/lib/client/board/BoardView.svelte"));
+  assert.ok(entries.includes("package/dist/board/BoardView.svelte"));
   assert.ok(entries.includes("package/dist/styles.css"));
   assert.ok(manifest.sideEffects.includes("**/*.css"));
   assert.equal(manifest.exports["./styles.css"], "./dist/styles.css");

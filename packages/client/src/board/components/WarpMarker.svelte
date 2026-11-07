@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
-  import type { Warp } from "$lib/types";
+  import { css } from "../../styles/css.js";
+  import type { Warp } from "@kozane/core";
 
   let {
     warp,

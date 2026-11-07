@@ -1,4 +1,4 @@
-import { css } from "styled-system/css";
+import { css } from "../styles/css.js";
 
 /** Buttons in the editor panel's header and notice bars. */
 export const barButton = css({

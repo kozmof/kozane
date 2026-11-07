@@ -1,7 +1,7 @@
 import type { KozaneBackend } from "../../backend/contract.js";
 import { BackendError } from "../../backend/contract.js";
-import type { TaskspaceEntry, TaskspaceTruncation } from "$lib/types";
-import { entryNameIssue } from "$lib/entry-name";
+import type { TaskspaceEntry, TaskspaceTruncation } from "@kozane/core";
+import { entryNameIssue } from "@kozane/core";
 /** What is known about one directory of one taskspace. */
 export type TaskspaceNode = {
   /** Null until the directory has been read once. */

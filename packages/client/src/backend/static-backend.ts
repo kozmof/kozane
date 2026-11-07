@@ -1,8 +1,8 @@
 import type { KozaneBackend } from "./contract.js";
-import type { TagsViewData } from "../../../kozane/src/services/tags.js";
-import type { TreemapSnapshot } from "../../../kozane/src/services/map.js";
+import type { TagsViewData } from "@kozane/core";
+import type { TreemapSnapshot } from "@kozane/core";
 import type { WarpListEntry } from "../warp-list.js";
-import type { TaskspaceFileTree } from "../../../kozane/src/lib/types.js";
+import type { TaskspaceFileTree } from "@kozane/core";
 import {
   BackendError,
   type BackendCapabilities,

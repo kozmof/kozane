@@ -7,7 +7,7 @@ import type {
   ScopeArea as ScopeAreaRow,
   TaskspaceSummary,
   Warp,
-} from "$lib/types";
+} from "@kozane/core";
 import type { BoardRect } from "../../constants/index.js";
 import type { NewCardPlacement } from "../../ui-config.js";
 import type { SelectionState } from "../namespace-state.svelte.js";

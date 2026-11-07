@@ -1,1 +1,1 @@
-export default { outDir: "./tmp/svelte" };
+export default {};

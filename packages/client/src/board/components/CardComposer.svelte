@@ -3,10 +3,10 @@
   import PartitionDropdown from "./PartitionDropdown.svelte";
   import LayerDropdown from "./LayerDropdown.svelte";
   import SelectionActions from "./SelectionActions.svelte";
-  import { css } from "styled-system/css";
-  import type { CardWithGlue, PartitionWithColor, GlueRel, Layer } from "$lib/types";
+  import { css } from "../../styles/css.js";
+  import type { CardWithGlue, PartitionWithColor, GlueRel, Layer } from "@kozane/core";
   import { DEFAULT_UI_CONFIG, type UiConfig } from "../../ui-config.js";
-  import { splitCardContent } from "$lib/squash";
+  import { splitCardContent } from "@kozane/core";
   import { orderLayers } from "../lib/namespace-page.js";
 
   interface Props {

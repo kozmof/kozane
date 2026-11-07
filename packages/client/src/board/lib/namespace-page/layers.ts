@@ -1,5 +1,5 @@
 /** Layer order and stacking, and list reordering by drag or nudge. */
-import { compareIds } from "$lib/order.js";
+import { compareIds } from "@kozane/core";
 
 export type StackedLayer<T> = { layer: T; rank: number; active: boolean; floating: boolean };
 

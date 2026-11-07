@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css, cx } from "styled-system/css";
-  import type { CardWithGlue, Layer } from "$lib/types";
+  import { css, cx } from "../../styles/css.js";
+  import type { CardWithGlue, Layer } from "@kozane/core";
   import {
     insideTriangle,
     orderLayers,

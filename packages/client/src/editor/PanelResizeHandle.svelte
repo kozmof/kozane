@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
+  import { css } from "../styles/css.js";
 
   /**
    * The draggable left edge of the editor panel. It sits over the panel's padding so it

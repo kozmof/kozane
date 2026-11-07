@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
+  import { css } from "../../styles/css.js";
   import type { NamespaceState } from "../namespace-state.svelte.js";
   import type { createNamespaceActions } from "../namespace-actions.svelte.js";
   import LayerControl from "./LayerControl.svelte";

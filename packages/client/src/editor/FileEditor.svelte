@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
+  import { css } from "../styles/css.js";
   import { onDestroy, untrack } from "svelte";
   import type { NavigationDriver } from "../navigation.js";
   import EditorSurface, { type EditorMode } from "./EditorSurface.svelte";

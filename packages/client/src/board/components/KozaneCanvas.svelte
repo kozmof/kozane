@@ -1,20 +1,20 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { onMount } from "svelte";
-  import { css } from "styled-system/css";
-  import { token } from "styled-system/tokens";
+  import { css } from "../../styles/css.js";
+  import { token } from "../../styles/tokens.js";
   import KozaneCard from "./KozaneCard.svelte";
   import ScopeArea from "./ScopeArea.svelte";
   import ScopeAreaFiles from "./ScopeAreaFiles.svelte";
   import SelectionRect from "./SelectionRect.svelte";
   import WarpMarker from "./WarpMarker.svelte";
   import InventoryIcon from "./InventoryIcon.svelte";
-  import type { CardWithGlue, Inventory } from "$lib/types";
+  import type { CardWithGlue, Inventory } from "@kozane/core";
   import { ScopeAreaBrowser } from "../lib/scope-area-browser.svelte.js";
   import { CanvasViewport, type BoardPoint } from "../lib/canvas-viewport.js";
   import { BoardGestures } from "../lib/board-gestures.svelte.js";
   import { dropTargetAt } from "../lib/inventory-drop.js";
-  import { PALETTE } from "$lib/palette";
+  import { PALETTE } from "@kozane/core";
   import { clampZoom } from "../../constants/index.js";
   import {
     buildGlueGroupMap,

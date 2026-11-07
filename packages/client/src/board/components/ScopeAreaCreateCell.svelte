@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cx } from "styled-system/css";
+  import { cx } from "../../styles/css.js";
   import { CELL_HEIGHT, CELL_WIDTH } from "../lib/scope-area-files.js";
   import {
     cellClass,

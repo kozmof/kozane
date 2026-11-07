@@ -13,7 +13,7 @@ import type {
   TaskspacesApi,
 } from "./resources.js";
 export * from "./resources.js";
-import type { NamespaceDataSnapshot } from "../../../kozane/src/lib/types.js";
+import type { NamespaceDataSnapshot } from "@kozane/core";
 export type BackendErrorCode =
   | "validation"
   | "not_found"

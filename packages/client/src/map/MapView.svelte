@@ -8,8 +8,8 @@
   import { untrack } from "svelte";
   import { startDatasetView } from "../backend/dataset-view.js";
   import { mapView, type MapViewData } from "../backend/views/map.js";
-  import { css } from "styled-system/css";
-  import { buildTagTree, normalizeTag } from "$lib/tag";
+  import { css } from "../styles/css.js";
+  import { buildTagTree, normalizeTag } from "../tag/index.js";
   import NavIcon from "../components/NavIcon.svelte";
   import TagPanel from "./components/TagPanel.svelte";
   import MapZoomControl from "./components/MapZoomControl.svelte";

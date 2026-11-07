@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TaskspaceEntryKind } from "$lib/types";
+  import type { TaskspaceEntryKind } from "@kozane/core";
 
   /**
    * Shared file, folder, and parent-directory glyphs for taskspace views. Use `currentColor`

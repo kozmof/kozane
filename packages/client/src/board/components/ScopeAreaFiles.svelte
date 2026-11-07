@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { css, cx } from "styled-system/css";
-  import type { ScopeArea } from "$lib/types";
+  import { css, cx } from "../../styles/css.js";
+  import type { ScopeArea } from "@kozane/core";
   import {
     CELL_WIDTH,
     STRIP_GAP,

@@ -1,5 +1,5 @@
 import { history, position, query, rendering, scan, store } from "@kozmof/reed";
-import { byteLength } from "$lib/byte-length.js";
+import { byteLength } from "@kozane/core";
 import { GraphemeCache } from "./graphemes.js";
 import type { ByteOffset, ContentChangeEvent, SelectionRange } from "@kozmof/reed";
 

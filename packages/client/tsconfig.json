@@ -12,5 +12,5 @@
     "types": ["svelte"],
     "noEmit": true
   },
-  "include": ["tmp/source/**/*"]
+  "include": ["src/**/*"]
 }

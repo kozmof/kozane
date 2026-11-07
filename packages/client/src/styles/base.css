@@ -1,0 +1,37 @@
+@layer reset, base, tokens, recipes, utilities;
+
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@layer base {
+  body {
+    font-family: system-ui, sans-serif;
+    color: var(--colors-ink-black);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--colors-neutral-scroll);
+    border-radius: 2px;
+  }
+
+  input:focus,
+  textarea:focus {
+    outline: none;
+  }
+}

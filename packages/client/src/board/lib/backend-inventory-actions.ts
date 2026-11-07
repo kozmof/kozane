@@ -17,8 +17,8 @@ async function attempt<T>(
 function stowInput(cardIds: string[], slot: number | null) {
   return { cardIds, ...(slot === null ? {} : { slot }) };
 }
-import type { CardWithGlue } from "$lib/types";
-import { cardSpan, inventoryFootprints, planStow, type InventoryPlacement } from "$lib/inventory";
+import type { CardWithGlue } from "@kozane/core";
+import { cardSpan, inventoryFootprints, planStow, type InventoryPlacement } from "@kozane/core";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import { readArray, readFiniteNumber, readString, readStringArray } from "./response.js";

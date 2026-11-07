@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { css } from "styled-system/css";
+  import { css } from "../../styles/css.js";
   import type { MapLayout } from "../lib/map-layout.js";
 
   /**

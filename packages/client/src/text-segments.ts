@@ -1,5 +1,5 @@
-import { scanTagPositions } from "../../kozane/src/lib/tag.js";
-import { scanUrls } from "../../kozane/src/lib/urls.js";
+import { scanTagPositions } from "./tag/index.js";
+import { scanUrls } from "@kozane/core";
 
 // Split text into plain, HTTP(S) link, and tag segments for escaped rendering. Leave trailing
 // sentence punctuation as plain text.

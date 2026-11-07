@@ -8,7 +8,7 @@
   import { untrack } from "svelte";
   import { startDatasetView } from "../backend/dataset-view.js";
   import { tagsView, type TagsViewPageData } from "../backend/views/tags.js";
-  import { css } from "styled-system/css";
+  import { css } from "../styles/css.js";
   import NavIcon from "../components/NavIcon.svelte";
   import {
     buildTagTree,
@@ -26,9 +26,9 @@
     TASKSPACE_CLEANUP_COMMAND,
     type TagCounts,
     type TagNode,
-  } from "$lib/tag";
+  } from "../tag/index.js";
   import { TAG_HITS_SHOWN_MAX } from "../constants/index.js";
-  import type { TagHit } from "$lib/types";
+  import type { TagHit } from "@kozane/core";
   import TagResults from "./TagResults.svelte";
   import { activeRowClass, countClass, noteClass, rowClass } from "./styles.js";
 

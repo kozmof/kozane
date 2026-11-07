@@ -23,7 +23,7 @@ import { BackendError } from "../../../backend/contract.js";
 import { readCard, readInventory } from "../../../backend/decoders/snapshot-reader.js";
 import { readArray } from "../../../backend/decoders/response.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
-import { storedCardIds } from "$lib/inventory";
+import { storedCardIds } from "@kozane/core";
 import { readObject, readString, readStringArray } from "../response.js";
 import {
   fieldSnapshot,

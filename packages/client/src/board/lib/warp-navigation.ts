@@ -1,5 +1,5 @@
 import { createNodeNavigation } from "../../navigation.js";
-import type { Warp } from "$lib/types";
+import type { Warp } from "@kozane/core";
 import type { WarpListEntry } from "../../warp-list.js";
 
 /**

@@ -4,7 +4,7 @@ import type {
   TaskspaceEntryKind,
   TaskspaceListing,
   TaskspaceSummary,
-} from "../../../kozane/src/lib/types.js";
+} from "@kozane/core";
 import type { MutationOptions } from "./resources.js";
 
 export interface TaskspaceCreated {

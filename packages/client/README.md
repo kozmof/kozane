@@ -19,15 +19,11 @@ views and CLI output. Map display bounds and tag display caps use the same expor
 
 Prepare and verify candidate packages through the [local release flow](../../docs/releases.md).
 
-Views, backend adapters, contracts, UI configuration, navigation, preferences and
-rendering helpers live
-in `packages/client/src` with their tests. Run `pnpm build:client`
-from the repository root to build core before client. The build collects the remaining
-portable compatibility re-exports and rewrites workspace aliases before packaging.
-It rejects application helper implementations so runtime logic stays in client or core.
-Generated staging files and `dist` are ignored. Runtime entries exclude test helpers,
-SvelteKit modules and Node modules. Panda's authoring-only type augmentation stays
-outside consumer declarations.
+Views, backend adapters, contracts and rendering helpers live in `packages/client/src`. Tests and fixtures live in `packages/client/tests` and are not published. Source imports public core entries and relative client modules, with no application imports or workspace aliases.
+
+Run `pnpm build:client` from the repository root to build core before client. The client build generates Panda assets and runs `svelte-package --input src --output dist` directly. It does not rewrite application code, import paths or type declarations. Public entry files in `src` match the package export map. TypeScript checks `src/**/*` without emitting files beside inputs.
+
+The client owns the shared Panda theme and base stylesheet. The Node app uses those same inputs. Typed CSS helpers use generated runtime assets copied unchanged into the ignored `src/styles/generated` directory. Panda's authoring augmentation and its barrel stay outside the published declarations. Consumers need the public stylesheet, not Panda or code generation. Generated assets, temporary output and `dist` are ignored.
 
 Run `pnpm check:client-package` to pack both packages and install them outside the
 workspace using a frozen offline dependency graph. The check audits runtime and

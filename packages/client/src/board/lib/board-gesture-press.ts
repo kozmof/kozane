@@ -3,7 +3,7 @@
  * null when the pressed thing is no longer on the board. `BoardGestures` decides whether a
  * press may open a gesture at all.
  */
-import { storedCardIds } from "$lib/inventory";
+import { storedCardIds } from "@kozane/core";
 import { gestureOrigin } from "./gesture.js";
 import type {
   AreaDragGesture,
