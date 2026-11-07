@@ -66,7 +66,9 @@
     "check:compatibility-retention": "node scripts/compatibility/check-retention.mjs",
     "release:check:core": "pnpm test:restoration-harness",
     "build:client": "pnpm --filter @kozane/core build && pnpm --filter @kozane/client build",
-    "check:client-package": "node scripts/check-core-package.mjs --client-package"
+    "check:client-package": "node scripts/check-core-package.mjs --client-package",
+    "build:client-harness": "node scripts/check-core-package.mjs --client-package --client-browser-harness",
+    "test:client-package": "pnpm build:client-harness && playwright test --config scripts/client-package/playwright.config.ts"
   },
   "dependencies": {
     "@kozmof/reed": "^4.1.0",

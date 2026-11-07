@@ -107,6 +107,9 @@ importers:
         specifier: 4.1.0
         version: 4.1.0
     devDependencies:
+      '@pandacss/dev':
+        specifier: 1.12.1
+        version: 1.12.1(jsdom@29.1.1)(typescript@6.0.3)
       '@kozane/core':
         specifier: workspace:0.1.0
         version: link:../core

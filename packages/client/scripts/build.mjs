@@ -1,3 +1,4 @@
+import { runPanda, buildStyles } from "./styles.mjs";
 import fs from "node:fs/promises";
 import { existsSync, statSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -6,6 +7,7 @@ import ts from "typescript";
 import { execFileSync } from "node:child_process";
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const packageRoot = path.join(root, "packages/client");
+runPanda(root, packageRoot, ["codegen"]);
 const staging = path.join(packageRoot, "tmp/source");
 await fs.rm(staging, { recursive: true, force: true });
 await fs.mkdir(staging, { recursive: true });
@@ -204,4 +206,5 @@ execFileSync(
   ["exec", "svelte-package", "--input", staging, "--output", "dist", "--tsconfig", "tsconfig.json"],
   { cwd: packageRoot, stdio: "inherit" },
 );
+await buildStyles(root, packageRoot);
 console.log(`Packaged ${visited.size} client modules with public core imports.`);

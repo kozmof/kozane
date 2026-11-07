@@ -41,7 +41,8 @@
       "types": "./dist/editor.d.ts",
       "svelte": "./dist/editor.js",
       "default": "./dist/editor.js"
-    }
+    },
+    "./styles.css": "./dist/styles.css"
   },
   "publishConfig": {
     "access": "public"
@@ -55,6 +56,7 @@
   },
   "devDependencies": {
     "@kozane/core": "workspace:0.1.0",
+    "@pandacss/dev": "1.12.1",
     "@sveltejs/package": "3.0.1",
     "svelte": "5.57.2",
     "typescript": "6.0.3"

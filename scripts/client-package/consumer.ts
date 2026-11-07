@@ -40,10 +40,9 @@ const namespaceProps: ComponentProps<typeof NamespacesView> = {
   initialNamespaces: namespaces,
   navigation: createDemoNavigation({ base: "/packed" }),
 };
-assert(
-  render(NamespacesView, { props: namespaceProps }).body.includes("Packed workspace"),
-  "Namespace SSR",
-);
+const namespaceHtml = render(NamespacesView, { props: namespaceProps }).body;
+assert(namespaceHtml.includes("Packed workspace"), "Namespace SSR");
+export const styleFixtureHtml = `<section id="packed-editor">${surface.body}</section><section id="packed-namespaces">${namespaceHtml}</section>`;
 const http = new HttpBackend({
   capabilities: {
     writable: true,

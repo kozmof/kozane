@@ -375,7 +375,14 @@ ${client.snapshots}
   }
   if (process.argv.includes("--client-package")) {
     const { checkClientPackage } = await import("./client-package/check.mjs");
-    await checkClientPackage({ consumer: temporary, run, manifest: client.manifest });
+    await checkClientPackage({
+      consumer: temporary,
+      run,
+      manifest: client.manifest,
+      browserOutput: process.argv.includes("--client-browser-harness")
+        ? resolve("tmp/client-package-harness")
+        : undefined,
+    });
   }
   if (process.argv.includes("--restoration-harness")) {
     const { buildRestorationHarness } = await import("./restoration-harness/build.mjs");
