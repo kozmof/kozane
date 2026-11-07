@@ -86,4 +86,9 @@ and prevents rewriting earlier corpus records. See the
 [corpus workflow](../../tests/compatibility/README.md). This source-release command requires
 the repository's development dependencies and pinned Chromium installation.
 
+Packed checks also initialize libsql and sqlite-wasm through public adapter hooks. Both
+apply migrations, validate history/schema and exercise service writes, nullable updates,
+missing reads and transaction-bound rollback. Driver dependencies belong to the isolated
+consumer and are not added to core runtime dependencies.
+
 The remaining workspace conversion is being completed under [Phase 3](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

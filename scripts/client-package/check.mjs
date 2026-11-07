@@ -79,6 +79,13 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
   console.log(run(process.execPath, [join(consumer, "testing-consumer.mjs")], consumer).trim());
   const source = join(consumer, "client-consumer.ts");
   copyFileSync(new URL("consumer.ts", import.meta.url), source);
+  const inputs = join(consumer, "client-resource-inputs.ts");
+  const resourceFixture = readFileSync(
+    new URL("../../src/test-utils/backend-inputs.typecheck.ts", import.meta.url),
+    "utf8",
+  );
+  assert.equal((resourceFixture.match(/\.\.\/lib\/backend\/index\.js/g) ?? []).length, 2);
+  writeFileSync(inputs, resourceFixture.replaceAll("../lib/backend/index.js", "@kozane/client"));
   run(
     process.execPath,
     [
@@ -96,6 +103,7 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
       "--lib",
       "ES2024,DOM,DOM.Iterable",
       source,
+      inputs,
     ],
     consumer,
   );

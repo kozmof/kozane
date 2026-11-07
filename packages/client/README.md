@@ -19,7 +19,7 @@ outside consumer declarations.
 
 Run `pnpm check:client-package` to pack both packages and install them outside the
 workspace using a frozen offline dependency graph. The check audits runtime and
-declaration imports, type-checks the public entries, server-renders the editor and namespace
+declaration imports, type-checks all 55 backend methods and the public UI entries, server-renders the editor and namespace
 view, verifies core validation-error identity and compiles the full browser entry.
 `pnpm verify` includes this combined core/client artifact check.
 

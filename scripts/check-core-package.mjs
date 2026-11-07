@@ -60,10 +60,7 @@ try {
   const libsqlVersion = JSON.parse(
     readFileSync(join(repository, "node_modules/@libsql/client/package.json"), "utf8"),
   ).version;
-  const nativeProducer = corpusDriver === "libsql";
-  const drizzleReference = nativeProducer
-    ? `${drizzleVersion}(@libsql/client@${libsqlVersion})`
-    : drizzleVersion;
+  const drizzleReference = `${drizzleVersion}(@libsql/client@${libsqlVersion})`;
   const wasmVersion = JSON.parse(readFileSync(join(repository, "package.json"), "utf8"))
     .dependencies["@sqlite.org/sqlite-wasm"];
   for (const version of [drizzleVersion, uuidVersion])
@@ -81,7 +78,7 @@ try {
         "@kozane/core": `file:${join(temporary, archive)}`,
         "drizzle-orm": drizzleVersion,
         "@sqlite.org/sqlite-wasm": wasmVersion,
-        ...(nativeProducer ? { "@libsql/client": libsqlVersion } : {}),
+        "@libsql/client": libsqlVersion,
       },
     }),
   );
@@ -93,8 +90,8 @@ try {
     createHash("sha512")
       .update(readFileSync(join(temporary, archive)))
       .digest("base64");
-  // Reuse locked registry artifacts without importing the workspace's optional
-  // driver peers. Adapter fixtures explicitly declare the pinned Drizzle and wasm drivers.
+  // Reuse locked registry artifacts and the tested native driver graph.
+  // Adapter fixtures declare their drivers without adding them to core runtime dependencies.
   const registry = readFileSync(join(repository, "pnpm-lock.yaml"), "utf8")
     .split("\npackages:\n")[1]
     .split("\nsnapshots:\n")[0];
@@ -106,12 +103,10 @@ try {
     return block.replace(/^\n/, "").trimEnd();
   }
   const { lockedDriver } = await import("./compatibility/locked-driver.mjs");
-  const driverGraph = nativeProducer
-    ? lockedDriver(
-        readFileSync(join(repository, "pnpm-lock.yaml"), "utf8"),
-        `@libsql/client@${libsqlVersion}`,
-      )
-    : { packages: "", snapshots: "" };
+  const driverGraph = lockedDriver(
+    readFileSync(join(repository, "pnpm-lock.yaml"), "utf8"),
+    `@libsql/client@${libsqlVersion}`,
+  );
   const client = process.argv.includes("--client-package")
     ? (await import("./client-package/prepare.mjs")).prepareClientConsumer({
         consumer: temporary,
@@ -139,14 +134,10 @@ importers:
       '@sqlite.org/sqlite-wasm':
         specifier: ${wasmVersion}
         version: ${wasmVersion}
-${
-  nativeProducer
-    ? `      '@libsql/client':
+      '@libsql/client':
         specifier: ${libsqlVersion}
         version: ${libsqlVersion}
-`
-    : ""
-}${client.importer}packages:
+${client.importer}packages:
   ${packageKey}:
     resolution: {integrity: ${integrity}, tarball: ${JSON.stringify(archiveReference)}}
     version: ${candidate.version}
@@ -160,13 +151,9 @@ snapshots:
     dependencies:
       drizzle-orm: ${drizzleReference}
       uuid: ${uuidVersion}
-  ${JSON.stringify(`drizzle-orm@${drizzleReference}`)}: ${
-    nativeProducer
-      ? `
+  ${JSON.stringify(`drizzle-orm@${drizzleReference}`)}:
     dependencies:
-      '@libsql/client': ${libsqlVersion}`
-      : "{}"
-  }
+      '@libsql/client': ${libsqlVersion}
 ${driverGraph.snapshots}
 ${client.snapshots}
   uuid@${uuidVersion}: {}
@@ -316,6 +303,11 @@ ${client.snapshots}
     ],
     temporary,
   );
+  writeFileSync(
+    join(temporary, "drivers.mjs"),
+    readFileSync(join(repository, "scripts/fixtures/core-consumer-drivers.mjs")),
+  );
+  console.log(run(process.execPath, [join(temporary, "drivers.mjs")], temporary).trim());
   const builtins = new Set(builtinModules.map((name) => name.replace(/^node:/, "")));
   await build({
     configFile: false,
