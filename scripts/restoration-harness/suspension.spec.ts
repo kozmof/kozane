@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { chromium, expect, test } from "@playwright/test";
+import { openRawChromium, evaluateUntil, evaluateOnce } from "./raw-chromium";
 import { installSuspensionDriver, type SuspensionStage } from "./suspension-driver";
 const stages: SuspensionStage[] = [
   "worker-fetch",
@@ -118,45 +119,90 @@ test("supported freeze/resume signals preserve a pending validation budget", asy
     });
   }
 });
-test("a real BFCache round trip retains the live worker and unsaved edits", async ({ page }) => {
-  const token = await page.evaluate(async () => {
-    const session = await (window as any).restorationHarness.openSession(undefined, {
-      rpcTimeoutMs: 2000,
-      healthTimeoutMs: 2000,
+test("a real BFCache round trip retains the live worker and unsaved edits", async ({
+  browserName,
+}, testInfo) => {
+  expect(browserName).toBe("chromium");
+  // Playwright Page does not support BFCache. Keep this browser outside its lifecycle instrumentation.
+  const browser = await openRawChromium(chromium.executablePath());
+  const { cdp } = browser;
+  let sessionId: string | undefined;
+  try {
+    const target = await cdp.send("Target.createTarget", { url: "about:blank" });
+    sessionId = (
+      await cdp.send("Target.attachToTarget", { targetId: target.targetId, flatten: true })
+    ).sessionId;
+    await cdp.send("Page.enable", {}, sessionId);
+    await cdp.send("Page.navigate", { url: "http://127.0.0.1:4181" }, sessionId);
+    await evaluateUntil(cdp, sessionId!, "document.body?.dataset.harness === 'ready'");
+    const token = await evaluateOnce(
+      cdp,
+      sessionId!,
+      `(async () => {
+      const session = await window.restorationHarness.openSession(undefined, { rpcTimeoutMs: 2000, healthTimeoutMs: 2000 });
+      if (session.status !== "ready") throw new Error("Session failed");
+      await session.addCard("Unsaved BFCache edit");
+      sessionStorage.setItem("kozane-demo:session", "preserved copy");
+      const state = { session, token: crypto.randomUUID(), restored: false };
+      window.bfcacheCase = state;
+      window.addEventListener("pageshow", event => { if (event.persisted) state.restored = true; });
+      return state.token;
+    })()`,
+    );
+    await cdp.send("Page.navigate", { url: "http://127.0.0.1:4181/away" }, sessionId);
+    await evaluateUntil(
+      cdp,
+      sessionId!,
+      "location.pathname === '/away' && document.readyState === 'complete'",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const history = await cdp.send("Page.getNavigationHistory", {}, sessionId);
+    await cdp.send(
+      "Page.navigateToHistoryEntry",
+      { entryId: history.entries[history.currentIndex - 1].id },
+      sessionId,
+    );
+    await evaluateUntil(
+      cdp,
+      sessionId!,
+      "location.pathname === '/' && document.body?.dataset.harness === 'ready'",
+    );
+    const result = await evaluateOnce(
+      cdp,
+      sessionId!,
+      `(async () => {
+      const state = window.bfcacheCase;
+      if (!state) return { restored: false, reasons: performance.getEntriesByType("navigation")[0]?.notRestoredReasons?.toJSON() };
+      try { return { token: state.token, restored: state.restored, view: await state.session.read(), saved: sessionStorage.getItem("kozane-demo:session") }; }
+      finally { await state.session.close(); }
+    })()`,
+    );
+    const diagnostics = {
+      result,
+      events: cdp.events.filter((event) => event.method === "Page.backForwardCacheNotUsed"),
+    };
+    await testInfo.attach("bfcache-diagnostics", {
+      body: JSON.stringify(diagnostics, null, 2),
+      contentType: "application/json",
     });
-    if (session.status !== "ready") throw new Error("Session failed");
-    await session.addCard("Unsaved BFCache edit");
-    sessionStorage.setItem("kozane-demo:session", "preserved copy");
-    const state = { session, token: crypto.randomUUID(), restored: false };
-    (window as any).bfcacheCase = state;
-    window.addEventListener("pageshow", (event) => {
-      if (event.persisted) state.restored = true;
+    expect(result, JSON.stringify(diagnostics)).toMatchObject({
+      token,
+      restored: true,
+      saved: "preserved copy",
     });
-    return state.token;
-  });
-  await page.goto("http://127.0.0.1:4181/away");
-  await page.waitForTimeout(3000);
-  await page.goBack({ waitUntil: "commit" });
-  await expect(page.locator("body")).toHaveAttribute("data-harness", "ready");
-  const result = await page.evaluate(async () => {
-    const state = (window as any).bfcacheCase;
-    if (!state) return { restored: false };
+    expect(result.view.snapshot.snapshot.cards.map((card: any) => card.content)).toContain(
+      "Unsaved BFCache edit",
+    );
+  } finally {
     try {
-      const view = await state.session.read();
-      return {
-        token: state.token,
-        restored: state.restored,
-        view,
-        saved: sessionStorage.getItem("kozane-demo:session"),
-      };
+      await testInfo.attach("bfcache-protocol-events", {
+        body: JSON.stringify(cdp.events, null, 2),
+        contentType: "application/json",
+      });
     } finally {
-      await state.session.close();
+      await browser.close();
     }
-  });
-  expect(result).toMatchObject({ token, restored: true, saved: "preserved copy" });
-  expect(result.view.snapshot.snapshot.cards.map((card: any) => card.content)).toContain(
-    "Unsaved BFCache edit",
-  );
+  }
 });
 test("a hidden but executing page still expires a stalled database reply", async ({ page }) => {
   const result = await page.evaluate(async () => {

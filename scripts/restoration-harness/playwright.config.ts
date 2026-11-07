@@ -6,8 +6,6 @@ export default defineConfig({
   use: {
     browserName: "chromium",
     trace: "retain-on-failure",
-    // Playwright disables BFCache by default. This harness requires real history restoration.
-    launchOptions: { ignoreDefaultArgs: ["--disable-back-forward-cache"] },
   },
   webServer: {
     command: "node scripts/restoration-harness/serve.mjs",

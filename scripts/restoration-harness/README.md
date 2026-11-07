@@ -117,12 +117,18 @@ copy, and verifies worker health before releasing the held stage. A separate cas
 supported document freeze/resume events. The freeze case skips only when the browser does
 not expose those lifecycle events.
 
-The harness removes Playwright's default `--disable-back-forward-cache` launch switch so
-Chromium can retain the document. The test still requires an actual persisted restoration.
+The real BFCache case launches a separate Chromium process using Playwright's installed
+executable. A small CDP pipe controller avoids Playwright page lifecycle tracking and worker
+debugger attachment. Playwright documents BFCache testing as unsupported. See its
+[navigation guide](https://playwright.dev/docs/navigations#backforward-cache-bfcache).
+The remaining cases keep Playwright's default launch settings.
 The real navigation case leaves for `/away`, waits longer than its configured RPC and health
 deadlines, and returns through browser history. It requires `pageshow.persisted`, the same
 in-memory session and retained unsaved edits. Additional cases check that hidden execution
 still expires stalled replies and repeated ambiguous gaps exhaust a pre-worker asset budget.
+The BFCache case records Chromium rejection reasons and protocol events as JSON attachments.
+It polls read-only readiness predicates across execution-context changes. Commands that may
+mutate data run once, and transport deadlines and process cleanup bound failures.
 These tests are discovered by the existing CI command alongside the restoration cases.
 
 The build verifies all retained corpus hashes before copying database assets into the harness.
@@ -133,10 +139,10 @@ view summary with the original expectation. The wasm and libsql cohorts add 22 c
 sole, multiple and default namespace states, missing selections and populated Unicode data.
 Discovery finds 55 browser cases across three suites.
 
-P3-10 remains in progress. CI reported 53 of 55 cases passing, including all corpus cases.
+P3-10 remains in progress. CI reported 54 of 55 cases passing, including all corpus cases.
 The loader now shares its active clock with both the outer wasm stage and inner compilation
 deadline. A Node regression verifies a confirmed pause longer than the wall-clock timeout.
-The wasm suspension and real BFCache cases await a CI rerun after these fixes.
+The wasm suspension case now passes in CI. The direct-CDP BFCache case awaits a CI rerun.
 Basic `run()` cases close their candidate after reporting validation. Retained cases
 keep it until `close()`. The persistent editing backend is implemented in Phase 4.
 See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).
