@@ -1,12 +1,15 @@
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const options = process.argv.slice(2);
-if (options.some((option) => option !== "--install-only")) {
-  throw new Error("Usage: node scripts/smoke-package.mjs [--install-only]");
+if (options.some((option) => !["--install-only", "--registry"].includes(option))) {
+  throw new Error("Usage: node scripts/smoke-package.mjs [--install-only] [--registry]");
 }
+const registry = options.includes("--registry");
+const registryOptions = registry ? ["--registry=https://registry.npmjs.org/"] : [];
 const installOnly = options.includes("--install-only");
 
 const sourceRoot = resolve(import.meta.dirname, "..");
@@ -28,9 +31,18 @@ function run(command, args, options = {}) {
       `${command} ${args.join(" ")} failed\n${result.stdout ?? ""}\n${result.stderr ?? ""}`,
     );
   }
+  return result.stdout;
 }
 
-try {
+function installationTargets() {
+  if (registry) {
+    return ["core", "client", "kozane"].map((directory) => {
+      const { name, version } = JSON.parse(
+        readFileSync(join(sourceRoot, "packages", directory, "package.json"), "utf8"),
+      );
+      return name + "@" + version;
+    });
+  }
   run("pnpm", ["--filter", "@kozane/core", "pack", "--pack-destination", staging]);
   const coreArchive = readdirSync(staging).find(
     (file) => file.startsWith("kozane-core-") && file.endsWith(".tgz"),
@@ -57,6 +69,14 @@ try {
   const archive = readdirSync(staging).find((file) => file === name + "-" + version + ".tgz");
   if (!archive) throw new Error("pnpm pack did not produce an archive");
   const archivePath = join(staging, archive);
+  return [coreArchivePath, clientArchivePath, archivePath];
+}
+
+try {
+  const targets = installationTargets();
+  const expectedVersion = JSON.parse(
+    readFileSync(join(sourceRoot, "packages/kozane/package.json"), "utf8"),
+  ).version;
   writeFileSync(join(staging, "package.json"), '{"private":true}\n');
   run(
     "npm",
@@ -66,13 +86,17 @@ try {
       "--ignore-scripts",
       "--no-audit",
       "--no-fund",
-      coreArchivePath,
-      clientArchivePath,
-      archivePath,
+      ...registryOptions,
+      ...targets,
     ],
-    { cwd: staging },
+    {
+      cwd: staging,
+    },
   );
-  run("npm", ["exec", "--", "kozane", "--version"], { cwd: staging });
+  assert.equal(
+    run("npm", ["exec", "--", "kozane", "--version"], { cwd: staging }).trim(),
+    expectedVersion,
+  );
   const installedRoot = join(staging, "node_modules", "kozane");
   run(process.execPath, [join(sourceRoot, "scripts/check-node-core.mjs"), installedRoot]);
   if (!installOnly) {
@@ -91,9 +115,8 @@ try {
       "--no-fund",
       "--prefix",
       globalPrefix,
-      coreArchivePath,
-      clientArchivePath,
-      archivePath,
+      ...registryOptions,
+      ...targets,
     ],
     { cwd: staging },
   );
@@ -101,7 +124,7 @@ try {
     process.platform === "win32"
       ? join(globalPrefix, "kozane.cmd")
       : join(globalPrefix, "bin", "kozane");
-  run(globalBin, ["--version"], { cwd: staging });
+  assert.equal(run(globalBin, ["--version"], { cwd: staging }).trim(), expectedVersion);
   const globalRoot = join(
     globalPrefix,
     ...(process.platform === "win32" ? ["node_modules"] : ["lib", "node_modules"]),

@@ -53,3 +53,6 @@ jobs:
           else
             pnpm publish:npm
           fi
+      - name: Verify exact registry installations and provenance metadata
+        if: ${{ !inputs.dry-run }}
+        run: pnpm release:verify:registry
