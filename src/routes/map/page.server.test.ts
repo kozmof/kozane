@@ -1,4 +1,4 @@
-import type { StaticBackendData } from "$lib/backend/static-backend.js";
+import type { StaticBackendData } from "../../../packages/client/src/backend/static-backend.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addNamespace } from "$db/api/namespace";
 import { addPartition } from "$db/api/partition";

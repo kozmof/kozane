@@ -3,9 +3,13 @@ import { error } from "@sveltejs/kit";
 import { getDBURL, getWorkspaceRoot, getWorkspaceUiConfig } from "$db/internal/config";
 import { normalizeTag } from "$lib/tag";
 import { loadTreemapSnapshot } from "$lib/server/treemap-snapshot";
-import { mapView, validActivityDay } from "$lib/backend/views/map.js";
+import { mapView, validActivityDay } from "../../../packages/client/src/backend/views/map.js";
 import { pageBackendData } from "$lib/server/page-backend.js";
-export type { MapPartition, MapScope, MapSpoke } from "$lib/backend/views/map.js";
+export type {
+  MapPartition,
+  MapScope,
+  MapSpoke,
+} from "../../../packages/client/src/backend/views/map.js";
 import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 
 /**

@@ -1,8 +1,8 @@
 import { expect, it, vi } from "vitest";
 import { bindViewWrites } from "./view-writes.js";
-import { BackendSignals } from "../../../../../src/lib/backend/signals.js";
-import { StaticBackend } from "../../../../../src/lib/backend/static-backend.js";
-import { HttpBackend } from "../../../../../src/lib/backend/http-backend.js";
+import { BackendSignals } from "../../backend/signals.js";
+import { StaticBackend } from "../../backend/static-backend.js";
+import { HttpBackend } from "../../backend/http-backend.js";
 const capabilities = {
   writable: true,
   persistent: true,

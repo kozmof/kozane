@@ -1,4 +1,4 @@
-import type { MapViewData } from "../../../../src/lib/backend/views/map.js";
+import type { MapViewData } from "../backend/views/map.js";
 /** Older exports may omit the card-scan warning. */
 export type MapPageData = Omit<MapViewData, "cardsTruncated"> &
   Partial<Pick<MapViewData, "cardsTruncated">>;

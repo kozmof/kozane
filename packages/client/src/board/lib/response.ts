@@ -1,1 +1,1 @@
-export * from "../../../../../src/lib/backend/decoders/response.js";
+export * from "../../backend/decoders/response.js";

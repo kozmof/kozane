@@ -1,4 +1,4 @@
-import type { BackendCapabilities } from "../backend/contract.js";
+import type { BackendCapabilities } from "../../../packages/client/src/backend/contract.js";
 import { getDBURL, getWorkspaceRoot } from "../../db/internal/config.js";
 import { isMemoryDbUrl } from "../db-url.js";
 import { readApiKeyResult } from "./api-key.js";

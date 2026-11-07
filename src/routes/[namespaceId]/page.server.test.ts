@@ -2,7 +2,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { StaticBackend, type StaticBackendData } from "$lib/backend/static-backend.js";
+import {
+  StaticBackend,
+  type StaticBackendData,
+} from "../../../packages/client/src/backend/static-backend.js";
 const roots: string[] = [];
 afterEach(async () => {
   vi.unstubAllEnvs();

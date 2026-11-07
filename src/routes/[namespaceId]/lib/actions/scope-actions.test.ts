@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HttpBackend } from "$lib/backend/http-backend.js";
+import { HttpBackend } from "../../../../../packages/client/src/backend/http-backend.js";
 import { NamespaceState } from "../../../../../packages/client/src/board/namespace-state.svelte.js";
 import { createBackendScopeActions } from "../../../../../packages/client/src/board/lib/actions/backend-scope-actions.js";
 const capabilities = {

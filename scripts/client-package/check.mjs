@@ -109,8 +109,9 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
     new URL("../../src/test-utils/backend-inputs.typecheck.ts", import.meta.url),
     "utf8",
   );
-  assert.equal((resourceFixture.match(/\.\.\/lib\/backend\/index\.js/g) ?? []).length, 2);
-  writeFileSync(inputs, resourceFixture.replaceAll("../lib/backend/index.js", "@kozane/client"));
+  const backendSource = "../../packages/client/src/backend/index.js";
+  assert.equal(resourceFixture.split(backendSource).length - 1, 2);
+  writeFileSync(inputs, resourceFixture.replaceAll(backendSource, "@kozane/client"));
   run(
     process.execPath,
     [

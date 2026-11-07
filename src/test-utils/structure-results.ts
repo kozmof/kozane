@@ -4,7 +4,7 @@ import type {
   NamespaceCreateResult,
   PartitionCreateResult,
   PartitionRemoveResult,
-} from "../lib/backend/index.js";
+} from "../../packages/client/src/backend/index.js";
 /** Complete response fixtures shared by HTTP routing and decoding checks. */
 export const structureResults = {
   "namespaces.create": {

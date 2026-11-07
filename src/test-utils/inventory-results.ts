@@ -3,7 +3,7 @@ import type {
   InventoryRemoveResult,
   InventoryStowResult,
   InventoryTakeResult,
-} from "../lib/backend/index.js";
+} from "../../packages/client/src/backend/index.js";
 export const inventoryResults = {
   "inventories.create": {
     id: "i",

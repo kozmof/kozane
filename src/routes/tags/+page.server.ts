@@ -6,7 +6,7 @@ import { workspaceServiceContext } from "$lib/server/service-context";
 import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
 import { normalizeTag } from "$lib/tag";
-import { selectTagHits, tagsView } from "$lib/backend/views/tags.js";
+import { selectTagHits, tagsView } from "../../../packages/client/src/backend/views/tags.js";
 import { pageBackendData } from "$lib/server/page-backend.js";
 import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 

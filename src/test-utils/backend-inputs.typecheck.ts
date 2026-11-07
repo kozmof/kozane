@@ -9,15 +9,16 @@ import type {
   TagsResult,
   MapResult,
   WarpDirectoryResult,
-} from "../lib/backend/index.js";
+} from "../../packages/client/src/backend/index.js";
 
 /** Compiled consumer fixture. Never invoked or included in a runtime entry point. */
 export function checkBackendInputs(backend: KozaneBackend): void {
   void backend.subscribe(() => {});
   void backend.subscribeState((state) => {
     if (state.status === "ready") {
-      const refreshError: import("../lib/backend/index.js").BackendError | undefined =
-        state.refreshError;
+      const refreshError:
+        | import("../../packages/client/src/backend/index.js").BackendError
+        | undefined = state.refreshError;
       void refreshError?.retryAfterMs;
     }
   });

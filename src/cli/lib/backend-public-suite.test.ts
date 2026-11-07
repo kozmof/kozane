@@ -1,11 +1,11 @@
 import { expect, it } from "vitest";
-import { StaticBackend } from "../../lib/backend/static-backend";
-import { HttpBackend } from "../../lib/backend/http-backend";
+import { StaticBackend } from "../../../packages/client/src/backend/static-backend.js";
+import { HttpBackend } from "../../../packages/client/src/backend/http-backend.js";
 import {
   backendContractCases,
   runBackendContract,
   BackendContractFailure,
-} from "../../lib/backend/testing";
+} from "../../../packages/client/src/backend/testing/index.js";
 import * as database from "../../db/database";
 import * as services from "../../services/index";
 import * as schema from "../../db/schema";

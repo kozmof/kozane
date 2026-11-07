@@ -2,12 +2,12 @@
   import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
   import type { NavigationAdapter } from "$lib/navigation.js";
-  import type { KozaneBackend } from "$lib/backend/contract.js";
-  import type { PollLifecycle } from "$lib/backend/workspace-poller.js";
+  import type { KozaneBackend } from "../backend/contract.js";
+  import type { PollLifecycle } from "../backend/workspace-poller.js";
   import type { MapPageData, MapSelection } from "./types.js";
   import { untrack } from "svelte";
-  import { startDatasetView } from "$lib/backend/dataset-view.js";
-  import { mapView, type MapViewData } from "$lib/backend/views/map.js";
+  import { startDatasetView } from "../backend/dataset-view.js";
+  import { mapView, type MapViewData } from "../backend/views/map.js";
   import { css } from "styled-system/css";
   import { buildTagTree, normalizeTag } from "$lib/tag";
   import NavIcon from "$lib/components/NavIcon.svelte";

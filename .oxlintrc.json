@@ -196,7 +196,7 @@
     {
       // Shared client views depend on adapters instead of route or Node runtime modules.
       "files": ["packages/client/src/**"],
-      "excludeFiles": ["**/*.test.ts"],
+      "excludeFiles": ["**/*.test.ts", "packages/client/src/backend/**"],
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [
           { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Shared client views use injected browser-safe adapters." },
@@ -207,6 +207,17 @@
           { "property": "fetch", "message": "Shared client views use the injected backend." },
           { "property": "fetcher", "message": "Shared client views use the injected backend." }
         ]
+      }
+    },
+    {
+      // Backend adapters may use their transport but stay browser-safe.
+      "files": ["packages/client/src/backend/**"],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": ["error", { "patterns": [
+          { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Backend adapters must stay browser-safe." },
+          { "group": ["**/db/**", "$db/**"], "allowTypeImports": true, "message": "Backend adapters may import database types only." }
+        ] }]
       }
     },
     {

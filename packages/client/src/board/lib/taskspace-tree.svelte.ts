@@ -1,5 +1,5 @@
-import type { KozaneBackend } from "$lib/backend/contract.js";
-import { BackendError } from "$lib/backend/contract.js";
+import type { KozaneBackend } from "../../backend/contract.js";
+import { BackendError } from "../../backend/contract.js";
 import type { TaskspaceEntry, TaskspaceTruncation } from "$lib/types";
 import { entryNameIssue } from "$lib/entry-name";
 /** What is known about one directory of one taskspace. */

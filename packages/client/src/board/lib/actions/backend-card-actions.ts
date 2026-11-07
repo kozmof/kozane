@@ -18,10 +18,10 @@ function readCards(value: unknown) {
     ? cards
     : undefined;
 }
-import type { KozaneBackend } from "$lib/backend/contract.js";
-import { BackendError } from "$lib/backend/contract.js";
-import { readCard, readInventory } from "$lib/backend/decoders/snapshot-reader.js";
-import { readArray } from "$lib/backend/decoders/response.js";
+import type { KozaneBackend } from "../../../backend/contract.js";
+import { BackendError } from "../../../backend/contract.js";
+import { readCard, readInventory } from "../../../backend/decoders/snapshot-reader.js";
+import { readArray } from "../../../backend/decoders/response.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
 import { storedCardIds } from "$lib/inventory";
 import { readObject, readString, readStringArray } from "../response.js";

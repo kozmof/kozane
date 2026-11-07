@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
-import { tagDataset } from "$lib/backend/tags.fixtures.js";
+import { tagDataset } from "../../../packages/client/src/backend/tags.fixtures.js";
 import TagsPage from "./+page.svelte";
 import { buildTagTree } from "$lib/tag";
 import type { TagHit } from "$lib/types";

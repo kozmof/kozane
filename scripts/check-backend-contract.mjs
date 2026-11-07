@@ -13,7 +13,7 @@ function source(path) {
   );
 }
 const declarations = ["contract", "resources", "taskspaces-api"].map((name) =>
-  source(`src/lib/backend/${name}.ts`),
+  source(`packages/client/src/backend/${name}.ts`),
 );
 const interfaces = new Map();
 for (const file of declarations) {
@@ -35,7 +35,7 @@ for (const member of backend.members) {
     }
   }
 }
-const matrixURL = new URL("src/lib/backend/operation-matrix.md", root);
+const matrixURL = new URL("packages/client/src/backend/operation-matrix.md", root);
 const matrix = readFileSync(matrixURL, "utf8");
 const rows = matrixOperations(matrix);
 const problems = [];

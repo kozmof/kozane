@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { BoardWarps } from "../../../../packages/client/src/board/lib/board-warps.svelte.js";
 import { NamespaceState } from "../../../../packages/client/src/board/namespace-state.svelte.js";
 import { data } from "../page.fixtures.js";
-import { BackendError } from "$lib/backend/contract.js";
+import { BackendError } from "../../../../packages/client/src/backend/contract.js";
 import { createDemoNavigation } from "$lib/navigation.js";
 
 function setup(readonly = false) {

@@ -52,4 +52,4 @@ export function fetchWarpDirectory(fetcher: typeof fetch, namespaceId: string): 
   return fetcher(apiUrl(namespaceId, "/warp-directory"));
 }
 
-export { parseWarpEntries } from "$lib/backend/decoders/warp-directory.js";
+export { parseWarpEntries } from "../../../../../packages/client/src/backend/decoders/warp-directory.js";

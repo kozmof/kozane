@@ -10,9 +10,9 @@ async function attempt<T>(
     return { ok: false, error };
   }
 }
-import type { KozaneBackend } from "$lib/backend/contract.js";
-import { BackendError } from "$lib/backend/contract.js";
-import { readScopeArea } from "$lib/backend/decoders/snapshot-reader.js";
+import type { KozaneBackend } from "../../../backend/contract.js";
+import { BackendError } from "../../../backend/contract.js";
+import { readScopeArea } from "../../../backend/decoders/snapshot-reader.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
 import type { BoardRect } from "$lib/constants";
 import type { TaskspaceDirectoryOutcome } from "$lib/types";

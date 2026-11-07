@@ -39,7 +39,7 @@ export async function buildRestorationHarness(
   for (const name of ["verified-loader.ts", "deadline.ts"])
     await copyFile(new URL(`../browser-spike/${name}`, import.meta.url), join(sources, name));
   await copyFile(
-    new URL("../../src/lib/backend/operation-queue.ts", import.meta.url),
+    new URL("../../packages/client/src/backend/operation-queue.ts", import.meta.url),
     join(sources, "operation-queue.ts"),
   );
   execFileSync(process.execPath, [join(sources, "generate-fixture.mjs"), output], {

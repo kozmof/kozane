@@ -3,8 +3,8 @@
   import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
   import { base } from "$app/paths";
   import { untrack } from "svelte";
-  import { StaticBackend } from "$lib/backend/static-backend.js";
-  import { HttpBackend } from "$lib/backend/http-backend.js";
+  import { StaticBackend } from "../../packages/client/src/backend/static-backend.js";
+  import { HttpBackend } from "../../packages/client/src/backend/http-backend.js";
   import { NamespacesView } from "../../packages/client/src/namespaces/index.js";
   import { css } from "styled-system/css";
 

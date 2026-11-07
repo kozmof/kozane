@@ -2,10 +2,10 @@
   import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
   import type { NavigationAdapter } from "$lib/navigation.js";
-  import type { KozaneBackend, NamespaceGetResult } from "$lib/backend/contract.js";
+  import type { KozaneBackend, NamespaceGetResult } from "../backend/contract.js";
   import type { Snippet } from "svelte";
   import { untrack } from "svelte";
-  import { NamespaceIndex } from "$lib/backend/namespace-index.svelte.js";
+  import { NamespaceIndex } from "../backend/namespace-index.svelte.js";
   import { css } from "styled-system/css";
   import NavIcon from "$lib/components/NavIcon.svelte";
 

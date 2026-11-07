@@ -3,7 +3,7 @@ import type {
   ScopeRenameResult,
   ScopeCreateAreaResult,
   WarpCreateResult,
-} from "../lib/backend/index.js";
+} from "../../packages/client/src/backend/index.js";
 /** Complete service-shaped results used by backend transport and decoder tests. */
 export const geometryResults = {
   "scopes.create": { id: "s" } satisfies ScopeCreateResult,

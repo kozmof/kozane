@@ -11,7 +11,7 @@ Reed runtime dependency.
 This candidate is not ready for publication. Complete production consumer checks and
 workspace conversion remain under Phase 3.
 
-UI implementations and their tests live in `packages/client/src`. Run `pnpm build:client`
+Views, backend adapters, contracts and their tests live in `packages/client/src`. Run `pnpm build:client`
 from the repository root to build core before client. The build collects the remaining
 portable shared helpers and rewrites workspace aliases before packaging.
 Generated staging files and `dist` are ignored. Runtime entries exclude test helpers,

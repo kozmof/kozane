@@ -1,7 +1,7 @@
-import type { KozaneBackend } from "$lib/backend/contract.js";
-import { BackendError } from "$lib/backend/contract.js";
-import { readInventory } from "$lib/backend/decoders/snapshot-reader.js";
-import { readPlacements } from "$lib/backend/decoders/placements.js";
+import type { KozaneBackend } from "../../backend/contract.js";
+import { BackendError } from "../../backend/contract.js";
+import { readInventory } from "../../backend/decoders/snapshot-reader.js";
+import { readPlacements } from "../../backend/decoders/placements.js";
 function backendFailureMessage(error: unknown, fallback: string) {
   return error instanceof BackendError ? error.message : fallback;
 }

@@ -1,4 +1,4 @@
-import { HttpBackend } from "$lib/backend/http-backend.js";
+import { HttpBackend } from "../../../packages/client/src/backend/http-backend.js";
 import { createBackendBoardPersistence } from "../../../packages/client/src/board/lib/board-backend-persistence.js";
 import { createMemoryPreferences } from "$lib/preferences.js";
 import { describe, it, expect, beforeEach } from "vitest";

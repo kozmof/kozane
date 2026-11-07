@@ -1,5 +1,5 @@
-import type { BackendCapabilities } from "../backend/contract.js";
-import type { StaticBackendData } from "../backend/static-backend.js";
+import type { BackendCapabilities } from "../../../packages/client/src/backend/contract.js";
+import type { StaticBackendData } from "../../../packages/client/src/backend/static-backend.js";
 import { httpBackendCapabilities } from "./backend-capabilities.js";
 /** Optional fields retain compatibility with page data from older exports. */
 export interface PageBackendData {

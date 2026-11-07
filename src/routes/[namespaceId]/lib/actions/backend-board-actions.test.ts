@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { NamespaceState } from "../../../../../packages/client/src/board/namespace-state.svelte.js";
-import { HttpBackend } from "$lib/backend/http-backend.js";
+import { HttpBackend } from "../../../../../packages/client/src/backend/http-backend.js";
 import { createBackendBoardActions } from "../../../../../packages/client/src/board/lib/actions/backend-board-actions.js";
 import { data } from "../../page.fixtures.js";
 const capabilities = {

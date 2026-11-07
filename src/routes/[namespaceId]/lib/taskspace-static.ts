@@ -1,1 +1,4 @@
-export { findStaticNode, staticDirectoryEntries } from "$lib/backend/static-files.js";
+export {
+  findStaticNode,
+  staticDirectoryEntries,
+} from "../../../../packages/client/src/backend/static-files.js";

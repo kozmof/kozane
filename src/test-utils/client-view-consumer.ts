@@ -15,12 +15,12 @@ import {
   type NavigationDriver,
 } from "../../packages/client/src/index.js";
 
-import { tagDataset } from "../lib/backend/tags.fixtures.js";
-import { tagsView } from "../lib/backend/views/tags.js";
+import { tagDataset } from "../../packages/client/src/backend/tags.fixtures.js";
+import { tagsView } from "../../packages/client/src/backend/views/tags.js";
 import { boardViewProps } from "./board-view-props.js";
 import { boardCanvasProps } from "./board-canvas-props.js";
 import { mapDataset } from "./map-dataset.js";
-import { mapView } from "../lib/backend/views/map.js";
+import { mapView } from "../../packages/client/src/backend/views/map.js";
 import { staticEditorContext } from "./editor-context.js";
 
 export async function renderViews() {

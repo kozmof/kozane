@@ -1,6 +1,6 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import type { BackendCapabilities } from "../../../src/lib/backend/contract.js";
+  import type { BackendCapabilities } from "./backend/contract.js";
   let { capabilities, lifetimeNotice, floating = false }: { capabilities: Pick<BackendCapabilities, "writable">; lifetimeNotice?: string; floating?: boolean } = $props();
 </script>
 

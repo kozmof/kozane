@@ -1,4 +1,4 @@
-import { BackendError, type KozaneBackend } from "../../../../../src/lib/backend/contract.js";
+import { BackendError, type KozaneBackend } from "../../backend/contract.js";
 
 /** Bind UI mutation chains to one generation and check readiness at every dispatch. */
 export function bindViewWrites(backend: KozaneBackend, canWrite: () => boolean): KozaneBackend {

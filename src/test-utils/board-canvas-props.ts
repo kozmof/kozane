@@ -1,5 +1,5 @@
 import { NamespaceState, type BoardCanvasProps } from "../../packages/client/src/board/index.js";
-import { StaticBackend, type SnapshotData } from "../lib/backend/index.js";
+import { StaticBackend, type SnapshotData } from "../../packages/client/src/backend/index.js";
 import { createDemoNavigation } from "../lib/navigation.js";
 
 /** Initialize the public canvas without a route, storage, fetch, or test-runner globals. */

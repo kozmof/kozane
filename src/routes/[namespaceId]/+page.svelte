@@ -7,9 +7,9 @@
   import { createAppNavigationDriver } from "./lib/app-navigation.js";
   import { createNodeNavigation, type NavigationAdapter, type NavigationDriver } from "$lib/navigation.js";
   import { createSessionPreferences, type PreferenceStorage } from "$lib/preferences.js";
-  import { HttpBackend } from "$lib/backend/http-backend.js";
-  import { StaticBackend } from "$lib/backend/static-backend.js";
-  import { browserPollLifecycle } from "$lib/backend/workspace-poller.js";
+  import { HttpBackend } from "../../../packages/client/src/backend/http-backend.js";
+  import { StaticBackend } from "../../../packages/client/src/backend/static-backend.js";
+  import { browserPollLifecycle } from "../../../packages/client/src/backend/workspace-poller.js";
   import { BoardView } from "../../../packages/client/src/board/index.js";
 
   let { data, navigation = createNodeNavigation({ base, boardTrailingSlash: () => page.url.pathname.endsWith("/") }), routing = createAppNavigationDriver(), preferences = createSessionPreferences() }: PageProps & { navigation?: NavigationAdapter; routing?: NavigationDriver; preferences?: PreferenceStorage } = $props();

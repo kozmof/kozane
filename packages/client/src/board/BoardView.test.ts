@@ -1,10 +1,10 @@
-import { BackendError } from "../../../../src/lib/backend/contract.js";
-import { BackendSignals } from "../../../../src/lib/backend/signals.js";
-import type { KozaneBackend, SnapshotResult } from "../../../../src/lib/backend/contract.js";
+import { BackendError } from "../backend/contract.js";
+import { BackendSignals } from "../backend/signals.js";
+import type { KozaneBackend, SnapshotResult } from "../backend/contract.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { BoardView } from "../index.js";
-import { HttpBackend, StaticBackend } from "../../../../src/lib/backend/index.js";
+import { HttpBackend, StaticBackend } from "../backend/index.js";
 import { boardViewProps } from "../../../../src/test-utils/board-view-props.js";
 const capabilities = {
   writable: true,

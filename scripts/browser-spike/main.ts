@@ -3,7 +3,7 @@ import { deadline } from "./deadline";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { sql } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
-import { OperationQueue } from "../../src/lib/backend/operation-queue";
+import { OperationQueue } from "../../packages/client/src/backend/operation-queue.js";
 
 import { verifiedWorker, verifiedModule, type AssetManifest } from "./verified-loader";
 let worker: Worker;

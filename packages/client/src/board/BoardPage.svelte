@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { startDatasetView } from "$lib/backend/dataset-view.js";
-  import { BackendError } from "$lib/backend/contract.js";
+  import { startDatasetView } from "../backend/dataset-view.js";
+  import { BackendError } from "../backend/contract.js";
   import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
   import { onMount, onDestroy, tick, untrack } from "svelte";
@@ -36,7 +36,7 @@
   import type { FileManagementActions } from "./lib/file-management.js";
   import { InFlight } from "./lib/in-flight.js";
   import { bindViewWrites } from "./lib/view-writes.js";
-  import { startSnapshotView, type SnapshotViewStatus } from "$lib/backend/snapshot-view.js";
+  import { startSnapshotView, type SnapshotViewStatus } from "../backend/snapshot-view.js";
 
   let { data, backend, lifetimeNotice, navigation, routing, preferences, readRouteUrl = () => null, initialDataApplied = false, retryIntervalMs, lifecycle, isHidden = () => false }: BoardViewProps = $props();
 

@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { DestinationTracker } from "../../../scripts/restoration-harness/navigation";
 import { ResetSession, type ResetOptions } from "../../../scripts/restoration-harness/reset";
 import { HarnessFailure, restoreCandidate } from "../../../scripts/restoration-harness/recovery";
-import { OperationQueue } from "../../lib/backend/operation-queue";
+import { OperationQueue } from "../../../packages/client/src/backend/operation-queue.js";
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {

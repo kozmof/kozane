@@ -1,5 +1,5 @@
-import type { KozaneBackend, MutationOptions as SaveOptions } from "$lib/backend/contract.js";
-import { BackendError } from "$lib/backend/contract.js";
+import type { KozaneBackend, MutationOptions as SaveOptions } from "../backend/contract.js";
+import { BackendError } from "../backend/contract.js";
 import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
 export type EditorSessionContext = {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { css } from "styled-system/css";
-  import type { BackendState, KozaneBackend } from "../../../src/lib/backend/contract.js";
+  import type { BackendState, KozaneBackend } from "./backend/contract.js";
   let { backend, failed = false, message, retry, floating = false }: {
     backend?: Pick<KozaneBackend, "state" | "subscribeState">;
     failed?: boolean;

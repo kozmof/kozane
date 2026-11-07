@@ -44,6 +44,8 @@ function destination(file) {
   const relative = slash(path.relative(root, file));
   if (relative.startsWith("src/lib/server/"))
     throw new Error(`Client cannot contain server modules: ${relative}`);
+  if (relative.startsWith("packages/client/src/backend/"))
+    return "lib/backend/" + relative.slice("packages/client/src/backend/".length);
   if (relative.startsWith("packages/client/src/"))
     return "lib/client/" + relative.slice("packages/client/src/".length);
   if (relative.startsWith("src/lib/")) return relative.slice(4);
@@ -177,9 +179,9 @@ function rewrite(source, importer) {
 for (const name of ["index", "ui", "testing", "board", "tags", "map", "editor"]) {
   const entry =
     name === "index"
-      ? path.join(root, "src/lib/backend/index.ts")
+      ? path.join(packageRoot, "src/backend/index.ts")
       : name === "testing"
-        ? path.join(root, "src/lib/backend/testing/index.ts")
+        ? path.join(packageRoot, "src/backend/testing/index.ts")
         : path.join(packageRoot, "src", name === "ui" ? "ui.ts" : `${name}/index.ts`);
   queue.push(entry);
   await fs.writeFile(
