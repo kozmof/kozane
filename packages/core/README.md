@@ -31,6 +31,9 @@ Domain limits and defaults are available from the root entry, including `CONTENT
 from `@kozane/core/database` to apply configured write limits. The host owns server settings
 and gesture thresholds.
 
+Taskspace listing/export bounds and `taskspaceNameIssue` are also exported from the root
+entry. Hosts perform filesystem operations using these shared limits and name checks.
+
 The root entry also exports `byteLength`, `entryNameIssue`, `errorMessage` and `isPlainObject`
 for shared adapter checks. `isPlainObject` accepts non-null objects other than arrays and
 does not inspect prototypes. JSON input preparation through services applies its own

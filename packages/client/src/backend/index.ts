@@ -14,3 +14,9 @@ export {
   ZOOM_MAX,
   clampZoom,
 } from "../constants/canvas.js";
+
+export * from "../warp-list.js";
+export * from "../tag/truncation.js";
+
+export * from "../constants/map.js";
+export * from "../constants/tag.js";

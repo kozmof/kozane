@@ -15,7 +15,7 @@
   import { BoardGestures } from "../lib/board-gestures.svelte.js";
   import { dropTargetAt } from "../lib/inventory-drop.js";
   import { PALETTE } from "$lib/palette";
-  import { clampZoom } from "$lib/constants";
+  import { clampZoom } from "../../constants/index.js";
   import {
     buildGlueGroupMap,
     cardIdsOverlapping,

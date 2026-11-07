@@ -16,7 +16,7 @@
   import ActivityStrip from "./components/ActivityStrip.svelte";
   import MapDescription from "./components/MapDescription.svelte";
   import MapDrawing from "./components/MapDrawing.svelte";
-  import { DRAG_THRESHOLD, MAP_DEFAULT_VIEWPORT } from "$lib/constants";
+  import { DRAG_THRESHOLD, MAP_DEFAULT_VIEWPORT } from "../constants/index.js";
   import {
     buildMapLayout,
     tagLinks,

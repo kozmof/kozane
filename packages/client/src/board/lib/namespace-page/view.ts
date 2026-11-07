@@ -1,5 +1,5 @@
 /** Where the view is centred, and which warp an arrow key moves to. */
-import { clamp } from "$lib/constants.js";
+import { clamp } from "../../../constants/index.js";
 import { type Point } from "./geometry.js";
 
 /** The world coordinate the viewport is centred on, along one axis. */

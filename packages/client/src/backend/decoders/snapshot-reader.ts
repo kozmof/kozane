@@ -12,7 +12,7 @@ import type {
   Inventory,
   CardInventory,
 } from "../../../../../src/lib/types.js";
-import { PATH_KINDS, type PathKind } from "../../../../../src/lib/constants.js";
+import { PATH_KINDS, type PathKind } from "../../constants/index.js";
 import {
   readArray,
   readBoolean,

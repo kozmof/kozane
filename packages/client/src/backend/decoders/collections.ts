@@ -1,4 +1,4 @@
-import { INVENTORY_SLOT_MAX } from "../../../../../src/lib/constants.js";
+import { INVENTORY_SLOT_MAX } from "../../constants/index.js";
 import type { CardSetStackingResult } from "../resources.js";
 import { readPlacements } from "./placements.js";
 import { readArray, readFiniteNumber, readString, readStringArray } from "./response.js";

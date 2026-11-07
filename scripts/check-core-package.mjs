@@ -218,6 +218,7 @@ ${client.snapshots}
     "plain-object",
     "entry-name",
     "error-message",
+    "constants/taskspace",
   ]) {
     assert.ok(
       entries.has(`package/dist/packages/core/src/${path}.js`),
@@ -294,6 +295,11 @@ ${client.snapshots}
     assert.equal(core.errorMessage(new Error('failure')), 'failure');
     assert.equal(core.errorMessage({message:'object'}), '[object Object]');
     assert.equal(core.errorMessage(Symbol('value')), 'Symbol(value)');
+    assert.equal(core.TASKSPACE_DIR_ENTRIES_MAX,500);
+    assert.equal(core.TASKSPACE_FILE_BYTES_MAX,16*1024*1024);
+    assert.equal(core.TASKSPACE_SSG_DEPTH_MAX,64);
+    assert.equal(core.taskspaceNameIssue('notes'),null);
+    assert.equal(core.taskspaceNameIssue('../escape'),'Taskspace name cannot contain a path separator');
     assert.deepEqual(core.checkCardContent(' ok ',core.CONTENT_MAX), {ok:true,content:'ok'});
     assert.equal(core.contentLimitIssue('xx',1), 'content must be a string under 1 characters');
     assert.deepEqual(core.chunked([1,2,3],{size:2}), [[1,2],[3]]);

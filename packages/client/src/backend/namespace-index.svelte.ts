@@ -1,7 +1,7 @@
 import { BackendError } from "./contract.js";
 import type { KozaneBackend, NamespaceGetResult } from "./contract.js";
 import { readNamespaceList } from "./decoders/namespaces.js";
-import { NAME_MAX } from "../../../../src/lib/constants.js";
+import { NAME_MAX } from "../constants/index.js";
 
 export type NamespaceRow = NamespaceGetResult;
 type NamespaceBackend = Pick<

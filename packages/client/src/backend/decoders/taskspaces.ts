@@ -1,4 +1,4 @@
-import { PATH_KINDS } from "../../../../../src/lib/constants.js";
+import { PATH_KINDS } from "../../constants/index.js";
 import type {
   TaskspaceEntry,
   TaskspaceEntryKind,

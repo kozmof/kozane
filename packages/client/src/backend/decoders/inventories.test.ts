@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { INVENTORY_SLOT_MAX } from "../../../../../src/lib/constants.js";
+import { INVENTORY_SLOT_MAX } from "../../constants/index.js";
 import { inventoryResults } from "../../../../../src/test-utils/inventory-results.js";
 import {
   readInventoryResult,

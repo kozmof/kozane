@@ -27,7 +27,7 @@
     type TagCounts,
     type TagNode,
   } from "$lib/tag";
-  import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
+  import { TAG_HITS_SHOWN_MAX } from "../constants/index.js";
   import type { TagHit } from "$lib/types";
   import TagResults from "./TagResults.svelte";
   import { activeRowClass, countClass, noteClass, rowClass } from "./styles.js";

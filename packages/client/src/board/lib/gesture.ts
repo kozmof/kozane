@@ -1,4 +1,4 @@
-import { DRAG_THRESHOLD } from "$lib/constants";
+import { DRAG_THRESHOLD } from "../../constants/index.js";
 
 /**
  * Track where a pointer gesture began and whether it crossed the drag threshold. Each gesture

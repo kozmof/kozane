@@ -39,11 +39,17 @@ function local(source, importer) {
     path.join(target, "index.mjs"),
   ])
     if (existsSync(file) && statSync(file).isFile())
-      return file === path.join(root, "src/lib/ui-config.ts")
-        ? path.join(packageRoot, "src/ui-config.ts")
-        : file === path.join(root, "src/lib/constants/canvas.ts")
-          ? path.join(packageRoot, "src/constants/canvas.ts")
-          : file;
+      return file === path.join(root, "src/lib/constants.ts")
+        ? path.join(packageRoot, "src/constants/index.ts")
+        : file === path.join(root, "src/lib/ui-config.ts")
+          ? path.join(packageRoot, "src/ui-config.ts")
+          : file === path.join(root, "src/lib/constants/canvas.ts")
+            ? path.join(packageRoot, "src/constants/canvas.ts")
+            : file === path.join(root, "src/lib/warp-list.ts")
+              ? path.join(packageRoot, "src/warp-list.ts")
+              : file === path.join(root, "src/lib/tag/truncation.ts")
+                ? path.join(packageRoot, "src/tag/truncation.ts")
+                : file;
   throw new Error(`Unresolved client import ${source} from ${importer}`);
 }
 function destination(file) {
@@ -202,6 +208,20 @@ while (queue.length) {
   const output = path.join(staging, destination(file));
   await fs.mkdir(path.dirname(output), { recursive: true });
   let source = await fs.readFile(file, "utf8");
+  if (slash(path.relative(root, file)).startsWith("src/lib/")) {
+    const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    if (
+      !tree.statements.every(
+        (node) =>
+          ts.isImportDeclaration(node) ||
+          ts.isExportDeclaration(node) ||
+          ts.isTypeAliasDeclaration(node) ||
+          ts.isInterfaceDeclaration(node) ||
+          ts.isEmptyStatement(node),
+      )
+    )
+      throw new Error(`Client cannot copy application helper implementations: ${file}`);
+  }
   if (file.endsWith(".svelte"))
     source = source.replace(
       /(<script[^>]*>)([\s\S]*?)(<\/script>)/g,

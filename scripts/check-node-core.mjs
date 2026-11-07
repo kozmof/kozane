@@ -97,6 +97,13 @@ if (!process.execArgv.includes(flag)) {
   const legacyServices = await legacy("services/index.js");
   for (const [name, value] of Object.entries(await legacy("lib/ui-config.js")))
     assert.equal(value, client[name], `Node UI configuration must use public client: ${name}`);
+  for (const path of ["lib/warp-list.js", "lib/tag/truncation.js", "lib/constants/map.js"])
+    for (const [name, value] of Object.entries(await legacy(path)))
+      assert.equal(value, client[name], `Node reader helper must use public client: ${name}`);
+  assert.equal(
+    (await legacy("lib/constants/tag.js")).TAG_HITS_SHOWN_MAX,
+    client.TAG_HITS_SHOWN_MAX,
+  );
   const canvas = await legacy("lib/constants/canvas.js");
   for (const name of [
     "ARROW_KEYS",
@@ -144,6 +151,7 @@ if (!process.execArgv.includes(flag)) {
     "lib/plain-object.js",
     "lib/entry-name.js",
     "lib/error-message.js",
+    "lib/constants/taskspace.js",
   ]) {
     for (const [name, value] of Object.entries(await legacy(path)))
       assert.equal(value, core[name], `Node helper must use public core: ${name}`);

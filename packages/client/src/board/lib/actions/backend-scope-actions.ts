@@ -14,7 +14,7 @@ import type { KozaneBackend } from "../../../backend/contract.js";
 import { BackendError } from "../../../backend/contract.js";
 import { readScopeArea } from "../../../backend/decoders/snapshot-reader.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
-import type { BoardRect } from "$lib/constants";
+import type { BoardRect } from "../../../constants/index.js";
 import type { TaskspaceDirectoryOutcome } from "$lib/types";
 import { readString } from "../response.js";
 /** Answer `fallback` as the reason when `run` throws, as `fetch` does when offline. */

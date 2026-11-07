@@ -1,4 +1,4 @@
-import type { BoardRect } from "$lib/constants";
+import type { BoardRect } from "../../constants/index.js";
 import type { Gesture, HorizontalGesture } from "./gesture.js";
 import type { Point } from "./namespace-page.js";
 

@@ -1,4 +1,4 @@
-import { SCOPE_AREA_DRAW_MIN } from "$lib/constants";
+import { SCOPE_AREA_DRAW_MIN } from "../../constants/index.js";
 import { gestureOrigin, markMoved, markMovedHorizontally } from "./gesture.js";
 import {
   draggedAreaId,

@@ -7,7 +7,7 @@ import {
   tagMatcher,
   type TagNode,
 } from "../../../../../src/lib/tag.js";
-import { TAG_HITS_SHOWN_MAX } from "../../../../../src/lib/constants.js";
+import { TAG_HITS_SHOWN_MAX } from "../../constants/index.js";
 import { BackendError } from "../contract.js";
 
 /**

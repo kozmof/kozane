@@ -1,6 +1,6 @@
 import { createNodeNavigation } from "../../navigation.js";
 import type { Warp } from "$lib/types";
-import type { WarpListEntry } from "$lib/warp-list";
+import type { WarpListEntry } from "../../warp-list.js";
 
 /**
  * Exclude the focused warp once the viewport is as centered on it as canvas bounds allow.

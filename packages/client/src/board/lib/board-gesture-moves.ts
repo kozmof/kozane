@@ -3,7 +3,7 @@
  * gesture is open, and again with `snapToGrid` when it is released.
  */
 import { CARD_WIDTH_RANGE } from "../../ui-config.js";
-import { SCOPE_AREA_MIN_SIZE } from "$lib/constants";
+import { SCOPE_AREA_MIN_SIZE } from "../../constants/index.js";
 import type {
   AreaDragGesture,
   AreaResizeGesture,

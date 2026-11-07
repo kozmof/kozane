@@ -1,6 +1,6 @@
 <script lang="ts">
   import { css } from "styled-system/css";
-  import { groupWarpEntries, moveHighlight, type WarpListEntry } from "$lib/warp-list";
+  import { groupWarpEntries, moveHighlight, type WarpListEntry } from "../../warp-list.js";
 
   let {
     entries,

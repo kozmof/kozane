@@ -28,7 +28,7 @@
   import { BoardWarps } from "./lib/board-warps.svelte.js";
   import { BoardView } from "./lib/board-view.svelte.js";
   import { PendingFrame } from "./lib/pending-frame.svelte.js";
-  import { clampZoom } from "$lib/constants";
+  import { clampZoom } from "../constants/index.js";
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import { FileEditor, EditorSession } from "../editor/index.js";
   import FilePalette from "./components/FilePalette.svelte";

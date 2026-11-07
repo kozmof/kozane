@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css } from "styled-system/css";
   import { cardSpan } from "$lib/inventory";
-  import { INVENTORY_CELL } from "$lib/constants";
+  import { INVENTORY_CELL } from "../../constants/index.js";
   import type { Inventory } from "$lib/types";
   import type { NamespaceState } from "../namespace-state.svelte.js";
   import type { createBackendInventoryActions } from "../lib/backend-inventory-actions.js";

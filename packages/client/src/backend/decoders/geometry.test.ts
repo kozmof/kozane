@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { SCOPE_AREA_MIN_SIZE } from "../../../../../src/lib/constants.js";
+import { SCOPE_AREA_MIN_SIZE } from "../../constants/index.js";
 import { geometryResults } from "../../../../../src/test-utils/geometry-results.js";
 import { readScopeRenamed, readScopeAreaResult, readWarpResult } from "./geometry.js";
 import { readCreatedId, readMutationOk } from "./structure.js";

@@ -30,6 +30,13 @@ import { BoardView as PublicBoard } from "@kozane/client/board";
 import { TagsView as PublicTags } from "@kozane/client/tags";
 import { MapView as PublicMap } from "@kozane/client/map";
 import { FileEditor as PublicEditor } from "@kozane/client/editor";
+import {
+  cardMetrics,
+  nearestCardHint,
+  truncationReasons,
+  type CardMetrics,
+  type WarpListEntry,
+} from "@kozane/client";
 assert(BoardView === PublicBoard, "Board entry identity");
 assert(TagsView === PublicTags, "Tags entry identity");
 assert(MapView === PublicMap, "Map entry identity");
@@ -42,6 +49,24 @@ const validated: ValidationResult<Partial<UiConfig>> = validateUiOverrides({
 const invalidPlacement: UiConfig["newCardPlacement"] = "diagonal";
 void validated;
 void invalidPlacement;
+const metrics: CardMetrics = cardMetrics(DEFAULT_UI_CONFIG);
+const hint: string | null = nearestCardHint({ posX: 0, posY: 0 }, [], metrics);
+const warp: WarpListEntry = {
+  id: "w",
+  namespaceId: "n",
+  namespaceName: "N",
+  label: 1,
+  posX: 0,
+  posY: 0,
+  hint,
+  isCurrent: true,
+};
+// @ts-expect-error Warp marker labels remain numeric.
+const invalidWarp: WarpListEntry = { ...warp, label: "1" };
+// @ts-expect-error Tag truncation reasons remain a closed union.
+void truncationReasons(["unknown"]);
+void warp;
+void invalidWarp;
 const doc = new EditorDocument("Packed editor 日本語");
 const surfaceProps: ComponentProps<typeof EditorSurface> = {
   doc,

@@ -3,7 +3,7 @@ import type { PollLifecycle } from "../backend/workspace-poller.js";
 import type { NavigationAdapter, NavigationDriver } from "../navigation.js";
 import type { PreferenceStorage } from "../preferences.js";
 import type { UiConfig } from "../ui-config.js";
-import type { WarpListEntry } from "../../../../src/lib/warp-list.js";
+import type { WarpListEntry } from "../warp-list.js";
 export type BoardPageData = SnapshotData & {
   namespace: NamespaceGetResult;
   otherNamespaces: NamespaceGetResult[];

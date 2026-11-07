@@ -1,5 +1,5 @@
 import type { ScopeArea } from "$lib/types";
-import { clamp, SCOPE_AREA_MIN_SIZE, type BoardRect } from "$lib/constants";
+import { clamp, SCOPE_AREA_MIN_SIZE, type BoardRect } from "../../constants/index.js";
 import {
   membershipTransition,
   type MembershipTransition,

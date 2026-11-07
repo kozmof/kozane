@@ -1,5 +1,5 @@
 import type { CardWithGlue, Inventory, ScopeArea, Warp } from "$lib/types";
-import type { BoardRect } from "$lib/constants";
+import type { BoardRect } from "../../constants/index.js";
 import type { SelectionState } from "../namespace-state.svelte.js";
 import type { BoardPoint, CanvasViewport } from "./canvas-viewport.js";
 import type { DropTarget } from "./inventory-drop.js";

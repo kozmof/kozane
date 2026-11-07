@@ -1,4 +1,4 @@
-import type { PathKind } from "../../../../src/lib/constants.js";
+import type { PathKind } from "../constants/index.js";
 import type {
   TaskspaceDirectoryOutcome,
   TaskspaceEntryKind,

@@ -1,4 +1,4 @@
-import { clamp } from "$lib/constants";
+import { clamp } from "../../constants/index.js";
 import {
   centeredScrollOffset,
   clientToWorld,

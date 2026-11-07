@@ -7,6 +7,17 @@ import {
   validateUiOverrides,
   ARROW_KEYS,
   clampZoom,
+  cardMetrics,
+  textCells,
+  estimateCardHeight,
+  nearestCardHint,
+  truncationReasons,
+  truncationPaths,
+  cleanupCommandTail,
+  TASKSPACE_CLEANUP_COMMAND,
+  MAP_TAG_LINKS_MAX,
+  MAP_DEFAULT_VIEWPORT,
+  TAG_HITS_SHOWN_MAX,
 } from "@kozane/client";
 import { backendContractCases, runBackendContract } from "@kozane/client/testing";
 import * as database from "@kozane/core/database";
@@ -26,6 +37,22 @@ assert.throws(
 );
 assert.deepEqual(ARROW_KEYS, ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
 assert.equal(clampZoom(3), 2);
+const metrics = cardMetrics({ defaultCardWidth: 200, defaultFontSize: 10 });
+assert.deepEqual(metrics, { cardWidth: 200, fontSize: 10 });
+assert.equal(textCells("a日本😀"), 7);
+assert.equal(estimateCardHeight("short", metrics), 68);
+assert.equal(
+  nearestCardHint({ posX: 0, posY: 0 }, [{ posX: 0, posY: 0, content: "Nearest hint" }], metrics),
+  "Nearest hint",
+);
+assert.match(truncationReasons(["entries"]), /directory held more entries/);
+assert.equal(truncationPaths(["notes.md"]), " (for example notes.md)");
+assert.equal(cleanupCommandTail(1), "to drop the record.");
+assert.equal(cleanupCommandTail(2), "to drop the records.");
+assert.equal(TASKSPACE_CLEANUP_COMMAND, "kozane taskspace scan --apply --cleanup");
+assert.equal(MAP_TAG_LINKS_MAX, 20000);
+assert.deepEqual(MAP_DEFAULT_VIEWPORT, { width: 1600, height: 1000 });
+assert.equal(TAG_HITS_SHOWN_MAX, 200);
 const namespaces = [{ id: "seed", name: "Contract seed", isDefault: true }];
 const snapshot = {
   namespace: { id: "seed" },

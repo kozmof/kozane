@@ -5,7 +5,7 @@
  */
 import { tick } from "svelte";
 import type { ScopeArea } from "$lib/types";
-import type { BoardRect } from "$lib/constants";
+import type { BoardRect } from "../../constants/index.js";
 import type {
   AreaDragGesture,
   AreaResizeGesture,

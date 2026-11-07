@@ -8,7 +8,7 @@ import type {
   TaskspaceSummary,
   Warp,
 } from "$lib/types";
-import type { BoardRect } from "$lib/constants";
+import type { BoardRect } from "../../constants/index.js";
 import type { NewCardPlacement } from "../../ui-config.js";
 import type { SelectionState } from "../namespace-state.svelte.js";
 import type { TaskspaceTreeContext, TaskspaceTreeState } from "./taskspace-tree.svelte.js";

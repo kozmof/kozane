@@ -40,7 +40,7 @@ import type * as InventoriesServices from "../../../../src/services/inventories.
 import type * as NamespaceServices from "../../../../src/services/namespaces.js";
 import type { TagsViewData } from "../../../../src/services/tags.js";
 import type { TreemapSnapshot } from "../../../../src/services/map.js";
-import type { WarpListEntry } from "../../../../src/lib/warp-list.js";
+import type { WarpListEntry } from "../warp-list.js";
 export type * from "./taskspaces-api.js";
 
 export interface MutationOptions {

@@ -1,4 +1,4 @@
-import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "$lib/constants";
+import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "../../constants/index.js";
 import type { TaskspaceTruncation } from "$lib/types";
 
 /**

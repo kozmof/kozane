@@ -1,4 +1,4 @@
-import { withoutWarp, type WarpListEntry } from "$lib/warp-list";
+import { withoutWarp, type WarpListEntry } from "../../warp-list.js";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import type { KozaneBackend } from "../../backend/contract.js";

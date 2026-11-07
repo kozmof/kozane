@@ -1,4 +1,4 @@
-import { ARROW_KEYS } from "$lib/constants";
+import { ARROW_KEYS } from "../../constants/index.js";
 import type { UiConfig } from "../../ui-config.js";
 import type { KeyBinding } from "./board-keymap.js";
 

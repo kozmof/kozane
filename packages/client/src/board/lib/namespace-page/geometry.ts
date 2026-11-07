@@ -1,5 +1,5 @@
 /** Board geometry: the grid, rectangles, selection, frame membership, and resizing. */
-import { clamp } from "$lib/constants.js";
+import { clamp } from "../../../constants/index.js";
 
 export const GRID = 24;
 /** Opacity for layers other than the selected layer. */

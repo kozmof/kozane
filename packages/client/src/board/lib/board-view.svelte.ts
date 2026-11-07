@@ -1,6 +1,6 @@
 import { applyPalette } from "$lib/palette";
 import type { Inventory } from "$lib/types";
-import { cardMetrics, warpEntriesForNamespace, type WarpListEntry } from "$lib/warp-list";
+import { cardMetrics, warpEntriesForNamespace, type WarpListEntry } from "../../warp-list.js";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 
 /** The page data the board view reads. */

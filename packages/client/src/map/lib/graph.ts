@@ -1,7 +1,7 @@
 import { compareIds } from "$lib/order";
 import { tagMatcher } from "$lib/tag";
 import type { TagHit } from "$lib/types";
-import { MAP_TAG_LINKS_MAX } from "$lib/constants";
+import { MAP_TAG_LINKS_MAX } from "../../constants/index.js";
 import type { Point, Rect } from "./treemap.js";
 
 /**

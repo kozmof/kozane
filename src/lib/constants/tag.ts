@@ -1,3 +1,4 @@
+export { TAG_HITS_SHOWN_MAX } from "@kozane/client";
 export { TAG_CARD_HITS_MAX, TAG_CARD_ROWS_PAGE } from "@kozane/core";
 export {
   TAG_SIGIL,
@@ -14,12 +15,6 @@ export {
  * accepts afterwards. See the note on `TAG_RE` there.
  */
 import { TASKSPACE_SSG_DEPTH_MAX } from "./taskspace.js";
-
-/**
- * Maximum displayed hits per kind. Cap cards and file lines separately while retaining totals
- * from the gathered index.
- */
-export const TAG_HITS_SHOWN_MAX = 200;
 
 /**
  * Maximum file-content bytes read from one taskspace per tag scan. Report skipped content

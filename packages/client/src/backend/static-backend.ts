@@ -1,7 +1,7 @@
 import type { KozaneBackend } from "./contract.js";
 import type { TagsViewData } from "../../../../src/services/tags.js";
 import type { TreemapSnapshot } from "../../../../src/services/map.js";
-import type { WarpListEntry } from "../../../../src/lib/warp-list.js";
+import type { WarpListEntry } from "../warp-list.js";
 import type { TaskspaceFileTree } from "../../../../src/lib/types.js";
 import {
   BackendError,

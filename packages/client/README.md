@@ -14,6 +14,9 @@ entry for defaults and workspace configuration checks. It also exports the gestu
 zoom constants. These exports work in Node without loading Svelte components. The UI entry
 re-exports the same default configuration object.
 
+The root entry also exports warp hint/layout calculations and tag truncation labels for
+views and CLI output. Map display bounds and tag display caps use the same exported constants.
+
 This candidate is not ready for publication. Complete production consumer checks and
 workspace conversion remain under Phase 3.
 
@@ -21,7 +24,8 @@ Views, backend adapters, contracts, UI configuration, navigation, preferences an
 rendering helpers live
 in `packages/client/src` with their tests. Run `pnpm build:client`
 from the repository root to build core before client. The build collects the remaining
-portable shared helpers and rewrites workspace aliases before packaging.
+portable compatibility re-exports and rewrites workspace aliases before packaging.
+It rejects application helper implementations so runtime logic stays in client or core.
 Generated staging files and `dist` are ignored. Runtime entries exclude test helpers,
 SvelteKit modules and Node modules. Panda's authoring-only type augmentation stays
 outside consumer declarations.
