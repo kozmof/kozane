@@ -2,6 +2,11 @@ import { afterEach, expect, it } from "vitest";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { DatabaseSync } from "node:sqlite";
+import {
+  decodeRecovery,
+  RECOVERY_DB_MAX_BYTES,
+} from "../../../scripts/restoration-harness/recovery";
 import { createHash } from "node:crypto";
 import { lockedDriver } from "../../../scripts/compatibility/locked-driver.mjs";
 import { prepareBrowserCorpus } from "../../../scripts/compatibility/prepare-browser.mjs";
@@ -140,3 +145,57 @@ it("selects the complete locked native driver graph without unrelated workspace 
     ),
   ).toThrow(/Missing driver artifact/);
 });
+
+it.each(["core-0.1.0-rc3-wasm-boundaries", "core-0.1.0-rc4-libsql-boundaries"])(
+  "retains a valid recovery-limit database and accepted schema formatting from %s",
+  (id) => {
+    const root = resolve("tests/compatibility/corpus");
+    const cohort = readCorpus(root).find((entry) => entry.id === id);
+    expect(cohort).toBeDefined();
+    const limitPath = join(cohort.directory, "recovery-limit.sqlite3");
+    const bytes = readFileSync(limitPath);
+    expect(bytes.length).toBe(RECOVERY_DB_MAX_BYTES);
+    const envelope = JSON.stringify({
+      schemaVersion: cohort.migrationId,
+      savedAt: 0,
+      db: bytes.toString("base64"),
+    });
+    expect(Buffer.from(decodeRecovery(envelope, cohort.migrationId).bytes).equals(bytes)).toBe(
+      true,
+    );
+    const oversized = JSON.stringify({
+      schemaVersion: cohort.migrationId,
+      savedAt: 0,
+      db: Buffer.concat([bytes, Buffer.from([0])]).toString("base64"),
+    });
+    expect(() => decodeRecovery(oversized, cohort.migrationId)).toThrow(
+      expect.objectContaining({ reason: "size" }),
+    );
+    const limit = new DatabaseSync(limitPath, { readOnly: true });
+    const normalized = new DatabaseSync(join(cohort.directory, "normalized-schema.sqlite3"), {
+      readOnly: true,
+    });
+    try {
+      expect(limit.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
+      expect(
+        Number(limit.prepare("SELECT count(*) AS count FROM card").get()!.count),
+      ).toBeGreaterThan(100);
+      expect(normalized.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
+      expect(
+        Number(
+          normalized
+            .prepare(
+              "SELECT count(*) AS count FROM sqlite_schema WHERE sql LIKE '%retained corpus formatting%'",
+            )
+            .get()!.count,
+        ),
+      ).toBeGreaterThan(1);
+      expect(
+        normalized.prepare("SELECT name FROM sqlite_schema WHERE name='sqlite_stat1'").get(),
+      ).toEqual({ name: "sqlite_stat1" });
+    } finally {
+      limit.close();
+      normalized.close();
+    }
+  },
+);

@@ -9,6 +9,11 @@ import { dirname, join, resolve } from "node:path";
 import { build } from "vite";
 import { builtinModules } from "node:module";
 import { createHash } from "node:crypto";
+const corpusScenarios =
+  process.argv
+    .find((value) => value.startsWith("--corpus-scenarios="))
+    ?.slice("--corpus-scenarios=".length) ?? "basic";
+assert.ok(["basic", "boundaries"].includes(corpusScenarios), "Unsupported corpus scenarios");
 const corpusDriver =
   process.argv
     .find((value) => value.startsWith("--corpus-driver="))
@@ -345,6 +350,7 @@ ${driverGraph.snapshots}
       archive: join(temporary, archive),
       candidate,
       driver: corpusDriver,
+      scenarios: corpusScenarios,
       id: corpusOption.slice("--bootstrap-corpus=".length),
       run,
       repository,

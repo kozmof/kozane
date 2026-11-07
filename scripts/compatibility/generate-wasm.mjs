@@ -7,6 +7,7 @@ import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { createDatabaseAdapter } from "@kozane/core/database";
 import { applyMigrations, schemaVersion } from "@kozane/core/migrations";
 import * as schema from "@kozane/core/schema";
+import { seedBoundaries } from "./seed-boundaries.mjs";
 import { seedCorpus } from "./seed-corpus.mjs";
 import { validateCandidate } from "./validation.ts";
 import { summarizeView } from "./view-summary.ts";
@@ -55,7 +56,11 @@ async function database(name, seed) {
   });
   try {
     await applyMigrations(db);
-    await seed(db, engine);
+    await seed(db, engine, async (sql, bind = []) => {
+      const rows = [];
+      engine.exec({ sql, bind, rowMode: "array", resultRows: rows });
+      return rows;
+    });
   } finally {
     engine.close();
   }
@@ -82,7 +87,7 @@ async function retain(db, engine, name, requests) {
     expected,
   });
 }
-await seedCorpus(database, retain);
+await (producer.scenarios === "boundaries" ? seedBoundaries : seedCorpus)(database, retain);
 const wasm = JSON.parse(
   readFileSync(new URL(import.meta.resolve("@sqlite.org/sqlite-wasm/package.json")), "utf8"),
 );

@@ -22,7 +22,9 @@ export async function bootstrapCorpus({
   run,
   repository,
   driver = "wasm",
+  scenarios = "basic",
 }) {
+  if (!["basic", "boundaries"].includes(scenarios)) throw new Error("Unsupported corpus scenarios");
   if (!["wasm", "libsql"].includes(driver)) throw new Error("Unsupported corpus producer driver");
   if (!/^[a-z0-9][a-z0-9.-]+$/.test(id)) throw new Error("Invalid corpus cohort id");
   const root = join(repository, "tests/compatibility/corpus"),
@@ -32,7 +34,12 @@ export async function bootstrapCorpus({
   mkdirSync(staging);
   const sources = join(consumer, "corpus-tools");
   mkdirSync(sources);
-  for (const name of [`generate-${driver}.mjs`, "seed-corpus.mjs", "view-summary.ts"])
+  for (const name of [
+    `generate-${driver}.mjs`,
+    "seed-corpus.mjs",
+    "seed-boundaries.mjs",
+    "view-summary.ts",
+  ])
     copyFileSync(new URL(name, import.meta.url), join(sources, name));
   for (const name of ["validation.ts", "recovery.ts", "navigation.ts", "attempt.ts"])
     copyFileSync(new URL(`../restoration-harness/${name}`, import.meta.url), join(sources, name));
@@ -41,6 +48,7 @@ export async function bootstrapCorpus({
   writeFileSync(
     join(sources, "producer.json"),
     JSON.stringify({
+      scenarios,
       package: candidate.name,
       version: candidate.version,
       status: "unpublished-candidate",

@@ -19,6 +19,12 @@ migration batch produce four original files with eleven recorded outcomes. The p
 candidate's wasm reader accepts all 22 outcomes across both cohorts. Both cohorts remain
 unpublished release candidates.
 
+The `core-0.1.0-rc3-wasm-boundaries` and `core-0.1.0-rc4-libsql-boundaries` cohorts add
+two fixtures per driver. One retains harmless whitespace and comments in the migrated
+schema plus SQLite-owned statistics created by `ANALYZE`. The other holds exactly
+2,097,152 bytes of valid SQLite data populated through public card services. It has
+no appended file padding. The full corpus has twelve databases and 26 view outcomes.
+
 Add a new cohort explicitly after building the intended candidate.
 
 ```sh
@@ -31,6 +37,13 @@ Select the locked libsql producer explicitly when adding a native cohort.
 node scripts/check-core-package.mjs --bootstrap-corpus=<new-cohort-id> --corpus-driver=libsql
 ```
 
+Select boundary scenarios to create schema-formatting and recovery-limit fixtures.
+
+```sh
+node scripts/check-core-package.mjs --bootstrap-corpus=<new-cohort-id> --corpus-scenarios=boundaries
+```
+
+Combine `--corpus-scenarios=boundaries` with `--corpus-driver=libsql` for the native driver.
 Both generators use the same public-service scenarios. The libsql producer installs its
 exact dependency graph from the repository lock in the isolated consumer, including native
 platform artifacts. It does not import workspace core code. If the temporary mount blocks
@@ -47,7 +60,7 @@ Run `pnpm test:restoration-harness` to build the isolated browser harness and re
 every recorded selection under Chromium. CI includes this command in its browser job.
 The browser cases verify fetched fixture hashes, require successful restoration, preserve
 the saved envelope and compare the recorded view summaries. Browser execution of these
-new corpus cases remains pending.
+four boundary cases remains pending. The earlier 55 browser cases passed in CI.
 
-Broader boundary data, recovery-size fixtures and publication gates remain tracked under
-P3-11, P3-12 and P3-18.
+Publication gates remain tracked under P3-12. P3-18 awaits browser execution of all
+retained fixtures, including the new boundaries.

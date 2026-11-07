@@ -135,14 +135,16 @@ The build verifies all retained corpus hashes before copying database assets int
 The server exposes only the catalog and explicitly listed database paths. `corpus.spec.ts`
 restores every recorded selection through the verified worker. Each case checks the fetched
 bytes, requires the restored source, preserves the exact saved envelope and compares a stable
-view summary with the original expectation. The wasm and libsql cohorts add 22 cases covering empty,
-sole, multiple and default namespace states, missing selections and populated Unicode data.
-Discovery finds 55 browser cases across three suites.
+view summary with the original expectation. The wasm and libsql cohorts add 26 cases covering empty,
+sole, multiple and default namespace states, missing selections, populated Unicode data,
+accepted schema formatting and SQLite statistics, and valid databases at the exact 2 MiB
+recovery boundary. Discovery finds 59 browser cases across three suites.
 
-P3-10 remains in progress. CI reported 54 of 55 cases passing, including all corpus cases.
+P3-10 is complete. The user reported all 55 browser cases passing, including real BFCache
+restoration and both original corpus cohorts.
 The loader now shares its active clock with both the outer wasm stage and inner compilation
 deadline. A Node regression verifies a confirmed pause longer than the wall-clock timeout.
-The wasm suspension case now passes in CI. The direct-CDP BFCache case awaits a CI rerun.
+The four new schema and recovery-size boundary cases await CI execution under P3-18.
 Basic `run()` cases close their candidate after reporting validation. Retained cases
 keep it until `close()`. The persistent editing backend is implemented in Phase 4.
 See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

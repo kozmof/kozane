@@ -10,6 +10,7 @@ import { applyMigrations, schemaVersion } from "@kozane/core/migrations";
 import * as schema from "@kozane/core/schema";
 import { validateCandidate } from "./validation.ts";
 import { summarizeView } from "./view-summary.ts";
+import { seedBoundaries } from "./seed-boundaries.mjs";
 import { seedCorpus } from "./seed-corpus.mjs";
 const output = process.argv[2];
 const producer = JSON.parse(readFileSync(process.argv[3], "utf8"));
@@ -45,7 +46,9 @@ async function database(name, seed) {
     await client.execute("PRAGMA foreign_keys=ON");
     engineVersion = (await client.execute("SELECT sqlite_version() AS version")).rows[0].version;
     await applyMigrations(db);
-    await seed(db, { client, path });
+    await seed(db, { client, path }, async (sql, args = []) =>
+      (await client.execute({ sql, args })).rows.map((row) => Array.from(row)),
+    );
   } finally {
     client.close();
     rmSync(path, { force: true });
@@ -74,7 +77,7 @@ async function retain(db, engine, name, requests) {
     expected,
   });
 }
-await seedCorpus(database, retain);
+await (producer.scenarios === "boundaries" ? seedBoundaries : seedCorpus)(database, retain);
 // The exact driver version is supplied from the isolated consumer's locked installation.
 const version = JSON.parse(readFileSync("package.json", "utf8")).dependencies["@libsql/client"];
 writeFileSync(
