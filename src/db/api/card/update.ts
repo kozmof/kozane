@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { cardTable, layerTable, partitionTable } from "../../schema.js";
 import type { NeedsPartition, NeedsTx } from "../types.js";
+import type { CardPositionUpdate } from "@kozane/core";
 import { BATCH_MAX, chunked } from "../../../lib/constants.js";
 import { NotFoundError, assertFound, type BatchResult, type CardBatchResult } from "../utils.js";
 import { withTx, type DB, type Tx } from "../../database.js";
@@ -173,11 +174,7 @@ export async function updateCardInTx({
   assertFound(updated, `Card cardId=${cardId}`);
 }
 
-export type CardPositionUpdate = {
-  cardId: string;
-  posX: number;
-  posY: number;
-};
+export type { CardPositionUpdate } from "@kozane/core";
 
 // Preserve the column value when no WHEN branch matches. This avoids writing NULL if the CASE
 // and WHERE lists ever diverge. The row-count check still fails the transaction on an

@@ -1,192 +1,21 @@
-import type {
-  Partition,
-  Card,
-  GlueRel,
-  Layer,
-  Scope,
-  ScopeRel,
-  ScopeArea,
-  Taskspace,
-  Warp,
-  Inventory,
-} from "../db/api/types.js";
-
-/** A stored card's inventory and top-cell slot. */
-export type CardInventory = { id: string; slot: number };
-
-// `zIndex` is required because its column is NOT NULL DEFAULT 0. `width` stays nullable so
-// cards can follow `ui.defaultCardWidth`. A card with an `inventory` is stored there and is
-// not drawn on the canvas. The two columns behind it are read as one value, so no reader
-// meets an inventory without a slot or a slot without an inventory.
-export type CardData = Pick<
-  Card,
-  | "id"
-  | "content"
-  | "partitionId"
-  | "layerId"
-  | "posX"
-  | "posY"
-  | "taskspaceId"
-  | "zIndex"
-  | "width"
-> & { inventory: CardInventory | null };
-
-export interface CardWithGlue extends CardData {
-  glueId: string | null;
-}
-
-export interface PartitionWithColor {
-  id: string;
-  name: string;
-  bg: string;
-  dot: string;
-  isDefault: boolean;
-}
-
-export type TaskspaceSummary = Pick<Taskspace, "id" | "name" | "scopeId" | "path" | "pathKind">;
-
-/**
- * What deleting a taskspace did to its directory: `deleted` with everything in it, already
- * `missing`, or `kept` because it is not marked as made by Kozane, such as one the user chose
- * or one made before Kozane marked its own directories.
- */
-export type TaskspaceDirectoryOutcome = "deleted" | "missing" | "kept";
-
-/**
- * Directory entry metadata without file contents. Report symlinks as links and do not expand
- * them in the panel.
- */
-export type TaskspaceEntryKind = "directory" | "file" | "symlink" | "other";
-
-export interface TaskspaceEntry {
-  name: string;
-  kind: TaskspaceEntryKind;
-  /** Size in bytes for regular files, or null for other entry kinds. */
-  size: number | null;
-  modifiedAt: string | null;
-}
-
-export interface TaskspaceListing {
-  /** Static exports retain the reason a directory listing is incomplete. */
-  truncation?: TaskspaceTruncation | null;
-  /** The listed directory, relative to the taskspace root and always `/`-separated. */
-  path: string;
-  entries: TaskspaceEntry[];
-  /** Whether the listing is incomplete. Live listings report the directory entry limit. */
-  truncated: boolean;
-}
-
-/**
- * Shared tree-walk truncation reasons. Distinguish listing, depth, entry-budget, and read
- * failures so incomplete directories are not presented as empty. Individual scans can add
- * their own reasons.
- */
-export type WalkTruncation = "entries" | "depth" | "nodes" | "unreadable";
-
-/**
- * Reason a static-export directory listing is incomplete, or null when complete. Alias {@link
- * WalkTruncation} to share the walk's limits. Live listings can reach only the entry cap.
- */
-export type TaskspaceTruncation = WalkTruncation;
-
-/**
- * Embedded static-export tree node. Directories include children and readable files include
- * content because static pages have no file endpoint.
- *
- * Keep skipped files visible with a reason when size, encoding, or export budgets prevent
- * embedding them.
- */
-export type TaskspaceFileNode =
-  | {
-      kind: "directory";
-      name: string;
-      children: TaskspaceFileNode[];
-      truncated: TaskspaceTruncation | null;
-    }
-  | { kind: "file"; name: string; content: string; size: number }
-  | {
-      kind: "file-skipped";
-      name: string;
-      /** Unreadable files include permission failures and files removed after listing. */
-      reason: "too-large" | "not-text" | "budget" | "unreadable";
-      size: number | null;
-    }
-  | { kind: "symlink" | "other"; name: string };
-
-/** One taskspace's file tree, rooted at the taskspace directory itself. */
-export interface TaskspaceFileTree {
-  root: Extract<TaskspaceFileNode, { kind: "directory" }>;
-}
-
-/**
- * Tag source identity for a card or taskspace file. Join card metadata by ID instead of
- * copying it into every hit.
- *
- * File identity includes taskspace, path, and line. Card hits open the whole card and retain
- * matching text in the excerpt rather than a navigation line number.
- */
-export type TagSource =
-  | { kind: "card"; cardId: string }
-  | { kind: "file"; taskspaceId: string; path: string; line: number };
-
-/** One tag, once, where it was written. */
-export interface TagHit {
-  /** Full normalized tag without its sigil, such as `foo:bar:baz`. See `normalizeTag`. */
-  tag: string;
-  source: TagSource;
-  /** Trimmed, length-limited source line used to identify the tag hit. */
-  excerpt: string;
-}
-
-/**
- * Reasons a tag scan may cover only part of a taskspace. Extend `WalkTruncation` with
- * tag-specific limits and failures.
- *
- * `budget` means the scan exhausted its byte allowance. `too-large` means a file exceeded the
- * per-file limit before it was opened. `unreadable` means reading failed. `hits` means scanning
- * found more tags than `TAG_SCAN_HITS_MAX` allows, so even the reported counts are lower
- * bounds.
- *
- * Keep this type shared between the filesystem scanner, CLI, and browser. `truncationReasons`
- * in `lib/tag.ts` supplies the display text.
- */
-export type TagScanTruncation = WalkTruncation | "budget" | "hits" | "too-large";
-
-/**
- * Shared board data returned by the snapshot endpoint and loaded into client state. Keep
- * this type outside client state modules so server routes can import it without depending
- * on `.svelte.ts` code.
- */
-export interface NamespaceDataSnapshot {
-  namespace: { id: string };
-  cards: CardWithGlue[];
-  partitions: Partition[];
-  layers: Layer[];
-  warps: Warp[];
-  /** Inventories on this board, in creation order. Their cards are in `cards`. */
-  inventories: Inventory[];
-  /**
-   * Scopes visible to this namespace, not the complete workspace list. Use the workspace-wide
-   * CLI listing for that view.
-   */
-  scopes: Scope[];
-  scopeRels: ScopeRel[];
-  /**
-   * Scope frames on this board, each identified by its own ID. A scope can have multiple
-   * frames or none.
-   */
-  scopeAreas: ScopeArea[];
-  glueRels: GlueRel[];
-  /** This namespace's taskspaces plus unplaced taskspaces. */
-  taskspaces: TaskspaceSummary[];
-  /**
-   * Embedded file trees keyed by taskspace ID, present only in static exports that include
-   * scoped files. Live boards fetch files on demand.
-   */
-  taskspaceFiles?: Record<string, TaskspaceFileTree>;
-}
-
 export type {
+  CardInventory,
+  CardData,
+  CardWithGlue,
+  PartitionWithColor,
+  TaskspaceSummary,
+  TaskspaceDirectoryOutcome,
+  TaskspaceEntryKind,
+  TaskspaceEntry,
+  TaskspaceListing,
+  WalkTruncation,
+  TaskspaceTruncation,
+  TaskspaceFileNode,
+  TaskspaceFileTree,
+  TagSource,
+  TagHit,
+  TagScanTruncation,
+  NamespaceDataSnapshot,
   Partition,
   Layer,
   Scope,
@@ -195,4 +24,4 @@ export type {
   GlueRel,
   Warp,
   Inventory,
-} from "../db/api/types.js";
+} from "@kozane/core";

@@ -15,7 +15,7 @@ import {
   type ScopeNamespaceUsage,
 } from "../../../../src/db/api/scope.js";
 import { getCardTagHits, type CardTagHits } from "../../../../src/db/api/tag.js";
-import type { Namespace, Scope } from "../../../../src/db/api/types.js";
+import type { Namespace, Scope } from "../database-types.js";
 import { applyPalette } from "../../../../src/lib/palette.js";
 export type TreemapPartition = PartitionCardCount & { bg: string; dot: string };
 export type TreemapSnapshot = {

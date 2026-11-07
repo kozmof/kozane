@@ -1,5 +1,5 @@
-export type * from "../../../src/db/api/types.js";
-export type * from "../../../src/lib/types.js";
+export type * from "./database-types.js";
+export type * from "./types.js";
 export type * from "./services/inputs.js";
 export * from "./errors.js";
 export { domainErrorCode, type DomainErrorCode } from "./services/error-code.js";
@@ -13,6 +13,5 @@ export {
 
 export type * from "./schema-types.js";
 
-export type { CardPositionUpdate } from "../../../src/db/api/card.js";
 export type { TagsViewData } from "./services/tags.js";
 export type { TreemapSnapshot, TreemapPartition } from "./services/map.js";

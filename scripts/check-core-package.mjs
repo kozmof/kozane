@@ -195,6 +195,18 @@ ${client.snapshots}
     assert.ok(readFileSync(resolve(installed, entry.import), "utf8").length > 0);
     assert.ok(readFileSync(resolve(installed, entry.types), "utf8").length > 0);
   }
+  const publicTypes = readFileSync(resolve(installed, manifest.exports["."].types), "utf8");
+  for (const name of ["database-types", "types"]) {
+    assert.ok(publicTypes.includes(`"./${name}.js"`), `Missing owned ${name} export`);
+    const declaration = readFileSync(
+      join(installed, "dist/packages/core/src", `${name}.d.ts`),
+      "utf8",
+    );
+    assert.ok(
+      !declaration.includes("/src/"),
+      `Domain declarations must use core-owned types: ${name}`,
+    );
+  }
   writeFileSync(
     join(temporary, "runtime.mjs"),
     `
@@ -257,7 +269,7 @@ ${client.snapshots}
   writeFileSync(
     join(temporary, "consumer.ts"),
     `
-    import type { CardCreateInput, Namespace, ValidationError } from '@kozane/core';
+    import type { CardCreateInput, Namespace, ValidationError, CardPositionUpdate, CardData, NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceTruncation } from '@kozane/core';
     import { createServiceContext, withTx, withReadTx, type DB } from '@kozane/core/database';
     import { cards, namespaces } from '@kozane/core/services';
     import { cardTable } from '@kozane/core/schema';
@@ -265,6 +277,15 @@ ${client.snapshots}
     declare const db: DB;
     declare const error: ValidationError;
     const input: CardCreateInput = { partitionId: 'p', content: 'Typed public consumer' };
+    const position: CardPositionUpdate = { cardId: 'c', posX: 1, posY: 2 };
+    declare const snapshot: NamespaceDataSnapshot;
+    const card: CardData = snapshot.cards[0];
+    const trees: Record<string, TaskspaceFileTree> | undefined = snapshot.taskspaceFiles;
+    // @ts-expect-error Card position coordinates remain numeric.
+    const invalidPosition: CardPositionUpdate = { cardId: 'c', posX: '1', posY: 2 };
+    // @ts-expect-error Truncation reasons remain a closed union.
+    const invalidTruncation: TaskspaceTruncation = 'complete';
+    void position; void card; void trees; void invalidPosition; void invalidTruncation;
     const context = createServiceContext();
     void cards.create(db, context, 'n', input);
     void namespaces.list(db, context).then((rows: Namespace[]) => rows);

@@ -37,7 +37,7 @@ import {
 } from "./validation.js";
 import { updateNamespaceCardPositionsInTx } from "../../../../src/db/api/card.js";
 import { deleteNamespaceCards } from "../../../../src/db/api/composite.js";
-import type { CardWithGlue } from "../../../../src/lib/types.js";
+import type { CardWithGlue } from "../types.js";
 
 import { getPartition } from "../../../../src/db/api/partition.js";
 import { getDefaultLayer, getLayer } from "../../../../src/db/api/layer.js";

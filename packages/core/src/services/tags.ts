@@ -1,4 +1,4 @@
-import type { TagHit, TagScanTruncation } from "../../../../src/lib/types.js";
+import type { TagHit, TagScanTruncation } from "../types.js";
 import { getAllNamespaces } from "../../../../src/db/api/namespace.js";
 import { getAllPartitions } from "../../../../src/db/api/partition.js";
 import { getCardPartitionNames } from "../../../../src/db/api/card.js";

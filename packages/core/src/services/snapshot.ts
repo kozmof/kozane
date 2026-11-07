@@ -56,8 +56,8 @@ export async function readRows(
 
 export type SnapshotRows = NonNullable<Awaited<ReturnType<typeof readRows>>>;
 export interface SnapshotEnrichment {
-  taskspaces?: import("../../../../src/lib/types.js").TaskspaceSummary[];
-  taskspaceFiles?: Record<string, import("../../../../src/lib/types.js").TaskspaceFileTree>;
+  taskspaces?: import("../types.js").TaskspaceSummary[];
+  taskspaceFiles?: Record<string, import("../types.js").TaskspaceFileTree>;
 }
 /** Assemble shared board rules once; adapters may supply already-resolved Node data. */
 export function assemble(
@@ -95,7 +95,7 @@ export function assemble(
     glueRels,
     taskspaces,
     ...(taskspaceFiles ? { taskspaceFiles } : {}),
-  } satisfies import("../../../../src/lib/types.js").NamespaceDataSnapshot;
+  } satisfies import("../types.js").NamespaceDataSnapshot;
   return { namespace, snapshot };
 }
 

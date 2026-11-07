@@ -2,7 +2,7 @@ import { NotFoundError } from "./errors.js";
 import { partitionTable, cardTable } from "../schema.js";
 import { and, eq } from "drizzle-orm";
 import type { AnyDB } from "../database.js";
-import type { Card } from "../../../../src/db/api/types.js";
+import type { Card } from "../database-types.js";
 
 /** Verify card ownership through its partition. Throw 404 for a missing or foreign card. */
 export async function requireCardInNamespace(

@@ -14,6 +14,9 @@ The host supplies its database driver and transaction hooks through the adapter 
 The package declares Drizzle and UUID as runtime dependencies and includes JavaScript and
 TypeScript declarations. Private module paths are unsupported.
 
+Import entity, board snapshot, taskspace-file and tag types from `@kozane/core`.
+These declarations share the schema and adapter types supplied by the package.
+
 Import resource operations from `@kozane/core/services`. The `validation` and `guards`
 namespaces provide the same checks for host filesystem adapters. The `rejection` namespace
 provides batch validation errors and their messages. Keep host I/O outside these services
