@@ -1,0 +1,205 @@
+<script lang="ts">
+  import { css } from "../../styles/css.js";
+  import { groupWarpEntries, moveHighlight, type WarpListEntry } from "../../warp-list.js";
+
+  let {
+    entries,
+    /** Currently focused warp, used as the initial highlight. */
+    focusedWarpId = null,
+    readonly = false,
+    onJump,
+    onDelete,
+    onClose,
+  }: {
+    entries: WarpListEntry[];
+    focusedWarpId?: string | null;
+    /** Hide removal controls in read-only exports because mutation endpoints are unavailable. */
+    readonly?: boolean;
+    onJump: (entry: WarpListEntry) => void;
+    onDelete: (entry: WarpListEntry) => void;
+    onClose: () => void;
+  } = $props();
+
+  let highlightedId = $state<string | null>(null);
+  let panelEl: HTMLDivElement = $state()!;
+  /**
+   * Track row elements by warp ID for scrolling the highlighted row into view. Use action
+   * teardown to remove unmounted rows. This map does not drive rendering.
+   */
+  const rowEls: Record<string, HTMLButtonElement> = {};
+
+  function row(node: HTMLButtonElement, id: string) {
+    rowEls[id] = node;
+    return {
+      destroy() {
+        delete rowEls[id];
+      },
+    };
+  }
+
+  // Restore palette focus when removing a focused row would leave focus on the document body.
+  // Run the same check on opening.
+  $effect(() => {
+    // Read `entries` so focus is checked whenever rows change.
+    //
+    // oxlint-disable-next-line no-unused-expressions
+    entries.length;
+    if (panelEl && !panelEl.contains(document.activeElement)) panelEl.focus();
+  });
+
+  // Resolve the initial highlight against the current list in case the focused warp was
+  // removed.
+  let highlighted = $derived(
+    entries.find(({ id }) => id === highlightedId)?.id ??
+      entries.find(({ id }) => id === focusedWarpId)?.id ??
+      entries[0]?.id ??
+      null,
+  );
+  let groups = $derived(groupWarpEntries(entries));
+
+  $effect(() => {
+    // Allow missing scroll support in environments such as jsdom.
+    if (highlighted) rowEls[highlighted]?.scrollIntoView?.({ block: "nearest" });
+  });
+
+  function move(delta: -1 | 1) {
+    highlightedId = moveHighlight(entries, highlighted, delta)?.id ?? null;
+  }
+
+  function jump(entry: WarpListEntry) {
+    highlightedId = entry.id;
+    onJump(entry);
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    // Stop palette keys from reaching the board, where the close shortcut could reopen the
+    // palette.
+    e.stopPropagation();
+    // Shift+arrow is the key that opened the palette, so it closes it again.
+    if (e.shiftKey && e.key.startsWith("Arrow")) {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      move(e.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const entry = entries.find(({ id }) => id === highlighted);
+      if (entry) jump(entry);
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+    }
+  }
+</script>
+
+<!-- The backdrop closes on a click, the way the composer's popovers do. -->
+<div
+  class={css({
+    position: "fixed",
+    inset: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.12)",
+    zIndex: "300",
+  })}
+  role="presentation"
+  onmousedown={(e) => {
+    if (e.target === e.currentTarget) onClose();
+  }}
+>
+  <div
+    bind:this={panelEl}
+    role="dialog"
+    aria-modal="true"
+    aria-label="Warps"
+    tabindex="-1"
+    onkeydown={handleKeydown}
+    class={css({
+      width: "min(440px, calc(100vw - 32px))",
+      maxHeight: "min(60vh, 520px)",
+      overflowY: "auto",
+      background: "ink.white",
+      border: "1px solid token(colors.neutral.dim)",
+      borderRadius: "4px",
+      padding: "6px",
+      outline: "none",
+    })}
+  >
+    {#if entries.length === 0}
+      <p class={css({ padding: "16px", fontSize: "12px", color: "neutral.subtle", textAlign: "center" })}>
+        No warps yet. Press the set-warp key on any board to make one.
+      </p>
+    {:else}
+      {#each groups as group (group.namespaceId)}
+        <p
+          class={css({ padding: "8px 10px 4px", fontSize: "11px", fontFamily: "mono", color: "ink.black" })}
+        >
+          {group.namespaceName}{group.isCurrent ? " (this namespace)" : ""}
+        </p>
+        <div role="listbox" aria-label={group.namespaceName}>
+          {#each group.entries as entry (entry.id)}
+            {@const isHighlighted = entry.id === highlighted}
+            <!-- Use sibling buttons for jumping and removing. HTML buttons cannot be nested. -->
+            <div
+              role="presentation"
+              class={css({ display: "flex", alignItems: "center", borderRadius: "2px" })}
+              style:background={isHighlighted ? "var(--colors-select-bg)" : "transparent"}
+              onmouseenter={() => (highlightedId = entry.id)}
+            >
+              <button
+                use:row={entry.id}
+                role="option"
+                aria-selected={isHighlighted}
+                class={css({
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: "8px",
+                  flex: "1",
+                  minWidth: "0",
+                  padding: "6px 10px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: "12px",
+                  color: "ink.black",
+                  textAlign: "left",
+                })}
+                onclick={() => jump(entry)}
+              >
+                <span class={css({ fontFamily: "mono", fontSize: "11px", color: "neutral.secondary", flexShrink: "0" })}>
+                  Warp {entry.label}
+                </span>
+                <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
+                  {entry.hint ?? ""}
+                </span>
+              </button>
+              {#if !readonly}
+                <button
+                  class={css({ display: "flex", alignItems: "center", padding: "6px 10px", background: "transparent", border: "none", cursor: "pointer", color: "neutral.icon", _hover: { color: "ink.black" } })}
+                  aria-label="Remove warp {entry.label} in {entry.namespaceName}"
+                  title="Remove this warp"
+                  onclick={() => onDelete(entry)}
+                >
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                    <path d="M4.5 2h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+                    <path d="M1.5 4h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+                    <path d="M2.5 4l.7 6h5.6l.7-6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/each}
+    {/if}
+  </div>
+</div>

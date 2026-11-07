@@ -1,0 +1,68 @@
+{
+  "name": "kozane",
+  "version": "0.22.0",
+  "license": "MIT",
+  "author": "Kozo Oeda",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kozmof/kozane.git",
+    "directory": "packages/kozane"
+  },
+  "bin": {
+    "kozane": "./bin/kozane.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "build",
+    "!build/index.js",
+    "!build/index.js.map",
+    "drizzle"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "pnpm --dir ../.. build",
+    "prepack": "pnpm run build",
+    "build:app": "node ../../scripts/stage-cli-migrations.mjs && drizzle-kit generate && vite build && vite build --config vite.config-editor.ts && tsc --project tsconfig.cli.json && node ../../scripts/check-node-core.mjs .",
+    "prepare:app": "svelte-kit sync && panda codegen --silent",
+    "dev": "vite dev",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "build:cli": "tsc --project tsconfig.cli.json",
+    "build:config-editor": "vite build --config vite.config-editor.ts",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@kozane/client": "workspace:0.1.0",
+    "@kozane/core": "workspace:0.1.0",
+    "@kozmof/reed": "^4.1.0",
+    "@libsql/client": "^0.17.4",
+    "commander": "^14.0.3",
+    "drizzle-orm": "^0.45.4",
+    "svelte": "5.57.2"
+  },
+  "devDependencies": {
+    "@pandacss/dev": "^1.12.1",
+    "@sveltejs/adapter-node": "^5.5.7",
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.4.2",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/node": "^25.9.9",
+    "drizzle-kit": "^0.31.11",
+    "svelte-check": "^4.7.6",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^4.1.12"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@10.17.0"
+}

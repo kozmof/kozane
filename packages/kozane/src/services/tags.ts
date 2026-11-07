@@ -1,0 +1,10 @@
+import { tags as service } from "@kozane/core/services";
+export const get: typeof service.get = service.get;
+export const displayMetadata: typeof service.displayMetadata = service.displayMetadata;
+export const assembleViewData: typeof service.assembleViewData = service.assembleViewData;
+export const view: typeof service.view = service.view;
+export type TagIndexTruncation = service.TagIndexTruncation;
+export type TagIndexTaskspace = service.TagIndexTaskspace;
+export type TagIndexTaskspaces = service.TagIndexTaskspaces;
+export type TagIndex = service.TagIndex;
+export type TagsViewData = service.TagsViewData;

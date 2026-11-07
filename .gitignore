@@ -62,3 +62,11 @@ styled-system-static
 
 # Playwright
 test-results/
+
+/packages/kozane/.svelte-kit/
+/packages/kozane/build/
+/packages/kozane/build-ssg/
+/packages/kozane/drizzle/
+
+/packages/client/src/styles/generated/
+/packages/client/.svelte-kit/

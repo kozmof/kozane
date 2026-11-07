@@ -1,0 +1,152 @@
+import { checkClientHydration } from "./check-client-hydration.mjs";
+import { build } from "vite";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { builtinModules } from "node:module";
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+const builtins = new Set(builtinModules.map((name) => name.replace(/^node:/, "")));
+const shared = {
+  configFile: false,
+  publicDir: false,
+  resolve: {
+    alias: {
+      $lib: fileURLToPath(new URL("../packages/kozane/src/lib", import.meta.url)),
+      "styled-system": fileURLToPath(new URL("../styled-system", import.meta.url)),
+    },
+  },
+  plugins: [
+    {
+      name: "shared-client-boundary",
+      enforce: "pre",
+      generateBundle(_options, bundle) {
+        if (this.environment.config.consumer !== "server") return;
+        for (const chunk of Object.values(bundle)) {
+          if (chunk.type !== "chunk") continue;
+          for (const id of Object.keys(chunk.modules)) {
+            const normalized = id.replaceAll("\\", "/");
+            if (
+              normalized.includes("/packages/core/") ||
+              normalized.includes("/node_modules/@kozane/core/")
+            ) {
+              throw new Error(
+                "Client SSR must use the installed core runtime rather than bundle " + id,
+              );
+            }
+          }
+        }
+      },
+      resolveId(source, importer) {
+        // Rolldown injects createRequire into its server bundle runtime.
+        if (
+          this.environment.config.consumer === "server" &&
+          source === "node:module" &&
+          importer === "\0rolldown/runtime.js"
+        )
+          return null;
+        if (
+          source.startsWith("node:") ||
+          builtins.has(source) ||
+          source.startsWith("$app/") ||
+          source.startsWith("$env/") ||
+          source === "@sveltejs/kit" ||
+          source.startsWith("@sveltejs/kit/") ||
+          source.includes("/routes/")
+        ) {
+          throw new Error(`Shared client cannot import ${source} from ${importer}`);
+        }
+      },
+    },
+    svelte({ configFile: false }),
+  ],
+};
+async function main() {
+  await build({
+    ...shared,
+    build: {
+      outDir: "tmp/client-browser",
+      emptyOutDir: true,
+      lib: {
+        entry: "packages/client/src/ui.ts",
+        formats: ["es"],
+        fileName: () => "client.js",
+      },
+    },
+  });
+
+  await build({
+    ...shared,
+    // Keep the same shared core runtime as production and the packed SSR consumer.
+    ssr: { external: ["svelte", "@kozmof/reed", "@kozane/core"] },
+    build: {
+      outDir: "tmp/client-ssr",
+      emptyOutDir: true,
+      ssr: "packages/kozane/src/test-utils/client-view-consumer.ts",
+      rollupOptions: { output: { entryFileNames: "views.js" } },
+    },
+  });
+  await build({
+    ...shared,
+    build: {
+      outDir: "tmp/client-hydration",
+      emptyOutDir: true,
+      lib: {
+        entry: "packages/kozane/src/test-utils/client-hydration-consumer.ts",
+        formats: ["es"],
+        fileName: () => "consumer.js",
+      },
+    },
+  });
+  const { renderViews, renderCapabilityViews } = await import(
+    new URL("../tmp/client-ssr/views.js", import.meta.url)
+  );
+  const rendered = await renderViews();
+  assert.match(rendered.surface, /Shared editor SSR/);
+  assert.match(rendered.surface, /editor-sink/);
+  assert.match(rendered.panel, /role="dialog"/);
+  assert.match(rendered.panel, /notes\.md/);
+  assert.match(rendered.namespaces, /Standalone workspace/);
+  assert.match(rendered.namespaces, /href="\/demo\/board\/\?namespaceId=n"/);
+  assert.doesNotMatch(rendered.namespaces, /<form/);
+  assert.match(rendered.tags, /Standalone tag result/);
+  assert.match(rendered.tags, /card=ssr-card/);
+  assert.doesNotMatch(rendered.tags, /href="[^"#]*[?&]tag=/);
+  assert.ok(rendered.map.includes("Standalone partition"), "Map SSR must include partition labels");
+  assert.ok(
+    rendered.map.includes('aria-label="Namespaces and partitions by card count'),
+    "Map SSR must include its accessible drawing",
+  );
+  assert.ok(
+    /href="\/demo\/board\/\?namespaceId=p1"/.test(rendered.map),
+    "Map SSR must use the supplied board navigation",
+  );
+  assert.ok(
+    rendered.board.includes("Standalone board"),
+    "Board canvas SSR must include card content",
+  );
+  assert.ok(
+    rendered.board.includes('data-card-id="card"'),
+    "Board canvas SSR must preserve card identity",
+  );
+  assert.ok(
+    rendered.board.includes("/demo/tags/?namespaceId=board#tag=shared"),
+    "Board canvas SSR must use supplied tag navigation",
+  );
+  assert.ok(
+    rendered.fullBoard.includes("Standalone board"),
+    "Board view SSR must render its seeded card",
+  );
+  assert.ok(
+    rendered.fullBoard.includes('data-card-id="card"'),
+    "Board view SSR must include the canvas",
+  );
+  await checkClientHydration(renderCapabilityViews);
+  console.log(
+    "Shared client browser bundle and standalone editor/namespace/tags/map/board SSR passed.",
+  );
+}
+try {
+  await main();
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
+}

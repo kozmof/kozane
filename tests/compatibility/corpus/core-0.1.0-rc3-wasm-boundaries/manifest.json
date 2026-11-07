@@ -1,0 +1,59 @@
+{
+  "format": 1,
+  "migrationId": "0019_card_guards",
+  "producer": {
+    "scenarios": "boundaries",
+    "package": "@kozane/core",
+    "version": "0.1.0",
+    "status": "unpublished-candidate",
+    "artifactSha256": "04e885c66ce2be15b91e7361dc1148f44fb8fff443999047ea076dc769f5450b",
+    "artifactBytes": 128739,
+    "drizzleVersion": "0.45.4",
+    "sourceRevision": "2ad20224c7e3a462d9dc25ffd8ea9cf5a87d9446",
+    "driver": {
+      "package": "@sqlite.org/sqlite-wasm",
+      "version": "3.54.1-build1",
+      "engine": "3.54.1",
+      "adapter": "drizzle/sqlite-proxy",
+      "runtime": "v26.13.0"
+    }
+  },
+  "fixtures": [
+    {
+      "id": "normalized-schema",
+      "file": "normalized-schema.sqlite3",
+      "sha256": "1b361fdf67dbd15e4ed0573fd4210277279717a68fb2db6924c936c8aee87c22",
+      "size": 385024,
+      "expected": [
+        {
+          "view": {
+            "version": 1,
+            "kind": "selected",
+            "namespaceId": "01a1b3c2-505b-713d-9f63-101dfc0db820",
+            "namespaceName": "Schema normalization 日本語",
+            "cardCount": 1,
+            "dataHash": "741fec27e2a1a23156c37c61863277009b217810013a79ec4b6e9e817df9dc0b"
+          }
+        }
+      ]
+    },
+    {
+      "id": "recovery-limit",
+      "file": "recovery-limit.sqlite3",
+      "sha256": "115debc757f77505768d0ac164ac11856d209139cb1ed7ea0e88c5a8617f6d28",
+      "size": 2097152,
+      "expected": [
+        {
+          "view": {
+            "version": 1,
+            "kind": "selected",
+            "namespaceId": "01a1b3c2-5081-7138-9212-4ea203a6240d",
+            "namespaceName": "Exact recovery boundary",
+            "cardCount": 335,
+            "dataHash": "436ceb3f43df59c466ebfd277706be1f80a1f2e531aec37ba3441050940a472d"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,507 @@
+<script lang="ts">
+  import { untrack } from "svelte";
+  import { onMount } from "svelte";
+  import { css } from "../../styles/css.js";
+  import { token } from "../../styles/tokens.js";
+  import KozaneCard from "./KozaneCard.svelte";
+  import ScopeArea from "./ScopeArea.svelte";
+  import ScopeAreaFiles from "./ScopeAreaFiles.svelte";
+  import SelectionRect from "./SelectionRect.svelte";
+  import WarpMarker from "./WarpMarker.svelte";
+  import InventoryIcon from "./InventoryIcon.svelte";
+  import type { CardWithGlue, Inventory } from "@kozane/core";
+  import { ScopeAreaBrowser } from "../lib/scope-area-browser.svelte.js";
+  import { CanvasViewport, type BoardPoint } from "../lib/canvas-viewport.js";
+  import { BoardGestures } from "../lib/board-gestures.svelte.js";
+  import { dropTargetAt } from "../lib/inventory-drop.js";
+  import { PALETTE } from "@kozane/core";
+  import { clampZoom } from "../../constants/index.js";
+  import {
+    buildGlueGroupMap,
+    cardIdsOverlapping,
+    glueIdByCardId,
+    INACTIVE_LAYER_OPACITY,
+    groupCardsByLayer,
+  } from "../lib/namespace-page.js";
+  import type { PositionedCardSize, WorldRect } from "../lib/namespace-page.js";
+  import { CardPlacement } from "../lib/card-placement.js";
+  import type { KozaneCanvasProps } from "../lib/kozane-canvas-props.js";
+
+  let {
+    cards = $bindable(),
+    visibleCards,
+    glueRels,
+    layers,
+    activeLayerId,
+    partitionColorById,
+    selection,
+    scopeCardIds,
+    scopeAreas = $bindable(),
+    scopeNameById,
+    activeScopeId,
+    taskspaces,
+    taskspaceTree,
+    treeContext,
+    onOpenFile,
+    onCreateTaskspace,
+    pendingScopeAreaRect = $bindable(),
+    onPersistScopeArea,
+    onRemoveScopeArea,
+    onScopeMembershipChange,
+    warps = $bindable(),
+    focusedWarpId,
+    warpsVisible,
+    warpMarkerSize,
+    initialCenter = null,
+    onFocusWarp,
+    onPersistWarpPosition,
+    inventories = $bindable(),
+    openInventoryIds,
+    inventoryLabel,
+    onToggleInventory,
+    onPersistInventoryPosition,
+    onStow,
+    onTake,
+    inventoryDrag = $bindable(),
+    showFooters,
+    zoom = $bindable(),
+    zoomStep,
+    canvasWidth,
+    canvasHeight,
+    cardWidth,
+    newCardPlacement,
+    fontSize,
+    fontFamily,
+    onPersistPositions,
+    onPersistWidth,
+    onPositionActivityStart,
+    onPositionActivityEnd,
+    onError,
+    tagHref,
+    readonly = false,
+  }: KozaneCanvasProps = $props();
+
+  const glueGroupMap = $derived(buildGlueGroupMap(glueRels));
+  const cardToGlue = $derived(glueIdByCardId(glueRels));
+
+  let canvasEl: HTMLDivElement = $state()!;
+  const canvasRectBounds = $derived({ canvasWidth, canvasHeight });
+  const viewport = new CanvasViewport(
+    () => canvasEl,
+    () => zoom,
+    () => canvasRectBounds,
+  );
+  /** Where new cards go, and the run of them the last one belongs to. */
+  const placement = new CardPlacement();
+
+  /** All rendered card elements used to test rectangle coverage. */
+  function cardElements(): HTMLElement[] {
+    return [...canvasEl.querySelectorAll<HTMLElement>("[data-card-id]")];
+  }
+
+  /** Which cards overlap `rect`, given in world coordinates. */
+  function cardIdsInRect(rect: WorldRect): Set<string> {
+    return cardIdsOverlapping(cardElements(), viewport.toScreen(rect));
+  }
+
+  /**
+   * Manage pointer gestures through `board-gestures.svelte.ts`. Use getters for changing
+   * props and setters for bound state that gestures replace.
+   */
+  const gestures: BoardGestures = new BoardGestures({
+    get readonly() { return readonly; },
+    get el() { return canvasEl; },
+    viewport,
+    get zoom() { return zoom; },
+    get bounds() { return canvasRectBounds; },
+    get cardWidth() { return cardWidth; },
+    get cards() { return cards; },
+    set cards(next) { cards = next; },
+    get warps() { return warps; },
+    get inventories() { return inventories; },
+    get scopeAreas() { return scopeAreas; },
+    get selection() { return selection; },
+    get glueGroupMap() { return glueGroupMap; },
+    get cardToGlue() { return cardToGlue; },
+    get sweepableCardIds() { return sweepableCardIds; },
+    get pendingScopeAreaRect() { return pendingScopeAreaRect; },
+    set pendingScopeAreaRect(rect) { pendingScopeAreaRect = rect; },
+    cardIdsInRect,
+    dropTargetAt: (clientX, clientY) => dropTargetAt(document, clientX, clientY),
+    get onPositionActivityStart() { return onPositionActivityStart; },
+    get onPositionActivityEnd() { return onPositionActivityEnd; },
+    get onError() { return onError; },
+    get onFocusWarp() { return onFocusWarp; },
+    get onPersistPositions() { return onPersistPositions; },
+    get onPersistWidth() { return onPersistWidth; },
+    get onPersistWarpPosition() { return onPersistWarpPosition; },
+    get onToggleInventory() { return onToggleInventory; },
+    get onPersistInventoryPosition() { return onPersistInventoryPosition; },
+    get onStow() { return onStow; },
+    get onTake() { return onTake; },
+    get onPersistScopeArea() { return onPersistScopeArea; },
+    get onScopeMembershipChange() { return onScopeMembershipChange; },
+  });
+
+  // Render each layer in a canvas-sized wrapper. The wrapper's z-index orders layers, and
+  // `card.zIndex` orders cards within them.
+  const draggingLayerId = $derived(
+    gestures.draggingCardId
+      ? (cards.find(({ id }) => id === gestures.draggingCardId)?.layerId ?? null)
+      : null,
+  );
+  const layerGroups = $derived(
+    groupCardsByLayer(layers, activeLayerId, draggingLayerId, visibleCards),
+  );
+
+  // Include only fully visible layers in marquee selection. Dimmed cards remain individually
+  // clickable.
+  const sweepableCardIds = $derived(
+    new Set(
+      layerGroups
+        .filter(({ active, floating }) => active || floating)
+        .flatMap(({ cards: layerCards }) => layerCards.map(({ id }) => id)),
+    ),
+  );
+
+  // Show the width handle only while exactly one card is selected.
+  $effect(() => {
+    const armed = selection.resizingCardId;
+    if (armed === null) return;
+    if (selection.selectedCards.size === 1 && selection.selectedCards.has(armed)) return;
+    selection.resizingCardId = null;
+  });
+
+  onMount(() => {
+    // Landing on a warp is decided before the first paint rather than scrolled to
+    // afterwards, so arriving from another namespace does not flash the middle of the board.
+    if (initialCenter) {
+      centerOn(initialCenter.posX, initialCenter.posY);
+      return;
+    }
+    recenter();
+  });
+
+  // Hand the inventory side of a drag to the page, which draws the grids outside the canvas.
+  $effect(() => {
+    inventoryDrag = {
+      target: gestures.dropTarget,
+      cardId: gestures.draggingStowedCardId,
+      carriedCardId: gestures.draggingStowedCardId ?? gestures.draggingCardId,
+      pointer: gestures.stowedPointer,
+    };
+  });
+
+  /** Starts dragging a card out of an inventory grid, which the page draws. */
+  export function pressStowedCard(e: MouseEvent, cardId: string): void {
+    gestures.pressStowedCard(e, cardId);
+  }
+
+  /** Center the viewport when a new namespace reuses this canvas component. */
+  export function recenter(): void {
+    viewport.recenter();
+  }
+
+  /**
+   * Measure cards at the placement point for {@link CardPlacement}. Use rendered height and
+   * fall back to configured width before layout is available.
+   */
+  function measureCardsAt(at: { x: number; y: number }): PositionedCardSize[] {
+    // Index cards once to avoid a linear search for every rendered element.
+    const cardById = new Map(visibleCards.map((card) => [card.id, card]));
+    return cardElements().flatMap((el) => {
+      const cardId = el.dataset.cardId;
+      const card = cardId ? cardById.get(cardId) : undefined;
+      if (card?.posX !== at.x || card.posY !== at.y) return [];
+      return [{
+        posX: card.posX,
+        posY: card.posY,
+        width: el.offsetWidth || cardWidth,
+        height: el.offsetHeight,
+      }];
+    });
+  }
+
+  export function getNewCardPosition(seq: number): BoardPoint {
+    return placement.next({
+      seq,
+      viewport: {
+        scrollLeft: canvasEl.scrollLeft,
+        scrollTop: canvasEl.scrollTop,
+        clientWidth: canvasEl.clientWidth,
+        clientHeight: canvasEl.clientHeight,
+      },
+      zoom,
+      cardWidth,
+      placement: newCardPlacement,
+      measureAt: measureCardsAt,
+    });
+  }
+
+  /** Viewport center in canvas coordinates, used as the origin for warp navigation. */
+  export function getViewCenter(): BoardPoint {
+    return viewport.center();
+  }
+
+  /**
+   * Place new warps under the pointer. Use the view centre if the pointer has not moved or is
+   * outside the board.
+   */
+  export function getWarpPosition(): BoardPoint {
+    const pointer = gestures.lastPointer;
+    if (!pointer || !viewport.contains(pointer)) return viewport.center();
+    return viewport.onCanvas(viewport.toWorld(pointer.x, pointer.y));
+  }
+
+  /**
+   * Whether the viewport is as centered on this point as canvas bounds allow. Avoid moving it
+   * again when it has already arrived.
+   */
+  export function isCenteredOn(posX: number, posY: number): boolean {
+    return viewport.isCenteredOn(posX, posY);
+  }
+
+  /** Moves the viewport so `posX`/`posY` sits in the middle of it. Zoom is left alone. */
+  export function centerOn(posX: number, posY: number): void {
+    viewport.centerOn(posX, posY);
+  }
+
+  /**
+   * Measure cards covered by the rectangle when the user chooses a scope. The board may have
+   * changed while the prompt was open.
+   */
+  export function cardIdsInWorldRect(rect: WorldRect): string[] {
+    return [...cardIdsInRect(rect)];
+  }
+
+  /** Use the card's pinned width or the workspace default. */
+  function widthOf(card: CardWithGlue): number {
+    return card.width ?? cardWidth;
+  }
+
+  /**
+   * Read frame file icons from the directory cache shared with the sidebar and file palette
+   * so refreshes update all views.
+   */
+  const areaFiles = new ScopeAreaBrowser({
+    areas: () => scopeAreas,
+    taskspaces: () => taskspaces,
+    tree: () => taskspaceTree,
+    context: () => treeContext,
+  });
+
+  /**
+   * Load frame directories as soon as their icons are needed. `ensure` reuses cached or
+   * pending loads, so repeated calls only traverse the list.
+   */
+  $effect(() => areaFiles.readShown());
+  $effect(() => {
+    const tree = taskspaceTree, directories = areaFiles.directoriesToRead;
+    return untrack(() => {
+      const releases = directories.map(({ taskspaceId, path }) => tree.watch(taskspaceId, path));
+      return () => { for (const release of releases) release(); };
+    });
+  });
+  $effect(() => areaFiles.prune());
+
+  // Track pointers on the window so drags can continue and finish outside the board.
+  $effect(() => {
+    const onMove = (e: MouseEvent) => gestures.move(e.clientX, e.clientY);
+    const onUp = () => void gestures.release();
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  });
+
+  // Edge scrolling while a card or inventory icon is dragged against the side of the board.
+  $effect(() => {
+    let frame: number;
+    function autoScroll() {
+      gestures.autoScroll();
+      frame = requestAnimationFrame(autoScroll);
+    }
+    frame = requestAnimationFrame(autoScroll);
+    return () => cancelAnimationFrame(frame);
+  });
+
+  // Ctrl/Cmd and the wheel zooms toward the pointer. Registered by hand, because it has to
+  // call `preventDefault` and a passive listener may not.
+  $effect(() => {
+    const canvas = canvasEl;
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? zoomStep : -zoomStep;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const prev = zoom;
+      const next = clampZoom(prev + delta);
+      const worldX = (canvas.scrollLeft + mouseX) / prev;
+      const worldY = (canvas.scrollTop + mouseY) / prev;
+      zoom = next;
+      requestAnimationFrame(() => {
+        canvas.scrollLeft = worldX * next - mouseX;
+        canvas.scrollTop = worldY * next - mouseY;
+      });
+    }
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  });
+</script>
+
+<div
+  class={css({ flex: "1", overflow: "auto", position: "relative", backgroundColor: "ink.canvas", isolation: "isolate", zIndex: "0" })}
+  role="presentation"
+  bind:this={canvasEl}
+  data-canvas-surface
+  onmousedown={(e) => gestures.pressCanvas(e)}
+  oncontextmenu={(e) => gestures.contextMenu(e)}
+  style:cursor={gestures.draggingCardId || gestures.isPanning ? "grabbing" : "grab"}
+>
+  <div
+    style:width="{canvasWidth * zoom}px"
+    style:height="{canvasHeight * zoom}px"
+    style:position="relative"
+    style:flex-shrink="0"
+  >
+    <div
+      style:width="{canvasWidth}px"
+      style:height="{canvasHeight}px"
+      style:position="absolute"
+      style:top="0"
+      style:left="0"
+      style:transform="scale({zoom})"
+      style:transform-origin="0 0"
+    >
+      <!-- Draw frames at z-index 0 below cards and outside layer wrappers. Frames can contain cards from any layer and must not inherit layer dimming. -->
+      {#each scopeAreas as area (area.id)}
+        <ScopeArea
+          {area}
+          name={scopeNameById.get(area.scopeId) ?? ""}
+          focused={area.scopeId === activeScopeId}
+          draggable={!readonly}
+          dragging={gestures.draggingAreaId === area.id}
+          resizing={gestures.resizingAreaId === area.id}
+          onMouseDown={(e) => gestures.pressArea(e, area.id)}
+          onResizeMouseDown={(e) => gestures.pressAreaResize(e, area.id)}
+          onRemove={() => onRemoveScopeArea(area.scopeId, area.id)}
+        />
+        <!-- Render the file strip beside the frame so `ScopeArea` stays independent of taskspaces. Both follow the same position row during dragging. -->
+        {@const groups = areaFiles.fileGroupsByArea.get(area.id) ?? []}
+        {@const live = !readonly && treeContext.backend.taskspaces !== undefined}
+        <!-- A scope with no taskspaces still gets a strip on a live board, holding the
+             new-taskspace control that gives it its first one. -->
+        {#if groups.length > 0 || (live && onCreateTaskspace)}
+          <ScopeAreaFiles
+            {area}
+            {groups}
+            {onOpenFile}
+            onNavigate={(taskspaceId, path) => areaFiles.navigate(area.id, taskspaceId, path)}
+            onRefresh={(taskspaceId, path) => { void taskspaceTree.ensure(treeContext, taskspaceId, path, true); }}
+            onCreate={live
+              ? (taskspaceId, path, kind, name) => areaFiles.create(taskspaceId, path, kind, name)
+              : undefined}
+            onCreateTaskspace={live && onCreateTaskspace
+              ? (name) => onCreateTaskspace(area.scopeId, name)
+              : undefined}
+          />
+        {/if}
+      {/each}
+      {#each layerGroups as group (group.id)}
+        <!-- pointer-events pass through the wrapper so cards on layers underneath stay
+             clickable and canvas panning still works between them. -->
+        <div
+          data-layer-id={group.id}
+          style:position="absolute"
+          style:inset="0"
+          style:z-index={group.rank}
+          style:opacity={group.active || group.floating ? 1 : INACTIVE_LAYER_OPACITY}
+          style:pointer-events="none"
+          style:transition="opacity 0.18s"
+        >
+          <!-- Apply scope dimming only to fully opaque layers so multiplying opacities does not make cards unreadable. -->
+          {#each group.cards as card (card.id)}
+            {@const color = partitionColorById.get(card.partitionId) ?? {
+              id: "",
+              namespaceId: "",
+              isDefault: false,
+              bg: PALETTE[0].bg,
+              dot: PALETTE[0].dot,
+              name: "Unknown",
+            }}
+            <KozaneCard
+              {card}
+              {color}
+              isSelected={selection.selectedCards.has(card.id)}
+              isPrimaryUnglue={card.id === selection.primarySelectedId && !!card.glueId}
+              isComposing={selection.composerCard?.id === card.id}
+              dimmed={(group.active || group.floating) &&
+                scopeCardIds !== null &&
+                !scopeCardIds.has(card.id)}
+              isDragging={gestures.draggingCardId === card.id}
+              zIndex={card.zIndex}
+              {showFooters}
+              cardWidth={widthOf(card)}
+              {fontSize}
+              {fontFamily}
+              isResizing={selection.resizingCardId === card.id}
+              {tagHref}
+              onCardMouseDown={(e) => gestures.pressCard(e, card.id)}
+              onCardClick={(e) => gestures.clickCard(e, card.id)}
+              onCardDblClick={() => gestures.dblClickCard(card.id)}
+              onResizeMouseDown={(e) => gestures.pressCardResize(e, card.id)}
+            />
+          {/each}
+        </div>
+      {/each}
+
+      <!-- Keep warp markers outside layer wrappers so they never inherit layer dimming. -->
+      {#if warpsVisible}
+        {#each warps as warp, index (warp.id)}
+          <WarpMarker
+            {warp}
+            draggable={!readonly}
+            dragging={gestures.draggingWarpId === warp.id}
+            label={index + 1}
+            focused={warp.id === focusedWarpId}
+            size={warpMarkerSize}
+            onMouseDown={(e) => gestures.pressWarp(e, warp.id)}
+          />
+        {/each}
+      {/if}
+
+      <!-- Inventory icons sit with the warp markers, above every layer and outside its dimming. -->
+      {#each inventories as inventory (inventory.id)}
+        <InventoryIcon
+          {inventory}
+          label={inventoryLabel(inventory)}
+          open={openInventoryIds.has(inventory.id)}
+          dropHover={gestures.dropTarget?.kind === "inventory" &&
+            gestures.dropTarget.inventoryId === inventory.id &&
+            gestures.dropTarget.slot === null}
+          draggable={!readonly}
+          dragging={gestures.draggingInventoryId === inventory.id}
+          onMouseDown={(e) => gestures.pressInventory(e, inventory.id)}
+          onToggle={() => onToggleInventory(inventory.id)}
+        />
+      {/each}
+
+      {#if gestures.selectionRect}
+        <SelectionRect rect={gestures.selectionRect} />
+      {/if}
+
+      <!-- Use the scope accent for frames being drawn or awaiting scope assignment.
+           This distinguishes a pending frame from a selection rectangle. -->
+      {#if gestures.scopeAreaDraft ?? pendingScopeAreaRect}
+        <SelectionRect
+          rect={(gestures.scopeAreaDraft ?? pendingScopeAreaRect)!}
+          accent={token.var("colors.neutral.iconDim")}
+        />
+      {/if}
+    </div>
+  </div>
+</div>

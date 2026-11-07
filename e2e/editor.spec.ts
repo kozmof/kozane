@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
  * covers editing behavior separately.
  */
 
-const packageRoot = resolve(import.meta.dirname, "..");
+const packageRoot = resolve(import.meta.dirname, "../packages/kozane");
 const workspace = mkdtempSync(join(tmpdir(), "kozane-editor-e2e-"));
 const port = String(20_000 + Math.floor(Math.random() * 20_000));
 const baseUrl = `http://127.0.0.1:${port}`;

@@ -1,20 +1,3 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2024"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "rewriteRelativeImportExtensions": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "strict": true,
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "sourceMap": true,
-    "declaration": true,
-    "types": ["node"]
-  },
-  "include": ["src/cli/**/*", "src/db/**/*", "src/lib/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+  "extends": "./packages/kozane/tsconfig.cli.json"
 }

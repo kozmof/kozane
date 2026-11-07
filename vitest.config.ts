@@ -17,23 +17,33 @@ export default defineConfig({
   ],
   resolve: {
     conditions: ["browser"],
-    alias: {
-      $lib: path.resolve("./src/lib"),
-      // Mirror the route aliases from `svelte.config.js`.
-      $db: path.resolve("./src/db"),
-      "styled-system": path.resolve("./styled-system"),
-      "@libsql/client": libsqlNodeEntry,
-      // Stub the virtual modules supplied by SvelteKit builds.
-      "$app/paths": path.resolve("./src/test-utils/app-paths.ts"),
-      "$app/navigation": path.resolve("./src/test-utils/app-navigation.ts"),
-      "$app/environment": path.resolve("./src/test-utils/app-environment.ts"),
-      "$app/state": path.resolve("./src/test-utils/app-state.ts"),
-      "$app/forms": path.resolve("./src/test-utils/app-forms.ts"),
-    },
+    alias: [
+      {
+        find: /^@kozane\/client$/,
+        replacement: path.resolve("./packages/client/src/backend/index.ts"),
+      },
+      ...["index", "database", "schema", "services", "migrations"].map((name) => ({
+        find: new RegExp("^@kozane/core" + (name === "index" ? "" : "/" + name) + "$"),
+        replacement: path.resolve("./packages/core/src/" + name + ".ts"),
+      })),
+      ...Object.entries({
+        $lib: path.resolve("./packages/kozane/src/lib"),
+        // Mirror the route aliases from `svelte.config.js`.
+        $db: path.resolve("./packages/kozane/src/db"),
+        "styled-system": path.resolve("./styled-system"),
+        "@libsql/client": libsqlNodeEntry,
+        // Stub the virtual modules supplied by SvelteKit builds.
+        "$app/paths": path.resolve("./packages/kozane/src/test-utils/app-paths.ts"),
+        "$app/navigation": path.resolve("./packages/kozane/src/test-utils/app-navigation.ts"),
+        "$app/environment": path.resolve("./packages/kozane/src/test-utils/app-environment.ts"),
+        "$app/state": path.resolve("./packages/kozane/src/test-utils/app-state.ts"),
+        "$app/forms": path.resolve("./packages/kozane/src/test-utils/app-forms.ts"),
+      }).map(([find, replacement]) => ({ find, replacement })),
+    ],
   },
   test: {
-    include: ["src/**/*.test.ts"],
-    setupFiles: ["src/test-utils/setup.ts"],
+    include: ["packages/kozane/src/**/*.test.ts", "packages/client/tests/**/*.test.ts"],
+    setupFiles: ["packages/kozane/src/test-utils/setup.ts"],
     environment: "jsdom",
     maxWorkers: 4,
     // Limit each test's runtime. This does not bound the whole run. Redirect output to a file
@@ -42,7 +52,11 @@ export default defineConfig({
     testTimeout: 10_000,
     coverage: {
       provider: "v8",
-      include: ["src/**/*.{ts,svelte}"],
+      include: [
+        "packages/kozane/src/**/*.{ts,svelte}",
+        "packages/client/src/**/*.{ts,svelte}",
+        "packages/core/src/**/*.ts",
+      ],
       // Coverage thresholds apply only to files outside the exclusions below.
       //
       // - Svelte components have component and browser tests, but this V8 setup does not
@@ -51,33 +65,39 @@ export default defineConfig({
       // execution.
       exclude: [
         // Test infrastructure
-        "src/test-utils/**",
-        "src/app.d.ts",
+        "packages/kozane/src/test-utils/**",
+        "packages/kozane/src/app.d.ts",
         // CLI subprocess coverage is not collected by this process.
-        "src/cli/index.ts",
-        "src/cli/commands/**",
+        "packages/kozane/src/cli/index.ts",
+        "packages/kozane/src/cli/commands/**",
         // `spec.test.ts` checks the command tree. Action handlers run in CLI subprocess tests.
-        "src/cli/program.ts",
+        "packages/kozane/src/cli/program.ts",
+        // Split command registration retains that subprocess-only wiring exclusion.
+        // Keep program/parsers.ts measured and directly tested.
+        "packages/kozane/src/cli/program/{board,cards,data,structure,workspace}.ts",
         // Filesystem discovery and configuration require isolated CLI integration coverage.
-        "src/cli/lib/config.ts",
-        "src/cli/lib/workspace.ts",
-        "src/cli/lib/taskspace-scan.ts",
+        "packages/kozane/src/cli/lib/config.ts",
+        "packages/kozane/src/cli/lib/workspace.ts",
+        "packages/kozane/src/cli/lib/taskspace-scan.ts",
         // Workspace setup and failure exits are exercised by CLI subprocess tests.
-        "src/cli/lib/workspace-command.ts",
+        "packages/kozane/src/cli/lib/workspace-command.ts",
         // Database setup and schema declarations.
-        "src/db/internal/**",
-        "src/db/client.ts",
-        "src/db/schema.ts",
+        "packages/kozane/src/db/internal/**",
+        "packages/kozane/src/db/client.ts",
+        "packages/kozane/src/db/schema.ts",
+        "packages/core/src/schema.ts",
         // SvelteKit module wiring.
-        "src/lib/index.ts",
+        "packages/kozane/src/lib/index.ts",
         // Mounts the config page in the browser. `App.test.ts` renders the app itself.
-        "src/config-editor/main.ts",
+        "packages/kozane/src/config-editor/main.ts",
         // Exclude both page and layout server modules, which require integration coverage.
-        "src/routes/**/*page.server.ts",
-        "src/routes/**/*layout.server.ts",
+        "packages/kozane/src/routes/**/*page.server.ts",
+        "packages/kozane/src/routes/**/*layout.server.ts",
         // Exclude route and shared Svelte components because this V8 setup does not measure
         // their source coverage.
-        "src/**/*.svelte",
+        "packages/kozane/src/**/*.svelte",
+        "packages/client/src/**/*.svelte",
+        "packages/client/src/styles/generated/**",
       ],
       reporter: ["text", "html", "lcov"],
       thresholds: {

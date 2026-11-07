@@ -1,0 +1,18 @@
+import { inventories as service } from "@kozane/core/services";
+export const createInTx: typeof service.createInTx = service.createInTx;
+export const updateInTx: typeof service.updateInTx = service.updateInTx;
+export const removeInTx: typeof service.removeInTx = service.removeInTx;
+export const stowInTx: typeof service.stowInTx = service.stowInTx;
+export const takeInTx: typeof service.takeInTx = service.takeInTx;
+export const create: typeof service.create = service.create;
+export const update: typeof service.update = service.update;
+export const remove: typeof service.remove = service.remove;
+export const stow: typeof service.stow = service.stow;
+export const take: typeof service.take = service.take;
+export const repairInTx: typeof service.repairInTx = service.repairInTx;
+export const repair: typeof service.repair = service.repair;
+export type InventoryCreateInput = service.InventoryCreateInput;
+export type InventoryUpdateInput = service.InventoryUpdateInput;
+export type InventoryStowInput = service.InventoryStowInput;
+export type InventoryTakeCardInput = service.InventoryTakeCardInput;
+export type InventoryTakeInput = service.InventoryTakeInput;

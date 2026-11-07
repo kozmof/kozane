@@ -1,0 +1,471 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { createRequire } from "node:module";
+import { createClient } from "@libsql/client";
+import { afterEach, describe, expect, it } from "vitest";
+import { DROP_CARD_GUARDS_SQL } from "../test-utils/db.js";
+
+/**
+ * Test `kozane card list --sort` against a workspace created by `kozane init`. Set timestamps
+ * directly so ordering does not depend on whether consecutive writes cross a second boundary.
+ */
+
+const cliEntry = resolve("packages/kozane/src/cli/index.ts");
+const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("tsx");
+const tempRoots: string[] = [];
+
+/**
+ * Read migration 0011's `when` value from the journal so regeneration cannot leave this fixture
+ * using a stale timestamp.
+ */
+const CARD_TIMESTAMPS_MIGRATION_WHEN = migrationWhen("0011_card_timestamps");
+
+function migrationWhen(tag: string): number {
+  const journal = JSON.parse(readFileSync(resolve("drizzle/meta/_journal.json"), "utf-8")) as {
+    entries: { tag: string; when: number }[];
+  };
+  const entry = journal.entries.find((candidate) => candidate.tag === tag);
+  if (!entry) throw new Error(`No migration tagged ${tag} in drizzle/meta/_journal.json`);
+  return entry.when;
+}
+
+function tempWorkspace(): string {
+  const root = mkdtempSync(join(tmpdir(), "kozane-card-sort-e2e-"));
+  tempRoots.push(root);
+  return root;
+}
+
+function runCli(cwd: string, ...args: string[]): SpawnSyncReturns<string> {
+  return spawnSync(process.execPath, ["--import", tsxLoader, cliEntry, ...args], {
+    cwd,
+    encoding: "utf-8",
+    env: { ...process.env, TMPDIR: tmpdir(), NO_COLOR: "1" },
+  });
+}
+
+function cli(cwd: string, ...args: string[]): string {
+  const result = runCli(cwd, ...args);
+  if (result.status !== 0) {
+    throw new Error(
+      [`kozane ${args.join(" ")} failed (${result.status})`, result.stdout, result.stderr]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
+  return result.stdout;
+}
+
+/** Card text from each printed line, used as the fixture's card name. */
+function listed(root: string, ...args: string[]): string[] {
+  return cli(root, "card", "list", ...args)
+    .split("\n")
+    .flatMap((line) => {
+      const match = line.match(/^\S+\s{2}\S+\s{2}\(-?\d+, -?\d+\)\s{2}(.*)$/);
+      return match ? [match[1]] : [];
+    });
+}
+
+const seconds = (iso: string): number => Math.floor(new Date(iso).getTime() / 1000);
+
+async function withDb(
+  root: string,
+  run: (client: ReturnType<typeof createClient>) => Promise<void>,
+) {
+  const client = createClient({ url: `file:${join(root, ".kozane", "kozane.db")}` });
+  try {
+    await run(client);
+  } finally {
+    client.close();
+  }
+}
+
+/**
+ * Give the three cards distinct sort orders. `oldest` was created first and edited last.
+ * `untouched` was created last and never edited. `reconsidered` has intermediate timestamps and
+ * the longest interval.
+ *
+ * Use each card's text as its ID to make failures readable and ID tie-breaking predictable.
+ */
+const THREE_CARDS = [
+  { content: "oldest", created: "2026-01-01T00:00:00Z", updated: "2026-04-01T00:00:00Z" },
+  { content: "reconsidered", created: "2026-02-01T00:00:00Z", updated: "2026-03-01T00:00:00Z" },
+  { content: "untouched", created: "2026-03-01T00:00:00Z", updated: "2026-03-01T00:00:00Z" },
+] as const;
+
+/** The three orders `THREE_CARDS` produces, as `card list` prints them. */
+const BY_CREATED = [
+  "2026-01-01T00:00:00Z  oldest",
+  "2026-02-01T00:00:00Z  reconsidered",
+  "2026-03-01T00:00:00Z  untouched",
+];
+const BY_UPDATED = [
+  "2026-03-01T00:00:00Z  reconsidered",
+  "2026-03-01T00:00:00Z  untouched",
+  "2026-04-01T00:00:00Z  oldest",
+];
+const BY_GAP = ["0s  untouched", "28d  reconsidered", "90d  oldest"];
+
+/**
+ * Insert `THREE_CARDS` directly into an initialized workspace, optionally linked to a
+ * taskspace. Direct inserts set the required histories without spawning a CLI process per card.
+ * They also set `taskspace_id`, which has no CLI setter.
+ */
+async function seedThreeCards(root: string, taskspaceId: string | null = null): Promise<void> {
+  await withDb(root, async (client) => {
+    const [partition, layer] = await Promise.all([
+      client.execute("SELECT id FROM partition LIMIT 1"),
+      client.execute("SELECT id FROM layer LIMIT 1"),
+    ]);
+    const partitionId = partition.rows[0].id as string;
+    const layerId = layer.rows[0].id as string;
+    await client.batch(
+      THREE_CARDS.map(({ content, created, updated }) => ({
+        sql: `INSERT INTO card (id, partition_id, layer_id, taskspace_id, content, pos_x, pos_y, z_index, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, ?)`,
+        args: [
+          content,
+          partitionId,
+          layerId,
+          taskspaceId,
+          content,
+          seconds(created),
+          seconds(updated),
+        ],
+      })),
+      "write",
+    );
+  });
+}
+
+/** Put every workspace card in one scope for the scoped taskspace listing. */
+async function addEveryCardToScope(root: string, scopeId: string): Promise<void> {
+  await withDb(root, async (client) => {
+    await client.execute({
+      sql: "INSERT INTO scope_rel (scope_id, card_id) SELECT ?, id FROM card",
+      args: [scopeId],
+    });
+  });
+}
+
+/**
+ * Read the row's full ID from the database. CLI output uses short IDs, which cannot serve as
+ * foreign keys.
+ */
+async function onlyId(root: string, table: "scope" | "taskspace"): Promise<string> {
+  let id = "";
+  await withDb(root, async (client) => {
+    const rows = await client.execute(`SELECT id FROM ${table}`);
+    if (rows.rows.length !== 1)
+      throw new Error(`Expected one ${table} row, found ${rows.rows.length}`);
+    id = rows.rows[0].id as string;
+  });
+  return id;
+}
+
+afterEach(() => {
+  for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+describe("kozane card list --sort", () => {
+  it("orders by each key, and reverses", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+
+    expect(listed(root, "--sort", "created")).toEqual(BY_CREATED);
+    expect(listed(root, "--sort", "updated")).toEqual(BY_UPDATED);
+    // Order by gap, with untouched cards first and the longest interval last.
+    expect(listed(root, "--sort", "gap")).toEqual(BY_GAP);
+    expect(listed(root, "--sort", "gap", "--reverse")).toEqual([...BY_GAP].reverse());
+  }, 90_000);
+
+  it("prints the listing unchanged when no sort is asked for", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+
+    // Preserve the default ID, partition, coordinate, and text columns without an added time
+    // column.
+    expect(listed(root).toSorted()).toEqual(["oldest", "reconsidered", "untouched"]);
+  }, 90_000);
+
+  /**
+   * Verify sorting and timestamp output for cards listed through a taskspace's scope. This
+   * query selects all card columns and must match the namespace listing.
+   */
+  it("sorts a scoped taskspace listing the way it sorts a namespace listing", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "scope", "add", "Sort scope");
+    const scopeId = await onlyId(root, "scope");
+    await seedThreeCards(root);
+    await addEveryCardToScope(root, scopeId);
+    cli(root, "taskspace", "create", "reading", "--scope", scopeId);
+    const taskspaceDir = join(root, "taskspaces", "main", "reading");
+
+    expect(listed(taskspaceDir, "--sort", "gap")).toEqual(BY_GAP);
+    expect(listed(taskspaceDir, "--sort", "created", "--reverse")).toEqual(
+      [...BY_CREATED].reverse(),
+    );
+    // Omit the time column when no sort key is requested.
+    expect(listed(taskspaceDir).toSorted()).toEqual(["oldest", "reconsidered", "untouched"]);
+  }, 120_000);
+
+  /**
+   * Verify sorting for a taskspace without a scope. This query lists cards linked directly to
+   * the taskspace and reports that choice on stderr.
+   */
+  it("sorts the cards tied directly to a taskspace that has no scope", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "taskspace", "create", "loose", "--no-scope");
+    await seedThreeCards(root, await onlyId(root, "taskspace"));
+    const taskspaceDir = join(root, "taskspaces", "main", "loose");
+
+    expect(listed(taskspaceDir, "--sort", "updated")).toEqual(BY_UPDATED);
+    expect(listed(taskspaceDir, "--sort", "gap", "--reverse")).toEqual([...BY_GAP].reverse());
+  }, 120_000);
+
+  /**
+   * Match the full stderr output to distinguish a handled error from an unhandled rejection
+   * containing the same message. These validation errors occur before `runWorkspaceCommand` can
+   * catch them.
+   */
+  function refusal(root: string, ...args: string[]): string {
+    const result = runCli(root, ...args);
+    expect(result.status).toBe(1);
+    return result.stderr.trim();
+  }
+
+  it("refuses an unknown key and a --reverse with nothing to reverse", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    expect(refusal(root, "card", "list", "--sort", "bogus")).toContain(
+      "Must be one of: created, updated, gap.",
+    );
+    expect(refusal(root, "card", "list", "--reverse")).toBe("Error: --reverse requires --sort.");
+  }, 60_000);
+
+  it("refuses a --taskspace combined with --namespace the same way", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    expect(refusal(root, "card", "list", "--taskspace", ".", "--namespace", "abc")).toBe(
+      "Error: --taskspace cannot be combined with --namespace or --partition.",
+    );
+  }, 60_000);
+
+  it("names the malformed argument outside a workspace, rather than the missing workspace", () => {
+    // Reject `--reverse` without a sort key before looking up a workspace.
+    const root = tempWorkspace();
+
+    expect(refusal(root, "card", "list", "--reverse")).toBe("Error: --reverse requires --sort.");
+  }, 60_000);
+
+  it("backfills cards that predate the timestamp columns", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    // Roll back to migration 0010 before inserting the card so migration 0011 adds timestamps
+    // to an existing row.
+    //
+    // Remove every schema change whose journal entry is deleted, since all those migrations
+    // will run again. Drop indexes before dropping columns they reference. Reverse migration
+    // 0014's table and index renames so it can run against the old names. SQLite renames
+    // tables referenced by an index but leaves the index name unchanged.
+    //
+    // Do not restore `card_partition_updated` here. It was already dropped above and
+    // migration 0013 recreates it.
+    await withDb(root, async (client) => {
+      await client.batch(
+        [
+          "DROP INDEX IF EXISTS card_partition_updated",
+          "DROP INDEX IF EXISTS glue_rel_glue",
+          // Drop `scope_area` so migration 0016 can recreate it after its journal entry is
+          // removed. Its indexes disappear with it.
+          "DROP TABLE IF EXISTS scope_area",
+          // Undo 0019, whose triggers name the inventory and timestamp columns dropped below.
+          ...DROP_CARD_GUARDS_SQL,
+          // Undo 0018, whose journal entry goes with the rest below. The index has to go before
+          // the column it covers.
+          "DROP INDEX IF EXISTS card_inventory_slot",
+          "ALTER TABLE card DROP COLUMN inventory_slot",
+          "ALTER TABLE card DROP COLUMN inventory_id",
+          "DROP TABLE IF EXISTS inventory",
+
+          "ALTER TABLE `namespace` RENAME TO `project`",
+          "ALTER TABLE `partition` RENAME TO `bundle`",
+          "ALTER TABLE `bundle` RENAME COLUMN `namespace_id` TO `project_id`",
+          "ALTER TABLE `layer` RENAME COLUMN `namespace_id` TO `project_id`",
+          "ALTER TABLE `warp` RENAME COLUMN `namespace_id` TO `project_id`",
+          "ALTER TABLE `taskspace` RENAME COLUMN `namespace_id` TO `project_id`",
+          "ALTER TABLE `card` RENAME COLUMN `partition_id` TO `bundle_id`",
+          "DROP INDEX IF EXISTS `namespace_one_default`",
+          "CREATE UNIQUE INDEX `project_one_default` ON `project` (`is_default`) WHERE is_default = 1",
+          "DROP INDEX IF EXISTS `partition_one_default_per_namespace`",
+          "CREATE UNIQUE INDEX `bundle_one_default_per_project` ON `bundle` (`project_id`) WHERE is_default = 1",
+          "DROP INDEX IF EXISTS `partition_name_per_namespace`",
+          "CREATE UNIQUE INDEX `bundle_name_per_project` ON `bundle` (`project_id`,`name`)",
+          "DROP INDEX IF EXISTS `layer_one_default_per_namespace`",
+          "CREATE UNIQUE INDEX `layer_one_default_per_project` ON `layer` (`project_id`) WHERE is_default = 1",
+          "DROP INDEX IF EXISTS `layer_name_per_namespace`",
+          "CREATE UNIQUE INDEX `layer_name_per_project` ON `layer` (`project_id`,`name`)",
+          "DROP INDEX IF EXISTS `warp_namespace`",
+          "CREATE INDEX `warp_project` ON `warp` (`project_id`)",
+          "DROP INDEX IF EXISTS `card_partition`",
+          "CREATE INDEX `card_bundle` ON `card` (`bundle_id`)",
+
+          "ALTER TABLE card DROP COLUMN created_at",
+          "ALTER TABLE card DROP COLUMN updated_at",
+          `DELETE FROM __drizzle_migrations WHERE created_at >= ${CARD_TIMESTAMPS_MIGRATION_WHEN}`,
+        ],
+        "write",
+      );
+      const [bundle, layer] = await Promise.all([
+        client.execute("SELECT id FROM bundle LIMIT 1"),
+        client.execute("SELECT id FROM layer LIMIT 1"),
+      ]);
+      await client.execute({
+        sql: `INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y, z_index)
+              VALUES ('old', ?, ?, ?, 0, 0, 0)`,
+        args: [bundle.rows[0].id, layer.rows[0].id, "written before the columns existed"],
+      });
+    });
+    expect(runCli(root, "db", "status")).toMatchObject({
+      status: 1,
+      stdout: expect.stringContaining("Status  : pending"),
+    });
+
+    expect(cli(root, "db", "migrate")).toContain("Database migrated.");
+
+    // Backfill both timestamps with the migration time so the card appears unedited.
+    expect(listed(root, "--sort", "gap")).toEqual(["0s  written before the columns existed"]);
+    const [line] = listed(root, "--sort", "created");
+    const createdAt = new Date(line.split("  ")[0]);
+    expect(createdAt.getTime()).toBeGreaterThan(Date.now() - 10 * 60_000);
+  }, 90_000);
+
+  /**
+   * Verify that `doctor` reports timestamps left at the epoch. Migration 0011 adds both
+   * columns with `DEFAULT 0`, so a raw insert that omits them can still create such a row.
+   */
+  it("reports a card left at the epoch by an insert that named neither column", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    expect(cli(root, "doctor")).toContain("✓  Card timestamps valid");
+
+    await withDb(root, async (client) => {
+      // Migration 0019 stamps such inserts. A database from before it can still hold one.
+      for (const statement of DROP_CARD_GUARDS_SQL) await client.execute(statement);
+      const [partition, layer] = await Promise.all([
+        client.execute("SELECT id FROM partition LIMIT 1"),
+        client.execute("SELECT id FROM layer LIMIT 1"),
+      ]);
+      await client.execute({
+        sql: `INSERT INTO card (id, partition_id, layer_id, content, pos_x, pos_y, z_index)
+              VALUES ('epoch', ?, ?, 'inserted by hand', 0, 0, 0)`,
+        args: [partition.rows[0].id, layer.rows[0].id],
+      });
+    });
+
+    const result = runCli(root, "doctor");
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain(
+      "✗  Card timestamps valid — 1 card stamped outside what this app writes",
+    );
+    // Include the invalid card's short ID alongside the count so the report identifies the
+    // row.
+    expect(result.stdout).toContain("inserted by hand: epoch;");
+    // Verify that the listing displays the epoch timestamp reported by doctor.
+    expect(listed(root, "--sort", "created")).toContain("1970-01-01T00:00:00Z  inserted by hand");
+  }, 90_000);
+
+  /**
+   * Verify that an out-of-range timestamp does not prevent the card list from printing. Raw
+   * SQL can store integers that produce an invalid `Date`, whose `toISOString()` throws.
+   */
+  it("lists a card whose timestamp no date can be read from, and reports it", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+
+    await withDb(root, async (client) => {
+      await client.execute({
+        sql: "UPDATE card SET created_at = ?, updated_at = ? WHERE id = 'untouched'",
+        args: [9_000_000_000_000_000, 9_000_000_000_000_000],
+      });
+    });
+
+    // The whole listing still prints, and the card that cannot be placed is last and says so.
+    expect(listed(root, "--sort", "created")).toEqual([
+      "2026-01-01T00:00:00Z  oldest",
+      "2026-02-01T00:00:00Z  reconsidered",
+      "invalid  untouched",
+    ]);
+    // `gap` too, where the unreadable value would otherwise have read as an honest `0s`.
+    expect(listed(root, "--sort", "gap")).toEqual([
+      "28d  reconsidered",
+      "90d  oldest",
+      "invalid  untouched",
+    ]);
+    // Carried along by --reverse like every other tie, rather than pinned to the end.
+    expect(listed(root, "--sort", "created", "--reverse")[0]).toBe("invalid  untouched");
+
+    const result = runCli(root, "doctor");
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain(
+      "✗  Card timestamps valid — 1 card stamped outside what this app writes",
+    );
+    // The other end of the range names its row too. `untouched` shortens to seven
+    // characters, which is what `shortIdMap` gives an id nothing else shares a prefix with.
+    expect(result.stdout).toContain("inserted by hand: untouch;");
+  }, 90_000);
+});
+
+describe("kozane card show --times", () => {
+  it("prints the three values --sort orders by, above the text", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+
+    expect(cli(root, "card", "show", "reconsidered", "--times")).toBe(
+      [
+        "created  2026-02-01T00:00:00Z",
+        "updated  2026-03-01T00:00:00Z",
+        "gap      28d",
+        "",
+        "reconsidered",
+        "",
+      ].join("\n"),
+    );
+  }, 90_000);
+
+  it("prints the text and nothing else without the flag", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+
+    // Keep default `card show` output suitable for redirecting card text to a file.
+    expect(cli(root, "card", "show", "reconsidered")).toBe("reconsidered\n");
+  }, 90_000);
+
+  it("says invalid for a timestamp no date can be read from, as the listing does", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+    await withDb(root, async (client) => {
+      await client.execute({
+        sql: "UPDATE card SET created_at = ?, updated_at = ? WHERE id = 'oldest'",
+        args: [9_000_000_000_000_000, 9_000_000_000_000_000],
+      });
+    });
+
+    expect(cli(root, "card", "show", "oldest", "--times")).toBe(
+      ["created  invalid", "updated  invalid", "gap      invalid", "", "oldest", ""].join("\n"),
+    );
+  }, 90_000);
+});
