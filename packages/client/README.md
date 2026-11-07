@@ -17,8 +17,7 @@ re-exports the same default configuration object.
 The root entry also exports warp hint/layout calculations and tag truncation labels for
 views and CLI output. Map display bounds and tag display caps use the same exported constants.
 
-This candidate is not ready for publication. Complete production consumer checks and
-workspace conversion remain under Phase 3.
+Prepare and verify candidate packages through the [local release flow](../../docs/releases.md).
 
 Views, backend adapters, contracts, UI configuration, navigation, preferences and
 rendering helpers live
