@@ -8,6 +8,8 @@ Run `pnpm changeset` when changing a public package. Use a minor core bump for A
 
 Run `pnpm release:status` to review the plan. Run `pnpm release:version` to apply it and refresh the lockfile. Review and commit the generated changelogs, versions and lockfile. Changesets updates exact peer and workspace dependency versions. Its automatic formatter is disabled so formatting follows the repository tools.
 
+Run `pnpm smoke:package:install` to pack all three candidates and check local and global npm installation, executable entry points and shared runtime identity without starting an HTTP server. The full `pnpm smoke:package` command also tests the installed server.
+
 Run `pnpm release:check` to verify public package metadata and exact dependency versions. The check also applies two releases in a temporary workspace to test coordinated core/client upgrades. Run the normal verification and browser CI before merging the release commit to main.
 
 ## Configure npm

@@ -3,6 +3,12 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync } from "n
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+const options = process.argv.slice(2);
+if (options.some((option) => option !== "--install-only")) {
+  throw new Error("Usage: node scripts/smoke-package.mjs [--install-only]");
+}
+const installOnly = options.includes("--install-only");
+
 const sourceRoot = resolve(import.meta.dirname, "..");
 const staging = mkdtempSync(join(tmpdir(), "kozane-package-smoke-"));
 
@@ -69,9 +75,11 @@ try {
   run("npm", ["exec", "--", "kozane", "--version"], { cwd: staging });
   const installedRoot = join(staging, "node_modules", "kozane");
   run(process.execPath, [join(sourceRoot, "scripts/check-node-core.mjs"), installedRoot]);
-  run(process.execPath, [join(sourceRoot, "scripts", "smoke-production.mjs")], {
-    env: { ...process.env, KOZANE_PACKAGE_ROOT: installedRoot },
-  });
+  if (!installOnly) {
+    run(process.execPath, [join(sourceRoot, "scripts", "smoke-production.mjs")], {
+      env: { ...process.env, KOZANE_PACKAGE_ROOT: installedRoot },
+    });
+  }
   const globalPrefix = join(staging, "global");
   run(
     "npm",
@@ -100,7 +108,11 @@ try {
     "kozane",
   );
   run(process.execPath, [join(sourceRoot, "scripts/check-node-core.mjs"), globalRoot]);
-  console.log("Local and global npm package smoke tests passed.");
+  console.log(
+    installOnly
+      ? "Local and global npm installation, executable and public runtime identity checks passed. HTTP checks were not run."
+      : "Local and global npm package smoke tests passed.",
+  );
 } finally {
   rmSync(staging, { recursive: true, force: true });
 }
