@@ -5,10 +5,20 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const options = process.argv.slice(2);
-if (options.some((option) => !["--install-only", "--registry"].includes(option))) {
-  throw new Error("Usage: node scripts/smoke-package.mjs [--install-only] [--registry]");
+const artifactsOption = options.find((option) => option.startsWith("--artifacts="));
+if (
+  options.some(
+    (option) =>
+      !["--install-only", "--registry"].includes(option) && !option.startsWith("--artifacts="),
+  )
+) {
+  throw new Error(
+    "Usage: node scripts/smoke-package.mjs [--install-only] [--registry | --artifacts=<directory>]",
+  );
 }
 const registry = options.includes("--registry");
+if (registry && artifactsOption)
+  throw new Error("Registry and prepared archives are separate smoke sources");
 const registryOptions = registry ? ["--registry=https://registry.npmjs.org/"] : [];
 const installOnly = options.includes("--install-only");
 
@@ -35,6 +45,15 @@ function run(command, args, options = {}) {
 }
 
 function installationTargets() {
+  if (artifactsOption) {
+    const directory = resolve(artifactsOption.slice("--artifacts=".length));
+    return ["core", "client", "kozane"].map((name) => {
+      const pkg = JSON.parse(
+        readFileSync(join(sourceRoot, "packages", name, "package.json"), "utf8"),
+      );
+      return join(directory, `${pkg.name.replace(/^@/, "").replace("/", "-")}-${pkg.version}.tgz`);
+    });
+  }
   if (registry) {
     return ["core", "client", "kozane"].map((directory) => {
       const { name, version } = JSON.parse(

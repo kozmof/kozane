@@ -1,10 +1,13 @@
+import {
+  claimRecordedTaskspace,
+  TaskspaceClaimError,
+} from "../../lib/server/taskspace-service/claim.js";
 import { existsSync, readFileSync } from "node:fs";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
 import { errorMessage } from "../../lib/error-message.js";
 import { isPlainObject } from "../../lib/plain-object.js";
 import { basename, dirname, join, resolve, isAbsolute } from "node:path";
 import {
-  claimTaskspaceDirectory,
   enclosingRecordedTaskspace,
   enclosingTaskspaceDir,
 } from "../../lib/server/taskspace-directory.js";
@@ -24,12 +27,7 @@ import {
 import { taskspaceTable, scopeTable } from "../../db/schema.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { pickNamespaceId, resolveNamespaceId } from "../lib/namespace-selection.js";
-import {
-  addTaskspace,
-  deleteTaskspace,
-  getAllTaskspaces,
-  getTaskspacesInNamespace,
-} from "../../db/api/taskspace.js";
+import { getAllTaskspaces, getTaskspacesInNamespace } from "../../db/api/taskspace.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { taskspaceParentDir } from "../../lib/taskspace-location.js";
 import { isStrictlyInside } from "../../lib/server/fs-paths.js";
@@ -376,31 +374,21 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
 
     const { pathKind, storedPath } = storedLocation(root, targetDir);
 
-    const id = await addTaskspace({
-      db,
-      namespaceId,
-      scopeId,
-      name,
-      path: storedPath,
-      pathKind,
-      lastSeenAt: new Date(),
-    });
-
+    let id: string;
     try {
-      // A directory already there without a marker is adopted, but stays the user's. The
-      // claim removes only what it made if it fails.
-      claimTaskspaceDirectory({
-        workspaceRoot: root,
-        targetDir,
-        taskspaceId: id,
-        namespaceId,
-        adoptExisting: true,
-        parentsInside: checkParents,
-        // Only a directory made here under `defaultDir` is Kozane's to rename or delete.
-        ownIfCreated: !options.dir,
-      });
-    } catch (e) {
-      await deleteTaskspace({ db, taskspaceId: id });
+      id = await claimRecordedTaskspace(
+        { db, namespaceId, scopeId, name, path: storedPath, pathKind, lastSeenAt: new Date() },
+        {
+          workspaceRoot: root,
+          targetDir,
+          adoptExisting: true,
+          parentsInside: checkParents,
+          ownIfCreated: !options.dir,
+        },
+      );
+    } catch (failure) {
+      if (!(failure instanceof TaskspaceClaimError)) throw failure;
+      const e = failure.cause;
       console.error("Failed to initialize taskspace directory.");
       const outside = e instanceof TaskspaceFilesError && e.reason === "invalid-path";
       console.error(

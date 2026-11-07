@@ -341,8 +341,8 @@ Demo sample content lives only in `kozane-demo`. Neither `kozane` nor the `@koza
 
 - Create a free npm organization named `kozane`, owned by the `kozmof` account, with 2FA required for publishing. Fallback if the name is taken: `@kozmof/kozane-core` and `@kozmof/kozane-client`.
 - Each scoped package sets `"publishConfig": { "access": "public" }`, since scoped packages default to private.
-- Versioning and release use Changesets. `pnpm -r publish` replaces the single-package `publish:npm` script.
-- Releases publish with npm provenance from GitHub Actions.
+- Versioning uses Changesets. Per the user's local-release requirement, `pnpm release:local` validates the source and prepares checksummed archives. `pnpm release:publish <directory>` publishes those exact archives in dependency order from a clean checkout at the recorded commit.
+- Releases run locally with npm account authentication and 2FA. There is no CI/CD publication workflow or mandatory CI-generated npm provenance. Registry verification accepts absent provenance for local publications and validates registry provenance metadata when present. This policy supersedes the original GitHub Actions release requirement.
 - End users and demo visitors need no npm account.
 
 ## Web demo (kozane-demo)

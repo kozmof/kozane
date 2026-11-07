@@ -88,6 +88,12 @@ for (const [name, mutate] of [
   test(`rejects ${name}`, () => {
     const value = structuredClone(published);
     mutate(value);
-    assert.throws(() => validateRegistryPackage(candidate, value));
+    assert.throws(() => validateRegistryPackage(candidate, value, { requireProvenance: true }));
   });
 }
+
+test("accepts local publications without CI provenance", () => {
+  const value = structuredClone(published);
+  delete value.dist.attestations;
+  assert.equal(validateRegistryPackage(candidate, value), null);
+});

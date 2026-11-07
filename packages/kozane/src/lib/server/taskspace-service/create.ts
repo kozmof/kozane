@@ -1,7 +1,7 @@
 import type { DB } from "../../../db/database.js";
 import { TaskspaceServiceError } from "./errors.js";
 import { dirname, relative, resolve } from "node:path";
-import { addTaskspace, deleteTaskspace } from "../../../db/api/taskspace.js";
+import { claimRecordedTaskspace, TaskspaceClaimError } from "./claim.js";
 import { getAllNamespaces, getNamespace } from "../../../db/api/namespace.js";
 import { getScope } from "../../../db/api/scope.js";
 import { requireBoundedName, requireTrimmedString } from "../../../services/validation.js";
@@ -9,7 +9,7 @@ import { getWorkspaceRoot, getTaskspacePlacementConfig } from "../../../db/inter
 import { AmbiguousNamespacePathError, taskspaceParentDir } from "../../taskspace-location.js";
 import { taskspaceNameIssue } from "../../constants.js";
 import { errorCode } from "../fs-paths.js";
-import { claimTaskspaceDirectory, enclosingTaskspaceDir } from "../taskspace-directory.js";
+import { enclosingTaskspaceDir } from "../taskspace-directory.js";
 import { TaskspaceFilesError } from "../taskspace-files.js";
 import { storedLocation } from "../taskspace-path.js";
 export async function createTaskspace(db: DB, namespaceId: string, body: Record<string, unknown>) {
@@ -52,29 +52,22 @@ export async function createTaskspace(db: DB, namespaceId: string, body: Record<
       `Taskspace directory would be inside the taskspace at ${relative(resolve(root), enclosing)}. ` +
         "Move that taskspace or change taskspace.defaultDir or taskspace.namespacePaths.",
     );
-  const id = await addTaskspace({
-    db,
-    namespaceId: namespaceId,
-    scopeId,
-    name,
-    path: storedPath,
-    pathKind,
-  });
+  let id: string;
   try {
-    // The path is stored relative, so its parents must really be inside the workspace. The
-    // browser always makes the directory itself, so it may manage it.
-    claimTaskspaceDirectory({
-      workspaceRoot: root,
-      targetDir,
-      taskspaceId: id,
-      namespaceId: namespaceId,
-      adoptExisting: false,
-      parentsInside: true,
-      ownIfCreated: true,
-    });
-  } catch (e) {
+    id = await claimRecordedTaskspace(
+      { db, namespaceId, scopeId, name, path: storedPath, pathKind },
+      {
+        workspaceRoot: root,
+        targetDir,
+        adoptExisting: false,
+        parentsInside: true,
+        ownIfCreated: true,
+      },
+    );
+  } catch (failure) {
+    if (!(failure instanceof TaskspaceClaimError)) throw failure;
+    const e = failure.cause;
     console.error("Failed to initialize taskspace directory:", e);
-    await deleteTaskspace({ db, taskspaceId: id });
     if (e instanceof TaskspaceFilesError && e.reason === "invalid-path")
       throw new TaskspaceServiceError(400, "Taskspace path must be inside the workspace root");
     if ((e instanceof TaskspaceFilesError && e.reason === "exists") || errorCode(e) === "EEXIST")

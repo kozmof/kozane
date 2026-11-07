@@ -1,31 +1,53 @@
-# Release packages
+# Release packages locally
 
-Kozane publishes three public packages. Release core first, client second and the unscoped CLI last. The client has an exact core peer version. The CLI has exact core and client runtime versions. The repository root stays private.
+Prepare and publish Kozane from your workstation. This project has no CI/CD release workflow. Test CI remains available, but publication does not depend on a workflow dispatch or GitHub environment.
+
+The packages publish in dependency order as core, client and the unscoped CLI. Client declares an exact core peer. The CLI declares exact core and client runtime versions. The repository root stays private.
 
 ## Prepare versions
 
-Run `pnpm changeset` when changing a public package. Use a minor core bump for API signature or result changes during 0.x, and a major bump during 1.x. Include a client change when it adopts a changed core API.
+Run `pnpm changeset` for a public package change. Core API signature or result changes require a minor bump during 0.x and a major bump during 1.x. Include a client change when it adopts a changed core API.
 
-Run `pnpm release:status` to review the plan. Run `pnpm release:version` to apply it and refresh the lockfile. Review and commit the generated changelogs, versions and lockfile. Changesets updates exact peer and workspace dependency versions. Its automatic formatter is disabled so formatting follows the repository tools.
+Run `pnpm release:status` to review the plan. Run `pnpm release:version` to update package versions and changelogs and refresh the lockfile. Review formatting and commit the resulting files. The initial candidate versions are core 0.1.0, client 0.1.0 and kozane 0.22.0.
 
-Run `pnpm smoke:package:install` to pack all three candidates and check local and global npm installation, executable entry points and shared runtime identity without starting an HTTP server. The full `pnpm smoke:package` command also tests the installed server.
+## Prepare a local release
 
-Run `pnpm release:check` to verify public package metadata and exact dependency versions. The check also applies two releases in a temporary workspace to test coordinated core/client upgrades. Run the normal verification and browser CI before merging the release commit to main.
+Use Node 24 or newer and the pinned pnpm toolchain. Install dependencies with `pnpm install --frozen-lockfile`. Install the browser used by the local checks with `pnpm exec playwright install chromium`.
 
-## Configure npm
+Commit all source changes, then run the local release checks.
 
-Before the first publication, create the kozane organization under kozmof and require 2FA for publishing. Confirm ownership of the scope before publishing either scoped package. If that scope is unavailable, apply the specification's fallback names consistently before release.
+```sh
+pnpm release:local
+```
 
-Configure each package's npm trusted publisher for this repository, the `release.yml` workflow and the `npm` GitHub environment. Package creation or an initial authenticated publication may be needed before npm exposes these settings. Configure required reviewers on the GitHub environment if releases need approval. These account and environment settings are external to this repository.
+This runs release metadata and versioning regressions, verification and coverage, production dependency auditing, local/global archive installation and HTTP smoke, and the app, restoration and public-client browser suites. It builds the three tarballs and runs npm dry-run publication on them. It writes a release manifest containing their versions, SHA-256 hashes and source commit under `tmp/releases/<commit>/`. An optional directory argument chooses another destination.
 
-The workflow grants `id-token: write` for npm authentication and publishes with provenance. Trusted publishing requires a public repository for provenance and a supported npm CLI. The Node 24 runner provides the release toolchain. See the [npm trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/) for account setup.
+P0 database/browser verification is optional and is not part of this flow, per the user's request. Run `pnpm test:db-wasm` or `pnpm test:db-browser` separately when needed.
 
-## Run the release workflow
+Preparation does not publish. It rejects uncommitted source changes and writes the manifest only after every check passes. Keep the prepared directory until publication is verified. Use the full commit hash and archive hashes when recording release evidence.
 
-Dispatch `Release packages` from main with `dry-run` enabled first. It installs the frozen lockfile, checks release versions, runs verification, audits production dependencies, tests local and global package installation, and runs the browser suites. Recursive pnpm publishing follows package dependencies and keeps the private tooling root out of the release.
+For a narrower installation check during development, run `pnpm smoke:package:install`. This builds and installs all three candidate archives locally and globally without starting a server. `pnpm smoke:package` also checks the installed HTTP server. Neither command substitutes for release preparation.
 
-Review the successful dry run. Dispatch the same commit with `dry-run` disabled to publish. The workflow serializes release dispatches and reruns the checks before publishing. `pnpm publish:npm` is the underlying recursive publication command and changes npm when invoked.
+## Authenticate and publish
 
-Publication is not atomic across the three packages. If it stops after a successful package publication, retain those versions and rerun the same release commit after fixing the failure. Never reuse a published version for different bytes.
+Confirm that kozmof owns the kozane npm organization and that publishing requires 2FA. If the scope is unavailable, apply the specification's fallback package names throughout the repository before preparing the release. Log in locally with `npm login --registry=https://registry.npmjs.org/` and check the account with `npm whoami`.
 
-After publication, run `pnpm release:verify:registry`. The release workflow runs this automatically after a real publication. It checks the exact registry versions, repository paths, dependency and peer pins, integrity metadata and the registry provenance links. It then installs those exact versions from the public npm registry locally and globally, checks their reported CLI version and public runtime identity, and tests the installed HTTP server. It does not build or substitute local archives. The metadata check records the registry provenance link rather than verifying the signed attestation itself. Gate 4 remains open until publication and registry installation evidence are recorded. Local archives and dry runs do not satisfy that gate.
+Publish the prepared directory explicitly.
+
+```sh
+pnpm release:publish tmp/releases/<commit>
+```
+
+The publisher requires a clean checkout at the prepared commit. It checks package order, versions, archive filenames and hashes before contacting npm. It publishes those archives with lifecycle scripts disabled, so publication cannot rebuild them. npm handles your account authentication and 2FA challenge. `pnpm publish:npm <directory>` is an alias for the same local publisher.
+
+Publication is not atomic across packages. A rerun skips a published version only when its registry integrity matches the prepared archive. It rejects an existing version with different bytes and preserves unpublished archives for investigation.
+
+The local flow does not request CI-generated npm provenance. Registry checks accept local publications without that metadata. If npm supplies provenance metadata, the check validates and records its registry link. It does not verify the signed attestation itself. This local publishing policy replaces the specification's earlier GitHub Actions provenance requirement at the user's request.
+
+## Verify publication
+
+The publisher runs `pnpm release:verify:registry` after all three packages are published. Run it again to repeat the checks independently.
+
+It checks exact registry versions, repository paths, runtime and peer pins and integrity metadata. It installs those exact versions from the public registry locally and globally, checks both CLI versions and shared runtime identity, and tests the installed HTTP server. Registry mode does not build or substitute candidate archives.
+
+Record the source commit, prepared archive hashes, published versions and verification output in the task list. Gate 4 remains open until initial publication and these fresh registry checks pass.

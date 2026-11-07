@@ -97,6 +97,24 @@ describe("taskspace CLI flow", () => {
     );
   }, 30_000);
 
+  it("preserves database validation errors before directory claiming", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const result = runCli(
+      root,
+      "taskspace",
+      "create",
+      "x".repeat(256),
+      "--no-scope",
+      "--dir",
+      join(root, "explicit"),
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Taskspace name must be 255 characters or fewer");
+    expect(result.stderr).not.toContain("Failed to initialize taskspace directory");
+    expect(cli(root, "taskspace", "list")).toContain("No taskspaces found.");
+  }, 30_000);
+
   it("stores a directory beside the workspace that shares its prefix as absolute", () => {
     const root = tempWorkspace();
     cli(root, "init");
