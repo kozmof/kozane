@@ -65,6 +65,10 @@
         ? "1px solid var(--colors-select-accent)"
         : "1px solid var(--colors-neutral-card)",
   );
+
+  function isLinkEvent(event: Event): boolean {
+    return event.target instanceof Element && event.target.closest("a") !== null;
+  }
 </script>
 
 <div
@@ -74,9 +78,10 @@
   tabindex="0"
   data-card-id={card.id}
   onmousedown={onCardMouseDown}
-  onclick={onCardClick}
-  ondblclick={onCardDblClick}
+  onclick={(event) => { if (!isLinkEvent(event)) onCardClick(event); }}
+  ondblclick={(event) => { if (!isLinkEvent(event)) onCardDblClick(); }}
   onkeydown={(e) => {
+    if (isLinkEvent(e)) return;
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
     onCardDblClick();
@@ -108,21 +113,19 @@
     {#if card.content}
       {#each segmentText(card.content) as part}
         {#if part.href}
-          <!-- Stop propagation so following a link doesn't start a card drag or selection. -->
+          <!-- Stop presses from starting a drag, but let clicks reach delegated routers. -->
           <a
             href={part.href}
             target="_blank"
             rel="noopener noreferrer"
             onmousedown={(e) => e.stopPropagation()}
-            onclick={(e) => e.stopPropagation()}
             class={css({ color: "select.accent", textDecoration: "underline" })}
           >{part.text}</a>
         {:else if part.tag && tagHref}
-          <!-- Same propagation stop as a URL, for the same reason. -->
+          <!-- Card selection ignores links without blocking the host router. -->
           <a
             href={tagHref(part.tag)}
             onmousedown={(e) => e.stopPropagation()}
-            onclick={(e) => e.stopPropagation()}
             class={css({ color: "ink.tag", textDecoration: "none", _hover: { textDecoration: "underline" } })}
           >{part.text}</a>
         {:else if part.tag}

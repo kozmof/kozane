@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import KozaneCard from "../../../lib/client/board/components/KozaneCard.svelte";
 
@@ -262,33 +262,50 @@ describe("KozaneCard", () => {
       expect(links[0]).toHaveAttribute("href", "http://example.com/(:foo");
     });
 
-    it("does not start a card drag when a tag is followed", async () => {
-      const user = userEvent.setup();
-      const onCardMouseDown = vi.fn();
-      const onCardClick = vi.fn();
-      render(KozaneCard, {
-        props: withContent("about :perf", {
-          tagHref: (tag: string) => `/tags?tag=${tag}`,
-          onCardMouseDown,
-          onCardClick,
-        }),
-      });
+    it.each([
+      { content: "about :perf", label: ":perf" },
+      { content: "visit https://example.com", label: "https://example.com" },
+    ])(
+      "lets a delegated router handle $label without card gestures",
+      async ({ content, label }) => {
+        const user = userEvent.setup();
+        const onCardMouseDown = vi.fn();
+        const onCardClick = vi.fn();
+        const onCardDblClick = vi.fn();
+        render(KozaneCard, {
+          props: withContent(content, {
+            tagHref: (tag: string) => `/tags?tag=${tag}`,
+            onCardMouseDown,
+            onCardClick,
+            onCardDblClick,
+          }),
+        });
 
-      // Cancel navigation in capture phase to avoid jsdom's unsupported-navigation warning.
-      // The card stops bubbling, so a bubble listener would not run. Preserve the click
-      // behavior under test.
-      const swallowNavigation = (event: MouseEvent) => event.preventDefault();
-      document.addEventListener("click", swallowNavigation, true);
-      try {
-        await user.click(screen.getByRole("link", { name: ":perf" }));
-      } finally {
-        document.removeEventListener("click", swallowNavigation, true);
-      }
+        const link = screen.getByRole("link", { name: label });
+        const router = vi.fn((event: MouseEvent) => {
+          expect(event.defaultPrevented).toBe(false);
+          event.preventDefault(); // Handle navigation without jsdom's unsupported-navigation warning.
+        });
+        document.addEventListener("click", router);
+        try {
+          await user.click(link);
+          expect(router).toHaveBeenCalledOnce();
+          await fireEvent.doubleClick(link);
+          const enter = new KeyboardEvent("keydown", {
+            key: "Enter",
+            bubbles: true,
+            cancelable: true,
+          });
+          link.dispatchEvent(enter);
+          expect(enter.defaultPrevented).toBe(false);
+        } finally {
+          document.removeEventListener("click", router);
+        }
 
-      // Stop propagation when following a link so it neither drags the card nor changes the
-      // selection.
-      expect(onCardMouseDown).not.toHaveBeenCalled();
-      expect(onCardClick).not.toHaveBeenCalled();
-    });
+        expect(onCardMouseDown).not.toHaveBeenCalled();
+        expect(onCardClick).not.toHaveBeenCalled();
+        expect(onCardDblClick).not.toHaveBeenCalled();
+      },
+    );
   });
 });
