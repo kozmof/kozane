@@ -74,6 +74,9 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
     assert.ok(existsSync(join(installed, entry.types)));
     assert.ok(existsSync(join(installed, entry.default)));
   }
+  for (const name of ["testing-consumer.mjs", "testing-http-fixture.mjs"])
+    copyFileSync(new URL(name, import.meta.url), join(consumer, name));
+  console.log(run(process.execPath, [join(consumer, "testing-consumer.mjs")], consumer).trim());
   const source = join(consumer, "client-consumer.ts");
   copyFileSync(new URL("consumer.ts", import.meta.url), source);
   run(
@@ -119,7 +122,7 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
   );
   console.log(run(process.execPath, [renderer], consumer).trim());
   const entry = join(consumer, "client-browser.ts");
-  writeFileSync(entry, 'export * from "@kozane/client";');
+  writeFileSync(entry, 'export * from "@kozane/client"; export * from "@kozane/client/ui";');
   await build({
     configFile: false,
     root: consumer,

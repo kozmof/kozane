@@ -42,14 +42,24 @@
       "svelte": "./dist/editor.js",
       "default": "./dist/editor.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": "./dist/styles.css",
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "svelte": "./dist/ui.js",
+      "default": "./dist/ui.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "prepack": "pnpm run build"
+    "prepack": "pnpm run build",
+    "prepublishOnly": "pnpm --dir ../.. release:check:client"
   },
   "dependencies": {
     "@kozmof/reed": "4.1.0"

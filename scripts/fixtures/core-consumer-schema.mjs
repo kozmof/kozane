@@ -35,7 +35,7 @@ for (const engine of ["native", "wasm"]) {
   };
   const handle = drizzle(async (sql, args, method) => {
     const rows = query(sql, args);
-    return { rows: method === "get" ? (rows[0] ?? []) : rows };
+    return { rows: method === "get" ? rows[0] : rows };
   });
   async function transaction(operation) {
     execute("BEGIN DEFERRED");

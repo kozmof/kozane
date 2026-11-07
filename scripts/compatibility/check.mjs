@@ -2,7 +2,7 @@ import { copyFileSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { readCorpus } from "./read-corpus.mjs";
 /** Check original bytes with the installed candidate. Never regenerate expectations. */
-export function checkCorpus({ consumer, repository, run }) {
+export function checkCorpus({ consumer, repository, run, client = false }) {
   const root = join(repository, "tests/compatibility/corpus");
   readCorpus(root);
   const sources = join(consumer, "corpus-check");
@@ -25,6 +25,7 @@ export function checkCorpus({ consumer, repository, run }) {
         resolve(repository, "node_modules/tsx/dist/loader.mjs"),
         join(sources, "run-corpus.mjs"),
         root,
+        ...(client ? ["--client"] : []),
       ],
       consumer,
     ).trim(),

@@ -40,6 +40,8 @@ try {
   assert.equal(await fast, process.argv[5]);
   await initializing;
   await rpc("open", { bytes: new Uint8Array(readFileSync(process.argv[4])) });
+  assert.equal((await rpc("get", { sql: "SELECT 1 WHERE 0" })).rows, undefined);
+  assert.deepEqual((await rpc("get", { sql: "SELECT 1" })).rows, [1]);
   const original = (await rpc("values", { sql: "SELECT content FROM card ORDER BY id" })).rows;
   await rpc("run", { sql: "BEGIN IMMEDIATE" });
   await rpc("run", { sql: "UPDATE card SET content='uncommitted worker fixture'" });

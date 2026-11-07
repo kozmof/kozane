@@ -65,7 +65,7 @@ self.onmessage = ({ data }) => {
         result =
           method === "connection"
             ? rows.length === 1 && rows[0][0] === 1
-            : { rows: method === "get" ? (rows[0] ?? []) : rows };
+            : { rows: method === "get" ? rows[0] : rows };
       }
       reply(result);
     } catch (error) {

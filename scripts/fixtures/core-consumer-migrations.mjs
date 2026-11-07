@@ -27,7 +27,7 @@ function adapter() {
         return { rows: [] };
       }
       statement.setReturnArrays(true);
-      return { rows: method === "get" ? (statement.get(...args) ?? []) : statement.all(...args) };
+      return { rows: method === "get" ? statement.get(...args) : statement.all(...args) };
     },
     { schema },
   );

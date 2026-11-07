@@ -80,8 +80,8 @@ expressions. Declared types and column defaults use the same normalization. Cons
 partial predicates, triggers and views retain their normalized SQL definitions.
 
 Before source publication, `prepublishOnly` runs the repository's `release:check:core`
-command. It packs an isolated candidate, validates retained corpus bytes and outcomes,
-and runs the Chromium restoration suite. The retention check requires full Git history
+command. It packs isolated core/client candidates, validates retained corpus bytes and
+outcomes through both packages, and runs the client style and restoration Chromium suites. The retention check requires full Git history
 and prevents rewriting earlier corpus records. See the
 [corpus workflow](../../tests/compatibility/README.md). This source-release command requires
 the repository's development dependencies and pinned Chromium installation.

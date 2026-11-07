@@ -2,14 +2,14 @@
 
 Shared Kozane views for Svelte applications.
 
-The initial package exports the shared board, tags, map and editor through its root
-and the `./board`, `./tags`, `./map` and `./editor` entries. It ships Svelte source and
+The root exports backend contracts and adapters. Import shared views from `./ui` or
+the `./board`, `./tags`, `./map` and `./editor` entries. It ships Svelte source and
 declarations built with `@sveltejs/package`. Core types and validation use the public
 `@kozane/core` package, which is an exact peer dependency. The editor declares its
 Reed runtime dependency.
 
-This candidate is not ready for publication. The testing entry, complete production
-consumer checks and the release hook remain under Phase 3.
+This candidate is not ready for publication. Complete production consumer checks and
+workspace conversion remain under Phase 3.
 
 Run `pnpm build:client` from the repository root to build core before client. The build collects
 the portable dependency closure and rewrites workspace aliases before packaging.
@@ -19,7 +19,7 @@ outside consumer declarations.
 
 Run `pnpm check:client-package` to pack both packages and install them outside the
 workspace using a frozen offline dependency graph. The check audits runtime and
-declaration imports, type-checks all five entries, server-renders the editor and namespace
+declaration imports, type-checks the public entries, server-renders the editor and namespace
 view, verifies core validation-error identity and compiles the full browser entry.
 `pnpm verify` includes this combined core/client artifact check.
 
@@ -41,3 +41,34 @@ checks emitted CSS and links, and verifies that the isolated consumer has no Pan
 dependency. Run `pnpm test:client-package` for the Chromium check of hydrated editor
 and namespace views, token values, representative computed styles and layer precedence.
 The browser CI job includes this command.
+
+## Backend contract checks
+
+Import the framework-independent suite from `@kozane/client/testing`. The root and
+testing entries run directly under Node without compiling Svelte. Register the cases
+with your test runner or call `runBackendContract` to run them serially.
+
+```ts
+import { backendContractCases } from "@kozane/client/testing";
+
+for (const test of backendContractCases(createFixture, { mode: "read-only" })) {
+  it(test.name, test.run);
+}
+```
+
+Provide `createFixture` with a ready backend, an existing `namespaceId` and optional
+`cleanup`. Each case requests a fresh fixture and always attempts cleanup. Disable
+background polling and external writers while a case runs. Declare unavailable tags,
+map or warp-directory datasets through `unavailableDatasets`.
+
+The read-only suite checks reads, versions, subscriptions and all 36 mutation
+rejections. Writable mode checks namespace creation, card creation/update/deletion
+and rejection without committed changes. Override `initialContent` and `updatedContent`
+for workspace content limits. Adapter-specific suites still cover the remaining
+resource mutations and taskspace file operations.
+
+Before source publication, `prepublishOnly` runs `release:check:client`. Both client
+and core release checks run packed candidate checks, the production style browser
+case and the restoration browser suite. Retained current-ID corpus outcomes also
+pass through the packed client snapshot, tags and map readers. Install the pinned
+Chromium runtime and retain full Git history before running either release command.

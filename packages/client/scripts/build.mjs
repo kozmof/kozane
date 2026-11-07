@@ -172,12 +172,13 @@ function rewrite(source, importer) {
     source = source.slice(0, edit.start) + edit.text + source.slice(edit.end);
   return source;
 }
-for (const name of ["index", "board", "tags", "map", "editor"]) {
-  const entry = path.join(
-    root,
-    "src/lib/client",
-    name === "index" ? "index.ts" : `${name}/index.ts`,
-  );
+for (const name of ["index", "ui", "testing", "board", "tags", "map", "editor"]) {
+  const entry =
+    name === "index"
+      ? path.join(root, "src/lib/backend/index.ts")
+      : name === "testing"
+        ? path.join(root, "src/lib/backend/testing/index.ts")
+        : path.join(root, "src/lib/client", name === "ui" ? "ui.ts" : `${name}/index.ts`);
   queue.push(entry);
   await fs.writeFile(
     path.join(staging, `${name}.ts`),

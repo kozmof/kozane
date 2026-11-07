@@ -1,22 +1,20 @@
+import { backendContractCases, type BackendContractFactory } from "@kozane/client/testing";
+import {
+  EditorDocument,
+  EditorSurface,
+  FileEditor,
+  NamespacesView,
+  BoardView,
+  TagsView,
+  MapView,
+} from "@kozane/client/ui";
 const assert = (condition: boolean, message: string) => {
   if (!condition) throw new Error(message);
 };
 import { render } from "svelte/server";
 import type { ComponentProps } from "svelte";
 import { ValidationError } from "@kozane/core";
-import {
-  EditorDocument,
-  EditorSurface,
-  FileEditor,
-  NamespacesView,
-  StaticBackend,
-  HttpBackend,
-  BackendError,
-  createDemoNavigation,
-  BoardView,
-  TagsView,
-  MapView,
-} from "@kozane/client";
+import { StaticBackend, HttpBackend, BackendError, createDemoNavigation } from "@kozane/client";
 import { BoardView as PublicBoard } from "@kozane/client/board";
 import { TagsView as PublicTags } from "@kozane/client/tags";
 import { MapView as PublicMap } from "@kozane/client/map";
@@ -79,3 +77,14 @@ assert(
 console.log(
   "Packed client public entries, editor/namespace SSR and core validation identity passed.",
 );
+
+function register(factory: BackendContractFactory) {
+  for (const test of backendContractCases(factory)) {
+    const run: () => Promise<void> = test.run;
+    assert(
+      typeof run === "function" && typeof test.name === "string",
+      "Public contract case types",
+    );
+  }
+}
+void register;

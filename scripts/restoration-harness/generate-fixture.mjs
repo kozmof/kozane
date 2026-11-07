@@ -18,7 +18,7 @@ try {
       const statement = sqlite.prepare(sql);
       statement.setReturnArrays(true);
       const rows = statement.all(...args);
-      return { rows: method === "get" ? (rows[0] ?? []) : rows };
+      return { rows: method === "get" ? rows[0] : rows };
     },
     { schema },
   );

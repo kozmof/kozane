@@ -22,7 +22,7 @@ async function database(name, seed) {
     async (sql, args, method) => {
       const rows = [];
       engine.exec({ sql, bind: args, rowMode: "array", resultRows: rows });
-      return { rows: method === "get" ? (rows[0] ?? []) : rows };
+      return { rows: method === "get" ? rows[0] : rows };
     },
     { schema },
   );

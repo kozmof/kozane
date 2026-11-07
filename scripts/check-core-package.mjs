@@ -371,7 +371,12 @@ ${client.snapshots}
   }
   {
     const { checkCorpus } = await import("./compatibility/check.mjs");
-    checkCorpus({ consumer: temporary, repository, run });
+    checkCorpus({
+      consumer: temporary,
+      repository,
+      run,
+      client: process.argv.includes("--client-package"),
+    });
   }
   if (process.argv.includes("--client-package")) {
     const { checkClientPackage } = await import("./client-package/check.mjs");

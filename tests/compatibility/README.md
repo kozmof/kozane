@@ -71,8 +71,9 @@ building a candidate. This requires a full checkout. CI uses `fetch-depth: 0`, a
 clone fails with instructions to fetch the missing history. Commit the initial corpus before
 running release checks.
 
-Run `pnpm release:check:core` to run the packed candidate checks and all Chromium restoration
-cases. Core's `prepublishOnly` hook invokes this command before normal source publication.
+Run `pnpm release:check:core` or `pnpm release:check:client` to run packed candidate
+checks, the client style browser case and all Chromium restoration cases. Each package's
+`prepublishOnly` hook invokes its command before normal source publication.
 The internal pack step runs its build hook without re-entering the publication hook.
 Install the pinned Chromium runtime before running the release check.
 
@@ -88,5 +89,6 @@ containing only incompatible old fixtures cannot pass. Earlier fixtures and thei
 outcomes remain unchanged. Any intentional acceptance restriction still needs a new bundled
 migration record and review. Same-ID validator regressions cannot be relabeled incompatible.
 
-P3-12 remains open for the future client publication path. All retained corpus restoration
-cases passed in CI under P3-18.
+Current-ID outcomes also pass through the packed client namespace, snapshot, tags and map
+readers. Both source publication paths enforce this check. All retained corpus restoration
+cases passed in CI under P3-18. New client browser cases still require CI execution.

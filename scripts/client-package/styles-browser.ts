@@ -1,12 +1,7 @@
 import "@kozane/client/styles.css";
 import { hydrate, tick } from "svelte";
-import {
-  EditorDocument,
-  EditorSurface,
-  NamespacesView,
-  StaticBackend,
-  createDemoNavigation,
-} from "@kozane/client";
+import { EditorDocument, EditorSurface, NamespacesView } from "@kozane/client/ui";
+import { StaticBackend, createDemoNavigation } from "@kozane/client";
 const doc = new EditorDocument("Packed editor 日本語");
 const namespaces = [{ id: "packed", name: "Packed workspace", isDefault: true }];
 hydrate(EditorSurface, {

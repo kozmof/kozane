@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
-import { createDatabaseAdapter } from "@kozane/core/database";
+import { createDatabaseAdapter, createServiceContext } from "@kozane/core/database";
 import { schemaVersion, migrations } from "@kozane/core/migrations";
 import * as schema from "@kozane/core/schema";
 import { validateCandidate } from "./validation.ts";
@@ -11,6 +11,8 @@ import { summarizeView } from "./view-summary.ts";
 import { readCorpus } from "./read-corpus.mjs";
 import { migrationCompatibility, planCorpusCompatibility } from "./corpus-compatibility.ts";
 import { decodeRecovery, RecoveryCopyError } from "./recovery.ts";
+import { namespaces, tags, map } from "@kozane/core/services";
+const clientModule = process.argv.includes("--client") ? await import("@kozane/client") : undefined;
 const sqlite = await sqlite3InitModule();
 let checked = 0,
   incompatible = 0;
@@ -47,7 +49,7 @@ for (const cohort of cohorts) {
       async (sql, args, method) => {
         const rows = [];
         engine.exec({ sql, bind: args, rowMode: "array", resultRows: rows });
-        return { rows: method === "get" ? (rows[0] ?? []) : rows };
+        return { rows: method === "get" ? rows[0] : rows };
       },
       { schema },
     );
@@ -72,6 +74,31 @@ for (const cohort of cohorts) {
       for (const expected of fixture.expected) {
         const view = await validateCandidate(db, { namespaceId: expected.namespaceId });
         assert.deepEqual(await summarizeView(view), expected.view, `${cohort.id}/${fixture.id}`);
+        if (clientModule) {
+          const context = createServiceContext();
+          const rows = await namespaces.list(db, context);
+          const client = new clientModule.StaticBackend({
+            namespaces: rows,
+            snapshots: view.kind === "selected" ? [view.snapshot.snapshot] : [],
+            tags: await tags.view(db, context),
+            map: await map.get(db, context),
+          });
+          assert.deepEqual(await client.namespaces.list(), rows);
+          await client.tags.get();
+          await client.map.get();
+          if (view.kind === "selected") {
+            const snapshot = await client.snapshot(view.namespaceId);
+            assert.equal(snapshot.status, "changed");
+            assert.deepEqual(
+              await summarizeView({
+                ...view,
+                snapshot: { namespace: view.snapshot.namespace, snapshot: snapshot.data },
+              }),
+              expected.view,
+              `Packed client rejected or changed ${cohort.id}/${fixture.id}`,
+            );
+          }
+        }
         checked++;
       }
       assert.equal(engine.selectValue("SELECT total_changes()"), before);
@@ -81,5 +108,5 @@ for (const cohort of cohorts) {
   }
 }
 console.log(
-  `Retained compatibility corpus passed ${checked} same-ID view outcomes and ${incompatible} earlier-ID envelope outcomes with packed core and wasm.`,
+  `Retained compatibility corpus passed ${checked} same-ID view outcomes and ${incompatible} earlier-ID envelope outcomes with packed core, wasm${clientModule ? " and client" : ""}.`,
 );

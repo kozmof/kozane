@@ -43,7 +43,7 @@ function open(bytes, independent = false) {
       try {
         const rows = [];
         engine.exec({ sql, bind: args, rowMode: "array", resultRows: rows });
-        return { rows: method === "get" ? (rows[0] ?? []) : rows };
+        return { rows: method === "get" ? rows[0] : rows };
       } catch (error) {
         const code = error instanceof sqlite.SQLite3Error ? error.resultCode & 255 : 0;
         throw new HarnessFailure(

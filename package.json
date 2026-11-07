@@ -64,11 +64,12 @@
     "build:restoration-harness": "node scripts/check-core-package.mjs --restoration-harness",
     "test:restoration-harness": "pnpm build:restoration-harness && playwright test --config scripts/restoration-harness/playwright.config.ts",
     "check:compatibility-retention": "node scripts/compatibility/check-retention.mjs",
-    "release:check:core": "pnpm test:restoration-harness",
+    "release:check:core": "pnpm test:client-package && pnpm test:restoration-harness",
     "build:client": "pnpm --filter @kozane/core build && pnpm --filter @kozane/client build",
     "check:client-package": "node scripts/check-core-package.mjs --client-package",
     "build:client-harness": "node scripts/check-core-package.mjs --client-package --client-browser-harness",
-    "test:client-package": "pnpm build:client-harness && playwright test --config scripts/client-package/playwright.config.ts"
+    "test:client-package": "pnpm build:client-harness && playwright test --config scripts/client-package/playwright.config.ts",
+    "release:check:client": "pnpm test:client-package && pnpm test:restoration-harness"
   },
   "dependencies": {
     "@kozmof/reed": "^4.1.0",
