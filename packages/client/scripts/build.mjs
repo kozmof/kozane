@@ -38,7 +38,12 @@ function local(source, importer) {
     path.join(target, "index.ts"),
     path.join(target, "index.mjs"),
   ])
-    if (existsSync(file) && statSync(file).isFile()) return file;
+    if (existsSync(file) && statSync(file).isFile())
+      return file === path.join(root, "src/lib/ui-config.ts")
+        ? path.join(packageRoot, "src/ui-config.ts")
+        : file === path.join(root, "src/lib/constants/canvas.ts")
+          ? path.join(packageRoot, "src/constants/canvas.ts")
+          : file;
   throw new Error(`Unresolved client import ${source} from ${importer}`);
 }
 function destination(file) {

@@ -8,6 +8,7 @@ import {
   BoardView,
   TagsView,
   MapView,
+  DEFAULT_UI_CONFIG as uiDefaults,
 } from "@kozane/client/ui";
 const assert = (condition: boolean, message: string) => {
   if (!condition) throw new Error(message);
@@ -15,7 +16,16 @@ const assert = (condition: boolean, message: string) => {
 import { render } from "svelte/server";
 import type { ComponentProps } from "svelte";
 import { ValidationError } from "@kozane/core";
-import { StaticBackend, HttpBackend, BackendError, createDemoNavigation } from "@kozane/client";
+import {
+  StaticBackend,
+  HttpBackend,
+  BackendError,
+  createDemoNavigation,
+  DEFAULT_UI_CONFIG,
+  validateUiOverrides,
+  type UiConfig,
+  type ValidationResult,
+} from "@kozane/client";
 import { BoardView as PublicBoard } from "@kozane/client/board";
 import { TagsView as PublicTags } from "@kozane/client/tags";
 import { MapView as PublicMap } from "@kozane/client/map";
@@ -24,6 +34,14 @@ assert(BoardView === PublicBoard, "Board entry identity");
 assert(TagsView === PublicTags, "Tags entry identity");
 assert(MapView === PublicMap, "Map entry identity");
 assert(FileEditor === PublicEditor, "Editor entry identity");
+assert(DEFAULT_UI_CONFIG === uiDefaults, "UI configuration entry identity");
+const validated: ValidationResult<Partial<UiConfig>> = validateUiOverrides({
+  defaultCardWidth: 240,
+});
+// @ts-expect-error Card placement remains a closed union.
+const invalidPlacement: UiConfig["newCardPlacement"] = "diagonal";
+void validated;
+void invalidPlacement;
 const doc = new EditorDocument("Packed editor 日本語");
 const surfaceProps: ComponentProps<typeof EditorSurface> = {
   doc,

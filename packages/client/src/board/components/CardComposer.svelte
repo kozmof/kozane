@@ -5,7 +5,7 @@
   import SelectionActions from "./SelectionActions.svelte";
   import { css } from "styled-system/css";
   import type { CardWithGlue, PartitionWithColor, GlueRel, Layer } from "$lib/types";
-  import { DEFAULT_UI_CONFIG, type UiConfig } from "$lib/ui-config";
+  import { DEFAULT_UI_CONFIG, type UiConfig } from "../../ui-config.js";
   import { splitCardContent } from "$lib/squash";
   import { orderLayers } from "../lib/namespace-page.js";
 

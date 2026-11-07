@@ -12,6 +12,9 @@ importers:
 
   .:
     dependencies:
+      '@kozane/client':
+        specifier: workspace:0.1.0
+        version: link:packages/client
       '@kozane/core':
         specifier: workspace:0.1.0
         version: link:packages/core
@@ -30,6 +33,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@libsql/client@0.17.4)
+      svelte:
+        specifier: 5.57.2
+        version: 5.57.2
       uuid:
         specifier: ^13.0.2
         version: 13.0.2
@@ -85,9 +91,6 @@ importers:
       oxlint:
         specifier: ^1.88.0
         version: 1.88.0
-      svelte:
-        specifier: ^5.57.2
-        version: 5.57.2
       svelte-check:
         specifier: ^4.7.6
         version: 4.7.6(picomatch@4.0.7)(svelte@5.57.2)(typescript@6.0.3)

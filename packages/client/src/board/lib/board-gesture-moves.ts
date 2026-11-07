@@ -2,7 +2,7 @@
  * Per-move updates for each draggable thing on the board. `BoardGestures` calls these while a
  * gesture is open, and again with `snapToGrid` when it is released.
  */
-import { CARD_WIDTH_RANGE } from "$lib/ui-config";
+import { CARD_WIDTH_RANGE } from "../../ui-config.js";
 import { SCOPE_AREA_MIN_SIZE } from "$lib/constants";
 import type {
   AreaDragGesture,

@@ -18,6 +18,10 @@ export default defineConfig({
   resolve: {
     conditions: ["browser"],
     alias: [
+      {
+        find: /^@kozane\/client$/,
+        replacement: path.resolve("./packages/client/src/backend/index.ts"),
+      },
       ...["index", "database", "schema", "services", "migrations"].map((name) => ({
         find: new RegExp("^@kozane/core" + (name === "index" ? "" : "/" + name) + "$"),
         replacement: path.resolve("./packages/core/src/" + name + ".ts"),

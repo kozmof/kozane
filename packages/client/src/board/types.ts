@@ -2,7 +2,7 @@ import type { KozaneBackend, NamespaceGetResult, SnapshotData } from "../backend
 import type { PollLifecycle } from "../backend/workspace-poller.js";
 import type { NavigationAdapter, NavigationDriver } from "../navigation.js";
 import type { PreferenceStorage } from "../preferences.js";
-import type { UiConfig } from "../../../../src/lib/ui-config.js";
+import type { UiConfig } from "../ui-config.js";
 import type { WarpListEntry } from "../../../../src/lib/warp-list.js";
 export type BoardPageData = SnapshotData & {
   namespace: NamespaceGetResult;

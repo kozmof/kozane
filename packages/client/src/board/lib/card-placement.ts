@@ -1,4 +1,4 @@
-import type { NewCardPlacement } from "$lib/ui-config";
+import type { NewCardPlacement } from "../../ui-config.js";
 import {
   GRID,
   verticalListPosition,

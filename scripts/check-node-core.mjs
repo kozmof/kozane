@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { inspectCoreGraph } from "./client-package/core-graph.mjs";
 const flag = "--experimental-import-meta-resolve";
 if (!process.execArgv.includes(flag)) {
   execFileSync(process.execPath, [flag, ...process.argv.slice(1)], { stdio: "inherit" });
@@ -17,6 +18,61 @@ if (!process.execArgv.includes(flag)) {
   const database = await import(import.meta.resolve("@kozane/core/database", parent));
   const schema = await import(import.meta.resolve("@kozane/core/schema", parent));
   const services = await import(import.meta.resolve("@kozane/core/services", parent));
+  const clientUrl = import.meta.resolve("@kozane/client", parent);
+  const client = await import(clientUrl);
+  const expectedClient = pkg.dependencies["@kozane/client"].replace(/^workspace:/, "");
+  assert.match(expectedClient, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
+  inspectCoreGraph(root, { core: expected, client: expectedClient });
+  const clientCoreUrl = import.meta.resolve("@kozane/core", clientUrl);
+  assert.equal(clientCoreUrl, coreUrl, "Node app and client resolve different core entries");
+  assert.equal(await import(clientCoreUrl), core);
+  assert.equal(client.CARD_WIDTH_RANGE, core.CARD_WIDTH_RANGE);
+  const identityError = new core.ValidationError("Node core/client identity");
+  const backend = new client.HttpBackend({
+    capabilities: {
+      writable: true,
+      persistent: false,
+      taskspaces: false,
+      externalWrites: false,
+      auth: false,
+    },
+    fetcher: async () => {
+      throw new Error("Identity probe must not dispatch");
+    },
+  });
+  await assert.rejects(
+    backend.cards.update(
+      "n",
+      "c",
+      new Proxy(
+        { width: 1 },
+        {
+          getPrototypeOf() {
+            throw identityError;
+          },
+        },
+      ),
+    ),
+    (error) =>
+      error instanceof client.BackendError &&
+      error.code === "validation" &&
+      error.message === identityError.message,
+  );
+  let clientRoot = dirname(fileURLToPath(clientUrl));
+  for (;;) {
+    try {
+      const found = JSON.parse(readFileSync(join(clientRoot, "package.json"), "utf8"));
+      if (found.name === "@kozane/client") {
+        assert.equal(found.version, expectedClient);
+        break;
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    const next = dirname(clientRoot);
+    assert.notEqual(next, clientRoot, "Cannot locate installed client manifest");
+    clientRoot = next;
+  }
   let coreRoot = dirname(fileURLToPath(coreUrl));
   for (;;) {
     try {
@@ -39,6 +95,22 @@ if (!process.execArgv.includes(flag)) {
   const legacyUtils = await legacy("db/api/utils.js");
   const legacyFailures = await legacy("db/failures.js");
   const legacyServices = await legacy("services/index.js");
+  for (const [name, value] of Object.entries(await legacy("lib/ui-config.js")))
+    assert.equal(value, client[name], `Node UI configuration must use public client: ${name}`);
+  const canvas = await legacy("lib/constants/canvas.js");
+  for (const name of [
+    "ARROW_KEYS",
+    "SCOPE_AREA_DRAW_MIN",
+    "DRAG_THRESHOLD",
+    "ZOOM_MIN",
+    "ZOOM_MAX",
+    "clampZoom",
+  ])
+    assert.equal(
+      canvas[name],
+      client[name],
+      `Node gesture constant must use public client: ${name}`,
+    );
   for (const [name, entries] of Object.entries(database.records)) {
     const path = name
       .replace(
@@ -148,7 +220,5 @@ if (!process.execArgv.includes(flag)) {
   assert.equal(await database.withReadTx(db, async (tx) => tx), handle);
   assert.equal(await legacyDb.withTx(db, async (tx) => tx), handle);
   assert.throws(() => legacyDb.createServiceContext({ contentMax: 0 }), core.ValidationError);
-  console.log(
-    "Node package uses the expected public core schema, services, adapter state and error instances.",
-  );
+  console.log("Node package uses the expected public core runtime and client UI configuration.");
 }

@@ -1,5 +1,5 @@
 import { ARROW_KEYS } from "$lib/constants";
-import type { UiConfig } from "$lib/ui-config";
+import type { UiConfig } from "../../ui-config.js";
 import type { KeyBinding } from "./board-keymap.js";
 
 /** The configurable shortcuts the board's table reads. */

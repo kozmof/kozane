@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { StaticBackend, HttpBackend } from "@kozane/client";
+import {
+  StaticBackend,
+  HttpBackend,
+  DEFAULT_UI_CONFIG,
+  parseUiOverrides,
+  validateUiOverrides,
+  ARROW_KEYS,
+  clampZoom,
+} from "@kozane/client";
 import { backendContractCases, runBackendContract } from "@kozane/client/testing";
 import * as database from "@kozane/core/database";
 import * as services from "@kozane/core/services";
@@ -7,6 +15,17 @@ import * as schema from "@kozane/core/schema";
 import { applyMigrations } from "@kozane/core/migrations";
 import { domainErrorCode } from "@kozane/core";
 import { createServiceContractFixture } from "./testing-http-fixture.mjs";
+assert.equal(DEFAULT_UI_CONFIG.defaultCardWidth, 210);
+assert.deepEqual(parseUiOverrides({ defaultCardWidth: 240 }, { strict: true }), {
+  defaultCardWidth: 240,
+});
+assert.equal(validateUiOverrides({ defaultCardWidth: 0 }).issues[0].severity, "error");
+assert.throws(
+  () => parseUiOverrides({ defaultCardWidth: 0 }, { strict: true }),
+  /Invalid Kozane config/,
+);
+assert.deepEqual(ARROW_KEYS, ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
+assert.equal(clampZoom(3), 2);
 const namespaces = [{ id: "seed", name: "Contract seed", isDefault: true }];
 const snapshot = {
   namespace: { id: "seed" },

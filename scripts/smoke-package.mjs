@@ -31,6 +31,12 @@ try {
   );
   if (!coreArchive) throw new Error("Missing packed core dependency");
   const coreArchivePath = join(staging, coreArchive);
+  run("pnpm", ["--filter", "@kozane/client", "pack", "--pack-destination", staging]);
+  const clientArchive = readdirSync(staging).find(
+    (file) => file.startsWith("kozane-client-") && file.endsWith(".tgz"),
+  );
+  if (!clientArchive) throw new Error("Missing packed client dependency");
+  const clientArchivePath = join(staging, clientArchive);
   run("pnpm", [
     ...(process.env.KOZANE_ALLOW_UNSUPPORTED_NODE === "1" ? ["--config.ignore-scripts=true"] : []),
     "pack",
@@ -51,6 +57,7 @@ try {
       "--no-audit",
       "--no-fund",
       coreArchivePath,
+      clientArchivePath,
       archivePath,
     ],
     { cwd: staging },
@@ -73,6 +80,7 @@ try {
       "--prefix",
       globalPrefix,
       coreArchivePath,
+      clientArchivePath,
       archivePath,
     ],
     { cwd: staging },

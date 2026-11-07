@@ -9,6 +9,7 @@ export default defineConfig({
       "@kozane/core/schema",
       "@kozane/core/services",
       "@kozane/core/migrations",
+      "@kozane/client",
     ],
   },
   plugins: [

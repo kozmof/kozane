@@ -2,16 +2,23 @@
 
 Shared Kozane views for Svelte applications.
 
-The root exports backend contracts and adapters. Import shared views from `./ui` or
+The root exports backend contracts, adapters, UI configuration and gesture defaults.
+Import shared views from `./ui` or
 the `./board`, `./tags`, `./map` and `./editor` entries. It ships Svelte source and
 declarations built with `@sveltejs/package`. Core types and validation use the public
 `@kozane/core` package, which is an exact peer dependency. The editor declares its
 Reed runtime dependency.
 
+Import `DEFAULT_UI_CONFIG`, `parseUiOverrides` and `validateUiOverrides` from the root
+entry for defaults and workspace configuration checks. It also exports the gesture and
+zoom constants. These exports work in Node without loading Svelte components. The UI entry
+re-exports the same default configuration object.
+
 This candidate is not ready for publication. Complete production consumer checks and
 workspace conversion remain under Phase 3.
 
-Views, backend adapters, contracts, navigation, preferences and rendering helpers live
+Views, backend adapters, contracts, UI configuration, navigation, preferences and
+rendering helpers live
 in `packages/client/src` with their tests. Run `pnpm build:client`
 from the repository root to build core before client. The build collects the remaining
 portable shared helpers and rewrites workspace aliases before packaging.

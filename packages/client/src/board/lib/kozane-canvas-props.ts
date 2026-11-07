@@ -9,7 +9,7 @@ import type {
   Warp,
 } from "$lib/types";
 import type { BoardRect } from "$lib/constants";
-import type { NewCardPlacement } from "$lib/ui-config";
+import type { NewCardPlacement } from "../../ui-config.js";
 import type { SelectionState } from "../namespace-state.svelte.js";
 import type { TaskspaceTreeContext, TaskspaceTreeState } from "./taskspace-tree.svelte.js";
 import type { InventoryDrag } from "./inventory-drop.js";

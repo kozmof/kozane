@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css } from "styled-system/css";
   import type { CardWithGlue } from "$lib/types";
-  import type { UiConfig } from "$lib/ui-config";
+  import type { UiConfig } from "../../ui-config.js";
 
   /**
    * The action buttons the composer shows in place of its text box while cards are selected.
