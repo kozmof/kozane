@@ -60,7 +60,8 @@ function destination(file) {
     return "lib/backend/" + relative.slice("packages/client/src/backend/".length);
   if (relative.startsWith("packages/client/src/"))
     return "lib/client/" + relative.slice("packages/client/src/".length);
-  if (relative.startsWith("packages/kozane/src/lib/")) return relative.slice("packages/kozane/src/".length);
+  if (relative.startsWith("packages/kozane/src/lib/"))
+    return relative.slice("packages/kozane/src/".length);
   if (relative.startsWith("styled-system/")) return relative.replace(/\.mjs$/, ".js");
   throw new Error(`Client closure cannot contain ${relative}`);
 }

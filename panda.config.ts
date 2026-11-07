@@ -2,7 +2,10 @@ import { defineConfig } from "@pandacss/dev";
 
 export default defineConfig({
   preflight: false,
-  include: ["./packages/kozane/src/**/*.{js,ts,svelte}", "./packages/client/src/**/*.{js,ts,svelte}"],
+  include: [
+    "./packages/kozane/src/**/*.{js,ts,svelte}",
+    "./packages/client/src/**/*.{js,ts,svelte}",
+  ],
   exclude: [],
   theme: {
     extend: {
