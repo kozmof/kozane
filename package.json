@@ -50,7 +50,7 @@
     "preflight": "TMPDIR=/tmp npm_config_cache=/tmp/kozane-npm-cache pnpm publish --dry-run",
     "pre-release-check": "pnpm preflight && pnpm pack:check",
     "clean": "node scripts/clean.mjs",
-    "verify": "pnpm check && pnpm check:core-package && pnpm check:client-browser && pnpm check:core-browser && pnpm check:backend-contract && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
+    "verify": "pnpm check && pnpm check:client-package && pnpm check:client-browser && pnpm check:core-browser && pnpm check:backend-contract && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
     "prepack": "pnpm build",
     "test:e2e": "TMPDIR=/tmp playwright test",
     "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e",
@@ -64,7 +64,9 @@
     "build:restoration-harness": "node scripts/check-core-package.mjs --restoration-harness",
     "test:restoration-harness": "pnpm build:restoration-harness && playwright test --config scripts/restoration-harness/playwright.config.ts",
     "check:compatibility-retention": "node scripts/compatibility/check-retention.mjs",
-    "release:check:core": "pnpm test:restoration-harness"
+    "release:check:core": "pnpm test:restoration-harness",
+    "build:client": "pnpm --filter @kozane/core build && pnpm --filter @kozane/client build",
+    "check:client-package": "node scripts/check-core-package.mjs --client-package"
   },
   "dependencies": {
     "@kozmof/reed": "^4.1.0",

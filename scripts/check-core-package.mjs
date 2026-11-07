@@ -112,6 +112,15 @@ try {
         `@libsql/client@${libsqlVersion}`,
       )
     : { packages: "", snapshots: "" };
+  const client = process.argv.includes("--client-package")
+    ? (await import("./client-package/prepare.mjs")).prepareClientConsumer({
+        consumer: temporary,
+        repository,
+        run,
+        coreReference: archiveReference,
+        coreVersion: candidate.version,
+      })
+    : { importer: "", packages: "", snapshots: "" };
   writeFileSync(
     join(temporary, "pnpm-lock.yaml"),
     `lockfileVersion: '9.0'
@@ -137,12 +146,13 @@ ${
         version: ${libsqlVersion}
 `
     : ""
-}packages:
+}${client.importer}packages:
   ${packageKey}:
     resolution: {integrity: ${integrity}, tarball: ${JSON.stringify(archiveReference)}}
     version: ${candidate.version}
 ${lockedPackage(`drizzle-orm@${drizzleVersion}`)}
 ${driverGraph.packages}
+${client.packages}
 ${lockedPackage(`uuid@${uuidVersion}`)}
 ${lockedPackage(`'@sqlite.org/sqlite-wasm@${wasmVersion}'`)}
 snapshots:
@@ -158,6 +168,7 @@ snapshots:
       : "{}"
   }
 ${driverGraph.snapshots}
+${client.snapshots}
   uuid@${uuidVersion}: {}
   '@sqlite.org/sqlite-wasm@${wasmVersion}': {}
 `,
@@ -361,6 +372,10 @@ ${driverGraph.snapshots}
   {
     const { checkCorpus } = await import("./compatibility/check.mjs");
     checkCorpus({ consumer: temporary, repository, run });
+  }
+  if (process.argv.includes("--client-package")) {
+    const { checkClientPackage } = await import("./client-package/check.mjs");
+    await checkClientPackage({ consumer: temporary, run, manifest: client.manifest });
   }
   if (process.argv.includes("--restoration-harness")) {
     const { buildRestorationHarness } = await import("./restoration-harness/build.mjs");

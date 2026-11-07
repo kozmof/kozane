@@ -12,3 +12,7 @@ export {
 } from "./migrations/errors.js";
 
 export type * from "./schema-types.js";
+
+export type { CardPositionUpdate } from "../../../src/db/api/card.js";
+export type { TagsViewData } from "../../../src/services/tags.js";
+export type { TreemapSnapshot, TreemapPartition } from "../../../src/services/map.js";
