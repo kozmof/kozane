@@ -42,7 +42,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepack": "pnpm run build",
-    "check:migrations": "node scripts/generate-migrations.mjs --check"
+    "check:migrations": "node scripts/generate-migrations.mjs --check",
+    "prepublishOnly": "pnpm --dir ../.. release:check:core"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",

@@ -53,8 +53,11 @@ native library execution, use an executable temporary directory, such as
 The bootstrap refuses an existing cohort name. Retain the original `producer.tgz`,
 database bytes, manifest and index hashes in Git. Do not regenerate an old cohort
 when a candidate rejects it. Investigate the regression or record an intentional
-migration-ID change with explicit compatibility expectations. An index hash detects
-accidental changes but does not replace review of edits to retained expectations.
+migration-ID change with explicit compatibility expectations. The packed check also compares the current index with every committed index reachable
+from HEAD. Earlier records must remain unchanged and in the same order. Each historical
+manifest hash pins its expectations, producer metadata and original byte hashes. Rewriting
+a fixture and all its current hashes still fails. Review remains necessary for changes
+to validators, normalization, services and drivers.
 
 Run `pnpm test:restoration-harness` to build the isolated browser harness and restore
 every recorded selection under Chromium. CI includes this command in its browser job.
@@ -62,5 +65,17 @@ The browser cases verify fetched fixture hashes, require successful restoration,
 the saved envelope and compare the recorded view summaries. Browser execution of these
 four boundary cases remains pending. The earlier 55 browser cases passed in CI.
 
-Publication gates remain tracked under P3-12. P3-18 awaits browser execution of all
-retained fixtures, including the new boundaries.
+Run `pnpm check:compatibility-retention` to check current bytes and Git retention without
+building a candidate. This requires a full checkout. CI uses `fetch-depth: 0`, and a shallow
+clone fails with instructions to fetch the missing history. Commit the initial corpus before
+running release checks.
+
+Run `pnpm release:check:core` to run the packed candidate checks and all Chromium restoration
+cases. Core's `prepublishOnly` hook invokes this command before normal source publication.
+The internal pack step runs its build hook without re-entering the publication hook.
+Install the pinned Chromium runtime before running the release check.
+
+P3-12 remains open for the future client publication path and explicit handling of retained
+fixtures from earlier migration IDs. A new ID currently blocks the check until that policy
+is implemented. Same-ID validation or view regressions fail against the original outcomes.
+P3-18 awaits browser execution of all retained fixtures, including the new boundaries.

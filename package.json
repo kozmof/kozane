@@ -62,7 +62,9 @@
     "build:core": "pnpm --filter @kozane/core build",
     "check:core-package": "node scripts/check-core-package.mjs",
     "build:restoration-harness": "node scripts/check-core-package.mjs --restoration-harness",
-    "test:restoration-harness": "pnpm build:restoration-harness && playwright test --config scripts/restoration-harness/playwright.config.ts"
+    "test:restoration-harness": "pnpm build:restoration-harness && playwright test --config scripts/restoration-harness/playwright.config.ts",
+    "check:compatibility-retention": "node scripts/compatibility/check-retention.mjs",
+    "release:check:core": "pnpm test:restoration-harness"
   },
   "dependencies": {
     "@kozmof/reed": "^4.1.0",

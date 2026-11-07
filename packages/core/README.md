@@ -79,4 +79,11 @@ statement terminators. It preserves token spelling, case, quoting, literals, ope
 expressions. Declared types and column defaults use the same normalization. Constraints,
 partial predicates, triggers and views retain their normalized SQL definitions.
 
+Before source publication, `prepublishOnly` runs the repository's `release:check:core`
+command. It packs an isolated candidate, validates retained corpus bytes and outcomes,
+and runs the Chromium restoration suite. The retention check requires full Git history
+and prevents rewriting earlier corpus records. See the
+[corpus workflow](../../tests/compatibility/README.md). This source-release command requires
+the repository's development dependencies and pinned Chromium installation.
+
 The remaining workspace conversion is being completed under [Phase 3](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

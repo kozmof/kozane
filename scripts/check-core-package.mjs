@@ -20,6 +20,8 @@ const corpusDriver =
     ?.slice("--corpus-driver=".length) ?? "wasm";
 assert.ok(["wasm", "libsql"].includes(corpusDriver), "Unsupported corpus producer driver");
 const repository = resolve(import.meta.dirname, "..");
+const { checkCorpusRetention } = await import("./compatibility/retention.mjs");
+checkCorpusRetention(repository);
 const temporary = mkdtempSync(join(tmpdir(), "kozane-core-package-"));
 function run(command, args, cwd = repository) {
   try {
