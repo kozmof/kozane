@@ -1,3 +1,4 @@
+import { prepareBrowserCorpus } from "../compatibility/prepare-browser.mjs";
 import { build } from "vite";
 import ts from "typescript";
 import { mkdir, copyFile, readFile, writeFile, rm } from "node:fs/promises";
@@ -14,6 +15,7 @@ export async function buildRestorationHarness(
   await mkdir(sources, { recursive: true });
   await rm(output, { recursive: true, force: true });
   await mkdir(output, { recursive: true });
+  prepareBrowserCorpus(resolve("tests/compatibility/corpus"), output);
   for (const name of [
     "main.ts",
     "worker.ts",

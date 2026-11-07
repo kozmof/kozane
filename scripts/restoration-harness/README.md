@@ -13,7 +13,8 @@ imports. It does not launch a browser.
 Run `pnpm test:restoration-harness` to rebuild and execute the browser tests in Playwright
 Chromium. The local server uses the demo CSP and serves worker, wasm and database assets.
 The browser entry uses the embedded hashes and build-ID handshake before database access.
-The fixture and its metadata are regenerated on each build. The CI `browser-e2e` job runs
+The disposable sample and its metadata are regenerated on each build.
+Retained corpus databases keep their original bytes and recorded expectations. The CI `browser-e2e` job runs
 this command on Node 24 with Chromium for pushes and pull requests.
 
 The shared startup policy reads recovery storage before opening a database. It bounds JSON
@@ -122,8 +123,15 @@ in-memory session and retained unsaved edits. Additional cases check that hidden
 still expires stalled replies and repeated ambiguous gaps exhaust a pre-worker asset budget.
 These tests are discovered by the existing CI command alongside the restoration cases.
 
-P3-10 remains in progress. The expanded browser cases await CI execution. Compatibility-corpus
-integration remains. Basic
-`run()` cases close their candidate after reporting validation. Retained cases
+The build verifies all retained corpus hashes before copying database assets into the harness.
+The server exposes only the catalog and explicitly listed database paths. `corpus.spec.ts`
+restores every recorded selection through the verified worker. Each case checks the fetched
+bytes, requires the restored source, preserves the exact saved envelope and compares a stable
+view summary with the original expectation. The first cohort adds eleven cases covering empty,
+sole, multiple and default namespace states, missing selections and populated Unicode data.
+Discovery finds 44 browser cases across three suites.
+
+P3-10 remains in progress. The expanded suspension and corpus cases await CI execution.
+Basic `run()` cases close their candidate after reporting validation. Retained cases
 keep it until `close()`. The persistent editing backend is implemented in Phase 4.
 See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

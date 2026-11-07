@@ -25,5 +25,11 @@ when a candidate rejects it. Investigate the regression or record an intentional
 migration-ID change with explicit compatibility expectations. An index hash detects
 accidental changes but does not replace review of edits to retained expectations.
 
-Libsql-produced fixtures, broader boundary data, browser restoration of these retained
-files and publication gates remain tracked under P3-11, P3-12 and P3-18.
+Run `pnpm test:restoration-harness` to build the isolated browser harness and restore
+every recorded selection under Chromium. CI includes this command in its browser job.
+The browser cases verify fetched fixture hashes, require successful restoration, preserve
+the saved envelope and compare the recorded view summaries. Browser execution of these
+new corpus cases remains pending.
+
+Libsql-produced fixtures, broader boundary data and publication gates remain tracked under
+P3-11, P3-12 and P3-18.

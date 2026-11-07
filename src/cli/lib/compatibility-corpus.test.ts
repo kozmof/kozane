@@ -3,6 +3,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
+import { prepareBrowserCorpus } from "../../../scripts/compatibility/prepare-browser.mjs";
 import { readCorpus } from "../../../scripts/compatibility/read-corpus.mjs";
 import { summarizeView } from "../../../scripts/compatibility/view-summary";
 const temporary: string[] = [];
@@ -75,4 +76,29 @@ it("ignores row ordering and added derived fields but detects changed stored con
   expect(await summarizeView(after)).toEqual(expected);
   after.snapshot.snapshot.cards[0].content = "Changed";
   expect((await summarizeView(after)).dataHash).not.toBe(expected.dataHash);
+});
+
+it("prepares browser assets from unchanged retained bytes and expectations", () => {
+  const root = resolve("tests/compatibility/corpus");
+  const output = mkdtempSync(join(tmpdir(), "kozane-browser-corpus-test-"));
+  temporary.push(output);
+  const fixtures = prepareBrowserCorpus(root, output);
+  const catalog = JSON.parse(readFileSync(join(output, "corpus.json"), "utf8"));
+  expect(catalog).toEqual({ format: 1, fixtures });
+  for (const fixture of fixtures) {
+    const bytes = readFileSync(join(output, fixture.url.slice(1)));
+    expect(bytes.length).toBe(fixture.size);
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(fixture.sha256);
+    const original = readCorpus(root).find((cohort) => cohort.id === fixture.cohort);
+    expect(
+      original.fixtures.find((item: { id: string }) => item.id === fixture.id).expected,
+    ).toEqual(fixture.expected);
+  }
+});
+it("refuses to prepare a browser corpus from altered original bytes", () => {
+  const root = copy();
+  const output = mkdtempSync(join(tmpdir(), "kozane-browser-corpus-test-"));
+  temporary.push(output);
+  writeFileSync(join(root, "core-0.1.0-rc1-wasm", "empty.sqlite3"), "damaged");
+  expect(() => prepareBrowserCorpus(root, output)).toThrow(/Retained fixture changed/);
 });
