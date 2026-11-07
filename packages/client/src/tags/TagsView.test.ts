@@ -4,7 +4,7 @@ import { TagsView } from "../index.js";
 import { HttpBackend, StaticBackend } from "../backend/index.js";
 import { tagDataset } from "../backend/tags.fixtures.js";
 import { tagsView } from "../backend/views/tags.js";
-import { createDemoNavigation } from "../../../../src/lib/navigation.js";
+import { createDemoNavigation } from "../navigation.js";
 import type { TagHit } from "../../../../src/lib/types.js";
 const hit = (id: string, tag: string, excerpt: string): TagHit => ({
   tag,

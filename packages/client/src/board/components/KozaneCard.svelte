@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css } from "styled-system/css";
   import type { CardWithGlue, PartitionWithColor } from "$lib/types";
-  import { segmentText } from "$lib/text-segments";
+  import { segmentText } from "../../text-segments.js";
 
   interface Props {
     card: CardWithGlue;

@@ -3,7 +3,7 @@ import { BoardWarps } from "../../../../packages/client/src/board/lib/board-warp
 import { NamespaceState } from "../../../../packages/client/src/board/namespace-state.svelte.js";
 import { data } from "../page.fixtures.js";
 import { BackendError } from "../../../../packages/client/src/backend/contract.js";
-import { createDemoNavigation } from "$lib/navigation.js";
+import { createDemoNavigation } from "../../../../packages/client/src/navigation.js";
 
 function setup(readonly = false) {
   const s = new NamespaceState();

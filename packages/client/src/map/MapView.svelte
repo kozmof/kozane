@@ -1,7 +1,7 @@
 <script lang="ts">
   import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
-  import type { NavigationAdapter } from "$lib/navigation.js";
+  import type { NavigationAdapter } from "../navigation.js";
   import type { KozaneBackend } from "../backend/contract.js";
   import type { PollLifecycle } from "../backend/workspace-poller.js";
   import type { MapPageData, MapSelection } from "./types.js";
@@ -10,7 +10,7 @@
   import { mapView, type MapViewData } from "../backend/views/map.js";
   import { css } from "styled-system/css";
   import { buildTagTree, normalizeTag } from "$lib/tag";
-  import NavIcon from "$lib/components/NavIcon.svelte";
+  import NavIcon from "../components/NavIcon.svelte";
   import TagPanel from "./components/TagPanel.svelte";
   import MapZoomControl from "./components/MapZoomControl.svelte";
   import ActivityStrip from "./components/ActivityStrip.svelte";

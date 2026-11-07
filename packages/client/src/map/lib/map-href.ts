@@ -1,4 +1,4 @@
-import { createNodeNavigation } from "$lib/navigation.js";
+import { createNodeNavigation } from "../../navigation.js";
 /** Namespace, tag, and day filters. Null omits a filter from the URL. */
 export type MapQuery = {
   namespaceId: string | null;

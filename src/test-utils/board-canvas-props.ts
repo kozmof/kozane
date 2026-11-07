@@ -1,6 +1,6 @@
 import { NamespaceState, type BoardCanvasProps } from "../../packages/client/src/board/index.js";
 import { StaticBackend, type SnapshotData } from "../../packages/client/src/backend/index.js";
-import { createDemoNavigation } from "../lib/navigation.js";
+import { createDemoNavigation } from "../../packages/client/src/navigation.js";
 
 /** Initialize the public canvas without a route, storage, fetch, or test-runner globals. */
 export function boardCanvasProps(): BoardCanvasProps {

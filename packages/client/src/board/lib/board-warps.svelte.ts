@@ -5,7 +5,7 @@ import type { KozaneBackend } from "../../backend/contract.js";
 import { BackendError } from "../../backend/contract.js";
 import { parseWarpEntries } from "../../backend/decoders/warp-directory.js";
 import { ARROW_DIRECTIONS, warpInDirection } from "./namespace-page.js";
-import type { NavigationAdapter } from "$lib/navigation.js";
+import type { NavigationAdapter } from "../../navigation.js";
 import { reachableWarps } from "./warp-navigation.js";
 
 /** The parts of the canvas warp navigation moves. */

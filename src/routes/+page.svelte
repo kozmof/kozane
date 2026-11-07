@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
-  import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
+  import { createNodeNavigation, type NavigationAdapter } from "../../packages/client/src/navigation.js";
   import { base } from "$app/paths";
   import { untrack } from "svelte";
   import { StaticBackend } from "../../packages/client/src/backend/static-backend.js";

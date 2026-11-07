@@ -1,5 +1,5 @@
-import { scanTagPositions } from "./tag.js";
-import { scanUrls } from "./urls.js";
+import { scanTagPositions } from "../../../src/lib/tag.js";
+import { scanUrls } from "../../../src/lib/urls.js";
 
 // Split text into plain, HTTP(S) link, and tag segments for escaped rendering. Leave trailing
 // sentence punctuation as plain text.

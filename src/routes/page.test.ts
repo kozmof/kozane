@@ -100,7 +100,7 @@ it("keeps static namespace pages free of backend requests and creation controls"
 });
 
 it("uses supplied navigation for namespace discovery and workspace views", async () => {
-  const { createDemoNavigation } = await import("$lib/navigation.js");
+  const { createDemoNavigation } = await import("../../packages/client/src/navigation.js");
   render(WorkspacePage, {
     props: {
       data: {

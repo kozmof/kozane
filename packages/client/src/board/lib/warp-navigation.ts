@@ -1,4 +1,4 @@
-import { createNodeNavigation } from "$lib/navigation.js";
+import { createNodeNavigation } from "../../navigation.js";
 import type { Warp } from "$lib/types";
 import type { WarpListEntry } from "$lib/warp-list";
 

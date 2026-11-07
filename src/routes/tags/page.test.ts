@@ -327,7 +327,7 @@ describe("backend tags refresh", () => {
 });
 
 it("uses injected demo routes and fragment filters for tags and board links", async () => {
-  const { createDemoNavigation } = await import("$lib/navigation.js");
+  const { createDemoNavigation } = await import("../../../packages/client/src/navigation.js");
   const { page } = await import("$app/state");
   const previous = page.url;
   page.url = new URL("http://localhost/demo/tags/?namespaceId=p1#tag=perf") as typeof page.url;

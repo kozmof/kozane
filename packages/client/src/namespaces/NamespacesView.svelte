@@ -1,13 +1,13 @@
 <script lang="ts">
   import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
-  import type { NavigationAdapter } from "$lib/navigation.js";
+  import type { NavigationAdapter } from "../navigation.js";
   import type { KozaneBackend, NamespaceGetResult } from "../backend/contract.js";
   import type { Snippet } from "svelte";
   import { untrack } from "svelte";
   import { NamespaceIndex } from "../backend/namespace-index.svelte.js";
   import { css } from "styled-system/css";
-  import NavIcon from "$lib/components/NavIcon.svelte";
+  import NavIcon from "../components/NavIcon.svelte";
 
   let { backend, initialNamespaces, navigation, workspaceName = null, workspaceLabel = "Kozane", formError = null, lifetimeNotice, createAction, emptyState, retryIntervalMs = 1000 }: {
     backend: KozaneBackend;

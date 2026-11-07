@@ -2,7 +2,7 @@ import type {
   BoardDestination,
   BoardArrivalParameter,
   NavigationAdapter,
-} from "$lib/navigation.js";
+} from "../../navigation.js";
 import type { CardWithGlue, Inventory, TaskspaceSummary } from "$lib/types";
 
 /**

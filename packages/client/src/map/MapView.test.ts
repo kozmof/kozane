@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { MapView } from "../index.js";
 import { HttpBackend, StaticBackend } from "../backend/index.js";
 import { mapView } from "../backend/views/map.js";
-import { createDemoNavigation } from "../../../../src/lib/navigation.js";
+import { createDemoNavigation } from "../navigation.js";
 import { mapDataset } from "../../../../src/test-utils/map-dataset.js";
 import { DEFAULT_ZOOM, zoomPercent } from "./lib/view.js";
 const selection = { namespaceId: "p1", tag: null, day: null };

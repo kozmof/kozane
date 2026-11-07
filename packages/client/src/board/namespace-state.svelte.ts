@@ -1,5 +1,5 @@
-import { createSessionPreferences, type PreferenceStorage } from "$lib/preferences.js";
-export { readStoredLayerId, storeActiveLayerId } from "$lib/preferences.js";
+import { createSessionPreferences, type PreferenceStorage } from "../preferences.js";
+export { readStoredLayerId, storeActiveLayerId } from "../preferences.js";
 import type {
   CardWithGlue,
   Partition,

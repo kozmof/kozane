@@ -4,7 +4,10 @@ import {
   clearArrivalParams,
   readArrival,
 } from "../../../../packages/client/src/board/lib/board-arrival.js";
-import { createDemoNavigation, createNodeNavigation } from "$lib/navigation.js";
+import {
+  createDemoNavigation,
+  createNodeNavigation,
+} from "../../../../packages/client/src/navigation.js";
 import { data } from "../page.fixtures.js";
 import type { Inventory, TaskspaceSummary } from "$lib/types.js";
 it("resolves a stored card and file from one arrival before either selector is cleared", () => {

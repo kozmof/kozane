@@ -619,7 +619,7 @@ describe("Card width", () => {
 });
 
 it("uses supplied routes for board tag links and the namespace list", async () => {
-  const { createDemoNavigation } = await import("$lib/navigation.js");
+  const { createDemoNavigation } = await import("../../../packages/client/src/navigation.js");
   render(NamespacePage, {
     props: {
       data: { ...data, readonly: true, cards: [{ ...data.cards[0], content: ":private" }] },
@@ -636,7 +636,7 @@ it("uses supplied routes for board tag links and the namespace list", async () =
 });
 
 it("clears handled demo arrivals through supplied history while preserving namespace and fragments", async () => {
-  const { createDemoNavigation } = await import("$lib/navigation.js");
+  const { createDemoNavigation } = await import("../../../packages/client/src/navigation.js");
   const { page } = await import("$app/state");
   const previous = page.url;
   page.url = new URL(

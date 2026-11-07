@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { NamespacesView } from "../index.js";
 import { HttpBackend, StaticBackend } from "../backend/index.js";
-import { createDemoNavigation } from "../../../../src/lib/navigation.js";
+import { createDemoNavigation } from "../navigation.js";
 const navigation = createDemoNavigation({ base: "/demo" });
 const capabilities = {
   writable: true,

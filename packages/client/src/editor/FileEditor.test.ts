@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import FileEditor from "./FileEditor.svelte";
 import { EditorSession } from "./editor-session.svelte.js";
-import type { NavigationDriver } from "$lib/navigation.js";
+import type { NavigationDriver } from "../navigation.js";
 
 // Invoke the injected navigation guard without a framework router.
 const beforeNavigate = vi.fn<NavigationDriver["beforeNavigate"]>();

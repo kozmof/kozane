@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css } from "styled-system/css";
   import { onDestroy, untrack } from "svelte";
-  import type { NavigationDriver } from "$lib/navigation.js";
+  import type { NavigationDriver } from "../navigation.js";
   import EditorSurface, { type EditorMode } from "./EditorSurface.svelte";
   import type {
     EditorSession,

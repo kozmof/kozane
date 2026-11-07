@@ -678,7 +678,7 @@ describe("backend map data", () => {
 });
 
 it("uses injected demo routes for map filters, partitions and workspace navigation", async () => {
-  const { createDemoNavigation } = await import("$lib/navigation.js");
+  const { createDemoNavigation } = await import("../../../packages/client/src/navigation.js");
   const { container } = render(MapPage, {
     props: {
       data: pageData({ namespaceId: "p1", tag: "perf" }) as never,

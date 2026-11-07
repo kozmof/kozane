@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { segmentText } from "./text-segments";
-import { scanTagLines } from "./tag";
+import { segmentText } from "./text-segments.js";
+import { scanTagLines } from "../../../src/lib/tag.js";
 
 describe("segmentText", () => {
   it("returns a single plain segment when there is no URL", () => {

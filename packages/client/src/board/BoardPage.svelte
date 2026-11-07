@@ -8,7 +8,7 @@
   import { css } from "styled-system/css";
   import {
     type BoardArrivalParameter,
-  } from "$lib/navigation.js";
+  } from "../navigation.js";
   import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
   import { boardKeyBindings } from "./lib/board-bindings.js";
   import { createBackendBoardPersistence } from "./lib/board-backend-persistence.js";

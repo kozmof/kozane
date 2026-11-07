@@ -5,8 +5,8 @@
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { createAppNavigationDriver } from "./lib/app-navigation.js";
-  import { createNodeNavigation, type NavigationAdapter, type NavigationDriver } from "$lib/navigation.js";
-  import { createSessionPreferences, type PreferenceStorage } from "$lib/preferences.js";
+  import { createNodeNavigation, type NavigationAdapter, type NavigationDriver } from "../../../packages/client/src/navigation.js";
+  import { createSessionPreferences, type PreferenceStorage } from "../../../packages/client/src/preferences.js";
   import { HttpBackend } from "../../../packages/client/src/backend/http-backend.js";
   import { StaticBackend } from "../../../packages/client/src/backend/static-backend.js";
   import { browserPollLifecycle } from "../../../packages/client/src/backend/workspace-poller.js";

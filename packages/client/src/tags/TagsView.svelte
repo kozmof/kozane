@@ -1,7 +1,7 @@
 <script lang="ts">
   import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
-  import type { NavigationAdapter } from "$lib/navigation.js";
+  import type { NavigationAdapter } from "../navigation.js";
   import type { KozaneBackend } from "../backend/contract.js";
   import type { PollLifecycle } from "../backend/workspace-poller.js";
   import type { TagsPageData, TagsSelection } from "./types.js";
@@ -9,7 +9,7 @@
   import { startDatasetView } from "../backend/dataset-view.js";
   import { tagsView, type TagsViewPageData } from "../backend/views/tags.js";
   import { css } from "styled-system/css";
-  import NavIcon from "$lib/components/NavIcon.svelte";
+  import NavIcon from "../components/NavIcon.svelte";
   import {
     buildTagTree,
     capHitsByKind,

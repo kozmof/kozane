@@ -564,7 +564,7 @@ describe("Layers", () => {
 });
 
 it("uses injected memory preferences across remounts and resets layers for a new generation without legacy storage", async () => {
-  const { createMemoryPreferences } = await import("$lib/preferences.js");
+  const { createMemoryPreferences } = await import("../../../packages/client/src/preferences.js");
   const original = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
   const legacy = globalThis.sessionStorage;
   legacy.setItem("kozane:active-layer:namespace-1", "l2");

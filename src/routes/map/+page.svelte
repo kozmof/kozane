@@ -4,7 +4,7 @@
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
-  import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
+  import { createNodeNavigation, type NavigationAdapter } from "../../../packages/client/src/navigation.js";
   import { StaticBackend } from "../../../packages/client/src/backend/static-backend.js";
   import { HttpBackend } from "../../../packages/client/src/backend/http-backend.js";
   import { browserPollLifecycle } from "../../../packages/client/src/backend/workspace-poller.js";
