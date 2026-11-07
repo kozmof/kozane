@@ -15,3 +15,7 @@ export type * from "./schema-types.js";
 
 export type { TagsViewData } from "./services/tags.js";
 export type { TreemapSnapshot, TreemapPartition } from "./services/map.js";
+
+export * from "./inventory.js";
+export * from "./squash.js";
+export * from "./constants/inventory.js";

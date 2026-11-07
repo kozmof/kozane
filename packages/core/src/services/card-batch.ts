@@ -7,7 +7,7 @@ import { getPartition } from "../../../../src/db/api/partition.js";
 import { getLayer } from "../../../../src/db/api/layer.js";
 import { getScope } from "../../../../src/db/api/scope.js";
 import { addSquashInventoryInTx } from "../../../../src/db/api/inventory.js";
-import { squashCardPositions, squashInventorySlots } from "../../../../src/lib/squash.js";
+import { squashCardPositions, squashInventorySlots } from "../squash.js";
 import { clamp, contentLimitIssue } from "../../../../src/lib/constants.js";
 import type { ServiceContext } from "./context.js";
 import { ValidationError } from "./errors.js";

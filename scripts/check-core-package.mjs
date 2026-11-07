@@ -196,6 +196,21 @@ ${client.snapshots}
     assert.ok(readFileSync(resolve(installed, entry.types), "utf8").length > 0);
   }
   const publicTypes = readFileSync(resolve(installed, manifest.exports["."].types), "utf8");
+  // Each fresh process must initialize the public entry without a prior root import.
+  for (const entry of ["@kozane/core/services", "@kozane/core/schema"])
+    run(
+      process.execPath,
+      ["--input-type=module", "--eval", `await import(${JSON.stringify(entry)})`],
+      temporary,
+    );
+  for (const path of ["inventory", "squash", "constants/inventory"]) {
+    const compatibility = readFileSync(join(installed, "dist/src/lib", `${path}.js`), "utf8");
+    assert.match(
+      compatibility,
+      /^export \{[\s\S]*\} from "@kozane\/core";\s*$/,
+      `Core must own helper implementation: ${path}`,
+    );
+  }
   for (const name of ["database-types", "types"]) {
     assert.ok(publicTypes.includes(`"./${name}.js"`), `Missing owned ${name} export`);
     const declaration = readFileSync(
@@ -211,7 +226,7 @@ ${client.snapshots}
     join(temporary, "runtime.mjs"),
     `
     import assert from 'node:assert/strict';
-    import { ValidationError, domainErrorCode, MigrationHistoryError as RootMigrationHistoryError } from '@kozane/core';
+    import { ValidationError, domainErrorCode, MigrationHistoryError as RootMigrationHistoryError, cardSpan, planStow, splitCardContent, squashInventorySlots, INVENTORY_COLUMNS } from '@kozane/core';
     import { createDatabaseAdapter, withTx, withReadTx, createServiceContext } from '@kozane/core/database';
     import * as schema from '@kozane/core/schema';
     import * as services from '@kozane/core/services';
@@ -223,6 +238,11 @@ ${client.snapshots}
     assert.throws(() => createServiceContext({contentMax: 1}), ValidationError);
     assert.ok(schema.cardTable);
     assert.equal(typeof services.cards.create, 'function');
+    assert.equal(INVENTORY_COLUMNS, 6);
+    assert.equal(cardSpan('short'), 1);
+    assert.deepEqual(planStow([], [{cardId:'a', span:1}, {cardId:'b', span:1}], null), [{cardId:'a',slot:0}, {cardId:'b',slot:1}]);
+    assert.deepEqual(splitCardContent('one. two。three'), ['one', 'two', 'three']);
+    assert.deepEqual(squashInventorySlots(['one', 'two']), [0, 1]);
     const handle = {};
     let writes = 0, reads = 0;
     const db = createDatabaseAdapter(handle, { write: async operation => { writes++; return operation(handle); }, read: async operation => { reads++; return operation(handle); } });
@@ -269,7 +289,8 @@ ${client.snapshots}
   writeFileSync(
     join(temporary, "consumer.ts"),
     `
-    import type { CardCreateInput, Namespace, ValidationError, CardPositionUpdate, CardData, NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceTruncation } from '@kozane/core';
+    import type { CardCreateInput, Namespace, ValidationError, CardPositionUpdate, CardData, NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceTruncation, TakenCard, Footprint, SlotPlacement } from '@kozane/core';
+    import { planStow, squashCardPositions } from '@kozane/core';
     import { createServiceContext, withTx, withReadTx, type DB } from '@kozane/core/database';
     import { cards, namespaces } from '@kozane/core/services';
     import { cardTable } from '@kozane/core/schema';
@@ -286,6 +307,13 @@ ${client.snapshots}
     // @ts-expect-error Truncation reasons remain a closed union.
     const invalidTruncation: TaskspaceTruncation = 'complete';
     void position; void card; void trees; void invalidPosition; void invalidTruncation;
+    const taken: TakenCard = {cardId:'c', position:{posX:1,posY:2}};
+    const held: Footprint[] = [{cardId:'c',slot:0,span:1}];
+    const placements: SlotPlacement[] = planStow(held, [{cardId:'d',span:1}], null);
+    void squashCardPositions([], 2, {origin:taken.position,canvasWidth:400});
+    // @ts-expect-error Inventory footprint spans remain numeric.
+    const invalidFootprint: Footprint = {cardId:'c',slot:0,span:'1'};
+    void placements; void invalidFootprint;
     const context = createServiceContext();
     void cards.create(db, context, 'n', input);
     void namespaces.list(db, context).then((rows: Namespace[]) => rows);

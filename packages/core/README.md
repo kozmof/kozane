@@ -4,7 +4,7 @@ Kozane database contracts, schema and domain services for Node and browsers.
 
 | Export                    | Contents                                                                  |
 | ------------------------- | ------------------------------------------------------------------------- |
-| `@kozane/core`            | Domain types, service input types and errors                              |
+| `@kozane/core`            | Domain types, errors and inventory/squash layout helpers                  |
 | `@kozane/core/database`   | Adapter factory, branded handles, transaction helpers and service context |
 | `@kozane/core/schema`     | Drizzle tables and relations                                              |
 | `@kozane/core/services`   | Domain services and input validation                                      |
@@ -16,6 +16,11 @@ TypeScript declarations. Private module paths are unsupported.
 
 Import entity, board snapshot, taskspace-file and tag types from `@kozane/core`.
 These declarations share the schema and adapter types supplied by the package.
+
+The root entry also exports inventory geometry and layout helpers such as `cardSpan` and
+`planStow`, plus card splitting and squash placement helpers. Use these for local placement
+previews that follow the same rules as database services. Mutations remain in
+`@kozane/core/services`.
 
 Import resource operations from `@kozane/core/services`. The `validation` and `guards`
 namespaces provide the same checks for host filesystem adapters. The `rejection` namespace

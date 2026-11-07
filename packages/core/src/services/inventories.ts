@@ -33,7 +33,7 @@ import {
   requireUniqueStrings,
 } from "./validation.js";
 import { INVENTORY_SLOT_MAX } from "../../../../src/lib/constants.js";
-import type { TakenCard } from "../../../../src/lib/inventory.js";
+import type { TakenCard } from "../inventory.js";
 import { rejectBatch } from "./rejection.js";
 
 export async function createInTx(
