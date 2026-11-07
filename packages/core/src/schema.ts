@@ -9,11 +9,11 @@ import {
   check,
 } from "drizzle-orm/sqlite-core";
 import { v7 as uuidv7 } from "uuid";
-import { PATH_KINDS } from "../../../src/lib/constants/workspace.js";
+import { PATH_KINDS } from "./constants/workspace.js";
 
 // Preserve schema exports without loading runtime compatibility entries during code generation.
 // Path resolution shares these definitions without importing the database schema.
-export { PATH_KINDS, type PathKind } from "../../../src/lib/constants/workspace.js";
+export { PATH_KINDS, type PathKind } from "./constants/workspace.js";
 
 export const namespaceTable = sqliteTable(
   "namespace",

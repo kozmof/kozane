@@ -214,6 +214,8 @@ ${client.snapshots}
     "urls",
     "palette",
     "order",
+    "constants/limits",
+    "constants/domain",
   ]) {
     assert.ok(
       entries.has(`package/dist/packages/core/src/${path}.js`),
@@ -227,6 +229,11 @@ ${client.snapshots}
       `Core must own helper implementation: ${path}`,
     );
   }
+  for (const topic of ["canvas", "workspace", "tag"])
+    assert.ok(
+      entries.has(`package/dist/packages/core/src/constants/${topic}.js`),
+      `Missing owned constants: ${topic}`,
+    );
   for (const name of ["database-types", "types"]) {
     assert.ok(publicTypes.includes(`"./${name}.js"`), `Missing owned ${name} export`);
     const declaration = readFileSync(
@@ -242,6 +249,7 @@ ${client.snapshots}
     join(temporary, "runtime.mjs"),
     `
     import assert from 'node:assert/strict';
+    import * as core from '@kozane/core';
     import { ValidationError, domainErrorCode, MigrationHistoryError as RootMigrationHistoryError, cardSpan, planStow, splitCardContent, squashInventorySlots, INVENTORY_COLUMNS, normalizeTag, tagMatches, scanTagPositions, scanTagLines, buildTagTree, scanUrls, PALETTE, applyPalette, compareIds } from '@kozane/core';
     import { createDatabaseAdapter, withTx, withReadTx, createServiceContext } from '@kozane/core/database';
     import * as schema from '@kozane/core/schema';
@@ -268,6 +276,17 @@ ${client.snapshots}
     assert.deepEqual(scanUrls('https://example.test.'), [{url:'https://example.test',index:0}]);
     assert.deepEqual(applyPalette([{id:'p',extra:1}]), [{id:'p',extra:1,...PALETTE[0]}]);
     assert.equal(compareIds('a', 'b'), -1);
+    assert.equal(core.CONTENT_MAX, 200000);
+    assert.equal(core.NAME_MAX, 255);
+    assert.equal(core.BATCH_MAX, 2000);
+    assert.equal(core.clamp(9,0,2), 2);
+    assert.deepEqual(core.checkCardContent(' ok ',core.CONTENT_MAX), {ok:true,content:'ok'});
+    assert.equal(core.contentLimitIssue('xx',1), 'content must be a string under 1 characters');
+    assert.deepEqual(core.chunked([1,2,3],{size:2}), [[1,2],[3]]);
+    assert.equal(schema.PATH_KINDS, core.PATH_KINDS);
+    assert.deepEqual(createServiceContext(), {contentMax:core.CONTENT_MAX,canvasWidth:core.CANVAS_W,canvasHeight:core.CANVAS_H});
+    for (const name of ['DEFAULT_SERVER_PORT','DEFAULT_SERVER_HOST','DRAG_THRESHOLD','ARROW_KEYS','TAG_SCAN_TOTAL_BYTES_MAX'])
+      assert.equal(name in core, false, 'Application settings must not become core domain constants: '+name);
     const handle = {};
     let writes = 0, reads = 0;
     const db = createDatabaseAdapter(handle, { write: async operation => { writes++; return operation(handle); }, read: async operation => { reads++; return operation(handle); } });
@@ -315,7 +334,7 @@ ${client.snapshots}
     join(temporary, "consumer.ts"),
     `
     import type { CardCreateInput, Namespace, ValidationError, CardPositionUpdate, CardData, NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceTruncation, TakenCard, Footprint, SlotPlacement } from '@kozane/core';
-    import { planStow, squashCardPositions, scanTagPositions, groupHitRows, applyPalette, type TagPosition, type TagHit } from '@kozane/core';
+    import { planStow, squashCardPositions, scanTagPositions, groupHitRows, applyPalette, chunked, CARD_WIDTH_RANGE, type BoardRect, type CardContentCheck, type PathKind, type TagPosition, type TagHit } from '@kozane/core';
     import { createServiceContext, withTx, withReadTx, type DB } from '@kozane/core/database';
     import { cards, namespaces } from '@kozane/core/services';
     import { cardTable } from '@kozane/core/schema';
@@ -346,6 +365,16 @@ ${client.snapshots}
     // @ts-expect-error URL/tag source offsets remain numeric.
     const invalidTag: TagPosition = {tag:'tag',index:'0',length:4};
     void tags; void extra; void partitionExtra; void invalidTag;
+    const rect: BoardRect = {posX:1,posY:2,width:120,height:120};
+    const range: [number,number] = CARD_WIDTH_RANGE;
+    const pathKind: PathKind = 'workspace_relative';
+    const content: CardContentCheck = {ok:true,content:'ok'};
+    const chunkValue: number = chunked([{extra:1}],{size:1})[0][0].extra;
+    // @ts-expect-error Board rectangles still require complete dimensions.
+    const invalidRect: BoardRect = {posX:1,posY:2};
+    // @ts-expect-error Stored path kinds remain a closed union.
+    const invalidPathKind: PathKind = 'relative';
+    void rect; void range; void pathKind; void content; void chunkValue; void invalidRect; void invalidPathKind;
     const context = createServiceContext();
     void cards.create(db, context, 'n', input);
     void namespaces.list(db, context).then((rows: Namespace[]) => rows);

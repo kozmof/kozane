@@ -1,5 +1,5 @@
 /** Finding tags in text, with their positions and line excerpts. */
-import { TAG_EXCERPT_CHARS_MAX, TAG_SIGIL } from "../../../../src/lib/constants/tag.js";
+import { TAG_EXCERPT_CHARS_MAX, TAG_SIGIL } from "../constants/tag.js";
 import { scanUrls, type UrlSpan } from "../urls.js";
 import { TAG_RE, normalizeTag } from "./syntax.js";
 

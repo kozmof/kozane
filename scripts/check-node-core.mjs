@@ -50,10 +50,22 @@ if (!process.execArgv.includes(flag)) {
     "lib/urls.js",
     "lib/palette.js",
     "lib/order.js",
+    "lib/constants/limits.js",
+    "lib/constants/domain.js",
   ]) {
     for (const [name, value] of Object.entries(await legacy(path)))
       assert.equal(value, core[name], `Node helper must use public core: ${name}`);
   }
+  for (const [path, names] of [
+    ["canvas", ["CANVAS_W", "CANVAS_H", "SCOPE_AREA_MIN_SIZE", "clamp", "WARP_HINT_MAX_CHARS"]],
+    ["workspace", ["PATH_KINDS", "DEFAULT_LAYER_NAME", "DEFAULT_PARTITION_NAME"]],
+    ["tag", ["TAG_SIGIL", "TAG_SEGMENT_CHARS_MAX", "TAG_LEVELS_MAX", "TAG_EXCERPT_CHARS_MAX"]],
+  ]) {
+    const aliases = await legacy(`lib/constants/${path}.js`);
+    for (const name of names)
+      assert.equal(aliases[name], core[name], `Node constant must use public core: ${name}`);
+  }
+  assert.equal(schema.PATH_KINDS, core.PATH_KINDS);
   for (const name of [
     "cards",
     "glues",

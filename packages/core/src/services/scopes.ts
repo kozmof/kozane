@@ -26,7 +26,7 @@ import { isUniqueConstraintError } from "../../../../src/db/api/utils.js";
 import { requireBoundedName, requireStringArray, optionalNumber } from "./validation.js";
 import { rejectBatch } from "./rejection.js";
 import { ConflictError, NotFoundError, ValidationError } from "./errors.js";
-import { clamp, SCOPE_AREA_MIN_SIZE, type BoardRect } from "../../../../src/lib/constants.js";
+import { clamp, SCOPE_AREA_MIN_SIZE, type BoardRect } from "../constants/index.js";
 function missing(message: string): NotFoundError {
   const error = new NotFoundError("Scope");
   error.message = message;

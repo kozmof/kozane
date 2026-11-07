@@ -25,7 +25,7 @@ import {
 } from "../../../../src/db/api/card.js";
 import { refitStoredCardInTx, type Refit } from "../../../../src/db/api/inventory.js";
 import { squashNamespaceCard, type SquashCardResult } from "../../../../src/db/api/composite.js";
-import { BATCH_MAX, CARD_WIDTH_RANGE } from "../../../../src/lib/constants.js";
+import { BATCH_MAX, CARD_WIDTH_RANGE } from "../constants/index.js";
 import { requireCardInNamespace } from "./guards.js";
 import { NotFoundError } from "./errors.js";
 import { reassignCardsStackOrder } from "../../../../src/db/api/card.js";
@@ -47,7 +47,7 @@ import { withTx } from "../database.js";
 import { addCardInTx } from "../../../../src/db/api/card.js";
 
 import { stowCardsInTx } from "../../../../src/db/api/inventory.js";
-import { checkCardContent, clamp } from "../../../../src/lib/constants.js";
+import { checkCardContent, clamp } from "../constants/index.js";
 import { optionalNumber, optionalId, requireString } from "./validation.js";
 import { rejectBatch } from "./rejection.js";
 

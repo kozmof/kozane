@@ -10,7 +10,7 @@ import { prepareInput } from "./prepare-input.js";
 import type { DB, Tx } from "../database.js";
 import type { ServiceContext } from "./context.js";
 import { ValidationError } from "./errors.js";
-import { clamp } from "../../../../src/lib/constants.js";
+import { clamp } from "../constants/index.js";
 function clampPosition(posX: number, posY: number, context: ServiceContext) {
   return {
     posX: Math.round(clamp(posX, 0, context.canvasWidth)),
@@ -32,7 +32,7 @@ import {
   requireString,
   requireUniqueStrings,
 } from "./validation.js";
-import { INVENTORY_SLOT_MAX } from "../../../../src/lib/constants.js";
+import { INVENTORY_SLOT_MAX } from "../constants/index.js";
 import type { TakenCard } from "../inventory.js";
 import { rejectBatch } from "./rejection.js";
 

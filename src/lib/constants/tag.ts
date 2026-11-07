@@ -1,3 +1,10 @@
+export {
+  TAG_SIGIL,
+  TAG_SEGMENT_CHARS_MAX,
+  TAG_LEVELS_MAX,
+  TAG_EXCERPT_CHARS_MAX,
+} from "@kozane/core";
+
 /**
  * Tag grammar limits and scan budgets.
  *
@@ -6,24 +13,6 @@
  * accepts afterwards. See the note on `TAG_RE` there.
  */
 import { TASKSPACE_SSG_DEPTH_MAX } from "./taskspace.js";
-
-/** The character that opens a tag. See `lib/tag.ts` for the grammar it starts. */
-export const TAG_SIGIL = ":";
-
-/**
- * Maximum characters per tag segment. Reject longer candidates instead of truncating them.
- * This also limits accidental tags in text written without spaces.
- */
-export const TAG_SEGMENT_CHARS_MAX = 64;
-
-/** Maximum tag depth. For example, `:foo:bar:baz` has three levels. */
-export const TAG_LEVELS_MAX = 8;
-
-/**
- * Maximum excerpt length for a tag hit. Keep enough text to identify the match without
- * copying the full source into the index.
- */
-export const TAG_EXCERPT_CHARS_MAX = 200;
 
 /**
  * Maximum displayed hits per kind. Cap cards and file lines separately while retaining totals

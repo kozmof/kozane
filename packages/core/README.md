@@ -26,6 +26,11 @@ Import `scanTagLines`, `tagMatches` and `buildTagTree` from the root entry to us
 tag grammar and grouping rules. It also exports `scanUrls` for text boundaries, `applyPalette`
 for partition colors and `compareIds` for stable ID ordering.
 
+Domain limits and defaults are available from the root entry, including `CONTENT_MAX`,
+`BATCH_MAX`, `CARD_WIDTH_RANGE`, canvas bounds and `PATH_KINDS`. Use `createServiceContext`
+from `@kozane/core/database` to apply configured write limits. The host owns server settings
+and gesture thresholds.
+
 Import resource operations from `@kozane/core/services`. The `validation` and `guards`
 namespaces provide the same checks for host filesystem adapters. The `rejection` namespace
 provides batch validation errors and their messages. Keep host I/O outside these services

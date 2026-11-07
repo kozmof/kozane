@@ -1,9 +1,5 @@
 /** What a tag is: its syntax, normal form, and matching. */
-import {
-  TAG_LEVELS_MAX,
-  TAG_SEGMENT_CHARS_MAX,
-  TAG_SIGIL,
-} from "../../../../src/lib/constants/tag.js";
+import { TAG_LEVELS_MAX, TAG_SEGMENT_CHARS_MAX, TAG_SIGIL } from "../constants/tag.js";
 
 // Bound segment length and depth in the regex to reject oversized tags and limit backtracking
 // when trailing lookaheads fail.

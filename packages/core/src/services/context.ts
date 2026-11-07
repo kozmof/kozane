@@ -5,7 +5,7 @@ import {
   CONTENT_MAX_RANGE,
   CANVAS_WIDTH_RANGE,
   CANVAS_HEIGHT_RANGE,
-} from "../../../../src/lib/constants.js";
+} from "../constants/index.js";
 import { ValidationError } from "./errors.js";
 
 export interface ServiceContext {

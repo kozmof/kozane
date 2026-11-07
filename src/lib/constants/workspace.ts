@@ -1,15 +1,5 @@
-/**
- * Workspace defaults written by `kozane init`, plus the default host and ports for
- * `kozane open` and `kozane net ssg preview`.
- */
-/**
- * Supported interpretations of stored taskspace paths. Relative paths use the workspace root
- * for portability. Absolute paths support taskspaces outside it.
- *
- * Share this list between the database schema and path resolver.
- */
-export const PATH_KINDS = ["workspace_relative", "absolute"] as const;
-export type PathKind = (typeof PATH_KINDS)[number];
+export { PATH_KINDS, DEFAULT_LAYER_NAME, DEFAULT_PARTITION_NAME } from "@kozane/core";
+export type { PathKind } from "@kozane/core";
 
 /**
  * Default base directory for new taskspaces, relative to the workspace root.
@@ -22,11 +12,6 @@ export const DEFAULT_TASKSPACE_DIR = "taskspaces";
  * namespace under `defaultDir`, unless `namespacePaths` overrides the location.
  */
 export const DEFAULT_TASKSPACE_NAMESPACE_DIRS = true;
-
-/** Name of the default layer every namespace is created with. */
-export const DEFAULT_LAYER_NAME = "Base";
-/** Name of the default partition every namespace is created with. */
-export const DEFAULT_PARTITION_NAME = "General";
 export const DEFAULT_SERVER_HOST = "127.0.0.1";
 /**
  * Default port for `kozane open`. Picked to stay clear of ports popular tools take by

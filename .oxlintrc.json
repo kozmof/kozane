@@ -53,7 +53,7 @@
     {
       "files": ["packages/core/src/**"],
       "rules": {
-        "eslint/no-restricted-imports": ["error", { "patterns": [{ "group": ["node:*", "@libsql/client", "@sveltejs/kit", "@sveltejs/kit/**", "$app/**", "$env/**", "**/lib/server/**", "**/db/internal/**", "**/routes/**", "**/cli/**"], "message": "Core runtime must stay driver-independent and browser-safe." }] }],
+        "eslint/no-restricted-imports": ["error", { "patterns": [{ "group": ["node:*", "@libsql/client", "@sveltejs/kit", "@sveltejs/kit/**", "$app/**", "$env/**", "**/lib/server/**", "**/db/internal/**", "**/routes/**", "**/cli/**"], "message": "Core runtime must stay driver-independent and browser-safe." }, { "group": ["**/src/lib/**"], "message": "Core imports its owned helpers instead of application compatibility modules." }] }],
         "eslint/no-restricted-globals": ["error", "process", "Buffer", "require", "__dirname", "__filename"]
       }
     },

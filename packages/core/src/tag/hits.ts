@@ -1,5 +1,5 @@
 /** Tag hits in cards and files: keys, caps, and grouping for display. */
-import { TAG_SIGIL } from "../../../../src/lib/constants/tag.js";
+import { TAG_SIGIL } from "../constants/tag.js";
 import type { TagSource } from "../types.js";
 
 /**

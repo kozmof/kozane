@@ -1,4 +1,4 @@
-import { CANVAS_W } from "../../../src/lib/constants/canvas.js";
+import { CANVAS_W } from "./constants/canvas.js";
 import { INVENTORY_SLOT_MAX } from "./constants/inventory.js";
 import { cardSpan, lastCell, planStow } from "./inventory.js";
 

@@ -1,5 +1,5 @@
 import { ValidationError } from "./errors.js";
-import { BATCH_MAX, NAME_MAX } from "../../../../src/lib/constants.js";
+import { BATCH_MAX, NAME_MAX } from "../constants/index.js";
 
 type JsonRecord = Record<string, unknown>;
 

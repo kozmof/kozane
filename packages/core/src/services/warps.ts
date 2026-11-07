@@ -4,7 +4,7 @@ import { prepareInput } from "./prepare-input.js";
 import type { DB, Tx } from "../database.js";
 import type { ServiceContext } from "./context.js";
 import { ValidationError } from "./errors.js";
-import { clamp } from "../../../../src/lib/constants.js";
+import { clamp } from "../constants/index.js";
 function clampPosition(posX: number, posY: number, context: ServiceContext) {
   return {
     posX: Math.round(clamp(posX, 0, context.canvasWidth)),

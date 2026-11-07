@@ -18,7 +18,7 @@ export type { TreemapSnapshot, TreemapPartition } from "./services/map.js";
 
 export * from "./inventory.js";
 export * from "./squash.js";
-export * from "./constants/inventory.js";
+export * from "./constants/index.js";
 
 export * from "./tag/syntax.js";
 export * from "./tag/scan.js";
