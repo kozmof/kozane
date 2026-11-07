@@ -1,3 +1,4 @@
+import { checkCoreRuntime } from "./check-core-runtime.mjs";
 import assert from "node:assert/strict";
 import {
   readFileSync,
@@ -89,6 +90,10 @@ export function checkSvelteKit({ consumer, run, browserOutput }) {
       root,
     );
     assert.equal(existsSync(join(root, "node_modules/@pandacss/dev")), false);
+    const manifest = JSON.parse(
+      readFileSync(join(consumer, "node_modules/@kozane/client/package.json"), "utf8"),
+    );
+    checkCoreRuntime({ consumer: root, run, manifest });
     cpSync(new URL("sveltekit/svelte.config.js", import.meta.url), join(root, "svelte.config.js"));
     cpSync(new URL("sveltekit/vite.config.js", import.meta.url), join(root, "vite.config.js"));
     mkdirSync(join(root, "src"));
@@ -97,6 +102,10 @@ export function checkSvelteKit({ consumer, run, browserOutput }) {
       recursive: true,
     });
     cpSync(new URL("view-fixture.ts", import.meta.url), join(root, "src/view-fixture.ts"));
+    cpSync(
+      new URL("verify-core-identity.mjs", import.meta.url),
+      join(root, "src/verify-core-identity.mjs"),
+    );
     run(process.execPath, [join(root, "node_modules/@sveltejs/kit/svelte-kit.js"), "sync"], root);
     writeFileSync(
       join(root, "tsconfig.json"),

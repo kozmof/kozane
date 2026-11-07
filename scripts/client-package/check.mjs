@@ -18,6 +18,8 @@ const permitted = (name) =>
   name.startsWith("svelte/");
 /** Inspect and compile only the installed tarball, without source aliases. */
 export async function checkClientPackage({ consumer, run, manifest, browserOutput }) {
+  const { checkCoreRuntime } = await import("./check-core-runtime.mjs");
+  checkCoreRuntime({ consumer, run, manifest });
   const installed = join(consumer, "node_modules/@kozane/client");
   function inspect(file) {
     const text = readFileSync(file, "utf8");
@@ -186,6 +188,10 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
   const app = join(consumer, "client-app-source");
   mkdirSync(app);
   copyFileSync(new URL("styles-browser.ts", import.meta.url), join(app, "main.ts"));
+  copyFileSync(
+    new URL("verify-core-identity.mjs", import.meta.url),
+    join(app, "verify-core-identity.mjs"),
+  );
   writeFileSync(
     join(app, "index.html"),
     '<!doctype html><meta charset="utf-8"><title>Packed client styles</title><link rel="icon" href="data:,"><body>' +

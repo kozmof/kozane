@@ -84,3 +84,16 @@ and core release checks run packed candidate checks, the production style browse
 case and the restoration browser suite. Retained current-ID corpus outcomes also
 pass through the packed client snapshot, tags and map readers. Install the pinned
 Chromium runtime and retain full Git history before running either release command.
+
+## Shared core runtime
+
+Packed checks inspect each consumer's installed runtime dependencies and required peers.
+They require the expected core/client versions and an exact core peer, and reject a
+second physical core installation even when both copies have the same version. Multiple
+symlinks to the same physical package are accepted. Node checks also compare public ESM
+resolution and module identity from the application and client locations.
+
+Both production browser fixtures require the client to recognize a validation error
+created by the application's public core import before reporting hydration readiness.
+This check exercises the bundled runtime through public entries without network calls.
+The packed client development dependency must match its exact core peer.

@@ -24,6 +24,7 @@ export function prepareClientConsumer({ consumer, repository, run, coreReference
     ),
   );
   assert.equal(manifest.peerDependencies["@kozane/core"], coreVersion);
+  assert.equal(manifest.devDependencies["@kozane/core"], coreVersion);
   assert.deepEqual(Object.keys(manifest.dependencies), ["@kozmof/reed"]);
   const svelte = JSON.parse(
     readFileSync(join(repository, "node_modules/svelte/package.json"), "utf8"),

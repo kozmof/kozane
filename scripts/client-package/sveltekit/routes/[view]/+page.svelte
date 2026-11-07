@@ -1,5 +1,6 @@
 <script lang="ts">
   import "@kozane/client/styles.css";
+  import { verifyCoreIdentity } from "../../verify-core-identity.mjs";
   import { onMount } from "svelte";
   import { beforeNavigate, goto } from "$app/navigation";
   import { createDemoNavigation } from "@kozane/client";
@@ -14,7 +15,7 @@
     replace: url => { void goto(url, { replaceState: true }); },
   });
   const doc = new EditorDocument("Kit editor 日本語");
-  onMount(() => { ready = true; });
+  onMount(() => { void verifyCoreIdentity().then(() => { ready = true; }); });
 </script>
 
 <svelte:head><title>Packed Kit {data.view}</title></svelte:head>

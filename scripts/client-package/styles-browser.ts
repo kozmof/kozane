@@ -1,3 +1,4 @@
+import { verifyCoreIdentity } from "./verify-core-identity.mjs";
 import "@kozane/client/styles.css";
 import { hydrate, tick } from "svelte";
 import { EditorDocument, EditorSurface, NamespacesView } from "@kozane/client/ui";
@@ -16,5 +17,6 @@ hydrate(NamespacesView, {
     navigation: createDemoNavigation({ base: "/packed" }),
   },
 });
+await verifyCoreIdentity();
 await tick();
 document.body.dataset.packagedClient = "ready";
