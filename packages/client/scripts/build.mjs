@@ -11,7 +11,8 @@ runPanda(root, packageRoot, ["codegen"]);
 const staging = path.join(packageRoot, "tmp/source");
 await fs.rm(staging, { recursive: true, force: true });
 await fs.mkdir(staging, { recursive: true });
-const inputSource = () => readFileSync(path.join(root, "src/services/inputs.ts"), "utf8");
+const inputSource = () =>
+  readFileSync(path.join(root, "packages/core/src/services/inputs.ts"), "utf8");
 let inputDeclarations;
 const queue = [],
   visited = new Set();

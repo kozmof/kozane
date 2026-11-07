@@ -1,1 +1,1 @@
-export * from "../../../src/services/index.js";
+export * from "./services/index.js";

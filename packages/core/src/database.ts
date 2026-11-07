@@ -50,7 +50,7 @@ export async function withMigration(db: DB, prepare: MigrationPreparation): Prom
   await hooks.migrate(prepare);
 }
 
-export { createServiceContext, type ServiceContext } from "../../../src/services/context.js";
+export { createServiceContext, type ServiceContext } from "./services/context.js";
 
 export {
   normalizeDatabaseFailure,

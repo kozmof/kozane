@@ -55,6 +55,12 @@ try {
   assert.ok(entries.has("package/LICENCE"));
   assert.ok(entries.has("package/README.md"));
   assert.ok(
+    [...entries]
+      .filter((path) => path.startsWith("package/dist/src/services/"))
+      .every((path) => /\/errors\.(?:js|d\.ts)$/.test(path)),
+    "Core must own services instead of compiling Node compatibility implementations",
+  );
+  assert.ok(
     [...entries].every(
       (path) => !path.endsWith("/ui-config.js") && !path.endsWith("/ui-config.d.ts"),
     ),

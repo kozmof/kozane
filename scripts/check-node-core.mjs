@@ -16,6 +16,7 @@ if (!process.execArgv.includes(flag)) {
   const core = await import(coreUrl);
   const database = await import(import.meta.resolve("@kozane/core/database", parent));
   const schema = await import(import.meta.resolve("@kozane/core/schema", parent));
+  const services = await import(import.meta.resolve("@kozane/core/services", parent));
   let coreRoot = dirname(fileURLToPath(coreUrl));
   for (;;) {
     try {
@@ -37,6 +38,34 @@ if (!process.execArgv.includes(flag)) {
   const legacyErrors = await legacy("services/errors.js");
   const legacyUtils = await legacy("db/api/utils.js");
   const legacyFailures = await legacy("db/failures.js");
+  const legacyServices = await legacy("services/index.js");
+  for (const name of [
+    "cards",
+    "glues",
+    "layers",
+    "partitions",
+    "scopes",
+    "warps",
+    "inventories",
+    "namespaces",
+    "snapshot",
+    "tags",
+    "map",
+    "warpDirectory",
+    "cardBatch",
+    "validation",
+    "guards",
+    "rejection",
+  ]) {
+    assert.equal(legacyServices[name], services[name]);
+    const filename = name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    const aliases = await legacy(`services/${filename}.js`);
+    for (const [key, value] of Object.entries(aliases)) assert.equal(value, services[name][key]);
+  }
+  assert.equal(
+    (await legacy("services/context.js")).createServiceContext,
+    database.createServiceContext,
+  );
   assert.equal(legacyDb.createDatabaseAdapter, database.createDatabaseAdapter);
   assert.equal(legacyDb.withTx, database.withTx);
   assert.equal(legacyDb.withReadTx, database.withReadTx);
@@ -63,6 +92,6 @@ if (!process.execArgv.includes(flag)) {
   assert.equal(await legacyDb.withTx(db, async (tx) => tx), handle);
   assert.throws(() => legacyDb.createServiceContext({ contentMax: 0 }), core.ValidationError);
   console.log(
-    "Node package uses the expected public core schema, adapter state and error instances.",
+    "Node package uses the expected public core schema, services, adapter state and error instances.",
   );
 }

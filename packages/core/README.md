@@ -14,6 +14,11 @@ The host supplies its database driver and transaction hooks through the adapter 
 The package declares Drizzle and UUID as runtime dependencies and includes JavaScript and
 TypeScript declarations. Private module paths are unsupported.
 
+Import resource operations from `@kozane/core/services`. The `validation` and `guards`
+namespaces provide the same checks for host filesystem adapters. The `rejection` namespace
+provides batch validation errors and their messages. Keep host I/O outside these services
+and pass the database adapter and service context to each operation.
+
 Migration records preserve the journal ID, tag, index, timestamp, journal version and
 breakpoint flag. Each record contains its original SQL, SHA-256 hash and ordered statements.
 Statements split only at Drizzle breakpoint markers, preserving trigger bodies. The
