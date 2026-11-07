@@ -39,7 +39,18 @@ if (!process.execArgv.includes(flag)) {
   const legacyUtils = await legacy("db/api/utils.js");
   const legacyFailures = await legacy("db/failures.js");
   const legacyServices = await legacy("services/index.js");
-  for (const path of ["lib/inventory.js", "lib/squash.js", "lib/constants/inventory.js"]) {
+  for (const path of [
+    "lib/inventory.js",
+    "lib/squash.js",
+    "lib/constants/inventory.js",
+    "lib/tag/syntax.js",
+    "lib/tag/scan.js",
+    "lib/tag/hits.js",
+    "lib/tag/tree.js",
+    "lib/urls.js",
+    "lib/palette.js",
+    "lib/order.js",
+  ]) {
     for (const [name, value] of Object.entries(await legacy(path)))
       assert.equal(value, core[name], `Node helper must use public core: ${name}`);
   }

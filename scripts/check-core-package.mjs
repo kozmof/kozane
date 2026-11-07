@@ -203,11 +203,27 @@ ${client.snapshots}
       ["--input-type=module", "--eval", `await import(${JSON.stringify(entry)})`],
       temporary,
     );
-  for (const path of ["inventory", "squash", "constants/inventory"]) {
+  for (const path of [
+    "inventory",
+    "squash",
+    "constants/inventory",
+    "tag/syntax",
+    "tag/scan",
+    "tag/hits",
+    "tag/tree",
+    "urls",
+    "palette",
+    "order",
+  ]) {
+    assert.ok(
+      entries.has(`package/dist/packages/core/src/${path}.js`),
+      `Missing owned helper: ${path}`,
+    );
+    if (!entries.has(`package/dist/src/lib/${path}.js`)) continue;
     const compatibility = readFileSync(join(installed, "dist/src/lib", `${path}.js`), "utf8");
     assert.match(
       compatibility,
-      /^export \{[\s\S]*\} from "@kozane\/core";\s*$/,
+      /^export \{[\w\s,]*\} from "@kozane\/core";\s*$/,
       `Core must own helper implementation: ${path}`,
     );
   }
@@ -226,7 +242,7 @@ ${client.snapshots}
     join(temporary, "runtime.mjs"),
     `
     import assert from 'node:assert/strict';
-    import { ValidationError, domainErrorCode, MigrationHistoryError as RootMigrationHistoryError, cardSpan, planStow, splitCardContent, squashInventorySlots, INVENTORY_COLUMNS } from '@kozane/core';
+    import { ValidationError, domainErrorCode, MigrationHistoryError as RootMigrationHistoryError, cardSpan, planStow, splitCardContent, squashInventorySlots, INVENTORY_COLUMNS, normalizeTag, tagMatches, scanTagPositions, scanTagLines, buildTagTree, scanUrls, PALETTE, applyPalette, compareIds } from '@kozane/core';
     import { createDatabaseAdapter, withTx, withReadTx, createServiceContext } from '@kozane/core/database';
     import * as schema from '@kozane/core/schema';
     import * as services from '@kozane/core/services';
@@ -243,6 +259,15 @@ ${client.snapshots}
     assert.deepEqual(planStow([], [{cardId:'a', span:1}, {cardId:'b', span:1}], null), [{cardId:'a',slot:0}, {cardId:'b',slot:1}]);
     assert.deepEqual(splitCardContent('one. two。three'), ['one', 'two', 'three']);
     assert.deepEqual(squashInventorySlots(['one', 'two']), [0, 1]);
+    assert.equal(normalizeTag('A\u030A'), 'å');
+    assert.equal(tagMatches('FOO', 'foo:bar'), true);
+    assert.equal(tagMatches('foo', 'foobar'), false);
+    assert.deepEqual(scanTagPositions('https://example.test/:hidden :visible').map(hit => hit.tag), ['visible']);
+    assert.deepEqual(scanTagLines(':Foo:Bar').map(hit => hit.tag), ['foo:bar']);
+    assert.deepEqual(buildTagTree([{tag:'foo:bar', source:{kind:'card',cardId:'c'},excerpt:''}])[0].total, {cards:1,files:0});
+    assert.deepEqual(scanUrls('https://example.test.'), [{url:'https://example.test',index:0}]);
+    assert.deepEqual(applyPalette([{id:'p',extra:1}]), [{id:'p',extra:1,...PALETTE[0]}]);
+    assert.equal(compareIds('a', 'b'), -1);
     const handle = {};
     let writes = 0, reads = 0;
     const db = createDatabaseAdapter(handle, { write: async operation => { writes++; return operation(handle); }, read: async operation => { reads++; return operation(handle); } });
@@ -290,7 +315,7 @@ ${client.snapshots}
     join(temporary, "consumer.ts"),
     `
     import type { CardCreateInput, Namespace, ValidationError, CardPositionUpdate, CardData, NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceTruncation, TakenCard, Footprint, SlotPlacement } from '@kozane/core';
-    import { planStow, squashCardPositions } from '@kozane/core';
+    import { planStow, squashCardPositions, scanTagPositions, groupHitRows, applyPalette, type TagPosition, type TagHit } from '@kozane/core';
     import { createServiceContext, withTx, withReadTx, type DB } from '@kozane/core/database';
     import { cards, namespaces } from '@kozane/core/services';
     import { cardTable } from '@kozane/core/schema';
@@ -314,6 +339,13 @@ ${client.snapshots}
     // @ts-expect-error Inventory footprint spans remain numeric.
     const invalidFootprint: Footprint = {cardId:'c',slot:0,span:'1'};
     void placements; void invalidFootprint;
+    const tags: TagPosition[] = scanTagPositions(':tag');
+    declare const hits: (TagHit & {extra:number})[];
+    const extra: number = groupHitRows(hits)[0].hits[0].extra;
+    const partitionExtra: number = applyPalette([{id:'p',extra:1}])[0].extra;
+    // @ts-expect-error URL/tag source offsets remain numeric.
+    const invalidTag: TagPosition = {tag:'tag',index:'0',length:4};
+    void tags; void extra; void partitionExtra; void invalidTag;
     const context = createServiceContext();
     void cards.create(db, context, 'n', input);
     void namespaces.list(db, context).then((rows: Namespace[]) => rows);

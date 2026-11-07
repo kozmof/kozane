@@ -4,7 +4,7 @@ Kozane database contracts, schema and domain services for Node and browsers.
 
 | Export                    | Contents                                                                  |
 | ------------------------- | ------------------------------------------------------------------------- |
-| `@kozane/core`            | Domain types, errors and inventory/squash layout helpers                  |
+| `@kozane/core`            | Domain types, errors and shared domain helpers                            |
 | `@kozane/core/database`   | Adapter factory, branded handles, transaction helpers and service context |
 | `@kozane/core/schema`     | Drizzle tables and relations                                              |
 | `@kozane/core/services`   | Domain services and input validation                                      |
@@ -21,6 +21,10 @@ The root entry also exports inventory geometry and layout helpers such as `cardS
 `planStow`, plus card splitting and squash placement helpers. Use these for local placement
 previews that follow the same rules as database services. Mutations remain in
 `@kozane/core/services`.
+
+Import `scanTagLines`, `tagMatches` and `buildTagTree` from the root entry to use the shared
+tag grammar and grouping rules. It also exports `scanUrls` for text boundaries, `applyPalette`
+for partition colors and `compareIds` for stable ID ordering.
 
 Import resource operations from `@kozane/core/services`. The `validation` and `guards`
 namespaces provide the same checks for host filesystem adapters. The `rejection` namespace
