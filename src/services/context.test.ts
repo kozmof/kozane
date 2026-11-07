@@ -1,6 +1,25 @@
 import { expect, it } from "vitest";
 import { createServiceContext } from "./context";
 import { ValidationError } from "./errors";
+
+it.each(["canvasWidth", "canvasHeight"] as const)(
+  "preserves workspace bounds and validation messages for %s",
+  (field) => {
+    for (const value of [400, 400.5, 20_000]) {
+      expect(createServiceContext({ [field]: value })[field]).toBe(value);
+    }
+    for (const value of [399, 20_001]) {
+      expect(() => createServiceContext({ [field]: value })).toThrow(
+        `ui.${field} must be between 400 and 20000`,
+      );
+    }
+    for (const value of [NaN, Infinity, -Infinity]) {
+      expect(() => createServiceContext({ [field]: value })).toThrow(
+        `ui.${field} must be a number`,
+      );
+    }
+  },
+);
 it("creates an immutable independent context with workspace defaults", () => {
   expect(createServiceContext()).toEqual({
     contentMax: 200_000,

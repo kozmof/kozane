@@ -22,8 +22,7 @@ import {
 } from "../db/api/card.js";
 import { refitStoredCardInTx, type Refit } from "../db/api/inventory.js";
 import { squashNamespaceCard, type SquashCardResult } from "../db/api/composite.js";
-import { CARD_WIDTH_RANGE } from "../lib/ui-config.js";
-import { BATCH_MAX } from "../lib/constants.js";
+import { BATCH_MAX, CARD_WIDTH_RANGE } from "../lib/constants.js";
 import { requireCardInNamespace } from "./guards.js";
 import { NotFoundError } from "./errors.js";
 import { reassignCardsStackOrder } from "../db/api/card.js";

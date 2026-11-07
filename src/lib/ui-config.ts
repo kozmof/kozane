@@ -1,4 +1,13 @@
-import { ARROW_KEYS, CANVAS_W, CANVAS_H, CONTENT_MAX } from "./constants.js";
+import {
+  ARROW_KEYS,
+  CANVAS_W,
+  CANVAS_H,
+  CONTENT_MAX,
+  CARD_WIDTH_RANGE,
+  CONTENT_MAX_RANGE,
+  CANVAS_WIDTH_RANGE,
+  CANVAS_HEIGHT_RANGE,
+} from "./constants.js";
 
 export type NewCardPlacement = "grid" | "vertical-list";
 
@@ -109,7 +118,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
  * Allowed card widths. Apply the same bounds to `ui.defaultCardWidth` and each card's
  * `width` so configuration and board resizing accept the same sizes.
  */
-export const CARD_WIDTH_RANGE: [number, number] = [40, 1200];
+export { CARD_WIDTH_RANGE } from "./constants.js";
 
 export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = {
   defaultFontSize: [4, 128],
@@ -118,13 +127,13 @@ export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = 
   zoomStep: [0.01, 1],
   leftPanelWidth: [80, 800],
   warpMarkerSize: [8, 64],
-  canvasWidth: [400, 20000],
-  canvasHeight: [400, 20000],
+  canvasWidth: CANVAS_WIDTH_RANGE,
+  canvasHeight: CANVAS_HEIGHT_RANGE,
   /**
    * Bounds for the configurable card text limit. Higher limits increase snapshot payloads
    * because polling includes complete card text.
    */
-  contentMax: [100, 1_000_000],
+  contentMax: CONTENT_MAX_RANGE,
 };
 
 export const UI_BOOL_FIELDS = [

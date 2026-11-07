@@ -91,4 +91,8 @@ apply migrations, validate history/schema and exercise service writes, nullable 
 missing reads and transaction-bound rollback. Driver dependencies belong to the isolated
 consumer and are not added to core runtime dependencies.
 
+Write validation and workspace configuration share portable domain bounds for card width,
+content limits and canvas dimensions. Core services use these bounds without importing
+presentation configuration. Packed checks reject UI configuration files in the core archive.
+
 The remaining workspace conversion is being completed under [Phase 3](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

@@ -54,6 +54,12 @@ try {
   );
   assert.ok(entries.has("package/LICENCE"));
   assert.ok(entries.has("package/README.md"));
+  assert.ok(
+    [...entries].every(
+      (path) => !path.endsWith("/ui-config.js") && !path.endsWith("/ui-config.d.ts"),
+    ),
+    "Core must not ship presentation configuration",
+  );
   assert.deepEqual(Object.keys(candidate.dependencies).sort(), ["drizzle-orm", "uuid"]);
   const drizzleVersion = candidate.dependencies["drizzle-orm"];
   const uuidVersion = candidate.dependencies.uuid;

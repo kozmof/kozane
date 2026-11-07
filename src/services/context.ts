@@ -1,5 +1,11 @@
-import { CONTENT_MAX, CANVAS_W, CANVAS_H } from "../lib/constants.js";
-import { UI_NUM_RANGES } from "../lib/ui-config.js";
+import {
+  CONTENT_MAX,
+  CANVAS_W,
+  CANVAS_H,
+  CONTENT_MAX_RANGE,
+  CANVAS_WIDTH_RANGE,
+  CANVAS_HEIGHT_RANGE,
+} from "../lib/constants.js";
 import { ValidationError } from "./errors.js";
 
 export interface ServiceContext {
@@ -10,7 +16,7 @@ export interface ServiceContext {
 /** Match workspace numeric validation, including finite fractional overrides. */
 export function createServiceContext(overrides: Partial<ServiceContext> = {}): ServiceContext {
   const contentMax = overrides.contentMax === undefined ? CONTENT_MAX : overrides.contentMax;
-  const [minimum, maximum] = UI_NUM_RANGES.contentMax!;
+  const [minimum, maximum] = CONTENT_MAX_RANGE;
   if (typeof contentMax !== "number" || !Number.isFinite(contentMax)) {
     throw new ValidationError("ui.contentMax must be a number");
   }
@@ -19,11 +25,10 @@ export function createServiceContext(overrides: Partial<ServiceContext> = {}): S
   }
   const canvasWidth = overrides.canvasWidth === undefined ? CANVAS_W : overrides.canvasWidth;
   const canvasHeight = overrides.canvasHeight === undefined ? CANVAS_H : overrides.canvasHeight;
-  for (const [field, value] of [
-    ["canvasWidth", canvasWidth],
-    ["canvasHeight", canvasHeight],
+  for (const [field, value, [lo, hi]] of [
+    ["canvasWidth", canvasWidth, CANVAS_WIDTH_RANGE],
+    ["canvasHeight", canvasHeight, CANVAS_HEIGHT_RANGE],
   ] as const) {
-    const [lo, hi] = UI_NUM_RANGES[field]!;
     if (typeof value !== "number" || !Number.isFinite(value))
       throw new ValidationError(`ui.${field} must be a number`);
     if (value < lo || value > hi)
