@@ -18,6 +18,23 @@ const shared = {
     {
       name: "shared-client-boundary",
       enforce: "pre",
+      generateBundle(_options, bundle) {
+        if (this.environment.config.consumer !== "server") return;
+        for (const chunk of Object.values(bundle)) {
+          if (chunk.type !== "chunk") continue;
+          for (const id of Object.keys(chunk.modules)) {
+            const normalized = id.replaceAll("\\", "/");
+            if (
+              normalized.includes("/packages/core/") ||
+              normalized.includes("/node_modules/@kozane/core/")
+            ) {
+              throw new Error(
+                "Client SSR must use the installed core runtime rather than bundle " + id,
+              );
+            }
+          }
+        }
+      },
       resolveId(source, importer) {
         // Rolldown injects createRequire into its server bundle runtime.
         if (
@@ -58,7 +75,8 @@ async function main() {
 
   await build({
     ...shared,
-    ssr: { external: ["svelte", "@kozmof/reed"] },
+    // Keep the same shared core runtime as production and the packed SSR consumer.
+    ssr: { external: ["svelte", "@kozmof/reed", "@kozane/core"] },
     build: {
       outDir: "tmp/client-ssr",
       emptyOutDir: true,
