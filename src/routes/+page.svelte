@@ -5,7 +5,7 @@
   import { untrack } from "svelte";
   import { StaticBackend } from "$lib/backend/static-backend.js";
   import { HttpBackend } from "$lib/backend/http-backend.js";
-  import { NamespacesView } from "$lib/client/namespaces/index.js";
+  import { NamespacesView } from "../../packages/client/src/namespaces/index.js";
   import { css } from "styled-system/css";
 
   let { data, form, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();

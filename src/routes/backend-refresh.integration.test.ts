@@ -19,7 +19,7 @@ import {
   type TagsResult,
   type MapResult,
 } from "../lib/backend/index.js";
-import { TaskspaceTreeState } from "../lib/client/board/lib/taskspace-tree.svelte.js";
+import { TaskspaceTreeState } from "../../packages/client/src/board/lib/taskspace-tree.svelte.js";
 import { startSnapshotView } from "../lib/backend/snapshot-view.js";
 import { startDatasetView } from "../lib/backend/dataset-view.js";
 import { GET as changes } from "./api/changes/+server.js";

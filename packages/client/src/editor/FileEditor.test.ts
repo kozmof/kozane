@@ -1,4 +1,4 @@
-import { httpEditorContext } from "../../../test-utils/editor-context.js";
+import { httpEditorContext } from "../../../../src/test-utils/editor-context.js";
 import type { TaskspaceFileData } from "$lib/backend/contract.js";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";

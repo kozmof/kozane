@@ -49,7 +49,7 @@ async function main() {
       outDir: "tmp/client-browser",
       emptyOutDir: true,
       lib: {
-        entry: "src/lib/client/index.ts",
+        entry: "packages/client/src/index.ts",
         formats: ["es"],
         fileName: () => "client.js",
       },

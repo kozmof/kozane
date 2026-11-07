@@ -6,7 +6,7 @@ import {
   readNullableString,
   readString,
   readStringArray,
-} from "../../../lib/client/board/lib/response.js";
+} from "../../../../packages/client/src/board/lib/response.js";
 
 describe("readString", () => {
   it("reads a string field", () => {

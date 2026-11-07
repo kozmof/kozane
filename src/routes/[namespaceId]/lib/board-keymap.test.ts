@@ -6,7 +6,7 @@ import {
   runKeyBindings,
   type BoardKeyEvent,
   type KeyBinding,
-} from "../../../lib/client/board/lib/board-keymap.js";
+} from "../../../../packages/client/src/board/lib/board-keymap.js";
 
 function keyEvent(key: string, shiftKey = false): BoardKeyEvent & { prevented: boolean } {
   const event = {

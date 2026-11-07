@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import KozaneCard from "../../../lib/client/board/components/KozaneCard.svelte";
+import KozaneCard from "../../../../packages/client/src/board/components/KozaneCard.svelte";
 
 const color = {
   id: "partition-1",

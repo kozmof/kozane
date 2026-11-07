@@ -10,7 +10,7 @@
   import { HttpBackend } from "$lib/backend/http-backend.js";
   import { StaticBackend } from "$lib/backend/static-backend.js";
   import { browserPollLifecycle } from "$lib/backend/workspace-poller.js";
-  import { BoardView } from "$lib/client/board/index.js";
+  import { BoardView } from "../../../packages/client/src/board/index.js";
 
   let { data, navigation = createNodeNavigation({ base, boardTrailingSlash: () => page.url.pathname.endsWith("/") }), routing = createAppNavigationDriver(), preferences = createSessionPreferences() }: PageProps & { navigation?: NavigationAdapter; routing?: NavigationDriver; preferences?: PreferenceStorage } = $props();
   const staticExport = untrack(() => data.staticBackendData !== undefined || (data.readonly && !data.backendCapabilities));

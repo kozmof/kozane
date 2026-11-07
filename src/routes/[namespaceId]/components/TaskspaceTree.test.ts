@@ -2,8 +2,8 @@ import { httpEditorContext, staticEditorContext } from "../../../test-utils/edit
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import TaskspaceTree from "../../../lib/client/board/components/TaskspaceTree.svelte";
-import { TaskspaceTreeState } from "../../../lib/client/board/lib/taskspace-tree.svelte.js";
+import TaskspaceTree from "../../../../packages/client/src/board/components/TaskspaceTree.svelte";
+import { TaskspaceTreeState } from "../../../../packages/client/src/board/lib/taskspace-tree.svelte.js";
 import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "$lib/constants";
 import type { TaskspaceFileTree } from "$lib/types";
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CanvasViewport } from "../../../lib/client/board/lib/canvas-viewport.js";
+import { CanvasViewport } from "../../../../packages/client/src/board/lib/canvas-viewport.js";
 
 /** A scroll container 400×300 on screen at (10, 20), over a 2000×1600 scrolled area. */
 function container() {

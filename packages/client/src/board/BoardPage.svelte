@@ -30,7 +30,7 @@
   import { PendingFrame } from "./lib/pending-frame.svelte.js";
   import { clampZoom } from "$lib/constants";
   import ErrorBanner from "./components/ErrorBanner.svelte";
-  import { FileEditor, EditorSession } from "$lib/client/editor/index.js";
+  import { FileEditor, EditorSession } from "../editor/index.js";
   import FilePalette from "./components/FilePalette.svelte";
   import FileBrowser from "./components/FileBrowser.svelte";
   import type { FileManagementActions } from "./lib/file-management.js";

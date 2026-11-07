@@ -9,7 +9,7 @@
   import { HttpBackend } from "$lib/backend/http-backend.js";
   import { browserPollLifecycle } from "$lib/backend/workspace-poller.js";
   import { normalizeTag } from "$lib/tag";
-  import { MapView } from "$lib/client/map/index.js";
+  import { MapView } from "../../../packages/client/src/map/index.js";
 
   let { data, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
   const httpBackend = untrack(() => data.backendCapabilities

@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { tick } from "svelte";
-import FileBrowser from "../../../lib/client/board/components/FileBrowser.svelte";
-import { TaskspaceTreeState } from "../../../lib/client/board/lib/taskspace-tree.svelte.js";
+import FileBrowser from "../../../../packages/client/src/board/components/FileBrowser.svelte";
+import { TaskspaceTreeState } from "../../../../packages/client/src/board/lib/taskspace-tree.svelte.js";
 import type { TaskspaceSummary } from "$lib/types";
 
 const scopes = [

@@ -10,9 +10,9 @@ import {
   sameBoardRect,
   scopeAreaChanges,
   type CardIdsInRect,
-} from "../../../lib/client/board/lib/scope-areas.js";
+} from "../../../../packages/client/src/board/lib/scope-areas.js";
 import { SCOPE_AREA_MIN_SIZE } from "$lib/constants";
-import type { WorldRect } from "../../../lib/client/board/lib/namespace-page.js";
+import type { WorldRect } from "../../../../packages/client/src/board/lib/namespace-page.js";
 
 function area(id: string, scopeId: string, posX: number, posY = 0): ScopeArea {
   return { id, scopeId, namespaceId: "ns", posX, posY, width: 100, height: 100 };

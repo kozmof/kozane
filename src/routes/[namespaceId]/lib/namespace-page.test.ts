@@ -34,7 +34,7 @@ import {
   resizedRect,
   selectionRectFromPoints,
   worldRectToScreenRect,
-} from "../../../lib/client/board/lib/namespace-page.js";
+} from "../../../../packages/client/src/board/lib/namespace-page.js";
 import { ARROW_KEYS } from "../../../lib/constants.js";
 import type { GlueRel } from "$db/api/types.js";
 import type { CardData } from "$lib/types.js";

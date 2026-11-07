@@ -44,6 +44,8 @@ function destination(file) {
   const relative = slash(path.relative(root, file));
   if (relative.startsWith("src/lib/server/"))
     throw new Error(`Client cannot contain server modules: ${relative}`);
+  if (relative.startsWith("packages/client/src/"))
+    return "lib/client/" + relative.slice("packages/client/src/".length);
   if (relative.startsWith("src/lib/")) return relative.slice(4);
   if (relative.startsWith("styled-system/")) return relative.replace(/\.mjs$/, ".js");
   throw new Error(`Client closure cannot contain ${relative}`);
@@ -178,7 +180,7 @@ for (const name of ["index", "ui", "testing", "board", "tags", "map", "editor"])
       ? path.join(root, "src/lib/backend/index.ts")
       : name === "testing"
         ? path.join(root, "src/lib/backend/testing/index.ts")
-        : path.join(root, "src/lib/client", name === "ui" ? "ui.ts" : `${name}/index.ts`);
+        : path.join(packageRoot, "src", name === "ui" ? "ui.ts" : `${name}/index.ts`);
   queue.push(entry);
   await fs.writeFile(
     path.join(staging, `${name}.ts`),

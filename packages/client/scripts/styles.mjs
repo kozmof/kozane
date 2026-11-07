@@ -32,7 +32,7 @@ export function runPanda(root, packageRoot, args) {
 /** @param {string} root @param {string} packageRoot */
 export async function buildStyles(root, packageRoot) {
   const utilities = join(packageRoot, "tmp/utilities.css");
-  runPanda(root, packageRoot, ["cssgen", "src/lib/**/*.{js,ts,svelte}", "--outfile", utilities]);
+  runPanda(root, packageRoot, ["cssgen", "--outfile", utilities]);
   const stylesheet = combineStyles(
     await readFile(join(root, "src/app.css"), "utf8"),
     await readFile(utilities, "utf8"),

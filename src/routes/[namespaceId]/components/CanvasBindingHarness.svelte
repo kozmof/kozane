@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack, type ComponentProps } from "svelte";
-  import KozaneCanvas from "../../../lib/client/board/components/KozaneCanvas.svelte";
+  import KozaneCanvas from "../../../../packages/client/src/board/components/KozaneCanvas.svelte";
   import type { CardWithGlue, ScopeArea } from "$lib/types";
 
   /**

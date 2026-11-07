@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/svelte";
-import KozaneCanvas from "../../../lib/client/board/components/KozaneCanvas.svelte";
+import KozaneCanvas from "../../../../packages/client/src/board/components/KozaneCanvas.svelte";
 import CanvasBindingHarness from "./CanvasBindingHarness.svelte";
-import { SelectionState } from "../../../lib/client/board/namespace-state.svelte.js";
-import type { CardPositionPatch } from "../../../lib/client/board/lib/namespace-page.js";
+import { SelectionState } from "../../../../packages/client/src/board/namespace-state.svelte.js";
+import type { CardPositionPatch } from "../../../../packages/client/src/board/lib/namespace-page.js";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 import {
   card,

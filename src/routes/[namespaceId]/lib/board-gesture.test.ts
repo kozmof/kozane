@@ -6,7 +6,7 @@ import {
   holdsPositionActivity,
   resizedAreaId,
   type BoardGesture,
-} from "../../../lib/client/board/lib/board-gesture.js";
+} from "../../../../packages/client/src/board/lib/board-gesture.js";
 
 const origin = { startClientX: 0, startClientY: 0, moved: false };
 

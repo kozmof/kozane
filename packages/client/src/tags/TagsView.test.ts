@@ -1,11 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/svelte";
 import { TagsView } from "../index.js";
-import { HttpBackend, StaticBackend } from "../../backend/index.js";
-import { tagDataset } from "../../backend/tags.fixtures.js";
-import { tagsView } from "../../backend/views/tags.js";
-import { createDemoNavigation } from "../../navigation.js";
-import type { TagHit } from "../../types.js";
+import { HttpBackend, StaticBackend } from "../../../../src/lib/backend/index.js";
+import { tagDataset } from "../../../../src/lib/backend/tags.fixtures.js";
+import { tagsView } from "../../../../src/lib/backend/views/tags.js";
+import { createDemoNavigation } from "../../../../src/lib/navigation.js";
+import type { TagHit } from "../../../../src/lib/types.js";
 const hit = (id: string, tag: string, excerpt: string): TagHit => ({
   tag,
   source: { kind: "card", cardId: id },

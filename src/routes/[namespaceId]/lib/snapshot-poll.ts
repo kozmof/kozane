@@ -1,6 +1,6 @@
 import { base } from "$app/paths";
 import type { NamespaceDataSnapshot } from "$lib/types.js";
-import type { InFlight } from "../../../lib/client/board/lib/in-flight.js";
+import type { InFlight } from "../../../../packages/client/src/board/lib/in-flight.js";
 import { readNamespaceSnapshot } from "./snapshot-reader.js";
 
 /** How often the board asks the server whether anything has changed. */

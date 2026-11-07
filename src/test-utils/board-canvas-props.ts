@@ -1,4 +1,4 @@
-import { NamespaceState, type BoardCanvasProps } from "../lib/client/board/index.js";
+import { NamespaceState, type BoardCanvasProps } from "../../packages/client/src/board/index.js";
 import { StaticBackend, type SnapshotData } from "../lib/backend/index.js";
 import { createDemoNavigation } from "../lib/navigation.js";
 

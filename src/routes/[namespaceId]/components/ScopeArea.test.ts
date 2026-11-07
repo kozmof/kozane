@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
-import ScopeArea from "../../../lib/client/board/components/ScopeArea.svelte";
+import ScopeArea from "../../../../packages/client/src/board/components/ScopeArea.svelte";
 import { token } from "styled-system/tokens";
 import type { ScopeArea as ScopeAreaRow } from "$lib/types";
 

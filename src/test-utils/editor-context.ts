@@ -1,6 +1,6 @@
 import { HttpBackend, StaticBackend, type SnapshotData } from "../lib/backend/index.js";
 import type { TaskspaceFileTree } from "../lib/types.js";
-import type { EditorSessionContext } from "../lib/client/editor/index.js";
+import type { EditorSessionContext } from "../../packages/client/src/editor/index.js";
 
 export function httpEditorContext(
   fetcher: typeof fetch,

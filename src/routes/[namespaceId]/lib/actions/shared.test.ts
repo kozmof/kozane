@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { CardWithGlue } from "$lib/types";
-import { fieldSnapshot, restoreField } from "../../../../lib/client/board/lib/actions/shared.js";
+import {
+  fieldSnapshot,
+  restoreField,
+} from "../../../../../packages/client/src/board/lib/actions/shared.js";
 
 function card(id: string, partitionId: string): CardWithGlue {
   return {

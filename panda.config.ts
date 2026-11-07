@@ -2,7 +2,7 @@ import { defineConfig } from "@pandacss/dev";
 
 export default defineConfig({
   preflight: false,
-  include: ["./src/**/*.{js,ts,svelte}"],
+  include: ["./src/**/*.{js,ts,svelte}", "./packages/client/src/**/*.{js,ts,svelte}"],
   exclude: [],
   theme: {
     extend: {

@@ -32,7 +32,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "packages/client/src/**/*.test.ts"],
     setupFiles: ["src/test-utils/setup.ts"],
     environment: "jsdom",
     maxWorkers: 4,
@@ -42,7 +42,7 @@ export default defineConfig({
     testTimeout: 10_000,
     coverage: {
       provider: "v8",
-      include: ["src/**/*.{ts,svelte}"],
+      include: ["src/**/*.{ts,svelte}", "packages/client/src/**/*.{ts,svelte}"],
       // Coverage thresholds apply only to files outside the exclusions below.
       //
       // - Svelte components have component and browser tests, but this V8 setup does not
@@ -81,6 +81,7 @@ export default defineConfig({
         // Exclude route and shared Svelte components because this V8 setup does not measure
         // their source coverage.
         "src/**/*.svelte",
+        "packages/client/src/**/*.svelte",
       ],
       reporter: ["text", "html", "lcov"],
       thresholds: {

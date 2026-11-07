@@ -3,8 +3,8 @@ import {
   boardKeyBindings,
   type BoardCommands,
   type BoardShortcuts,
-} from "../../../lib/client/board/lib/board-bindings.js";
-import { runKeyBindings } from "../../../lib/client/board/lib/board-keymap.js";
+} from "../../../../packages/client/src/board/lib/board-bindings.js";
+import { runKeyBindings } from "../../../../packages/client/src/board/lib/board-keymap.js";
 
 const shortcuts: BoardShortcuts = {
   focusCardInputShortcut: "n",

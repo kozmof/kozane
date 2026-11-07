@@ -6,7 +6,7 @@ import {
   markMovedHorizontally,
   travelled,
   type Gesture,
-} from "../../../lib/client/board/lib/gesture.js";
+} from "../../../../packages/client/src/board/lib/gesture.js";
 
 /** A gesture that began at the origin, so a coordinate reads as its own distance travelled. */
 function atOrigin(): Gesture {

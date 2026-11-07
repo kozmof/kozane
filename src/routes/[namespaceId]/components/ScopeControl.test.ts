@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import ScopeControl from "../../../lib/client/board/components/ScopeControl.svelte";
+import ScopeControl from "../../../../packages/client/src/board/components/ScopeControl.svelte";
 
 const SCOPES = [
   { id: "scope-1", name: "My Scope" },

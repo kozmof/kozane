@@ -3,7 +3,7 @@ import {
   arrivalWarp,
   clearArrivalParams,
   readArrival,
-} from "../../../lib/client/board/lib/board-arrival.js";
+} from "../../../../packages/client/src/board/lib/board-arrival.js";
 import { createDemoNavigation, createNodeNavigation } from "$lib/navigation.js";
 import { data } from "../page.fixtures.js";
 import type { Inventory, TaskspaceSummary } from "$lib/types.js";

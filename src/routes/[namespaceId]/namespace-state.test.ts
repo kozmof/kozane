@@ -1,5 +1,5 @@
 import { HttpBackend } from "$lib/backend/http-backend.js";
-import { createBackendBoardPersistence } from "../../lib/client/board/lib/board-backend-persistence.js";
+import { createBackendBoardPersistence } from "../../../packages/client/src/board/lib/board-backend-persistence.js";
 import { createMemoryPreferences } from "$lib/preferences.js";
 import { describe, it, expect, beforeEach } from "vitest";
 import {
@@ -11,8 +11,8 @@ import {
   resolveActiveLayerId,
   readStoredLayerId,
   storeActiveLayerId,
-} from "../../lib/client/board/namespace-state.svelte.js";
-import { nodeKey } from "../../lib/client/board/lib/taskspace-tree.svelte.js";
+} from "../../../packages/client/src/board/namespace-state.svelte.js";
+import { nodeKey } from "../../../packages/client/src/board/lib/taskspace-tree.svelte.js";
 import type {
   Partition,
   CardWithGlue,

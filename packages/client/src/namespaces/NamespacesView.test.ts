@@ -1,9 +1,9 @@
-import { BackendSignals } from "../../backend/signals.js";
+import { BackendSignals } from "../../../../src/lib/backend/signals.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { NamespacesView } from "../index.js";
-import { HttpBackend, StaticBackend } from "../../backend/index.js";
-import { createDemoNavigation } from "../../navigation.js";
+import { HttpBackend, StaticBackend } from "../../../../src/lib/backend/index.js";
+import { createDemoNavigation } from "../../../../src/lib/navigation.js";
 const navigation = createDemoNavigation({ base: "/demo" });
 const capabilities = {
   writable: true,

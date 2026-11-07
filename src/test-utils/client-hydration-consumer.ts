@@ -1,5 +1,9 @@
 import { hydrate, tick, unmount } from "svelte";
-import { BoardView, NamespacesView, type BackendCapabilities } from "../lib/client/index.js";
+import {
+  BoardView,
+  NamespacesView,
+  type BackendCapabilities,
+} from "../../packages/client/src/index.js";
 import { capabilityViewProps } from "./capability-view-props.js";
 
 export async function hydrateCapabilityViews(

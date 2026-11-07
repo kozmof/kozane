@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
-import ScopeAreaFiles from "../../../lib/client/board/components/ScopeAreaFiles.svelte";
+import ScopeAreaFiles from "../../../../packages/client/src/board/components/ScopeAreaFiles.svelte";
 import type { ScopeArea as ScopeAreaRow, TaskspaceEntry } from "$lib/types";
 import {
   CELL_WIDTH,
@@ -8,7 +8,7 @@ import {
   STRIP_GAP,
   type FileCell,
   type FileGroup,
-} from "../../../lib/client/board/lib/scope-area-files.js";
+} from "../../../../packages/client/src/board/lib/scope-area-files.js";
 
 afterEach(cleanup);
 

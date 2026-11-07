@@ -1,4 +1,4 @@
-import { HttpBackend, type BackendCapabilities } from "../lib/client/index.js";
+import { HttpBackend, type BackendCapabilities } from "../../packages/client/src/index.js";
 import { boardViewProps } from "./board-view-props.js";
 
 /** Same serializable capabilities and seed on the server and hydration paths. */

@@ -5,7 +5,7 @@ import {
   type BoardPageData,
   type BoardViewProps,
   type PollLifecycle,
-} from "../lib/client/index.js";
+} from "../../packages/client/src/index.js";
 import { boardCanvasProps } from "./board-canvas-props.js";
 
 /** Fully typed host props for rendering the public board without a router framework. */

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { guardUnsavedLeave } from "./leave-guard";
+import { guardUnsavedLeave } from "./leave-guard.js";
 
 function intent(type: string) {
   return { type, cancel: vi.fn() };

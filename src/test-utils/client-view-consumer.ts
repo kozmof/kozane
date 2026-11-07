@@ -13,7 +13,7 @@ import {
   StaticBackend,
   createDemoNavigation,
   type NavigationDriver,
-} from "../lib/client/index.js";
+} from "../../packages/client/src/index.js";
 
 import { tagDataset } from "../lib/backend/tags.fixtures.js";
 import { tagsView } from "../lib/backend/views/tags.js";
@@ -104,7 +104,7 @@ export async function renderViews() {
 }
 
 export function renderCapabilityViews(
-  capabilities: import("../lib/client/index.js").BackendCapabilities,
+  capabilities: import("../../packages/client/src/index.js").BackendCapabilities,
   lifetimeNotice?: string,
 ) {
   const props = capabilityViewProps(capabilities, lifetimeNotice);

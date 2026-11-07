@@ -195,7 +195,7 @@
     },
     {
       // Shared client views depend on adapters instead of route or Node runtime modules.
-      "files": ["src/lib/client/**"],
+      "files": ["packages/client/src/**"],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [

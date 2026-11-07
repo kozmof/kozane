@@ -4,7 +4,7 @@ import type { TaskspaceFileTree } from "$lib/types";
 import {
   TaskspaceTreeState,
   nodeKey,
-} from "../../../lib/client/board/lib/taskspace-tree.svelte.js";
+} from "../../../../packages/client/src/board/lib/taskspace-tree.svelte.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
