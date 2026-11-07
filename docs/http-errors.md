@@ -17,4 +17,4 @@ Domain codes travel in `X-Kozane-Error-Code`. Error bodies retain the existing `
 
 Existing content and batch limits remain validation errors with status 400. Normalization does not change them to size-limit errors. Database classification metadata and diagnostic causes are never serialized into HTTP error bodies or headers.
 
-The adapter sets headers through SvelteKit's request event and retains thrown HTTP errors. Unit tests verify header assignment and compatibility mappings. End-to-end response-header verification remains pending with the final E2E run.
+The adapter sets headers through SvelteKit's request event and retains thrown HTTP errors. Unit tests verify header assignment and compatibility mappings.

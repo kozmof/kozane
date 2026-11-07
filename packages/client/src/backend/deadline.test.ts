@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { deadline } from "../../../../scripts/browser-spike/deadline.js";
+import { deadline } from "../../../../scripts/restoration-harness/deadline.js";
 
 afterEach(() => vi.useRealTimers());
 it("clears the timer after success", async () => {

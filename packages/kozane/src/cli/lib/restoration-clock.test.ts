@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { ActiveClock } from "../../../../../scripts/restoration-harness/active-clock";
 import { trackSuspension } from "../../../../../scripts/restoration-harness/suspension";
-import { validateDeadlineDuration } from "../../../../../scripts/browser-spike/deadline";
+import { validateDeadlineDuration } from "../../../../../scripts/restoration-harness/deadline";
 const clocks: ActiveClock[] = [];
 afterEach(() => {
   for (const clock of clocks.splice(0)) clock.dispose();

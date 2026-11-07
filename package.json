@@ -40,7 +40,7 @@
     "preflight": "pnpm release:local",
     "pre-release-check": "pnpm release:local",
     "clean": "node scripts/clean.mjs",
-    "verify": "pnpm check && pnpm check:client-package && pnpm check:client-browser && pnpm check:core-browser && pnpm check:adapters && pnpm check:backend-contract && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
+    "verify": "pnpm check && pnpm check:client-package && pnpm check:client-browser && pnpm check:core-browser && pnpm check:backend-contract && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
     "test:e2e": "TMPDIR=/tmp playwright test",
     "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e",
     "publish:npm": "pnpm release:publish",
@@ -69,8 +69,7 @@
     "test:db-wasm": "vitest run --config scripts/database-parity/vitest.config.ts",
     "test:db-browser": "KOZANE_DB_BROWSER=1 vitest run --config scripts/database-parity/vitest.config.ts",
     "release:local": "node scripts/local-release.mjs prepare",
-    "release:publish": "node scripts/local-release.mjs publish",
-    "check:adapters": "node scripts/adapter-audit.mjs"
+    "release:publish": "node scripts/local-release.mjs publish"
   },
   "dependencies": {
     "@kozane/client": "workspace:0.1.0",

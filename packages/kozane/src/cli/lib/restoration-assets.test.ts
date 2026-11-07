@@ -4,7 +4,7 @@ import { webcrypto } from "node:crypto";
 import {
   verifiedModule,
   AssetVerificationError,
-} from "../../../../../scripts/browser-spike/verified-loader";
+} from "../../../../../scripts/restoration-harness/verified-loader";
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();

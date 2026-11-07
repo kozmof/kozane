@@ -1,7 +1,7 @@
 # Packed restoration harness
 
 Build and check restoration against an isolated `@kozane/core` tarball before publication.
-The harness uses the Phase 0 verified worker loader and the pinned sqlite-wasm engine.
+The harness owns the verified worker loader and uses the pinned sqlite-wasm engine.
 It imports core through public exports and generates a disposable database through public
 migration and domain services.
 
@@ -90,7 +90,7 @@ Results delivered during suspension are reconciled before overdue work, includin
 child stages whose parent is awaiting them. New database dispatch waits during confirmed
 suspension and reconciliation. Queue waiting consumes no RPC deadline. Expiry cancels remaining
 stage resources and terminates the context's workers. No operation is replayed. Test deadlines
-must be positive and finite. The Phase 0 standalone default remains a wall-clock deadline.
+must be positive and finite. The loader default uses a wall-clock deadline when no active clock is supplied.
 
 `ResumeGate` runs two checks after suspension. A responsiveness probe bypasses wasm loading,
 database readiness and both operation queues. Once a handle exists, a read-only `SELECT 1`
@@ -154,4 +154,4 @@ A current-ID producer cohort is mandatory, so a migration change cannot pass wit
 fallback cases. No retained fixture or expectation is rewritten for a new candidate.
 Basic `run()` cases close their candidate after reporting validation. Retained cases
 keep it until `close()`. The persistent editing backend is implemented in Phase 4.
-See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).
+See the [web demo tasks](../../docs/web-demo-tasks.md) and [specification](../../docs/web-demo-specification.md).

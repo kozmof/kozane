@@ -1,6 +1,6 @@
 # Backend operation matrix
 
-Use the exported declarations in [contract.ts](contract.ts), [resources.ts](resources.ts) and [taskspaces-api.ts](taskspaces-api.ts) for exact call and result types. This matrix records the implemented domain, read, taskspace and lifecycle surface. The LocalBackend contract runner remains pending. Packed core/client consumers validate public resource declarations and runtime identity. See the [Phase 2 task record](../../../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md) for Gate 3 acceptance evidence.
+Use the exported declarations in [contract.ts](contract.ts), [resources.ts](resources.ts) and [taskspaces-api.ts](taskspaces-api.ts) for exact call and result types. This matrix records the implemented domain, read, taskspace and lifecycle surface. The LocalBackend contract runner remains pending. Packed core/client consumers validate public resource declarations and runtime identity.
 
 ## Shared rules
 
@@ -8,7 +8,7 @@ Identifiers are strings. A supplied namespace identifies the board, and taskspac
 
 Reads do not publish invalidations. Successful HTTP mutations publish all five datasets (`snapshot`, `tags`, `map`, `namespaces`, `warpDirectory`) after the response succeeds, including when response decoding fails afterward. Failed requests publish nothing. Static mutations reject with `read_only` and publish nothing.
 
-HTTP requests share authentication, permission, throttling and network handling. Statuses 401, 403 and 429 are authoritative. Other errors use the allowlisted `X-Kozane-Error-Code` header or the status fallback. See the [HTTP compatibility mappings](../../../../docs/backend-separation/http-error-compatibility.md). Static reads reject missing records with `not_found` and datasets absent from an export with `unavailable`.
+HTTP requests share authentication, permission, throttling and network handling. Statuses 401, 403 and 429 are authoritative. Other errors use the allowlisted `X-Kozane-Error-Code` header or the status fallback. See the [HTTP compatibility mappings](../../../../docs/http-errors.md). Static reads reject missing records with `not_found` and datasets absent from an export with `unavailable`.
 
 Keepalive is supported only by methods that accept `MutationOptions`. It requests fetch keepalive for a JSON body within the 60 KiB transport budget. It does not guarantee delivery. Reads and other methods below do not accept it.
 

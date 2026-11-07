@@ -5,7 +5,7 @@ export function validateDeadlineDuration(milliseconds: number): void {
   if (!Number.isFinite(milliseconds) || milliseconds <= 0)
     throw new RangeError("Deadline must be a positive finite duration");
 }
-/** Hosts may supply a shared active clock. The Phase 0 default retains wall-clock behavior. */
+/** Hosts may supply a shared active clock. The default uses wall-clock time. */
 export async function deadline<T>(
   operation: Promise<T>,
   milliseconds: number,

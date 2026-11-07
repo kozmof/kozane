@@ -18,6 +18,8 @@ export async function buildRestorationHarness(
   prepareBrowserCorpus(resolve("tests/compatibility/corpus"), output);
   for (const name of [
     "main.ts",
+    "verified-loader.ts",
+    "deadline.ts",
     "corpus-compatibility.ts",
     "worker.ts",
     "worker-context.ts",
@@ -36,8 +38,6 @@ export async function buildRestorationHarness(
   ]) {
     await copyFile(new URL(name, import.meta.url), join(sources, name));
   }
-  for (const name of ["verified-loader.ts", "deadline.ts"])
-    await copyFile(new URL(`../browser-spike/${name}`, import.meta.url), join(sources, name));
   await copyFile(
     new URL("../../packages/client/src/backend/operation-queue.ts", import.meta.url),
     join(sources, "operation-queue.ts"),

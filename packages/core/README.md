@@ -137,4 +137,4 @@ builds keep core external, and the compiled Node check verifies shared schema ob
 adapter state and error constructors against the installed version. Package smoke checks
 install the candidate core tarball alongside the CLI tarball for local and global installs.
 
-The remaining workspace conversion is being completed under [Phase 3](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).
+See the [local release guide](../../docs/releases.md) for package preparation and publication.

@@ -22,7 +22,7 @@ pnpm release:local
 
 This runs release metadata and versioning regressions, verification and coverage, production dependency auditing, local/global archive installation and HTTP smoke, and the app, restoration and public-client browser suites. It builds the three tarballs and runs npm dry-run publication on them. It writes a release manifest containing their versions, SHA-256 hashes and source commit under `tmp/releases/<commit>/`. An optional directory argument chooses another destination.
 
-P0 database/browser verification is optional and is not part of this flow, per the user's request. Run `pnpm test:db-wasm` or `pnpm test:db-browser` separately when needed.
+Database driver parity checks are optional and are not part of release preparation. Run `pnpm test:db-wasm` or `pnpm test:db-browser` separately when needed.
 
 Preparation does not publish. It rejects uncommitted source changes and writes the manifest only after every check passes. Keep the prepared directory until publication is verified. Use the full commit hash and archive hashes when recording release evidence.
 
@@ -50,4 +50,4 @@ The publisher runs `pnpm release:verify:registry` after all three packages are p
 
 It checks exact registry versions, repository paths, runtime and peer pins and integrity metadata. It installs those exact versions from the public registry locally and globally, checks both CLI versions and shared runtime identity, and tests the installed HTTP server. Registry mode does not build or substitute candidate archives.
 
-Record the source commit, prepared archive hashes, published versions and verification output in the task list. Gate 4 remains open until initial publication and these fresh registry checks pass.
+Retain the prepared manifest and registry verification output as release evidence. Publish and verify the intended package pair before starting the [web demo tasks](web-demo-tasks.md).

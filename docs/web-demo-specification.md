@@ -1,12 +1,12 @@
-# Kozane Client/Backend Separation and Web Demo Specification
+# Web demo specification
 
 ## Overview
 
-Kozane's UI will talk to a transport-agnostic `KozaneBackend` interface instead of calling HTTP directly. That makes the server one interchangeable backend, so a browser-only web demo can run the real UI and business rules without a backend server. Edits stay in memory, with best-effort reload recovery through sessionStorage.
+Kozane's shared UI uses the `KozaneBackend` interface. That makes the server one interchangeable backend, so a browser-only web demo can run the real UI and business rules without a backend server. Edits stay in memory, with best-effort reload recovery through sessionStorage.
 
 ### Background
 
-Today the static (SSG) export is read-only, and editing requires `kozane open` with a Node server and a SQLite database. Visitors cannot try editing without installing Kozane. The codebase already has two useful seams: every client call goes through one injectable fetcher, and every API handler takes its database from `locals.db`.
+The static export is read-only, and editing uses `kozane open` with a Node server and a SQLite database. The shared UI accepts an injected backend, while HTTP handlers receive their database through the Node host. The browser demo adds editing through public core and client packages.
 
 ### Goals
 
@@ -23,23 +23,19 @@ Today the static (SSG) export is read-only, and editing requires `kozane open` w
 - Taskspaces and other filesystem features in the browser.
 - A public, stable HTTP API for third parties. The HTTP routes stay internal to `kozane`.
 
-## Current state
+## Existing packages
 
-Kozane is a SvelteKit app with a Node adapter, a Drizzle + libsql database, and a CLI. It is published as one npm package, `kozane` (v0.21.0 in the reviewed checkout).
+The repository contains core, client and the unscoped CLI package. The current release candidates are core 0.1.0, client 0.1.0 and kozane 0.22.0. Publish and verify them through the [local release flow](releases.md) before creating the separate demo repository.
 
-| Area              | Today                                                                                                                        | Relevance                                                         |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Client calls      | `s.fetcher = fetch` in `[namespaceId]/+page.svelte`, passed to `namespace-api.ts`, `snapshot-poll.ts` and the action modules | One seam for swapping the transport                               |
-| Handler DB access | `+server.ts` handlers read `const { db } = locals`                                                                           | Handlers can run against any `DB`                                 |
-| Business logic    | Validation (`lib/request.ts`), clamping, transactions and inventory stowing sit inside `+server.ts`                          | Must move into services to be shared                              |
-| Error mapping     | `httpErrorFromDb` turns domain errors into 404/400/409                                                                       | Becomes the HTTP adapter's job                                    |
-| DB types          | `DB`/`Tx` are branded `LibSQLDatabase` (`src/db/tx.ts`)                                                                      | Must widen to Drizzle's generic async SQLite type for the browser |
-| Migrations        | `drizzle/*.sql`, applied by `migrate()` reading the filesystem                                                               | Demo build needs exported SQL strings                             |
-| Static export     | `kozane net ssg generate`: `adapter-static`, `KOZANE_READONLY=1`, prerendered snapshots                                      | Basis for a read-only backend                                     |
-| CSP               | `script-src 'self'`                                                                                                          | Blocks WebAssembly until `'wasm-unsafe-eval'` is added            |
-| npm package       | Ships `bin`, `dist` (compiled `cli`, `db`, `lib`), `build`, `drizzle`; no `exports` field                                    | Routes and Svelte UI are not consumable by another repo           |
-
-Server-only modules that import `node:` APIs include `taskspace-path`, `taskspace-files`, `atomic-write`, `tag-cache`, `api-key`, `snapshot-etag`, `file-signature`, `runtime-state` and `db/internal/migrations`. These must stay out of the core and client packages.
+| Area              | Existing implementation                                                | Demo requirement                                                   |
+| ----------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Shared UI         | Client views receive backend, navigation and preference adapters       | Supply one browser-root local backend                              |
+| Domain rules      | Core owns schema, records, services, validation and transactions       | Use public services through the worker queue                       |
+| HTTP and CLI      | Node adapters retain transport, filesystem and workspace policy        | Keep Node-only features out of the demo                            |
+| Database adapters | Core exposes generic async SQLite handles and transaction hooks        | Implement hooks for worker-backed SQLite wasm                      |
+| Migrations        | Public ordered SQL, history validation and canonical schema APIs       | Generate and validate sample/recovery bytes through public exports |
+| Static export     | StaticBackend serves embedded read-only data                           | Prerender the preview and attach the local backend after hydration |
+| Package checks    | Isolated consumers, runtime identity and retained compatibility corpus | Exercise the same corpus through the production restoration path   |
 
 ## Target architecture
 
@@ -307,7 +303,7 @@ Scope mutable editor and view state to the active backend generation, including 
 
 ## Packages and repositories
 
-The `kozane` repository becomes a pnpm workspace with three published packages. The demo moves to a separate `kozane-demo` repository that consumes two of them from npm.
+The `kozane` repository is a pnpm workspace with three public packages. The demo belongs in a separate `kozane-demo` repository that consumes core and client from npm.
 
 | Package          | Path              | Contents                                                                             | Allowed runtimes                      | Depends on                                                  |
 | ---------------- | ----------------- | ------------------------------------------------------------------------------------ | ------------------------------------- | ----------------------------------------------------------- |
@@ -562,33 +558,6 @@ One shared contract suite runs against every writable backend, so `HttpBackend` 
 - CLI commands, flags and output are unchanged.
 - HTTP route paths and JSON shapes stay the same during migration, so a browser tab left open across an upgrade keeps working.
 - `kozane net ssg generate` output remains read-only and deployable as today.
-
-## Migration plan
-
-The work ships in five phases, each ending at a gate that must pass before the next starts. Every phase leaves the local app releasable, and the demo launches only after the shared code is published.
-
-```mermaid
-flowchart LR
-  P0[Phase 0: wasm spike] --> G1[Gate 1: browser DB and verified loader tests]
-  G1 --> P1[Phase 1: services]
-  P1 --> G2[Gate 2: adapter-only routes]
-  G2 --> P2[Phase 2: backends]
-  P2 --> G3[Gate 3: UI transport isolation]
-  G3 --> P3[Phase 3: packages]
-  P3 --> G4[Gate 4: public package consumers]
-  G4 --> P4[Phase 4: demo]
-  P4 --> G5[Gate 5: contracts, recovery, privacy, performance]
-```
-
-Phases are sequential; dates are not set yet.
-
-### Phase deliverables
-
-1. Phase 0, wasm spike: run the existing `src/db/api` tests on `@sqlite.org/sqlite-wasm` through Drizzle's sqlite-proxy driver in a Web Worker; confirm transactions, pragmas, foreign keys and `RETURNING`; test overlapping representative multi-query operations, reads, rollback and exports through the whole-operation queue; build a disposable spike database fixture using existing schema and database APIs; create the `kozane` npm org. This fixture is not release sample content. Build the release `demo.db` through public core services in Phase 4. Build a minimal production static spike under the demo CSP specified above, without COOP/COEP headers. Exercise a self-contained module worker with no runtime imports, fetched and hash-verified before creation from its exact bytes through a Blob URL. Pass absolute manifest asset URLs and verify the build-ID handshake. Fetch wasm once, compile and hash cloned response streams, then configure the SQLite loader to instantiate only the verified compiled module without another fetch or instantiation. Open the spike fixture through that loader. Test delayed verification, worker and wasm hash mismatches, cold and cached responses, and confirm that mismatches prevent execution or instantiation and database access. Prototype the canonical schema manifest and read-only comparison helper required under package rules using existing migration files. Compare fresh libsql and browser SQLite databases. Cover columns, defaults, primary and foreign keys, check and unique constraints, indexes with ordered columns and partial predicates, triggers and views. Use disposable fixtures for features absent from current migrations. Verify that formatting-only differences pass and altered definitions fail without modifying either database. Resolve cross-engine introspection and normalization blockers during this spike. Exit with Gate 1 only when all `db/api` tests, concurrency cases, schema-comparison fixtures and production loader/CSP checks pass, with browser cases running in a browser runner. Resolve loader or bundling blockers before service extraction or package publication. Phase 4 reuses this proven loading approach and repeats the checks against the release build.
-2. Phase 1, service layer: extract `cards` first, then the remaining resources, one per PR; add driver-error normalization, domain errors and the extended `apiHandler`; migrate CLI commands to the same services while preserving argument parsing, reference resolution, flags and output; classify routes, page loaders and CLI commands and add boundary lint checks. Exit with Gate 2: core-backed handlers and CLI commands delegate shared database rules and transaction ownership to core services, Node feature handlers and commands delegate filesystem rules to Node services, and infrastructure exemptions are explicit. Verify public transaction composition preserves CLI reference resolution within the mutation transaction. Existing tests remain unchanged and green, with additional parity checks for equivalent CLI and HTTP operations covering validation, clamping, transaction rollback and resource-specific errors.
-3. Phase 2, UI on backend: add `KozaneBackend`, `BackendError`, `capabilities`; implement `HttpBackend` over today's `namespace-api.ts`; replace `s.fetcher` with `s.backend`; replace `KOZANE_SSG` checks in components with capability checks; implement namespace discovery, tags, map and warp-directory APIs with public invalidation subscriptions, backend-owned workspace change-token polling and refresh rules; add the shared navigation adapter while preserving existing app and SSG URLs; implement `StaticBackend` for the existing SSG path. Exit with Gate 3: board, tags, map and warp navigation use backend data; no component or action module calls `fetch` or builds an API URL, and SSG remains read-only through `StaticBackend`.
-4. Phase 3, packages: convert to a pnpm workspace; move code into `packages/core`, `packages/client`, `packages/kozane`; add `exports` maps, `publishConfig`, Changesets and provenance; publish `0.x` versions. Exit with Gate 4: `@kozane/core` builds in a browser-only bundle with no `node:` shims. An isolated consumer installs packed artifacts, initializes both database adapters, applies migrations, calls services, imports `./styles.css`, server-renders and prerenders board, tags and map views, hydrates them without browser-global errors or mismatches, initializes the shared editor and exercises text editing with its declared runtime dependencies, verifies representative computed styles and token values in a production build, and imports `./testing` using only public exports. Require the core/client dependency graph and runtime identity checks under package rules, including rejection fixtures for incompatible and duplicate core installations. Before publication, build the browser restoration harness and bootstrap the compatibility corpus under package rules. Run the corpus against the candidate packed packages and require every expected validation and initial-view outcome to pass. This harness is a Gate 4 deliverable and does not depend on the Phase 4 demo repository or published candidate versions. All three packages are then published to npm.
-5. Phase 4, demo launch: create `kozane-demo`; implement `LocalBackend` in a sqlite-wasm worker, the prebuilt demo.db, progressive loading with the early recovery check, root-layout backend lifetime, fixed direct-entry routes with query-based namespace selection, sandbox banner and CSP meta tag; connect the Phase 3 restoration harness to the production restoration path and run the full compatibility corpus; run the contract suite; deploy to GitHub Pages; wire the release dispatch and dependency-update PR workflow. Verify a dispatch updates resolved package versions and the lockfile, a failing package combination cannot deploy, and deployment uses the tested revision. Exit with Gate 5: contract suite, view refresh, navigation lifetime, worker-failure recovery, reload recovery and network-privacy checks green on `LocalBackend`, production origin isolated, and the performance release requirements met with aspirational timings reported.
 
 ## Risks and open questions
 
