@@ -1,4 +1,4 @@
-import { schemaVersion } from "@kozane/core/migrations";
+import { schemaVersion, migrations } from "@kozane/core/migrations";
 import { AssetVerificationError } from "./verified-loader";
 import { AttemptOwner, SupersededAttemptError } from "./attempt";
 import { DestinationTracker } from "./navigation";
@@ -6,6 +6,8 @@ import { restoreCandidate, HarnessFailure } from "./recovery";
 import { WorkerContext, type HarnessManifest } from "./worker-context";
 import { openResetSession } from "./session";
 declare const __RESTORATION_MANIFEST__: HarnessManifest;
+import { migrationCompatibility } from "./corpus-compatibility";
+const migrationIds = Object.freeze(migrations.map((record) => record.id));
 const manifest = __RESTORATION_MANIFEST__;
 const attempts = new AttemptOwner();
 async function run(
@@ -73,6 +75,9 @@ Object.assign(window, {
     start,
     manifest,
     schemaVersion,
+    migrationIds,
+    corpusCompatibility: (producerId: string) =>
+      migrationCompatibility(producerId, schemaVersion, migrationIds),
     openSession: (
       namespaceId?: string,
       controls?: { healthTimeoutMs?: number; rpcTimeoutMs?: number },

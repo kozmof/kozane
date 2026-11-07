@@ -18,6 +18,7 @@ export async function buildRestorationHarness(
   prepareBrowserCorpus(resolve("tests/compatibility/corpus"), output);
   for (const name of [
     "main.ts",
+    "corpus-compatibility.ts",
     "worker.ts",
     "worker-context.ts",
     "session.ts",

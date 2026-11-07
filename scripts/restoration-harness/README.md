@@ -138,13 +138,20 @@ bytes, requires the restored source, preserves the exact saved envelope and comp
 view summary with the original expectation. The wasm and libsql cohorts add 26 cases covering empty,
 sole, multiple and default namespace states, missing selections, populated Unicode data,
 accepted schema formatting and SQLite statistics, and valid databases at the exact 2 MiB
-recovery boundary. Discovery finds 59 browser cases across three suites.
+recovery boundary. The user reported all 59 browser cases passing. Two new earlier-ID envelope-policy cases
+bring discovery to 61 cases across three suites.
 
 P3-10 is complete. The user reported all 55 browser cases passing, including real BFCache
 restoration and both original corpus cohorts.
 The loader now shares its active clock with both the outer wasm stage and inner compilation
 deadline. A Node regression verifies a confirmed pause longer than the wall-clock timeout.
-The four new schema and recovery-size boundary cases await CI execution under P3-18.
+The schema and recovery-size boundary cases also passed in CI, completing P3-18.
+The new earlier-ID envelope cases await CI execution under P3-12.
+The corpus runner derives compatibility from the candidate's bundled migration IDs. Same-ID
+fixtures keep their original validation and view requirements. Known earlier IDs require
+incompatible-copy fallback and sample validation before deletion. Unknown IDs block the check.
+A current-ID producer cohort is mandatory, so a migration change cannot pass with only
+fallback cases. No retained fixture or expectation is rewritten for a new candidate.
 Basic `run()` cases close their candidate after reporting validation. Retained cases
 keep it until `close()`. The persistent editing backend is implemented in Phase 4.
 See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

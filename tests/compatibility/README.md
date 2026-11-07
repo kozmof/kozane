@@ -63,7 +63,8 @@ Run `pnpm test:restoration-harness` to build the isolated browser harness and re
 every recorded selection under Chromium. CI includes this command in its browser job.
 The browser cases verify fetched fixture hashes, require successful restoration, preserve
 the saved envelope and compare the recorded view summaries. Browser execution of these
-four boundary cases remains pending. The earlier 55 browser cases passed in CI.
+retained corpus cases passed in CI. Two additional earlier-ID envelope-policy cases
+await CI execution. They do not claim to be historical producer fixtures.
 
 Run `pnpm check:compatibility-retention` to check current bytes and Git retention without
 building a candidate. This requires a full checkout. CI uses `fetch-depth: 0`, and a shallow
@@ -75,7 +76,17 @@ cases. Core's `prepublishOnly` hook invokes this command before normal source pu
 The internal pack step runs its build hook without re-entering the publication hook.
 Install the pinned Chromium runtime before running the release check.
 
-P3-12 remains open for the future client publication path and explicit handling of retained
-fixtures from earlier migration IDs. A new ID currently blocks the check until that policy
-is implemented. Same-ID validation or view regressions fail against the original outcomes.
-P3-18 awaits browser execution of all retained fixtures, including the new boundaries.
+Same-ID fixtures must still validate and match their original view summaries. A producer ID
+from earlier in the candidate's bundled migration history is incompatible with recovery.
+The packed check verifies that its envelope rejects with `incompatible`. Browser cases
+require validated sample fallback before deletion. A failed sample preserves the copy.
+Unknown producer IDs and malformed candidate histories block release checks.
+
+When introducing a new migration ID, retain a new producer cohort through that candidate's
+packed public services. The check requires at least one cohort for the current ID, so a run
+containing only incompatible old fixtures cannot pass. Earlier fixtures and their recorded
+outcomes remain unchanged. Any intentional acceptance restriction still needs a new bundled
+migration record and review. Same-ID validator regressions cannot be relabeled incompatible.
+
+P3-12 remains open for the future client publication path. All retained corpus restoration
+cases passed in CI under P3-18.

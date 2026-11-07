@@ -4,20 +4,39 @@ import { join } from "node:path";
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { createDatabaseAdapter } from "@kozane/core/database";
-import { schemaVersion } from "@kozane/core/migrations";
+import { schemaVersion, migrations } from "@kozane/core/migrations";
 import * as schema from "@kozane/core/schema";
 import { validateCandidate } from "./validation.ts";
 import { summarizeView } from "./view-summary.ts";
 import { readCorpus } from "./read-corpus.mjs";
+import { migrationCompatibility, planCorpusCompatibility } from "./corpus-compatibility.ts";
+import { decodeRecovery, RecoveryCopyError } from "./recovery.ts";
 const sqlite = await sqlite3InitModule();
-let checked = 0;
-for (const cohort of readCorpus(process.argv[2])) {
-  assert.equal(
-    cohort.migrationId,
-    schemaVersion,
-    "A new migration ID needs explicit incompatible-corpus expectations",
-  );
+let checked = 0,
+  incompatible = 0;
+const cohorts = readCorpus(process.argv[2]);
+const migrationIds = migrations.map((record) => record.id);
+planCorpusCompatibility(
+  cohorts.map((cohort) => cohort.migrationId),
+  schemaVersion,
+  migrationIds,
+);
+for (const cohort of cohorts) {
+  const policy = migrationCompatibility(cohort.migrationId, schemaVersion, migrationIds);
   for (const fixture of cohort.fixtures) {
+    if (policy === "incompatible") {
+      const saved = JSON.stringify({
+        schemaVersion: cohort.migrationId,
+        savedAt: 0,
+        db: readFileSync(join(cohort.directory, fixture.file)).toString("base64"),
+      });
+      assert.throws(
+        () => decodeRecovery(saved, schemaVersion),
+        (error) => error instanceof RecoveryCopyError && error.reason === "incompatible",
+      );
+      incompatible += fixture.expected.length;
+      continue;
+    }
     sqlite.capi.sqlite3_js_posix_create_file(
       "/retained.db",
       new Uint8Array(readFileSync(join(cohort.directory, fixture.file))),
@@ -62,5 +81,5 @@ for (const cohort of readCorpus(process.argv[2])) {
   }
 }
 console.log(
-  `Retained compatibility corpus passed ${checked} view outcomes with packed core and wasm.`,
+  `Retained compatibility corpus passed ${checked} same-ID view outcomes and ${incompatible} earlier-ID envelope outcomes with packed core and wasm.`,
 );

@@ -9,7 +9,13 @@ export function checkCorpus({ consumer, repository, run }) {
   mkdirSync(sources);
   for (const name of ["run-corpus.mjs", "read-corpus.mjs", "view-summary.ts"])
     copyFileSync(new URL(name, import.meta.url), join(sources, name));
-  for (const name of ["validation.ts", "recovery.ts", "navigation.ts", "attempt.ts"])
+  for (const name of [
+    "validation.ts",
+    "recovery.ts",
+    "navigation.ts",
+    "attempt.ts",
+    "corpus-compatibility.ts",
+  ])
     copyFileSync(new URL(`../restoration-harness/${name}`, import.meta.url), join(sources, name));
   console.log(
     run(
