@@ -9,7 +9,8 @@
     "allowJs": true,
     "checkJs": false,
     "declaration": true,
-    "types": ["svelte"]
+    "types": ["svelte"],
+    "noEmit": true
   },
   "include": ["tmp/source/**/*"]
 }
