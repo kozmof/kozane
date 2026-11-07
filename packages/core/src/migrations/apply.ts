@@ -5,7 +5,7 @@ import {
   type DB,
   type DatabaseHandle,
   type MigrationBatchStatement,
-} from "../../../../src/db/database.js";
+} from "../database.js";
 import { schemaVersion } from "../generated/migrations.js";
 import type {
   MigrationHistoryMode,

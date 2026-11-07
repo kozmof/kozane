@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { withReadTx, type DB } from "../../../../src/db/database.js";
+import { withReadTx, type DB } from "../database.js";
 import { SchemaMismatchError } from "./errors.js";
 import { canonicalSchemaManifest } from "../generated/schema-manifest.js";
 import { freezeSchema, readSchemaManifest } from "./schema-reader.js";

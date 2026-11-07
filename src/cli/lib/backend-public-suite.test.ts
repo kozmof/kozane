@@ -9,7 +9,7 @@ import {
 import * as database from "../../db/database";
 import * as services from "../../services/index";
 import * as schema from "../../db/schema";
-import { applyMigrations } from "../../../packages/core/src/migrations";
+import { applyMigrations } from "@kozane/core/migrations";
 import { domainErrorCode } from "../../services/error-code";
 import { createServiceContractFixture } from "../../../scripts/client-package/testing-http-fixture.mjs";
 function fixture() {

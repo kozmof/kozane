@@ -95,4 +95,11 @@ Write validation and workspace configuration share portable domain bounds for ca
 content limits and canvas dimensions. Core services use these bounds without importing
 presentation configuration. Packed checks reject UI configuration files in the core archive.
 
+Schema, adapter state, database failure normalization and domain error classes are owned
+by this package. The Node compatibility modules forward through public exports.
+The root package builds core before checking, testing or building consumers. Node server
+builds keep core external, and the compiled Node check verifies shared schema objects,
+adapter state and error constructors against the installed version. Package smoke checks
+install the candidate core tarball alongside the CLI tarball for local and global installs.
+
 The remaining workspace conversion is being completed under [Phase 3](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

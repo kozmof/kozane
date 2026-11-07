@@ -11,7 +11,7 @@ import {
   validateDatabaseMigrationHistory,
   migrations,
   schemaVersion,
-} from "../../../packages/core/src/migrations.js";
+} from "@kozane/core/migrations";
 const opened: OpenedDb[] = [];
 const roots: string[] = [];
 afterEach(() => {

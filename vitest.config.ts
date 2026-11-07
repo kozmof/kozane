@@ -17,19 +17,25 @@ export default defineConfig({
   ],
   resolve: {
     conditions: ["browser"],
-    alias: {
-      $lib: path.resolve("./src/lib"),
-      // Mirror the route aliases from `svelte.config.js`.
-      $db: path.resolve("./src/db"),
-      "styled-system": path.resolve("./styled-system"),
-      "@libsql/client": libsqlNodeEntry,
-      // Stub the virtual modules supplied by SvelteKit builds.
-      "$app/paths": path.resolve("./src/test-utils/app-paths.ts"),
-      "$app/navigation": path.resolve("./src/test-utils/app-navigation.ts"),
-      "$app/environment": path.resolve("./src/test-utils/app-environment.ts"),
-      "$app/state": path.resolve("./src/test-utils/app-state.ts"),
-      "$app/forms": path.resolve("./src/test-utils/app-forms.ts"),
-    },
+    alias: [
+      ...["index", "database", "schema", "services", "migrations"].map((name) => ({
+        find: new RegExp("^@kozane/core" + (name === "index" ? "" : "/" + name) + "$"),
+        replacement: path.resolve("./packages/core/src/" + name + ".ts"),
+      })),
+      ...Object.entries({
+        $lib: path.resolve("./src/lib"),
+        // Mirror the route aliases from `svelte.config.js`.
+        $db: path.resolve("./src/db"),
+        "styled-system": path.resolve("./styled-system"),
+        "@libsql/client": libsqlNodeEntry,
+        // Stub the virtual modules supplied by SvelteKit builds.
+        "$app/paths": path.resolve("./src/test-utils/app-paths.ts"),
+        "$app/navigation": path.resolve("./src/test-utils/app-navigation.ts"),
+        "$app/environment": path.resolve("./src/test-utils/app-environment.ts"),
+        "$app/state": path.resolve("./src/test-utils/app-state.ts"),
+        "$app/forms": path.resolve("./src/test-utils/app-forms.ts"),
+      }).map(([find, replacement]) => ({ find, replacement })),
+    ],
   },
   test: {
     include: ["src/**/*.test.ts", "packages/client/src/**/*.test.ts"],
@@ -42,7 +48,11 @@ export default defineConfig({
     testTimeout: 10_000,
     coverage: {
       provider: "v8",
-      include: ["src/**/*.{ts,svelte}", "packages/client/src/**/*.{ts,svelte}"],
+      include: [
+        "src/**/*.{ts,svelte}",
+        "packages/client/src/**/*.{ts,svelte}",
+        "packages/core/src/**/*.ts",
+      ],
       // Coverage thresholds apply only to files outside the exclusions below.
       //
       // - Svelte components have component and browser tests, but this V8 setup does not
@@ -71,6 +81,7 @@ export default defineConfig({
         "src/db/internal/**",
         "src/db/client.ts",
         "src/db/schema.ts",
+        "packages/core/src/schema.ts",
         // SvelteKit module wiring.
         "src/lib/index.ts",
         // Mounts the config page in the browser. `App.test.ts` renders the app itself.

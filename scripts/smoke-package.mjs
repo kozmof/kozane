@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -25,23 +25,39 @@ function run(command, args, options = {}) {
 }
 
 try {
+  run("pnpm", ["--filter", "@kozane/core", "pack", "--pack-destination", staging]);
+  const coreArchive = readdirSync(staging).find(
+    (file) => file.startsWith("kozane-core-") && file.endsWith(".tgz"),
+  );
+  if (!coreArchive) throw new Error("Missing packed core dependency");
+  const coreArchivePath = join(staging, coreArchive);
   run("pnpm", [
     ...(process.env.KOZANE_ALLOW_UNSUPPORTED_NODE === "1" ? ["--config.ignore-scripts=true"] : []),
     "pack",
     "--pack-destination",
     staging,
   ]);
-  const archive = readdirSync(staging).find((file) => file.endsWith(".tgz"));
+  const { name, version } = JSON.parse(readFileSync(join(sourceRoot, "package.json"), "utf8"));
+  const archive = readdirSync(staging).find((file) => file === name + "-" + version + ".tgz");
   if (!archive) throw new Error("pnpm pack did not produce an archive");
   const archivePath = join(staging, archive);
   writeFileSync(join(staging, "package.json"), '{"private":true}\n');
   run(
     "npm",
-    ["install", "--save-dev", "--ignore-scripts", "--no-audit", "--no-fund", archivePath],
+    [
+      "install",
+      "--save-dev",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      coreArchivePath,
+      archivePath,
+    ],
     { cwd: staging },
   );
   run("npm", ["exec", "--", "kozane", "--version"], { cwd: staging });
   const installedRoot = join(staging, "node_modules", "kozane");
+  run(process.execPath, [join(sourceRoot, "scripts/check-node-core.mjs"), installedRoot]);
   run(process.execPath, [join(sourceRoot, "scripts", "smoke-production.mjs")], {
     env: { ...process.env, KOZANE_PACKAGE_ROOT: installedRoot },
   });
@@ -56,6 +72,7 @@ try {
       "--no-fund",
       "--prefix",
       globalPrefix,
+      coreArchivePath,
       archivePath,
     ],
     { cwd: staging },
@@ -65,6 +82,12 @@ try {
       ? join(globalPrefix, "kozane.cmd")
       : join(globalPrefix, "bin", "kozane");
   run(globalBin, ["--version"], { cwd: staging });
+  const globalRoot = join(
+    globalPrefix,
+    ...(process.platform === "win32" ? ["node_modules"] : ["lib", "node_modules"]),
+    "kozane",
+  );
+  run(process.execPath, [join(sourceRoot, "scripts/check-node-core.mjs"), globalRoot]);
   console.log("Local and global npm package smoke tests passed.");
 } finally {
   rmSync(staging, { recursive: true, force: true });

@@ -16,7 +16,7 @@ import {
   compareSchemaManifests,
   normalizeSchemaSql,
   SchemaMismatchError,
-} from "../../../packages/core/src/migrations.js";
+} from "@kozane/core/migrations";
 const opened: OpenedDb[] = [];
 const roots: string[] = [];
 afterEach(() => {

@@ -10,7 +10,7 @@ import {
   schemaVersion,
   validateMigrationHistory,
   MigrationHistoryError,
-} from "../../../packages/core/src/migrations.js";
+} from "@kozane/core/migrations";
 import { runMigrations, getMigrationStatus } from "./db.js";
 import { openDb } from "../../db/client.js";
 const rows = () => migrations.map((record) => ({ hash: record.hash, created_at: record.when }));

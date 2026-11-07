@@ -12,6 +12,9 @@ importers:
 
   .:
     dependencies:
+      '@kozane/core':
+        specifier: workspace:0.1.0
+        version: link:packages/core
       '@kozmof/reed':
         specifier: ^4.1.0
         version: 4.1.0

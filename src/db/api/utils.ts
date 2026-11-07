@@ -1,4 +1,4 @@
-import { ConflictError } from "../../services/errors.js";
+import { ConflictError, NotFoundError } from "@kozane/core";
 import { getTableColumns, type Table } from "drizzle-orm";
 import { BATCH_MAX, NAME_MAX, chunked } from "../../lib/constants.js";
 
@@ -63,26 +63,7 @@ export async function readByIds<Id, Row>(
   return rows;
 }
 
-export class NotFoundError extends Error {
-  constructor(label: string) {
-    super(`${label} not found`);
-    this.name = "NotFoundError";
-  }
-}
-
-export class DefaultPartitionError extends Error {
-  constructor() {
-    super("Cannot delete the default partition");
-    this.name = "DefaultPartitionError";
-  }
-}
-
-export class DefaultLayerError extends Error {
-  constructor() {
-    super("Cannot delete the default layer");
-    this.name = "DefaultLayerError";
-  }
-}
+export { NotFoundError, DefaultPartitionError, DefaultLayerError } from "@kozane/core";
 
 /**
  * Enforce the shared name length limit for database callers, including the CLI. HTTP routes

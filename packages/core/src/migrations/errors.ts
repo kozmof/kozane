@@ -1,4 +1,4 @@
-import { ValidationError } from "../../../../src/services/errors.js";
+import { ValidationError } from "../errors.js";
 export type MigrationHistoryFailure =
   | "invalid"
   | "duplicate"
