@@ -19,8 +19,8 @@ outside consumer declarations.
 
 Run `pnpm check:client-package` to pack both packages and install them outside the
 workspace using a frozen offline dependency graph. The check audits runtime and
-declaration imports, type-checks all 55 backend methods and the public UI entries, server-renders the editor and namespace
-view, verifies core validation-error identity and compiles the full browser entry.
+declaration imports, type-checks all 55 backend methods and the public UI entries, server-renders board, tags, map, editor and namespace
+views, verifies core validation-error identity and compiles the full browser entry.
 `pnpm verify` includes this combined core/client artifact check.
 
 Import the compiled stylesheet once in your root layout. It includes global reset and
@@ -40,7 +40,11 @@ and fixtures from extraction.
 checks emitted CSS and links, and verifies that the isolated consumer has no Panda
 dependency. Run `pnpm test:client-package` for the Chromium check of hydrated editor
 and namespace views, token values, representative computed styles and layer precedence.
-The browser CI job includes this command.
+The browser CI job includes this command. Four additional cases hydrate the packed
+board, tags and map pages, follow supplied navigation URLs, change map zoom and
+exercise editor typing and undo. Each page starts with server-rendered content.
+Declaration checks require every relative type dependency to ship its declaration
+and reject a deliberately removed declaration.
 
 ## Backend contract checks
 

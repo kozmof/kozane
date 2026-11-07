@@ -1,6 +1,6 @@
 import type { TagsViewData } from "../../../services/tags.js";
 import type { TagHit } from "../../types.js";
-import { buildTagTree, capHitsByKind, normalizeTag, tagMatcher } from "../../tag.js";
+import { buildTagTree, capHitsByKind, normalizeTag, tagMatcher, type TagNode } from "../../tag.js";
 import { TAG_HITS_SHOWN_MAX } from "../../constants.js";
 import { BackendError } from "../contract.js";
 
@@ -45,7 +45,7 @@ function narrow<T>(record: Record<string, T>, keys: Iterable<string>): Record<st
 export function tagsView(
   dataset: TagsViewData,
   selection: { namespaceId: string | null; tag: string | null; staticExport?: boolean },
-) {
+): TagsViewPageData {
   const { index, namespaces, cardPartitions, partitions } = dataset;
   const { namespaceId: requestedNamespace, staticExport = false } = selection;
   const tag = selection.tag ? normalizeTag(selection.tag) : null;
@@ -104,4 +104,19 @@ export function tagsView(
     taskspaces: staticExport ? index.taskspaces : narrow(index.taskspaces, shownTaskspaceIds),
   };
 }
-export type TagsViewPageData = ReturnType<typeof tagsView>;
+export interface TagsViewPageData {
+  namespaceId: string | null;
+  namespaces: TagsViewData["namespaces"];
+  tree: TagNode[];
+  tag: string | null;
+  hits: TagHit[];
+  cardTotal: number | null;
+  fileTotal: number | null;
+  truncated: TagsViewData["index"]["truncated"];
+  missing: string[];
+  cardsTruncated: boolean;
+  cardNamespaces: TagsViewData["index"]["cardNamespaces"];
+  cardPartitionIds: Record<string, string>;
+  partitions: TagsViewData["partitions"];
+  taskspaces: TagsViewData["index"]["taskspaces"];
+}

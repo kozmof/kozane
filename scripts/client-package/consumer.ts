@@ -1,3 +1,4 @@
+import { createViewFixture } from "./view-fixture.js";
 import { backendContractCases, type BackendContractFactory } from "@kozane/client/testing";
 import {
   EditorDocument,
@@ -40,6 +41,15 @@ const namespaceProps: ComponentProps<typeof NamespacesView> = {
 };
 const namespaceHtml = render(NamespacesView, { props: namespaceProps }).body;
 assert(namespaceHtml.includes("Packed workspace"), "Namespace SSR");
+const fixture = createViewFixture();
+export const viewFixtureHtml = {
+  board: render(BoardView, { props: fixture.board }).body,
+  tags: render(TagsView, { props: fixture.tags }).body,
+  map: render(MapView, { props: fixture.map }).body,
+};
+assert(viewFixtureHtml.board.includes("Packed board 日本語"), "Board SSR");
+assert(viewFixtureHtml.tags.includes("Packed board 日本語"), "Tags SSR");
+assert(viewFixtureHtml.map.includes("General"), "Map SSR");
 export const styleFixtureHtml = `<section id="packed-editor">${surface.body}</section><section id="packed-namespaces">${namespaceHtml}</section>`;
 const http = new HttpBackend({
   capabilities: {
@@ -88,3 +98,11 @@ function register(factory: BackendContractFactory) {
   }
 }
 void register;
+
+function rejectInvalidViewData() {
+  // @ts-expect-error Packaged tag counts retain their declared number/null type.
+  fixture.tags.data.cardTotal = "invalid";
+  // @ts-expect-error Packaged map zoom steps retain their declared number type.
+  fixture.map.data.zoomStep = "invalid";
+}
+void rejectInvalidViewData;

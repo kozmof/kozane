@@ -51,6 +51,17 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
               [target, target.replace(/\.js$/, ".d.ts"), target + ".d.ts"].some(existsSync),
               `Missing client dependency: ${value} from ${file}`,
             );
+            if (file.endsWith(".d.ts")) {
+              const declaration = /\.[cm]?js$/.test(target)
+                ? target.replace(/\.[cm]?js$/, ".d.ts")
+                : target.endsWith(".svelte")
+                  ? target + ".d.ts"
+                  : target;
+              assert.ok(
+                existsSync(declaration),
+                `Missing client declaration: ${value} from ${file}`,
+              );
+            }
           } else assert.ok(permitted(value), `Unexpected client dependency ${value} from ${file}`);
         }
         ts.forEachChild(node, visit);
@@ -66,6 +77,17 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
     }
   }
   walk(join(installed, "dist"));
+  const mapDeclaration = join(installed, "dist/lib/backend/views/map.d.ts");
+  const originalDeclaration = readFileSync(mapDeclaration);
+  try {
+    rmSync(mapDeclaration);
+    assert.throws(
+      () => inspect(join(installed, "dist/lib/client/map/types.d.ts")),
+      /Missing client declaration/,
+    );
+  } finally {
+    writeFileSync(mapDeclaration, originalDeclaration);
+  }
   for (const entry of Object.values(manifest.exports)) {
     if (typeof entry === "string") {
       assert.ok(existsSync(join(installed, entry)));
@@ -77,6 +99,7 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
   for (const name of ["testing-consumer.mjs", "testing-http-fixture.mjs"])
     copyFileSync(new URL(name, import.meta.url), join(consumer, name));
   console.log(run(process.execPath, [join(consumer, "testing-consumer.mjs")], consumer).trim());
+  copyFileSync(new URL("view-fixture.ts", import.meta.url), join(consumer, "view-fixture.ts"));
   const source = join(consumer, "client-consumer.ts");
   copyFileSync(new URL("consumer.ts", import.meta.url), source);
   const inputs = join(consumer, "client-resource-inputs.ts");
@@ -126,7 +149,7 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
   const renderer = join(consumer, "render-client.mjs");
   writeFileSync(
     renderer,
-    'import { styleFixtureHtml } from "./client-server/consumer.js";\nimport { writeFileSync } from "node:fs";\nwriteFileSync(new URL("./client-fixture.html", import.meta.url), styleFixtureHtml);',
+    'import { styleFixtureHtml, viewFixtureHtml } from "./client-server/consumer.js";\nimport { writeFileSync } from "node:fs";\nwriteFileSync(new URL("./client-fixture.html", import.meta.url), styleFixtureHtml);\nwriteFileSync(new URL("./view-fixtures.json", import.meta.url), JSON.stringify(viewFixtureHtml));',
   );
   console.log(run(process.execPath, [renderer], consumer).trim());
   const entry = join(consumer, "client-browser.ts");
@@ -169,6 +192,21 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
       readFileSync(join(consumer, "client-fixture.html"), "utf8") +
       '<script type="module" src="./main.ts"></script></body>',
   );
+  copyFileSync(new URL("views-browser.ts", import.meta.url), join(app, "views.ts"));
+  copyFileSync(new URL("view-fixture.ts", import.meta.url), join(app, "view-fixture.ts"));
+  const views = JSON.parse(readFileSync(join(consumer, "view-fixtures.json"), "utf8"));
+  for (const name of ["board", "tags", "map"]) {
+    writeFileSync(
+      join(app, name + ".html"),
+      '<!doctype html><meta charset="utf-8"><title>Packed ' +
+        name +
+        '</title><link rel="icon" href="data:,"><body data-view="' +
+        name +
+        '"><main id="packed-view">' +
+        views[name] +
+        '</main><script type="module" src="./views.ts"></script></body>',
+    );
+  }
   const production = join(consumer, "client-app");
   await build({
     configFile: false,
@@ -176,7 +214,15 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
     publicDir: false,
     plugins: [svelte({ configFile: false })],
     css: { postcss: { plugins: [] } },
-    build: { outDir: production, emptyOutDir: true },
+    build: {
+      outDir: production,
+      emptyOutDir: true,
+      rollupOptions: {
+        input: Object.fromEntries(
+          ["index", "board", "tags", "map"].map((name) => [name, join(app, name + ".html")]),
+        ),
+      },
+    },
   });
   const css = readdirSync(join(production, "assets")).filter((name) => name.endsWith(".css"));
   assert.ok(css.length, "Production bundler removed the stylesheet");

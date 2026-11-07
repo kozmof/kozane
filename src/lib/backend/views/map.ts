@@ -27,7 +27,7 @@ export function mapView(
     day: string | null;
     zoomStep: number;
   },
-) {
+): MapViewData {
   const { namespaceId: requestedNamespace, day: requestedDay, zoomStep } = selection;
   const tag = selection.tag ? normalizeTag(selection.tag) : null;
   const { namespaces } = snapshot;
@@ -104,4 +104,17 @@ export function mapView(
     cardsTruncated: snapshot.tags.truncated,
   };
 }
-export type MapViewData = ReturnType<typeof mapView>;
+export interface MapViewData {
+  zoomStep: number;
+  namespaceId: string | null;
+  namespaces: TreemapSnapshot["namespaces"];
+  drawn: { id: string; name: string }[];
+  partitions: TreemapPartition[];
+  scopes: MapScope[];
+  tagHits: TreemapSnapshot["tags"]["hits"];
+  tagCards: TreemapSnapshot["tags"]["cardData"];
+  tag: string | null;
+  day: string | null;
+  activity: TreemapSnapshot["activity"];
+  cardsTruncated: boolean;
+}

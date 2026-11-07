@@ -3,6 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve, join, extname } from "node:path";
 const root = resolve("tmp/client-package-harness");
 const files = new Map([["/", join(root, "index.html")]]);
+for (const name of ["board", "tags", "map"]) files.set(`/${name}.html`, join(root, `${name}.html`));
 for (const entry of await readdir(join(root, "assets"), { withFileTypes: true }))
   if (entry.isFile()) files.set(`/assets/${entry.name}`, join(root, "assets", entry.name));
 createServer(async (request, response) => {

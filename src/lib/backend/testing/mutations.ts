@@ -16,7 +16,7 @@ export interface MutationCase {
   keepalive: boolean;
 }
 // A new domain mutation requires a case before the project can type-check.
-export const backendMutationCases = {
+export const backendMutationCases: Readonly<Record<MutationName, MutationCase>> = {
   "cards.create": {
     call: (b) => b.cards.create("n /", { partitionId: "p", content: "Text" }, { keepalive: true }),
     method: "POST",
