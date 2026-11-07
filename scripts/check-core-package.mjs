@@ -9,6 +9,11 @@ import { dirname, join, resolve } from "node:path";
 import { build } from "vite";
 import { builtinModules } from "node:module";
 import { createHash } from "node:crypto";
+const corpusDriver =
+  process.argv
+    .find((value) => value.startsWith("--corpus-driver="))
+    ?.slice("--corpus-driver=".length) ?? "wasm";
+assert.ok(["wasm", "libsql"].includes(corpusDriver), "Unsupported corpus producer driver");
 const repository = resolve(import.meta.dirname, "..");
 const temporary = mkdtempSync(join(tmpdir(), "kozane-core-package-"));
 function run(command, args, cwd = repository) {
@@ -45,6 +50,13 @@ try {
   assert.deepEqual(Object.keys(candidate.dependencies).sort(), ["drizzle-orm", "uuid"]);
   const drizzleVersion = candidate.dependencies["drizzle-orm"];
   const uuidVersion = candidate.dependencies.uuid;
+  const libsqlVersion = JSON.parse(
+    readFileSync(join(repository, "node_modules/@libsql/client/package.json"), "utf8"),
+  ).version;
+  const nativeProducer = corpusDriver === "libsql";
+  const drizzleReference = nativeProducer
+    ? `${drizzleVersion}(@libsql/client@${libsqlVersion})`
+    : drizzleVersion;
   const wasmVersion = JSON.parse(readFileSync(join(repository, "package.json"), "utf8"))
     .dependencies["@sqlite.org/sqlite-wasm"];
   for (const version of [drizzleVersion, uuidVersion])
@@ -62,6 +74,7 @@ try {
         "@kozane/core": `file:${join(temporary, archive)}`,
         "drizzle-orm": drizzleVersion,
         "@sqlite.org/sqlite-wasm": wasmVersion,
+        ...(nativeProducer ? { "@libsql/client": libsqlVersion } : {}),
       },
     }),
   );
@@ -85,6 +98,13 @@ try {
     assert.ok(block, `Missing locked artifact ${name}`);
     return block.replace(/^\n/, "").trimEnd();
   }
+  const { lockedDriver } = await import("./compatibility/locked-driver.mjs");
+  const driverGraph = nativeProducer
+    ? lockedDriver(
+        readFileSync(join(repository, "pnpm-lock.yaml"), "utf8"),
+        `@libsql/client@${libsqlVersion}`,
+      )
+    : { packages: "", snapshots: "" };
   writeFileSync(
     join(temporary, "pnpm-lock.yaml"),
     `lockfileVersion: '9.0'
@@ -99,23 +119,38 @@ importers:
         version: ${JSON.stringify(archiveReference)}
       drizzle-orm:
         specifier: ${drizzleVersion}
-        version: ${drizzleVersion}
+        version: ${drizzleReference}
       '@sqlite.org/sqlite-wasm':
         specifier: ${wasmVersion}
         version: ${wasmVersion}
-packages:
+${
+  nativeProducer
+    ? `      '@libsql/client':
+        specifier: ${libsqlVersion}
+        version: ${libsqlVersion}
+`
+    : ""
+}packages:
   ${packageKey}:
     resolution: {integrity: ${integrity}, tarball: ${JSON.stringify(archiveReference)}}
     version: ${candidate.version}
 ${lockedPackage(`drizzle-orm@${drizzleVersion}`)}
+${driverGraph.packages}
 ${lockedPackage(`uuid@${uuidVersion}`)}
 ${lockedPackage(`'@sqlite.org/sqlite-wasm@${wasmVersion}'`)}
 snapshots:
   ${packageKey}:
     dependencies:
-      drizzle-orm: ${drizzleVersion}
+      drizzle-orm: ${drizzleReference}
       uuid: ${uuidVersion}
-  drizzle-orm@${drizzleVersion}: {}
+  ${JSON.stringify(`drizzle-orm@${drizzleReference}`)}: ${
+    nativeProducer
+      ? `
+    dependencies:
+      '@libsql/client': ${libsqlVersion}`
+      : "{}"
+  }
+${driverGraph.snapshots}
   uuid@${uuidVersion}: {}
   '@sqlite.org/sqlite-wasm@${wasmVersion}': {}
 `,
@@ -309,6 +344,7 @@ snapshots:
       consumer: temporary,
       archive: join(temporary, archive),
       candidate,
+      driver: corpusDriver,
       id: corpusOption.slice("--bootstrap-corpus=".length),
       run,
       repository,

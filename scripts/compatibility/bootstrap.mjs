@@ -14,7 +14,16 @@ import { format } from "oxfmt";
 import { readCorpus } from "./read-corpus.mjs";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 /** A new cohort is explicit and never overwrites previous producers or expectations. */
-export async function bootstrapCorpus({ consumer, archive, candidate, id, run, repository }) {
+export async function bootstrapCorpus({
+  consumer,
+  archive,
+  candidate,
+  id,
+  run,
+  repository,
+  driver = "wasm",
+}) {
+  if (!["wasm", "libsql"].includes(driver)) throw new Error("Unsupported corpus producer driver");
   if (!/^[a-z0-9][a-z0-9.-]+$/.test(id)) throw new Error("Invalid corpus cohort id");
   const root = join(repository, "tests/compatibility/corpus"),
     target = join(root, id);
@@ -23,7 +32,7 @@ export async function bootstrapCorpus({ consumer, archive, candidate, id, run, r
   mkdirSync(staging);
   const sources = join(consumer, "corpus-tools");
   mkdirSync(sources);
-  for (const name of ["generate-wasm.mjs", "view-summary.ts"])
+  for (const name of [`generate-${driver}.mjs`, "seed-corpus.mjs", "view-summary.ts"])
     copyFileSync(new URL(name, import.meta.url), join(sources, name));
   for (const name of ["validation.ts", "recovery.ts", "navigation.ts", "attempt.ts"])
     copyFileSync(new URL(`../restoration-harness/${name}`, import.meta.url), join(sources, name));
@@ -49,7 +58,7 @@ export async function bootstrapCorpus({ consumer, archive, candidate, id, run, r
     [
       "--import",
       resolve(repository, "node_modules/tsx/dist/loader.mjs"),
-      join(sources, "generate-wasm.mjs"),
+      join(sources, `generate-${driver}.mjs`),
       staging,
       join(sources, "producer.json"),
     ],

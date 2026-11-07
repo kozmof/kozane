@@ -4,6 +4,10 @@
     {
       "id": "core-0.1.0-rc1-wasm",
       "sha256": "ad56612c0d1e8e25be05569a4336eb08b106780fd22a4b0cb3f5bc2db2780f0c"
+    },
+    {
+      "id": "core-0.1.0-rc2-libsql",
+      "sha256": "d5030b1a050166b59a2d875f9164314cdd548ff185928ec1701ca2e17db40150"
     }
   ]
 }

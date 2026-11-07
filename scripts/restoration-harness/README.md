@@ -127,9 +127,9 @@ The build verifies all retained corpus hashes before copying database assets int
 The server exposes only the catalog and explicitly listed database paths. `corpus.spec.ts`
 restores every recorded selection through the verified worker. Each case checks the fetched
 bytes, requires the restored source, preserves the exact saved envelope and compares a stable
-view summary with the original expectation. The first cohort adds eleven cases covering empty,
+view summary with the original expectation. The wasm and libsql cohorts add 22 cases covering empty,
 sole, multiple and default namespace states, missing selections and populated Unicode data.
-Discovery finds 44 browser cases across three suites.
+Discovery finds 55 browser cases across three suites.
 
 P3-10 remains in progress. The expanded suspension and corpus cases await CI execution.
 Basic `run()` cases close their candidate after reporting validation. Retained cases

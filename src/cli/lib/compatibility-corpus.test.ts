@@ -3,6 +3,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
+import { lockedDriver } from "../../../scripts/compatibility/locked-driver.mjs";
 import { prepareBrowserCorpus } from "../../../scripts/compatibility/prepare-browser.mjs";
 import { readCorpus } from "../../../scripts/compatibility/read-corpus.mjs";
 import { summarizeView } from "../../../scripts/compatibility/view-summary";
@@ -101,4 +102,41 @@ it("refuses to prepare a browser corpus from altered original bytes", () => {
   temporary.push(output);
   writeFileSync(join(root, "core-0.1.0-rc1-wasm", "empty.sqlite3"), "damaged");
   expect(() => prepareBrowserCorpus(root, output)).toThrow(/Retained fixture changed/);
+});
+
+it("retains both supported producer engines and eleven outcomes per cohort", () => {
+  const cohorts = readCorpus(resolve("tests/compatibility/corpus"));
+  expect(new Set(cohorts.map((cohort) => cohort.producer.driver.package))).toEqual(
+    new Set(["@sqlite.org/sqlite-wasm", "@libsql/client"]),
+  );
+  for (const id of ["core-0.1.0-rc1-wasm", "core-0.1.0-rc2-libsql"]) {
+    const cohort = cohorts.find((entry) => entry.id === id);
+    expect(cohort).toBeDefined();
+    expect(
+      cohort.fixtures.flatMap((fixture: { expected: unknown[] }) => fixture.expected),
+    ).toHaveLength(11);
+  }
+});
+it("selects the complete locked native driver graph without unrelated workspace packages", () => {
+  const lock = readFileSync("pnpm-lock.yaml", "utf8");
+  const version = JSON.parse(
+    readFileSync("node_modules/@libsql/client/package.json", "utf8"),
+  ).version;
+  const root = `@libsql/client@${version}`;
+  const graph = lockedDriver(lock, root);
+  expect(graph.packages).toContain("integrity:");
+  expect(graph.snapshots).toMatch(/'@libsql\/linux-x64-gnu@[^']+':/);
+  expect(graph.snapshots).toMatch(/'@libsql\/darwin-arm64@[^']+':/);
+  expect(graph.snapshots).toMatch(/undici-types@[^:]+:/);
+  expect(graph.snapshots).not.toContain("svelte");
+  expect(() => lockedDriver(lock, "missing-driver@1.0.0")).toThrow(/Missing driver snapshot/);
+  expect(() =>
+    lockedDriver(
+      lock.replace(
+        /  libsql@[^:\n]+:\n    resolution:/,
+        "  missing-libsql@0.0.0:\n    resolution:",
+      ),
+      root,
+    ),
+  ).toThrow(/Missing driver artifact/);
 });

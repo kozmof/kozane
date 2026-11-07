@@ -13,11 +13,29 @@ The manifest records the migration ID, package version, source revision, exact
 producer archive hash, Drizzle version, wasm version, SQLite engine and Node runtime.
 This producer is an unpublished candidate running the wasm driver under Node.
 
+The `core-0.1.0-rc2-libsql` cohort adds the same public-service scenarios through
+`@libsql/client` and Drizzle's libsql adapter. Driver-owned transactions and the native
+migration batch produce four original files with eleven recorded outcomes. The packed
+candidate's wasm reader accepts all 22 outcomes across both cohorts. Both cohorts remain
+unpublished release candidates.
+
 Add a new cohort explicitly after building the intended candidate.
 
 ```sh
 node scripts/check-core-package.mjs --bootstrap-corpus=<new-cohort-id>
 ```
+
+Select the locked libsql producer explicitly when adding a native cohort.
+
+```sh
+node scripts/check-core-package.mjs --bootstrap-corpus=<new-cohort-id> --corpus-driver=libsql
+```
+
+Both generators use the same public-service scenarios. The libsql producer installs its
+exact dependency graph from the repository lock in the isolated consumer, including native
+platform artifacts. It does not import workspace core code. If the temporary mount blocks
+native library execution, use an executable temporary directory, such as
+`TMPDIR=/workspace/tmp` in the development workspace.
 
 The bootstrap refuses an existing cohort name. Retain the original `producer.tgz`,
 database bytes, manifest and index hashes in Git. Do not regenerate an old cohort
@@ -31,5 +49,5 @@ The browser cases verify fetched fixture hashes, require successful restoration,
 the saved envelope and compare the recorded view summaries. Browser execution of these
 new corpus cases remains pending.
 
-Libsql-produced fixtures, broader boundary data and publication gates remain tracked under
+Broader boundary data, recovery-size fixtures and publication gates remain tracked under
 P3-11, P3-12 and P3-18.
