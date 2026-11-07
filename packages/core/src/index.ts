@@ -27,3 +27,8 @@ export * from "./tag/tree.js";
 export * from "./urls.js";
 export * from "./palette.js";
 export * from "./order.js";
+
+export * from "./byte-length.js";
+export * from "./plain-object.js";
+export * from "./entry-name.js";
+export * from "./error-message.js";

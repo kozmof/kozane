@@ -68,6 +68,10 @@ if (!process.execArgv.includes(flag)) {
     "lib/order.js",
     "lib/constants/limits.js",
     "lib/constants/domain.js",
+    "lib/byte-length.js",
+    "lib/plain-object.js",
+    "lib/entry-name.js",
+    "lib/error-message.js",
   ]) {
     for (const [name, value] of Object.entries(await legacy(path)))
       assert.equal(value, core[name], `Node helper must use public core: ${name}`);

@@ -214,6 +214,10 @@ ${client.snapshots}
     "order",
     "constants/limits",
     "constants/domain",
+    "byte-length",
+    "plain-object",
+    "entry-name",
+    "error-message",
   ]) {
     assert.ok(
       entries.has(`package/dist/packages/core/src/${path}.js`),
@@ -278,6 +282,18 @@ ${client.snapshots}
     assert.equal(core.NAME_MAX, 255);
     assert.equal(core.BATCH_MAX, 2000);
     assert.equal(core.clamp(9,0,2), 2);
+    assert.equal(core.byteLength('a日本'), 7);
+    assert.equal(core.isPlainObject({}), true);
+    assert.equal(core.isPlainObject(new Date(0)), true);
+    assert.equal(core.isPlainObject([]), false);
+    assert.equal(core.isPlainObject(null), false);
+    assert.throws(() => services.prepareInput(new Date(0)), core.ValidationError);
+    assert.equal(core.entryNameIssue('notes'), null);
+    assert.equal(core.entryNameIssue('../escape'), 'Name cannot contain a path separator');
+    assert.equal(core.entryNameIssue(' draft ','File name'), 'File name cannot start or end with whitespace');
+    assert.equal(core.errorMessage(new Error('failure')), 'failure');
+    assert.equal(core.errorMessage({message:'object'}), '[object Object]');
+    assert.equal(core.errorMessage(Symbol('value')), 'Symbol(value)');
     assert.deepEqual(core.checkCardContent(' ok ',core.CONTENT_MAX), {ok:true,content:'ok'});
     assert.equal(core.contentLimitIssue('xx',1), 'content must be a string under 1 characters');
     assert.deepEqual(core.chunked([1,2,3],{size:2}), [[1,2],[3]]);
@@ -332,7 +348,7 @@ ${client.snapshots}
     join(temporary, "consumer.ts"),
     `
     import type { CardCreateInput, Namespace, ValidationError, CardPositionUpdate, CardData, NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceTruncation, TakenCard, Footprint, SlotPlacement } from '@kozane/core';
-    import { planStow, squashCardPositions, scanTagPositions, groupHitRows, applyPalette, chunked, CARD_WIDTH_RANGE, type BoardRect, type CardContentCheck, type PathKind, type TagPosition, type TagHit } from '@kozane/core';
+    import { planStow, squashCardPositions, scanTagPositions, groupHitRows, applyPalette, chunked, CARD_WIDTH_RANGE, byteLength, isPlainObject, entryNameIssue, errorMessage, type BoardRect, type CardContentCheck, type PathKind, type TagPosition, type TagHit } from '@kozane/core';
     import { createServiceContext, withTx, withReadTx, records, type DB } from '@kozane/core/database';
     import { cards, namespaces } from '@kozane/core/services';
     import { cardTable } from '@kozane/core/schema';
@@ -373,6 +389,19 @@ ${client.snapshots}
     // @ts-expect-error Stored path kinds remain a closed union.
     const invalidPathKind: PathKind = 'relative';
     void rect; void range; void pathKind; void content; void chunkValue; void invalidRect; void invalidPathKind;
+    declare const unknownValue: unknown;
+    if (isPlainObject(unknownValue)) {
+      const object: Record<string,unknown> = unknownValue;
+      void object;
+    }
+    const bytes: number = byteLength('日本');
+    const nameIssue: string | null = entryNameIssue('notes');
+    const message: string = errorMessage(unknownValue);
+    // @ts-expect-error Entry validation still requires a string.
+    void entryNameIssue({});
+    // @ts-expect-error Byte counts still require text.
+    void byteLength(1);
+    void bytes; void nameIssue; void message;
     const context = createServiceContext();
     void withReadTx(db, async tx => {
       const rows: Namespace[] = await records.namespace.getAllNamespaces({db:tx});

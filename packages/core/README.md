@@ -31,6 +31,11 @@ Domain limits and defaults are available from the root entry, including `CONTENT
 from `@kozane/core/database` to apply configured write limits. The host owns server settings
 and gesture thresholds.
 
+The root entry also exports `byteLength`, `entryNameIssue`, `errorMessage` and `isPlainObject`
+for shared adapter checks. `isPlainObject` accepts non-null objects other than arrays and
+does not inspect prototypes. JSON input preparation through services applies its own
+stricter prototype checks.
+
 Import `records` from `@kozane/core/database` for table-level reference lookups and Node
 compatibility. Its namespaces include `records.namespace`, `records.partition` and
 `records.card`. Use `composeWrite` to resolve references and invoke a transaction-bound
