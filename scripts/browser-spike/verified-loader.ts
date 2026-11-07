@@ -92,5 +92,6 @@ export async function verifiedModule(
     })(),
     30_000,
     () => controller.abort(),
+    clock,
   );
 }
