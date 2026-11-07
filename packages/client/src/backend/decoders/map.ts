@@ -1,4 +1,4 @@
-import type { TreemapSnapshot } from "../../../../../src/services/map.js";
+import type { TreemapSnapshot } from "../../../../kozane/src/services/map.js";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

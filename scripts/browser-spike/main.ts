@@ -2,7 +2,7 @@ import { schemaManifest } from "./schema-manifest";
 import { deadline } from "./deadline";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { sql } from "drizzle-orm";
-import * as schema from "../../src/db/schema";
+import * as schema from "../../packages/kozane/src/db/schema";
 import { OperationQueue } from "../../packages/client/src/backend/operation-queue.js";
 
 import { verifiedWorker, verifiedModule, type AssetManifest } from "./verified-loader";

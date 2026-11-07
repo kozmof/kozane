@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpBackend, type KozaneBackend } from "./index.js";
-import { cardResults } from "../../../../src/test-utils/card-results.js";
+import { cardResults } from "../../../kozane/src/test-utils/card-results.js";
 const capabilities = {
   writable: true,
   taskspaces: false,

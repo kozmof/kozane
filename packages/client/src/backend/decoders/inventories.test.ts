@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { INVENTORY_SLOT_MAX } from "../../constants/index.js";
-import { inventoryResults } from "../../../../../src/test-utils/inventory-results.js";
+import { inventoryResults } from "../../../../kozane/src/test-utils/inventory-results.js";
 import {
   readInventoryResult,
   readInventoryRemoved,
@@ -71,12 +71,12 @@ it("requires exactly the taken cards and paired finite positions when supplied",
   ).toBeNull();
 });
 it("accepts real service results across stow, take, repositioning and inventory removal", async () => {
-  const { createTestDB } = await import("../../../../../src/test-utils/db.js");
-  const { createServiceContext } = await import("../../../../../src/services/context.js");
-  const namespaces = await import("../../../../../src/services/namespaces.js");
-  const inventories = await import("../../../../../src/services/inventories.js");
-  const cards = await import("../../../../../src/services/cards.js");
-  const { get } = await import("../../../../../src/services/snapshot.js");
+  const { createTestDB } = await import("../../../../kozane/src/test-utils/db.js");
+  const { createServiceContext } = await import("../../../../kozane/src/services/context.js");
+  const namespaces = await import("../../../../kozane/src/services/namespaces.js");
+  const inventories = await import("../../../../kozane/src/services/inventories.js");
+  const cards = await import("../../../../kozane/src/services/cards.js");
+  const { get } = await import("../../../../kozane/src/services/snapshot.js");
   const db = await createTestDB();
   const context = createServiceContext({ canvasWidth: 400, canvasHeight: 400 });
   const namespace = await namespaces.create(db, context, { name: "Board" });

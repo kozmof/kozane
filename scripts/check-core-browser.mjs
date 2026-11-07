@@ -24,6 +24,10 @@ await build({
   build: {
     outDir: "tmp/core-browser",
     emptyOutDir: true,
-    lib: { entry: "src/services/index.ts", formats: ["es"], fileName: () => "services.js" },
+    lib: {
+      entry: "packages/kozane/src/services/index.ts",
+      formats: ["es"],
+      fileName: () => "services.js",
+    },
   },
 });

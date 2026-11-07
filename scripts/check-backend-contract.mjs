@@ -49,7 +49,7 @@ for (const match of matrix.matchAll(/\]\(([^)]+)\)/g)) {
   const url = new URL(match[1], matrixURL);
   if (!existsSync(fileURLToPath(url))) problems.push(`Missing matrix link: ${match[1]}`);
 }
-const fixture = source("src/test-utils/backend-inputs.typecheck.ts");
+const fixture = source("packages/kozane/src/test-utils/backend-inputs.typecheck.ts");
 const aliases = new Map([["backend", ""]]);
 const calls = new Set();
 function access(node) {

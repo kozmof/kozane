@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpBackend, type KozaneBackend } from "./index.js";
-import { geometryResults } from "../../../../src/test-utils/geometry-results.js";
+import { geometryResults } from "../../../kozane/src/test-utils/geometry-results.js";
 const capabilities = {
   writable: true,
   taskspaces: false,

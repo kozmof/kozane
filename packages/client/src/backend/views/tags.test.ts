@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { tagsView } from "./tags.js";
 import { tagDataset } from "../tags.fixtures.js";
 import { TAG_HITS_SHOWN_MAX } from "../../constants/index.js";
-import type { TagHit } from "../../../../../src/lib/types.js";
+import type { TagHit } from "../../../../kozane/src/lib/types.js";
 const card = (cardId: string, tag: string): TagHit => ({
   tag,
   excerpt: "card",

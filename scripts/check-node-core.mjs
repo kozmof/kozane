@@ -8,7 +8,9 @@ const flag = "--experimental-import-meta-resolve";
 if (!process.execArgv.includes(flag)) {
   execFileSync(process.execPath, [flag, ...process.argv.slice(1)], { stdio: "inherit" });
 } else {
-  const root = resolve(process.argv[2] ?? fileURLToPath(new URL("..", import.meta.url)));
+  const root = resolve(
+    process.argv[2] ?? fileURLToPath(new URL("../packages/kozane", import.meta.url)),
+  );
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   const expected = pkg.dependencies["@kozane/core"].replace(/^workspace:/, "");
   assert.match(expected, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);

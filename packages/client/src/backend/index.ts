@@ -20,3 +20,6 @@ export * from "../tag/truncation.js";
 
 export * from "../constants/map.js";
 export * from "../constants/tag.js";
+
+export * from "./views/map.js";
+export * from "./views/tags.js";

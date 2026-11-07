@@ -12,7 +12,7 @@ async function files(directory) {
     )
   ).flat();
 }
-const sources = (await files("src")).filter(
+const sources = (await files("packages/kozane/src")).filter(
   (path) => /\.(ts|svelte)$/.test(path) && !/\.test\.ts$/.test(path),
 );
 const sections = [
@@ -64,14 +64,14 @@ for (const path of sources
   .sort()) {
   const source = await readFile(path, "utf8");
   let classification;
-  if (path.startsWith("src/routes/")) {
+  if (path.startsWith("packages/kozane/src/routes/")) {
     classification = path.includes("/health/")
       ? "infrastructure"
       : /\/(login|taskspaces)\//.test(path)
         ? "Node feature"
         : "core-backed";
   } else {
-    const command = path.slice("src/cli/commands/".length).split(/[/.]/)[0];
+    const command = path.slice("packages/kozane/src/cli/commands/".length).split(/[/.]/)[0];
     classification = domainCommands.has(command)
       ? "core-backed"
       : ["init", "db", "open", "status"].includes(command)

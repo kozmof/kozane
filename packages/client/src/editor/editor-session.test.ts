@@ -1,7 +1,7 @@
 import {
   httpEditorContext,
   staticEditorContext,
-} from "../../../../src/test-utils/editor-context.js";
+} from "../../../kozane/src/test-utils/editor-context.js";
 import type { TaskspaceFileData } from "../backend/contract.js";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { TaskspaceFileTree } from "$lib/types";

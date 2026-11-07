@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
  * `pnpm pack:check` runs this against the tarball produced by `pack:tmp`.
  */
 
-const packageRoot = resolve(import.meta.dirname, "..");
+const packageRoot = resolve(import.meta.dirname, "../packages/kozane");
 const { name, version } = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
 const tarball = join(process.env.TMPDIR ?? tmpdir(), `${name}-${version}.tgz`);
 const packedManifest = JSON.parse(
@@ -87,3 +87,17 @@ if (missing.length > 0 || shipped.length > 0) {
 console.log(
   `OK: server entry is bin/server.js, adapter entry excluded, ${REQUIRED.length} required files present.`,
 );
+
+// Binary imports must remain relative to the installed CLI package.
+for (const binary of ["kozane.js", "server.js"]) {
+  const source = readFileSync(join(packageRoot, "bin", binary), "utf8");
+  const packed = execFileSync("tar", ["-xOf", tarball, `package/bin/${binary}`], {
+    encoding: "utf8",
+  });
+  assert.equal(packed, source);
+  assert.doesNotMatch(
+    source,
+    /["']\.\.\/\.\.\//,
+    "Binary imports must stay inside the CLI package",
+  );
+}

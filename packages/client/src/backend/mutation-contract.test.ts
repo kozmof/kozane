@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { cardResults } from "../../../../src/test-utils/card-results.js";
-import { inventoryResults } from "../../../../src/test-utils/inventory-results.js";
-import { geometryResults } from "../../../../src/test-utils/geometry-results.js";
-import { structureResults } from "../../../../src/test-utils/structure-results.js";
+import { cardResults } from "../../../kozane/src/test-utils/card-results.js";
+import { inventoryResults } from "../../../kozane/src/test-utils/inventory-results.js";
+import { geometryResults } from "../../../kozane/src/test-utils/geometry-results.js";
+import { structureResults } from "../../../kozane/src/test-utils/structure-results.js";
 import {
   HttpBackend,
   StaticBackend,

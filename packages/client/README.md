@@ -110,3 +110,5 @@ Both production browser fixtures require the client to recognize a validation er
 created by the application's public core import before reporting hydration readiness.
 This check exercises the bundled runtime through public entries without network calls.
 The packed client development dependency must match its exact core peer.
+
+The root entry also exports the map and tag view projections used by server loaders. These helpers run without browser globals.

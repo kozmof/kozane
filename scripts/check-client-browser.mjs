@@ -10,7 +10,7 @@ const shared = {
   publicDir: false,
   resolve: {
     alias: {
-      $lib: fileURLToPath(new URL("../src/lib", import.meta.url)),
+      $lib: fileURLToPath(new URL("../packages/kozane/src/lib", import.meta.url)),
       "styled-system": fileURLToPath(new URL("../styled-system", import.meta.url)),
     },
   },
@@ -62,7 +62,7 @@ async function main() {
     build: {
       outDir: "tmp/client-ssr",
       emptyOutDir: true,
-      ssr: "src/test-utils/client-view-consumer.ts",
+      ssr: "packages/kozane/src/test-utils/client-view-consumer.ts",
       rollupOptions: { output: { entryFileNames: "views.js" } },
     },
   });
@@ -72,7 +72,7 @@ async function main() {
       outDir: "tmp/client-hydration",
       emptyOutDir: true,
       lib: {
-        entry: "src/test-utils/client-hydration-consumer.ts",
+        entry: "packages/kozane/src/test-utils/client-hydration-consumer.ts",
         formats: ["es"],
         fileName: () => "consumer.js",
       },

@@ -34,7 +34,7 @@ export async function buildStyles(root, packageRoot) {
   const utilities = join(packageRoot, "tmp/utilities.css");
   runPanda(root, packageRoot, ["cssgen", "--outfile", utilities]);
   const stylesheet = combineStyles(
-    await readFile(join(root, "src/app.css"), "utf8"),
+    await readFile(join(root, "packages/kozane/src/app.css"), "utf8"),
     await readFile(utilities, "utf8"),
   );
   await writeFile(join(packageRoot, "dist/styles.css"), stylesheet);

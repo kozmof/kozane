@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { baseCard, cardResults } from "../../../../../src/test-utils/card-results.js";
+import { baseCard, cardResults } from "../../../../kozane/src/test-utils/card-results.js";
 import {
   readCardCreated,
   readCardUpdated,
@@ -102,14 +102,14 @@ it("normalizes squash wire timestamps to the declared Date results and rejects i
   }
 });
 it("accepts actual service results through card editing, inventory refit, glue and squash", async () => {
-  const { createTestDB } = await import("../../../../../src/test-utils/db.js");
-  const { createServiceContext } = await import("../../../../../src/services/context.js");
-  const namespaces = await import("../../../../../src/services/namespaces.js");
-  const cards = await import("../../../../../src/services/cards.js");
-  const glues = await import("../../../../../src/services/glues.js");
-  const layers = await import("../../../../../src/services/layers.js");
-  const inventories = await import("../../../../../src/services/inventories.js");
-  const { get } = await import("../../../../../src/services/snapshot.js");
+  const { createTestDB } = await import("../../../../kozane/src/test-utils/db.js");
+  const { createServiceContext } = await import("../../../../kozane/src/services/context.js");
+  const namespaces = await import("../../../../kozane/src/services/namespaces.js");
+  const cards = await import("../../../../kozane/src/services/cards.js");
+  const glues = await import("../../../../kozane/src/services/glues.js");
+  const layers = await import("../../../../kozane/src/services/layers.js");
+  const inventories = await import("../../../../kozane/src/services/inventories.js");
+  const { get } = await import("../../../../kozane/src/services/snapshot.js");
   const db = await createTestDB();
   const context = createServiceContext();
   const namespace = await namespaces.create(db, context, { name: "Board" });

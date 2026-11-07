@@ -11,7 +11,7 @@ import type {
   Warp,
   Inventory,
   CardInventory,
-} from "../../../../../src/lib/types.js";
+} from "../../../../kozane/src/lib/types.js";
 import { PATH_KINDS, type PathKind } from "../../constants/index.js";
 import {
   readArray,

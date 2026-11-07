@@ -2,7 +2,7 @@
 
 This reference covers JSON endpoints used by browser and API clients.
 For HTML pages, see the [browser UI handbook](../docs/browser-ui-handbook.md).
-Endpoint coverage is checked by `src/routes/spec.test.ts`.
+Endpoint coverage is checked by `packages/kozane/src/routes/spec.test.ts`.
 
 ## Conventions
 

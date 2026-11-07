@@ -1,5 +1,5 @@
-import type { TagsViewData } from "../../../../src/services/tags.js";
-import type { TagHit } from "../../../../src/lib/types.js";
+import type { TagsViewData } from "../../../kozane/src/services/tags.js";
+import type { TagHit } from "../../../kozane/src/lib/types.js";
 /** A gathered dataset for client view and HTTP decoder tests. */
 export function tagDataset(hits: TagHit[] = []): TagsViewData {
   const cards = [

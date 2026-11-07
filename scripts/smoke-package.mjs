@@ -39,11 +39,15 @@ try {
   const clientArchivePath = join(staging, clientArchive);
   run("pnpm", [
     ...(process.env.KOZANE_ALLOW_UNSUPPORTED_NODE === "1" ? ["--config.ignore-scripts=true"] : []),
+    "--filter",
+    "kozane",
     "pack",
     "--pack-destination",
     staging,
   ]);
-  const { name, version } = JSON.parse(readFileSync(join(sourceRoot, "package.json"), "utf8"));
+  const { name, version } = JSON.parse(
+    readFileSync(join(sourceRoot, "packages/kozane/package.json"), "utf8"),
+  );
   const archive = readdirSync(staging).find((file) => file === name + "-" + version + ".tgz");
   if (!archive) throw new Error("pnpm pack did not produce an archive");
   const archivePath = join(staging, archive);

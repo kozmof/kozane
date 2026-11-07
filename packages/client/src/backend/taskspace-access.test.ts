@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpBackend } from "./http-backend.js";
-import { staticEditorContext } from "../../../../src/test-utils/editor-context.js";
+import { staticEditorContext } from "../../../kozane/src/test-utils/editor-context.js";
 
 const taskspace = { id: "t1", path: "notes" };
 const capabilities = {

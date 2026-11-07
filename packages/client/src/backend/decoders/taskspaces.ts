@@ -4,7 +4,7 @@ import type {
   TaskspaceEntryKind,
   TaskspaceListing,
   TaskspaceTruncation,
-} from "../../../../../src/lib/types.js";
+} from "../../../../kozane/src/lib/types.js";
 import type {
   TaskspaceCreated,
   TaskspaceRenamed,

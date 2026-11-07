@@ -28,18 +28,18 @@ import type {
   InventoryStowInput,
   InventoryTakeInput,
   NamespaceCreateInput,
-} from "../../../../src/services/inputs.js";
-export type * from "../../../../src/services/inputs.js";
-import type * as CardsServices from "../../../../src/services/cards.js";
-import type * as GluesServices from "../../../../src/services/glues.js";
-import type * as LayersServices from "../../../../src/services/layers.js";
-import type * as PartitionsServices from "../../../../src/services/partitions.js";
-import type * as ScopesServices from "../../../../src/services/scopes.js";
-import type * as WarpsServices from "../../../../src/services/warps.js";
-import type * as InventoriesServices from "../../../../src/services/inventories.js";
-import type * as NamespaceServices from "../../../../src/services/namespaces.js";
-import type { TagsViewData } from "../../../../src/services/tags.js";
-import type { TreemapSnapshot } from "../../../../src/services/map.js";
+} from "../../../kozane/src/services/inputs.js";
+export type * from "../../../kozane/src/services/inputs.js";
+import type * as CardsServices from "../../../kozane/src/services/cards.js";
+import type * as GluesServices from "../../../kozane/src/services/glues.js";
+import type * as LayersServices from "../../../kozane/src/services/layers.js";
+import type * as PartitionsServices from "../../../kozane/src/services/partitions.js";
+import type * as ScopesServices from "../../../kozane/src/services/scopes.js";
+import type * as WarpsServices from "../../../kozane/src/services/warps.js";
+import type * as InventoriesServices from "../../../kozane/src/services/inventories.js";
+import type * as NamespaceServices from "../../../kozane/src/services/namespaces.js";
+import type { TagsViewData } from "../../../kozane/src/services/tags.js";
+import type { TreemapSnapshot } from "../../../kozane/src/services/map.js";
 import type { WarpListEntry } from "../warp-list.js";
 export type * from "./taskspaces-api.js";
 

@@ -1,5 +1,5 @@
-import { prepareInput } from "../../../../src/services/prepare-input.js";
-import { ValidationError } from "../../../../src/services/errors.js";
+import { prepareInput } from "../../../kozane/src/services/prepare-input.js";
+import { ValidationError } from "../../../kozane/src/services/errors.js";
 import { BackendError, type BackendErrorCode } from "./contract.js";
 
 const DOMAIN_CODES = new Set<BackendErrorCode>([

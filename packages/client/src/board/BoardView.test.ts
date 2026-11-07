@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { BoardView } from "../index.js";
 import { HttpBackend, StaticBackend } from "../backend/index.js";
-import { boardViewProps } from "../../../../src/test-utils/board-view-props.js";
+import { boardViewProps } from "../../../kozane/src/test-utils/board-view-props.js";
 const capabilities = {
   writable: true,
   persistent: true,

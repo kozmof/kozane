@@ -1,0 +1,730 @@
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { tick } from "svelte";
+import MapPage from "./+page.svelte";
+import { DEFAULT_ZOOM, zoomPercent } from "../../../../client/src/map/lib/view.js";
+import {
+  TAG_PANEL_LEFT,
+  TAG_PANEL_TOP,
+  TAG_PANEL_WIDTH,
+  TAG_ROW_HEIGHT,
+} from "../../../../client/src/map/lib/tag-rows.js";
+import type { TagHit } from "$lib/types";
+
+/**
+ * Test rendered labels, links, sizes, and tag selection against their data. Pure geometry has
+ * separate layout tests.
+ */
+
+/**
+ * Use one fixed day for the clock and card fixtures so day filtering remains deterministic.
+ * Choose Sunday to cover the heatmap's week boundary.
+ */
+const TODAY = "2026-09-06";
+/** A date within the grid that the selected-day filter must exclude. */
+const EARLIER = "2026-09-04";
+
+const partition = (id: string, namespaceId: string, name: string, cards: number) => ({
+  id,
+  namespaceId,
+  name,
+  isDefault: false,
+  cards,
+  bg: "oklch(93% 0.055 264)",
+  dot: "oklch(80% 0.21 264)",
+});
+
+const cardHit = (cardId: string, tag: string): TagHit => ({
+  tag,
+  source: { kind: "card", cardId },
+  excerpt: `a card with :${tag}`,
+});
+
+function pageData(over: Record<string, unknown> = {}) {
+  const hits = [cardHit("c1", "perf"), cardHit("c2", "perf:cache"), cardHit("c3", "docs")];
+  return {
+    namespaceId: null,
+    namespaces: [
+      { id: "p1", name: "Namespace One", isDefault: true },
+      { id: "p2", name: "Namespace Two", isDefault: false },
+    ],
+    drawn: [
+      { id: "p1", name: "Namespace One" },
+      { id: "p2", name: "Namespace Two" },
+    ],
+    partitions: [
+      partition("b1", "p1", "General", 8),
+      partition("b2", "p1", "Drafts", 2),
+      partition("b3", "p2", "Notes", 4),
+    ],
+    scopes: [
+      {
+        id: "s1",
+        name: "Release plan",
+        spokes: [
+          { kind: "partition", id: "b1", cards: 3 },
+          { kind: "partition", id: "b3", cards: 1 },
+        ],
+      },
+    ],
+    tagHits: hits,
+    tagCards: {
+      c1: { namespaceId: "p1", partitionId: "b1", updatedDay: TODAY },
+      c2: { namespaceId: "p2", partitionId: "b3", updatedDay: EARLIER },
+      c3: { namespaceId: "p1", partitionId: "b2", updatedDay: TODAY },
+    },
+    tag: null,
+    cardsTruncated: false,
+    day: null,
+    activity: [],
+    zoomStep: 0.05,
+    ...over,
+  };
+}
+
+/**
+ * Calculate the nth tag row's line origin from layout constants at the panel's right edge and
+ * row midpoint.
+ */
+const lineStart = (row: number) =>
+  `M ${TAG_PANEL_LEFT + TAG_PANEL_WIDTH} ${TAG_PANEL_TOP + row * TAG_ROW_HEIGHT + TAG_ROW_HEIGHT / 2} Q `;
+
+const draw = (over: Record<string, unknown> = {}) =>
+  render(MapPage, { props: { data: pageData(over) as never, params: {}, form: null } });
+
+/** Query the map surface specifically because header navigation also contains SVG icons. */
+const MAP = '[role="presentation"] ';
+const mapSvg = (container: HTMLElement) => container.querySelector(`${MAP}svg`);
+const mapParts = (container: HTMLElement, selector: string) => [
+  ...container.querySelectorAll(`${MAP}${selector}`),
+];
+
+/** The lines a tag draws are the only accented paths on the map. */
+const tagPaths = (container: HTMLElement) =>
+  mapParts(container, "path").filter((p) =>
+    (p.getAttribute("stroke") ?? "").includes("select-accent"),
+  );
+
+const rectOf = (container: HTMLElement, name: string) =>
+  mapParts(container, "g").find((g) => g.textContent?.includes(name));
+
+describe("map page", () => {
+  describe("card change heatmap", () => {
+    /**
+     * Pin Date to the fixture's TODAY value while leaving timers real for Svelte and
+     * testing-library.
+     */
+    const today = TODAY;
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(`${today}T12:00:00.000Z`));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it("links an activity square to a day while preserving other filters", () => {
+      draw({
+        namespaceId: "p1",
+        tag: "perf",
+        activity: [{ day: today, partitionId: "b1", cards: 2 }],
+      });
+      const link = screen.getByRole("link", { name: `${today}: 2 card changes` });
+      expect(link.getAttribute("href")).toBe(`/map?namespaceId=p1&tag=perf&day=${today}`);
+    });
+
+    it("filters partition counts to the selected day and offers a clear link", () => {
+      const { container } = draw({
+        day: today,
+        activity: [{ day: today, partitionId: "b1", cards: 3 }],
+      });
+      expect(rectOf(container, "General")?.textContent).toContain("3");
+      expect(
+        [...container.querySelectorAll("a")].find((link) =>
+          link.getAttribute("aria-label")?.startsWith("Drafts, 0 cards"),
+        ),
+      ).toBeDefined();
+      expect(screen.getByRole("link", { name: `${today}: 3 card changes` })).toHaveAttribute(
+        "aria-current",
+        "date",
+      );
+      expect(screen.getByRole("link", { name: "Clear" })).toHaveAttribute("href", "/map");
+      expect(screen.getByText(today, { selector: "section span" })).toBeInTheDocument();
+      expect(screen.queryByText(/^\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
+    });
+
+    it("filters tag counts and tag-to-partition links to the selected day", () => {
+      const { container } = draw({
+        day: today,
+        tag: "perf",
+        activity: [
+          { day: today, partitionId: "b1", cards: 1 },
+          { day: today, partitionId: "b2", cards: 1 },
+        ],
+      });
+
+      expect(screen.getByRole("link", { name: /perf\s+1 card$/ })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /cache/ })).not.toBeInTheDocument();
+      expect(tagPaths(container)).toHaveLength(1);
+      expect(Number(rectOf(container, "General")?.getAttribute("opacity"))).toBe(1);
+      expect(Number(rectOf(container, "Drafts")?.getAttribute("opacity"))).toBeLessThan(1);
+    });
+
+    it("places the activity control in its own labelled region", () => {
+      draw();
+      expect(screen.getByRole("region", { name: "Card change activity" })).toBeInTheDocument();
+      const range = screen.getByText(/^\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}$/);
+      expect(range).toBeInTheDocument();
+      expect(range).not.toHaveTextContent("Card changes");
+    });
+  });
+
+  it("draws a rectangle for every namespace and every partition", () => {
+    const { container } = draw();
+    // A namespace's name is in the header nav and in the picture and in the words beside it,
+    // so the picture is asked about specifically.
+    expect(mapSvg(container)?.textContent).toContain("Namespace One");
+    expect(screen.getByText("General")).toBeInTheDocument();
+    expect(screen.getByText("Notes")).toBeInTheDocument();
+    // Two namespaces, three partitions, and none of them zero-sized.
+    const rects = mapParts(container, "svg rect");
+    expect(rects).toHaveLength(5);
+    for (const rect of rects) expect(Number(rect.getAttribute("width"))).toBeGreaterThan(0);
+  });
+
+  it("labels a partition with the number of cards its area comes from", () => {
+    const { container } = draw();
+    expect(rectOf(container, "General")?.textContent).toContain("8");
+    expect(rectOf(container, "Drafts")?.textContent).toContain("2");
+  });
+
+  it("links a partition to the board of the namespace it belongs to", () => {
+    const { container } = draw();
+    const link = [...container.querySelectorAll("a")].find((a) =>
+      a.getAttribute("aria-label")?.startsWith("Notes"),
+    );
+    expect(link?.getAttribute("href")).toBe("/p2");
+  });
+
+  /** Show empty namespaces as named empty-strip rectangles. */
+  describe("a namespace with no cards in it", () => {
+    const withEmpty = () =>
+      draw({
+        namespaces: [
+          { id: "p1", name: "Namespace One", isDefault: true },
+          { id: "p3", name: "Nothing Yet", isDefault: false },
+        ],
+        drawn: [
+          { id: "p1", name: "Namespace One" },
+          { id: "p3", name: "Nothing Yet" },
+        ],
+        partitions: [partition("b1", "p1", "General", 8), partition("b4", "p3", "General", 0)],
+        scopes: [],
+      });
+
+    it("is drawn with its name rather than as an unlabelled box", () => {
+      const { container } = withEmpty();
+      expect(mapSvg(container)?.textContent).toContain("Nothing Yet");
+    });
+
+    it("is drawn as an outline, so it is not read as a namespace that packed small", () => {
+      const { container } = withEmpty();
+      const empty = mapParts(container, "svg > g > rect").find(
+        (rect) => rect.getAttribute("stroke-dasharray") === "2 2",
+      );
+      expect(empty).toBeDefined();
+      expect(empty?.getAttribute("fill")).toBe("transparent");
+      expect(Number(empty?.getAttribute("height"))).toBeGreaterThan(0);
+    });
+  });
+
+  /** Give icon links accessible names that identify their destinations. */
+  describe("the way out", () => {
+    const linkTo = (container: HTMLElement, href: string) =>
+      [...container.querySelectorAll("header a")].find((a) => a.getAttribute("href") === href);
+
+    it("names each link, since neither of them says anything in words", () => {
+      const { container } = draw();
+      for (const [href, name] of [
+        ["/", "All namespaces"],
+        ["/tags", "Tags"],
+      ]) {
+        const link = linkTo(container, href);
+        expect(link?.getAttribute("aria-label")).toBe(name);
+        // The picture is all there is, so an empty accessible name would leave the link
+        // announcing its own URL.
+        expect(link?.textContent?.trim()).toBe("");
+        expect(link?.querySelector("svg")).not.toBeNull();
+      }
+    });
+
+    /** Keep namespace choices as text labels. */
+    it("leaves the namespace narrowing in words", () => {
+      const { container } = draw();
+      expect(linkTo(container, "/map?namespaceId=p1")?.textContent?.trim()).toBe("Namespace One");
+    });
+
+    /**
+     * Show the selected namespace name when the back link leads to its board rather than the
+     * namespace list.
+     */
+    it("shows the namespace it goes back to when the map is narrowed to one", () => {
+      const { container } = draw({ namespaceId: "p1" });
+      const back = linkTo(container, "/p1")!;
+      expect(back.textContent?.trim()).toBe("Namespace One");
+      expect(back.getAttribute("aria-label")).toBe("Back to Namespace One");
+      // Still a picture and a name, not a name on its own.
+      expect(back.querySelector("svg")).not.toBeNull();
+    });
+
+    /** Unnarrowed there is no namespace to name, and the icon stands alone. */
+    it("shows no name when it leads to the whole list", () => {
+      const { container } = draw();
+      expect(linkTo(container, "/")?.textContent?.trim()).toBe("");
+    });
+  });
+
+  it("draws a hub for each scope, named, with a line per partition it reaches", () => {
+    const { container } = draw();
+    expect(screen.getByText("Release plan")).toBeInTheDocument();
+    expect(mapParts(container, "svg circle")).toHaveLength(1);
+  });
+
+  describe("the tag tree", () => {
+    it("lists the tags, with the cards under each", () => {
+      draw();
+      const row = screen.getByText("perf").closest("a");
+      expect(row?.textContent).toContain("2");
+      expect(screen.getByText("2 cards")).toBeInTheDocument();
+    });
+
+    /**
+     * Assert inline row height because Panda cannot extract a rule from runtime
+     * interpolation. Tag-line geometry requires the rendered height to match the constant.
+     */
+    it("pins the row to the height the lines are drawn from", () => {
+      const { container } = draw();
+      const row = container.querySelector<HTMLElement>('nav[aria-label="Tags"] a')!;
+      expect(row.getAttribute("style")).toContain(`height: ${TAG_ROW_HEIGHT}px`);
+    });
+
+    it("links a row to the same page with the tag selected", () => {
+      draw();
+      expect(screen.getByText("docs").closest("a")?.getAttribute("href")).toBe("/map?tag=docs");
+    });
+
+    it("links the selected row back to no selection, so a click clears it", () => {
+      draw({ tag: "docs" });
+      expect(screen.getByText("docs").closest("a")?.getAttribute("href")).toBe("/map");
+    });
+
+    it("keeps the namespace narrowing when a tag is picked", () => {
+      draw({ namespaceId: "p1" });
+      expect(screen.getByText("docs").closest("a")?.getAttribute("href")).toBe(
+        "/map?namespaceId=p1&tag=docs",
+      );
+    });
+
+    it("opens the tree down to the selected subcategory", () => {
+      draw({ tag: "perf:cache" });
+      expect(screen.getByText("cache")).toBeInTheDocument();
+    });
+  });
+
+  describe("selecting a tag", () => {
+    it("draws a line to each partition the tag reaches", () => {
+      const { container } = draw({ tag: "docs" });
+      expect(tagPaths(container)).toHaveLength(1);
+    });
+
+    /** Selecting a parent tag must include partitions reached by its descendants. */
+    it("reaches everything under the tag, not only what carries it exactly", () => {
+      const { container } = draw({ tag: "perf" });
+      expect(tagPaths(container)).toHaveLength(2);
+    });
+
+    /**
+     * Render tag-link origins from row geometry before measurement. The first row begins half
+     * a row height below the panel top.
+     */
+    it("leaves from its own row, without waiting to be measured", () => {
+      const { container } = draw({ tag: "docs" });
+      expect(tagPaths(container)[0].getAttribute("d")?.startsWith(lineStart(0))).toBe(true);
+    });
+
+    it("leaves from further down for a row further down", () => {
+      const { container } = draw({ tag: "perf" });
+      // `perf` is the second row after `docs`.
+      expect(tagPaths(container)[0].getAttribute("d")?.startsWith(lineStart(1))).toBe(true);
+    });
+
+    /**
+     * Scroll long tag trees within the panel and move link origins with their rows.
+     */
+    it("moves a line with its row when the panel is scrolled", async () => {
+      const { container } = draw({ tag: "docs" });
+      const panel = container.querySelector<HTMLElement>('nav[aria-label="Tags"]')!;
+      const startsAt = () => tagPaths(container)[0].getAttribute("d")!.split(" Q ")[0];
+      expect(startsAt()).toBe(lineStart(0).slice(0, -3));
+
+      panel.scrollTop = 30;
+      await fireEvent.scroll(panel);
+      await tick();
+
+      // Check the line origin moves by the panel scroll offset. Its destination is recomputed
+      // too.
+      const [x, y] = startsAt().split(" ").slice(1).map(Number);
+      expect(x).toBe(TAG_PANEL_LEFT + TAG_PANEL_WIDTH);
+      expect(y).toBe(TAG_PANEL_TOP + TAG_ROW_HEIGHT / 2 - 30);
+    });
+
+    it("draws nothing until a tag is chosen", () => {
+      const { container } = draw();
+      expect(tagPaths(container)).toHaveLength(0);
+    });
+
+    /**
+     * Draw tag links only on click so moving the pointer across the panel leaves the
+     * selected graph unchanged.
+     */
+    it("draws nothing for a tag merely pointed at", async () => {
+      const { container } = draw();
+      const row = [...container.querySelectorAll('nav[aria-label="Tags"] a')].find((a) =>
+        a.textContent?.includes("docs"),
+      )!;
+
+      await fireEvent.mouseEnter(row);
+      await fireEvent.focus(row);
+      await tick();
+
+      expect(tagPaths(container)).toHaveLength(0);
+      // Nor does the packing stand back, which is the other half of a tag being drawn.
+      expect(Number(rectOf(container, "General")?.getAttribute("opacity"))).toBe(1);
+    });
+
+    /** Pointing at one row while another is drawn leaves the drawn one alone. */
+    it("keeps the chosen tag's lines while another row is pointed at", async () => {
+      const { container } = draw({ tag: "docs" });
+      const before = tagPaths(container).map((path) => path.getAttribute("d"));
+      const other = [...container.querySelectorAll('nav[aria-label="Tags"] a')].find((a) =>
+        a.textContent?.includes("perf"),
+      )!;
+
+      await fireEvent.mouseEnter(other);
+      await tick();
+
+      expect(tagPaths(container).map((path) => path.getAttribute("d"))).toEqual(before);
+    });
+
+    it("stands the rest of the map back so the lines read", () => {
+      const { container } = draw({ tag: "docs" });
+      const dimmed = rectOf(container, "General");
+      const lit = rectOf(container, "Drafts");
+      expect(Number(dimmed?.getAttribute("opacity"))).toBeLessThan(1);
+      expect(Number(lit?.getAttribute("opacity"))).toBe(1);
+    });
+
+    it("dims nothing for a tag that reaches nowhere on the map", () => {
+      const { container } = draw({ tag: "ghost" });
+      expect(Number(rectOf(container, "General")?.getAttribute("opacity"))).toBe(1);
+    });
+  });
+
+  describe("what it says when there is little to say", () => {
+    it("draws nothing rather than an empty box for an empty workspace", () => {
+      const { container } = draw({
+        namespaces: [],
+        drawn: [],
+        partitions: [],
+        scopes: [],
+        tagHits: [],
+        tagCards: {},
+      });
+      expect(mapSvg(container)).toBeNull();
+    });
+
+    it("omits the tags panel when there are no tags", () => {
+      draw({ tagHits: [], tagCards: {} });
+      expect(screen.queryByRole("navigation", { name: "Tags" })).toBeNull();
+    });
+
+    /** A tree cut at a ceiling and a workspace with that many tags look identical. */
+    it("says so when the gather stopped at its ceiling", () => {
+      draw({ cardsTruncated: true });
+      expect(screen.getByText(/the counts above are a floor/)).toBeInTheDocument();
+    });
+  });
+
+  it("says the same thing in words for a reader who cannot see it", () => {
+    draw();
+    const summary = screen.getByRole("heading", { name: "What the map shows" }).parentElement!;
+    expect(summary.textContent).toContain("Namespace One: 10 cards");
+    expect(summary.textContent).toContain("General: 8 cards");
+    expect(summary.textContent).toContain("Release plan: reaches 2 of them");
+  });
+});
+
+/** Test map gestures and click suppression separately from pure view arithmetic. */
+describe("panning and zooming", () => {
+  const surface = (container: HTMLElement) =>
+    container.querySelector<HTMLElement>('[role="presentation"]')!;
+
+  /** Serialize every rectangle's position and size to compare map movement. */
+  const geometry = (container: HTMLElement) =>
+    mapParts(container, "svg rect").map((r) =>
+      ["x", "y", "width", "height"].map((a) => r.getAttribute(a)).join(","),
+    );
+
+  const drag = (el: HTMLElement, from: [number, number], to: [number, number]) => {
+    fireEvent.pointerDown(el, { button: 0, pointerId: 1, clientX: from[0], clientY: from[1] });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: to[0], clientY: to[1] });
+    fireEvent.pointerUp(el, { pointerId: 1, clientX: to[0], clientY: to[1] });
+  };
+
+  /** Label the untouched opening scale as 100%. */
+  it("opens reading 100%", () => {
+    draw();
+    expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
+  it("moves the whole map by the drag, without resizing anything", async () => {
+    const { container } = draw();
+    const before = geometry(container);
+    drag(surface(container), [400, 300], [460, 260]);
+    await tick();
+
+    const after = geometry(container);
+    expect(after).not.toEqual(before);
+    for (const [i, box] of after.entries()) {
+      const [x, y, w, h] = box.split(",").map(Number);
+      const [bx, by, bw, bh] = before[i].split(",").map(Number);
+      expect(x - bx).toBeCloseTo(60, 6);
+      expect(y - by).toBeCloseTo(-40, 6);
+      expect(w).toBeCloseTo(bw, 6);
+      expect(h).toBeCloseTo(bh, 6);
+    }
+  });
+
+  /** Suppress partition navigation after a pan that starts on its link. */
+  it("does not follow the link a drag began on", async () => {
+    const { container } = draw();
+    const link = [...container.querySelectorAll("a")].find((a) =>
+      a.getAttribute("aria-label")?.startsWith("General"),
+    )!;
+    drag(surface(container), [400, 300], [500, 300]);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+  });
+
+  it("still follows a link that was clicked rather than dragged", async () => {
+    const { container } = draw();
+    const link = [...container.querySelectorAll("a")].find((a) =>
+      a.getAttribute("aria-label")?.startsWith("General"),
+    )!;
+    drag(surface(container), [400, 300], [401, 300]);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(false);
+  });
+
+  /** Delay pointer capture until dragging begins so ordinary clicks can reach partition links. */
+  it("captures the pointer only once the gesture is a drag", () => {
+    const { container } = draw();
+    const el = surface(container);
+    const capture = vi.spyOn(el, "setPointerCapture");
+    fireEvent.pointerDown(el, { button: 0, pointerId: 1, clientX: 400, clientY: 300 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 401, clientY: 300 });
+    expect(capture).not.toHaveBeenCalled();
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 450, clientY: 300 });
+    expect(capture).toHaveBeenCalledWith(1);
+    fireEvent.pointerUp(el, { pointerId: 1, clientX: 450, clientY: 300 });
+  });
+
+  it("enlarges the rectangles when zoomed in, and says so", async () => {
+    const { container } = draw();
+    const before = geometry(container);
+    await fireEvent.click(screen.getByLabelText("Zoom in"));
+    await tick();
+
+    expect(screen.getByText(`${zoomPercent(DEFAULT_ZOOM + 0.05)}%`)).toBeInTheDocument();
+    const widthOf = (rows: string[]) => Number(rows[0].split(",")[2]);
+    expect(widthOf(geometry(container))).toBeGreaterThan(widthOf(before));
+  });
+
+  it("puts the map back when the reading is used as the way home", async () => {
+    const { container } = draw();
+    const opened = geometry(container);
+    drag(surface(container), [400, 300], [500, 380]);
+    await fireEvent.click(screen.getByLabelText("Zoom in"));
+    await tick();
+    expect(geometry(container)).not.toEqual(opened);
+
+    await fireEvent.click(screen.getByTitle("Back to the size the map opens at"));
+    await tick();
+    expect(geometry(container)).toEqual(opened);
+    expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
+  it("offers no way home while it is already there", () => {
+    draw();
+    expect(screen.getByTitle("At the size the map opens at")).toBeDisabled();
+  });
+
+  /** Pan the map end of a tag link while keeping its panel origin fixed. */
+  it("keeps a tag's line attached to its row while the map moves under it", async () => {
+    const { container } = draw({ tag: "docs" });
+    const before = tagPaths(container)[0].getAttribute("d")!;
+    drag(surface(container), [400, 300], [460, 300]);
+    await tick();
+
+    const after = tagPaths(container)[0].getAttribute("d")!;
+    expect(after).not.toBe(before);
+    expect(after.startsWith(lineStart(0))).toBe(true);
+  });
+});
+
+/** Zoom small regions until labels fit while keeping text size constant. */
+describe("zooming into something too small to read", () => {
+  // Use small tail partitions whose labels fit only after zooming in.
+  const counts = [500, 380, 250, 120, 60, 30, 14, 7, 3, 1];
+  const tiny = () =>
+    draw({
+      drawn: [{ id: "p1", name: "Namespace One" }],
+      partitions: counts.map((cards, i) =>
+        partition(`b${i}`, "p1", i === counts.length - 1 ? "Scraps" : `Partition ${i}`, cards),
+      ),
+      scopes: [],
+      tagHits: [],
+      tagCards: {},
+    });
+
+  const labelled = (container: HTMLElement, name: string) =>
+    mapParts(container, "svg text").some((t) => t.textContent === name);
+
+  it("leaves a partition unlabelled while its rectangle is too small for the label", () => {
+    const { container } = tiny();
+    expect(labelled(container, "Partition 0")).toBe(true);
+    expect(labelled(container, "Scraps")).toBe(false);
+  });
+
+  it("labels it once zoomed in far enough to hold the label", async () => {
+    const { container } = tiny();
+    // Exceed the zoom ceiling to verify clamping.
+    for (let i = 0; i < 40; i++) await fireEvent.click(screen.getByLabelText("Zoom in"));
+    await tick();
+
+    // The ceiling `clampZoom` allows, which is twice the window fit and so 400% of the
+    // size the map opens at.
+    expect(screen.getByText(`${zoomPercent(2)}%`)).toBeInTheDocument();
+    expect(labelled(container, "Scraps")).toBe(true);
+  });
+});
+
+describe("backend map data", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("refreshes through the backend while retaining filters and zoom", async () => {
+    let finish!: (value: Response) => void;
+    const fetcher = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const { container } = draw({
+      namespaceId: "p1",
+      tag: "perf",
+      backendCapabilities: {
+        writable: true,
+        persistent: true,
+        taskspaces: false,
+        externalWrites: false,
+        auth: false,
+      },
+    });
+    await fireEvent.click(screen.getByLabelText("Zoom in"));
+    const initial = pageData();
+    finish(
+      new Response(
+        JSON.stringify({
+          namespaces: initial.namespaces,
+          partitions: [
+            partition("updated", "p1", "Updated", 6),
+            partition("other", "p2", "Elsewhere", 9),
+          ],
+          activity: [],
+          scopes: [],
+          partitionUsage: [],
+          namespaceUsage: [],
+          tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
+        }),
+      ),
+    );
+    await waitFor(() => expect(rectOf(container, "Updated")).toBeDefined());
+    expect(rectOf(container, "Elsewhere")).toBeUndefined();
+    expect(screen.getByText(`${zoomPercent(DEFAULT_ZOOM + 0.05)}%`)).toBeInTheDocument();
+    expect(container.querySelector('a[href="/map?tag=perf"]')).not.toBeNull();
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/map",
+      expect.objectContaining({ method: "GET", cache: "no-store" }),
+    );
+  });
+  it("uses only embedded data when capabilities are absent from an export", () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    draw();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+it("uses injected demo routes for map filters, partitions and workspace navigation", async () => {
+  const { createDemoNavigation } = await import("../../../../client/src/navigation.js");
+  const { container } = render(MapPage, {
+    props: {
+      data: pageData({ namespaceId: "p1", tag: "perf" }) as never,
+      params: {},
+      form: null,
+      navigation: createDemoNavigation({ base: "/demo" }),
+    },
+  });
+  expect(screen.getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/demo/tags/");
+  expect(container.querySelector('a[aria-label^="General, 8 cards"]')).toHaveAttribute(
+    "href",
+    "/demo/board/?namespaceId=p1",
+  );
+  expect(container.querySelector('a[href="/demo/map/?namespaceId=p2#tag=perf"]')).not.toBeNull();
+  for (const link of screen.getAllByRole("link")) {
+    expect(new URL(link.getAttribute("href")!, "http://localhost").searchParams.has("tag")).toBe(
+      false,
+    );
+  }
+});
+
+it("projects static backend data for the selected namespace without HTTP", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const initial = pageData();
+    const map = {
+      namespaces: initial.namespaces,
+      partitions: [
+        partition("one", "p1", "Embedded partition", 5),
+        partition("two", "p2", "Other partition", 8),
+      ],
+      scopes: [],
+      activity: [],
+      partitionUsage: [],
+      namespaceUsage: [],
+      tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
+    };
+    const { container } = draw({
+      namespaceId: "p1",
+      staticBackendData: { namespaces: initial.namespaces, map },
+    });
+    await waitFor(() => expect(rectOf(container, "Embedded partition")).toBeDefined());
+    expect(rectOf(container, "Other partition")).toBeUndefined();
+    expect(fetcher).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

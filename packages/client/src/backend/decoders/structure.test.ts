@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { structureResults } from "../../../../../src/test-utils/structure-results.js";
+import { structureResults } from "../../../../kozane/src/test-utils/structure-results.js";
 import {
   readMutationOk,
   readCreatedId,
@@ -63,13 +63,13 @@ it("rejects an entire reassignment result for missing or ambiguous stacking", ()
 });
 
 it("accepts actual service results while cards are reassigned through layer and partition deletion", async () => {
-  const { createTestDB } = await import("../../../../../src/test-utils/db.js");
-  const { createServiceContext } = await import("../../../../../src/services/context.js");
-  const namespaces = await import("../../../../../src/services/namespaces.js");
-  const layers = await import("../../../../../src/services/layers.js");
-  const partitions = await import("../../../../../src/services/partitions.js");
-  const cards = await import("../../../../../src/services/cards.js");
-  const { get } = await import("../../../../../src/services/snapshot.js");
+  const { createTestDB } = await import("../../../../kozane/src/test-utils/db.js");
+  const { createServiceContext } = await import("../../../../kozane/src/services/context.js");
+  const namespaces = await import("../../../../kozane/src/services/namespaces.js");
+  const layers = await import("../../../../kozane/src/services/layers.js");
+  const partitions = await import("../../../../kozane/src/services/partitions.js");
+  const cards = await import("../../../../kozane/src/services/cards.js");
+  const { get } = await import("../../../../kozane/src/services/snapshot.js");
   const db = await createTestDB();
   const context = createServiceContext();
   const namespace = await namespaces.create(db, context, { name: "Board" });

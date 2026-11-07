@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { StaticBackend, type StaticBackendData } from "./static-backend.js";
 import type { SnapshotData } from "./contract.js";
-import type { TaskspaceFileTree } from "../../../../src/lib/types.js";
+import type { TaskspaceFileTree } from "../../../kozane/src/lib/types.js";
 import { tagDataset } from "./tags.fixtures.js";
 function snapshot(id: string): SnapshotData {
   return {

@@ -27,8 +27,8 @@ import {
   readInventoryStowed,
   readInventoryTaken,
 } from "./decoders/inventories.js";
-import { prepareInput } from "../../../../src/services/prepare-input.js";
-import { ValidationError } from "../../../../src/services/errors.js";
+import { prepareInput } from "../../../kozane/src/services/prepare-input.js";
+import { ValidationError } from "../../../kozane/src/services/errors.js";
 import {
   readCardCreated,
   readCardUpdated,

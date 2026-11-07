@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpBackend, type KozaneBackend } from "./index.js";
-import { inventoryResults } from "../../../../src/test-utils/inventory-results.js";
+import { inventoryResults } from "../../../kozane/src/test-utils/inventory-results.js";
 const capabilities = {
   writable: true,
   taskspaces: false,

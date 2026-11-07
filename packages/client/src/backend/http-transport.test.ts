@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { HttpTransport, retryAfterMilliseconds, KEEPALIVE_BYTES_MAX } from "./http-transport.js";
-import { INPUT_VALIDATION_MESSAGE } from "../../../../src/services/prepare-input.js";
+import { INPUT_VALIDATION_MESSAGE } from "../../../kozane/src/services/prepare-input.js";
 const jsonError = (status: number, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify({ message: "existing wording" }), {
     status,

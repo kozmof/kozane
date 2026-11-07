@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { SCOPE_AREA_MIN_SIZE } from "../../constants/index.js";
-import { geometryResults } from "../../../../../src/test-utils/geometry-results.js";
+import { geometryResults } from "../../../../kozane/src/test-utils/geometry-results.js";
 import { readScopeRenamed, readScopeAreaResult, readWarpResult } from "./geometry.js";
 import { readCreatedId, readMutationOk } from "./structure.js";
 
@@ -28,13 +28,13 @@ it("decodes complete results and rejects malformed or mismatched geometry", () =
   expect(readWarpResult(null, "n /")).toBeNull();
 });
 it("accepts service results with clamped geometry and complete scope membership lifecycle", async () => {
-  const { createTestDB } = await import("../../../../../src/test-utils/db.js");
-  const { createServiceContext } = await import("../../../../../src/services/context.js");
-  const namespaces = await import("../../../../../src/services/namespaces.js");
-  const scopes = await import("../../../../../src/services/scopes.js");
-  const warps = await import("../../../../../src/services/warps.js");
-  const cards = await import("../../../../../src/services/cards.js");
-  const { get } = await import("../../../../../src/services/snapshot.js");
+  const { createTestDB } = await import("../../../../kozane/src/test-utils/db.js");
+  const { createServiceContext } = await import("../../../../kozane/src/services/context.js");
+  const namespaces = await import("../../../../kozane/src/services/namespaces.js");
+  const scopes = await import("../../../../kozane/src/services/scopes.js");
+  const warps = await import("../../../../kozane/src/services/warps.js");
+  const cards = await import("../../../../kozane/src/services/cards.js");
+  const { get } = await import("../../../../kozane/src/services/snapshot.js");
   const db = await createTestDB();
   const context = createServiceContext({ canvasWidth: 400, canvasHeight: 400 });
   const namespace = await namespaces.create(db, context, { name: "Board" });

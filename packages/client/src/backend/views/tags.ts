@@ -1,12 +1,12 @@
-import type { TagsViewData } from "../../../../../src/services/tags.js";
-import type { TagHit } from "../../../../../src/lib/types.js";
+import type { TagsViewData } from "../../../../kozane/src/services/tags.js";
+import type { TagHit } from "../../../../kozane/src/lib/types.js";
 import {
   buildTagTree,
   capHitsByKind,
   normalizeTag,
   tagMatcher,
   type TagNode,
-} from "../../../../../src/lib/tag.js";
+} from "../../../../kozane/src/lib/tag.js";
 import { TAG_HITS_SHOWN_MAX } from "../../constants/index.js";
 import { BackendError } from "../contract.js";
 

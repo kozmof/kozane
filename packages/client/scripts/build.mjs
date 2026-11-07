@@ -19,9 +19,9 @@ const queue = [],
 const slash = (value) => value.split(path.sep).join("/");
 function local(source, importer) {
   const target = source.startsWith("$lib/")
-    ? path.join(root, "src/lib", source.slice(5))
+    ? path.join(root, "packages/kozane/src/lib", source.slice(5))
     : source.startsWith("$db/")
-      ? path.join(root, "src/db", source.slice(4))
+      ? path.join(root, "packages/kozane/src/db", source.slice(4))
       : source.startsWith("styled-system/")
         ? path.join(root, source)
         : source.startsWith(".")
@@ -39,28 +39,28 @@ function local(source, importer) {
     path.join(target, "index.mjs"),
   ])
     if (existsSync(file) && statSync(file).isFile())
-      return file === path.join(root, "src/lib/constants.ts")
+      return file === path.join(root, "packages/kozane/src/lib/constants.ts")
         ? path.join(packageRoot, "src/constants/index.ts")
-        : file === path.join(root, "src/lib/ui-config.ts")
+        : file === path.join(root, "packages/kozane/src/lib/ui-config.ts")
           ? path.join(packageRoot, "src/ui-config.ts")
-          : file === path.join(root, "src/lib/constants/canvas.ts")
+          : file === path.join(root, "packages/kozane/src/lib/constants/canvas.ts")
             ? path.join(packageRoot, "src/constants/canvas.ts")
-            : file === path.join(root, "src/lib/warp-list.ts")
+            : file === path.join(root, "packages/kozane/src/lib/warp-list.ts")
               ? path.join(packageRoot, "src/warp-list.ts")
-              : file === path.join(root, "src/lib/tag/truncation.ts")
+              : file === path.join(root, "packages/kozane/src/lib/tag/truncation.ts")
                 ? path.join(packageRoot, "src/tag/truncation.ts")
                 : file;
   throw new Error(`Unresolved client import ${source} from ${importer}`);
 }
 function destination(file) {
   const relative = slash(path.relative(root, file));
-  if (relative.startsWith("src/lib/server/"))
+  if (relative.startsWith("packages/kozane/src/lib/server/"))
     throw new Error(`Client cannot contain server modules: ${relative}`);
   if (relative.startsWith("packages/client/src/backend/"))
     return "lib/backend/" + relative.slice("packages/client/src/backend/".length);
   if (relative.startsWith("packages/client/src/"))
     return "lib/client/" + relative.slice("packages/client/src/".length);
-  if (relative.startsWith("src/lib/")) return relative.slice(4);
+  if (relative.startsWith("packages/kozane/src/lib/")) return relative.slice("packages/kozane/src/".length);
   if (relative.startsWith("styled-system/")) return relative.replace(/\.mjs$/, ".js");
   throw new Error(`Client closure cannot contain ${relative}`);
 }
@@ -113,7 +113,7 @@ function rewrite(source, importer) {
           return;
         }
         if (
-          relative === "src/services/inputs.ts" &&
+          relative === "packages/kozane/src/services/inputs.ts" &&
           ts.isExportDeclaration(node) &&
           node.isTypeOnly &&
           !node.exportClause
@@ -143,20 +143,20 @@ function rewrite(source, importer) {
         let replacement;
         if (
           [
-            "src/db/api/types.ts",
-            "src/db/api/card.ts",
-            "src/lib/types.ts",
-            "src/services/inputs.ts",
-            "src/services/errors.ts",
-            "src/services/map.ts",
-            "src/services/tags.ts",
+            "packages/kozane/src/db/api/types.ts",
+            "packages/kozane/src/db/api/card.ts",
+            "packages/kozane/src/lib/types.ts",
+            "packages/kozane/src/services/inputs.ts",
+            "packages/kozane/src/services/errors.ts",
+            "packages/kozane/src/services/map.ts",
+            "packages/kozane/src/services/tags.ts",
           ].includes(relative)
         )
           replacement = "@kozane/core";
-        else if (relative === "src/services/prepare-input.ts")
+        else if (relative === "packages/kozane/src/services/prepare-input.ts")
           replacement = "@kozane/core/services";
         else if (
-          relative.startsWith("src/services/") &&
+          relative.startsWith("packages/kozane/src/services/") &&
           ts.isImportDeclaration(node) &&
           node.importClause?.isTypeOnly &&
           node.importClause.namedBindings &&
@@ -208,7 +208,7 @@ while (queue.length) {
   const output = path.join(staging, destination(file));
   await fs.mkdir(path.dirname(output), { recursive: true });
   let source = await fs.readFile(file, "utf8");
-  if (slash(path.relative(root, file)).startsWith("src/lib/")) {
+  if (slash(path.relative(root, file)).startsWith("packages/kozane/src/lib/")) {
     const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
     if (
       !tree.statements.every(

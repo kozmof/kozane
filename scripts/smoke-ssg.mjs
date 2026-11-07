@@ -12,7 +12,7 @@ const workspace = mkdtempSync(join(tmpdir(), "kozane-ssg-smoke-"));
 function cli(...args) {
   const result = spawnSync(
     process.execPath,
-    ["--import", loader, join(repository, "src/cli/index.ts"), ...args],
+    ["--import", loader, join(repository, "packages/kozane/src/cli/index.ts"), ...args],
     {
       cwd: workspace,
       encoding: "utf8",

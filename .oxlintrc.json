@@ -44,7 +44,7 @@
 
   "overrides": [
     {
-      "files": ["src/services/**"],
+      "files": ["packages/kozane/src/services/**"],
       "rules": {
         "eslint/no-restricted-imports": ["error", {"patterns": [{"group": ["node:*", "@sveltejs/kit", "@sveltejs/kit/**", "$app/**", "**/lib/server/**", "**/db/internal/**", "**/routes/**", "**/cli/**"], "message": "Shared services must stay transport-free and browser-safe."}]}],
         "eslint/no-restricted-globals": ["error", "process", "Buffer", "require", "__dirname", "__filename"]
@@ -77,8 +77,8 @@
       // Type-only imports of `db` are allowed and are not an exception to the direction:
       // `lib/types.ts` derives the wire types from the row types, and an erased import
       // creates no dependency at runtime. A value import of `db` from here is a real one.
-      "files": ["src/lib/**"],
-      "excludeFiles": ["src/lib/server/**"],
+      "files": ["packages/kozane/src/lib/**"],
+      "excludeFiles": ["packages/kozane/src/lib/server/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -87,15 +87,15 @@
               {
                 "group": ["**/db/**", "$db/**"],
                 "allowTypeImports": true,
-                "message": "src/lib is the leaf tier: import db types only, never its values. Move the shared value into lib/ instead."
+                "message": "packages/kozane/src/lib is the leaf tier: import db types only, never its values. Move the shared value into lib/ instead."
               },
               {
                 "group": ["**/lib/server/**", "./server/**", "../server/**"],
-                "message": "src/lib is imported by the browser; lib/server is Node-only and sits above db. Move the shared value down into lib/."
+                "message": "packages/kozane/src/lib is imported by the browser; lib/server is Node-only and sits above db. Move the shared value down into lib/."
               },
               {
                 "group": ["**/routes/**", "**/cli/**", "$app/**"],
-                "message": "src/lib is below both front ends and must not import either."
+                "message": "packages/kozane/src/lib is below both front ends and must not import either."
               }
             ]
           }
@@ -111,7 +111,7 @@
       // three-line stat that `db/internal/config` validates its cache with and that
       // `api-key`, `tag-cache` and `taskspace-files` use for theirs. It lives under
       // `lib/server` because it needs `node:fs`, not because it belongs to that tier.
-      "files": ["src/db/**"],
+      "files": ["packages/kozane/src/db/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -132,7 +132,7 @@
     },
     {
       // Server services may use everything below them, and neither front end above.
-      "files": ["src/lib/server/**"],
+      "files": ["packages/kozane/src/lib/server/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -152,7 +152,7 @@
       // each other: the CLI is built by `tsc` and cannot resolve SvelteKit's aliases, and a
       // route reaching into `src/cli` would pull `commander` and `process.exit` into the
       // server bundle.
-      "files": ["src/routes/**"],
+      "files": ["packages/kozane/src/routes/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -168,7 +168,7 @@
       }
     },
     {
-      "files": ["src/cli/**"],
+      "files": ["packages/kozane/src/cli/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -185,7 +185,7 @@
     },
     {
       // Board action composition and mutations depend on injected backend resources.
-      "files": ["src/routes/*/namespace-actions.svelte.ts", "src/routes/*/lib/actions/*.ts", "src/routes/*/lib/*persistence*.ts", "src/routes/*/lib/*inventory-actions.ts", "src/routes/*/lib/editor/*.ts", "src/routes/*/lib/taskspace-tree.svelte.ts"],
+      "files": ["packages/kozane/src/routes/*/namespace-actions.svelte.ts", "packages/kozane/src/routes/*/lib/actions/*.ts", "packages/kozane/src/routes/*/lib/*persistence*.ts", "packages/kozane/src/routes/*/lib/*inventory-actions.ts", "packages/kozane/src/routes/*/lib/editor/*.ts", "packages/kozane/src/routes/*/lib/taskspace-tree.svelte.ts"],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [
@@ -230,7 +230,7 @@
     {
       // A test may reach for `any` to build a malformed payload the types forbid — which is
       // exactly what the route guards in `lib/request.ts` exist to reject.
-      "files": ["**/*.test.ts", "**/*.spec.ts", "src/test-utils/**"],
+      "files": ["**/*.test.ts", "**/*.spec.ts", "packages/kozane/src/test-utils/**"],
       "rules": { "typescript/no-explicit-any": "off" }
     }
   ],
