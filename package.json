@@ -43,7 +43,7 @@
     "verify": "pnpm check && pnpm check:client-package && pnpm check:client-browser && pnpm check:core-browser && pnpm check:backend-contract && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
     "test:e2e": "TMPDIR=/tmp playwright test",
     "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e",
-    "publish:npm": "NPM_CONFIG_USERCONFIG=$(mktemp /tmp/kozane-npmrc.XXXXXX) && export NPM_CONFIG_USERCONFIG && trap 'rm -f -- \"$NPM_CONFIG_USERCONFIG\"' EXIT && npm login --registry=https://registry.npmjs.org/ && npm whoami --registry=https://registry.npmjs.org/ && npm publish ./packages/kozane --registry=https://registry.npmjs.org/",
+    "publish:npm": "pnpm -r publish --access public --provenance",
     "check:client-browser": "node scripts/check-client-browser.mjs",
     "check:core-browser": "node scripts/check-core-browser.mjs",
     "check:backend-contract": "node scripts/check-backend-contract.mjs",
@@ -59,7 +59,11 @@
     "build:client-harness": "node scripts/check-core-package.mjs --client-package --client-browser-harness",
     "test:client-package": "pnpm build:client-harness && playwright test --config scripts/client-package/playwright.config.ts",
     "release:check:client": "pnpm test:client-package && pnpm test:restoration-harness",
-    "check:node-core": "pnpm build:cli && node scripts/check-node-core.mjs"
+    "check:node-core": "pnpm build:cli && node scripts/check-node-core.mjs",
+    "changeset": "changeset",
+    "release:status": "changeset status",
+    "release:version": "changeset version && pnpm install --lockfile-only --ignore-scripts && node scripts/check-release-packages.mjs",
+    "release:check": "node scripts/check-release-packages.mjs && node scripts/check-release-versioning.mjs"
   },
   "dependencies": {
     "@kozane/client": "workspace:0.1.0",
@@ -73,6 +77,7 @@
     "uuid": "^13.0.2"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@pandacss/dev": "^1.12.1",
     "@playwright/test": "^1.64.1",
     "@sveltejs/adapter-auto": "^7.0.1",
