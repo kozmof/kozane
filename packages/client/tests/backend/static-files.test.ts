@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { findStaticNode, staticDirectoryEntries } from "../../src/backend/static-files.js";
+import {
+  findStaticNode,
+  isStaticFileTree,
+  staticDirectoryEntries,
+} from "../../src/backend/static-files.js";
 import type { TaskspaceFileNode, TaskspaceFileTree } from "@kozane/core";
 
 function directory(
@@ -96,5 +100,19 @@ describe("staticDirectoryEntries", () => {
   it("gives every entry a null modifiedAt", () => {
     const { entries } = staticDirectoryEntries(tree.root);
     expect(entries.every(({ modifiedAt }) => modifiedAt === null)).toBe(true);
+  });
+});
+
+describe("static tree path validation", () => {
+  it("accepts exported trees", () => {
+    expect(isStaticFileTree(tree)).toBe(true);
+  });
+  it.each(["", ".", "..", "a/b", "a\\b", "a\0b"])("rejects invalid child name %j", (name) => {
+    expect(isStaticFileTree({ root: directory("", [file(name)]) })).toBe(false);
+  });
+  it("rejects duplicate sibling names across node kinds", () => {
+    expect(isStaticFileTree({ root: directory("", [file("same"), directory("same", [])]) })).toBe(
+      false,
+    );
   });
 });

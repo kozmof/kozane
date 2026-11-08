@@ -81,3 +81,22 @@ it("copies and freezes namespace-scoped targets independently of caller-owned ar
   expect(event.revision).toBe(1);
   expect(signals.version.revision).toBe(2);
 });
+
+it("continues delivery when diagnostics throw", () => {
+  const signals = new ClientSignals({ status: "ready" }, () => {
+    throw new Error("diagnostics");
+  });
+  const fail = () => {
+    throw new Error("subscriber");
+  };
+  expect(() => signals.subscribeState(fail)).not.toThrow();
+  const state = vi.fn();
+  signals.subscribeState(state);
+  signals.subscribe(fail);
+  const data = vi.fn();
+  signals.subscribe(data);
+  expect(() => signals.transition({ status: "recovering" })).not.toThrow();
+  expect(() => signals.publish(["snapshot"])).not.toThrow();
+  expect(state).toHaveBeenLastCalledWith({ status: "recovering" });
+  expect(data).toHaveBeenCalledOnce();
+});

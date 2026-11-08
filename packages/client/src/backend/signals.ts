@@ -38,7 +38,7 @@ export class ClientSignals {
     try {
       listener(this.currentState);
     } catch (error) {
-      this.listenerError(error);
+      this.reportListenerError(error);
     }
     return () => {
       this.stateListeners.delete(listener);
@@ -76,6 +76,13 @@ export class ClientSignals {
     this.dataListeners.clear();
     this.stateListeners.clear();
   }
+  private reportListenerError(error: unknown): void {
+    try {
+      this.listenerError(error);
+    } catch {
+      // Diagnostics must never interrupt committed-data or lifecycle delivery.
+    }
+  }
   private assertActive() {
     if (this.disposed) throw new ClientError("unavailable", "Backend is disposed");
   }
@@ -85,7 +92,7 @@ export class ClientSignals {
       try {
         listener(event);
       } catch (error) {
-        this.listenerError(error);
+        this.reportListenerError(error);
       }
     }
   }

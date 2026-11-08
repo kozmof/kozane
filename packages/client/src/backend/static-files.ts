@@ -74,7 +74,23 @@ export function isStaticFileTree(value: unknown): value is TaskspaceFileTree {
         ![null, "entries", "depth", "nodes", "unreadable"].includes(node.truncated as string | null)
       )
         return false;
-      for (const child of node.children) pending.push(child);
+      const names = new Set<string>();
+      for (const child of node.children) {
+        if (
+          !record(child) ||
+          typeof child.name !== "string" ||
+          child.name.length === 0 ||
+          child.name === "." ||
+          child.name === ".." ||
+          child.name.includes("/") ||
+          child.name.includes("\\") ||
+          child.name.includes("\0") ||
+          names.has(child.name)
+        )
+          return false;
+        names.add(child.name);
+        pending.push(child);
+      }
     } else if (node.kind === "file") {
       if (
         typeof node.content !== "string" ||
