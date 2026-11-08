@@ -36,13 +36,13 @@ Use pure helpers directly when a feature only needs a local calculation or previ
 
 Import from these five entry points. Private module paths are unsupported and may change.
 
-| Entry point | Purpose |
-| --- | --- |
-| `@kozane/core` | Domain types, errors, limits, and pure helpers |
-| `@kozane/core/database` | Adapter registration, transactions, service context, and low-level records |
-| `@kozane/core/schema` | Drizzle tables and relations |
-| `@kozane/core/services` | Resource operations and domain input validation |
-| `@kozane/core/migrations` | Migration application, history checks, and schema comparison |
+| Entry point               | Purpose                                                                    |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `@kozane/core`            | Domain types, errors, limits, and pure helpers                             |
+| `@kozane/core/database`   | Adapter registration, transactions, service context, and low-level records |
+| `@kozane/core/schema`     | Drizzle tables and relations                                               |
+| `@kozane/core/services`   | Resource operations and domain input validation                            |
+| `@kozane/core/migrations` | Migration application, history checks, and schema comparison               |
 
 ## Application operations
 
@@ -66,16 +66,16 @@ non-null objects other than arrays without inspecting their prototypes.
 
 Use the root entry to share domain behavior across application features.
 
-| Need | Exports |
-| --- | --- |
-| Describe application data | Entity, board snapshot, taskspace-file, tag, and service input types |
-| Preview inventory placement | `cardSpan`, `planStow`, and other inventory geometry and layout helpers |
-| Preview splitting and squash placement | Card splitting and squash placement helpers |
-| Parse and group tags | `scanTagLines`, `tagMatches`, `buildTagTree`, and related tag helpers |
-| Find text boundaries and display values | `scanUrls`, `applyPalette`, and `compareIds` |
-| Apply domain bounds | `CONTENT_MAX`, `BATCH_MAX`, `CARD_WIDTH_RANGE`, canvas bounds, and `PATH_KINDS` |
-| Validate host file operations | Taskspace listing/export bounds and `taskspaceNameIssue` |
-| Share adapter checks | `byteLength`, `entryNameIssue`, `errorMessage`, and `isPlainObject` |
+| Need                                    | Exports                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| Describe application data               | Entity, board snapshot, taskspace-file, tag, and service input types            |
+| Preview inventory placement             | `cardSpan`, `planStow`, and other inventory geometry and layout helpers         |
+| Preview splitting and squash placement  | Card splitting and squash placement helpers                                     |
+| Parse and group tags                    | `scanTagLines`, `tagMatches`, `buildTagTree`, and related tag helpers           |
+| Find text boundaries and display values | `scanUrls`, `applyPalette`, and `compareIds`                                    |
+| Apply domain bounds                     | `CONTENT_MAX`, `BATCH_MAX`, `CARD_WIDTH_RANGE`, canvas bounds, and `PATH_KINDS` |
+| Validate host file operations           | Taskspace listing/export bounds and `taskspaceNameIssue`                        |
+| Share adapter checks                    | `byteLength`, `entryNameIssue`, `errorMessage`, and `isPlainObject`             |
 
 Placement helpers allow previews to follow the same rules as services. Persist changes
 through services. Hosts own server settings, gesture thresholds, and filesystem work.
@@ -136,10 +136,10 @@ Call `validateDatabaseMigrationHistory(db, mode)` to read and validate history i
 read transaction. A missing history table counts as empty and is never created by validation.
 Choose the mode explicitly.
 
-| Mode | Purpose |
-| --- | --- |
-| `prefix` | Accept an empty history or a matching contiguous prefix and return pending records |
-| `complete` | Require every bundled migration, including when validating a restoration |
+| Mode       | Purpose                                                                            |
+| ---------- | ---------------------------------------------------------------------------------- |
+| `prefix`   | Accept an empty history or a matching contiguous prefix and return pending records |
+| `complete` | Require every bundled migration, including when validating a restoration           |
 
 For custom history reads, pass rows ordered by `created_at`, including `hash` and
 `created_at`, to `validateMigrationHistory(rows, mode)`. Both modes reject duplicates,
@@ -181,15 +181,15 @@ partial predicates, triggers, and views retain their normalized SQL definitions.
 
 Run commands from the repository root.
 
-| Task | Command |
-| --- | --- |
-| Check committed migration inputs and build core | `pnpm build:core` |
-| Generate SQL and refresh core inputs after schema changes | `pnpm db:generate` |
-| Refresh core inputs from existing SQL | `pnpm --filter @kozane/core migrations:refresh` |
-| Check committed migration records | `pnpm --filter @kozane/core check:migrations` |
-| Check the canonical schema manifest | `node packages/core/scripts/generate-schema.mjs --check` |
-| Verify the installed core package and adapter contracts | `pnpm check:core-package` |
-| Verify client package compatibility | `pnpm test:client-package` |
+| Task                                                      | Command                                                  |
+| --------------------------------------------------------- | -------------------------------------------------------- |
+| Check committed migration inputs and build core           | `pnpm build:core`                                        |
+| Generate SQL and refresh core inputs after schema changes | `pnpm db:generate`                                       |
+| Refresh core inputs from existing SQL                     | `pnpm --filter @kozane/core migrations:refresh`          |
+| Check committed migration records                         | `pnpm --filter @kozane/core check:migrations`            |
+| Check the canonical schema manifest                       | `node packages/core/scripts/generate-schema.mjs --check` |
+| Verify the installed core package and adapter contracts   | `pnpm check:core-package`                                |
+| Verify client package compatibility                       | `pnpm test:client-package`                               |
 
 Run `pnpm check:core-package` for every adapter change. Add host-specific failure
 injection checks for commit and rollback. Before releasing API boundary changes, run
