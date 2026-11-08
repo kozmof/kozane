@@ -1,0 +1,311 @@
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { createRequire } from "node:module";
+import { afterEach, describe, expect, it } from "vitest";
+import { MIN_SHORT_ID_LENGTH } from "./lib/short-id.js";
+import { idMatches } from "../lib/short-id-key.js";
+
+const cliEntry = resolve("packages/kozane/src/cli/index.ts");
+const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("tsx");
+const tempRoots: string[] = [];
+
+function tempWorkspace(): string {
+  const root = mkdtempSync(join(tmpdir(), "kozane-taskspace-e2e-"));
+  tempRoots.push(root);
+  return root;
+}
+
+function runCli(cwd: string, ...args: string[]): SpawnSyncReturns<string> {
+  return spawnSync(process.execPath, ["--import", tsxLoader, cliEntry, ...args], {
+    cwd,
+    encoding: "utf-8",
+    env: { ...process.env, TMPDIR: tmpdir(), NO_COLOR: "1" },
+  });
+}
+
+function cli(cwd: string, ...args: string[]): string {
+  const result = runCli(cwd, ...args);
+  if (result.status !== 0) {
+    throw new Error(
+      [`kozane ${args.join(" ")} failed (${result.status})`, result.stdout, result.stderr]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
+  return result.stdout;
+}
+
+function outputId(output: string): string {
+  const match = output.match(/^\s*id\s*:\s*(\S+)/m);
+  if (!match) throw new Error(`Command output did not contain an ID:\n${output}`);
+  return match[1];
+}
+
+afterEach(() => {
+  for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+describe("taskspace CLI flow", () => {
+  it("validates create options and supports --no-scope with an explicit directory", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    const missingScope = runCli(root, "taskspace", "create", "missing-scope");
+    expect(missingScope.status).not.toBe(0);
+    expect(missingScope.stderr).toContain("--scope <scopeId> is required");
+
+    const target = join(root, "nested", "explicit");
+    const output = cli(root, "taskspace", "create", "unscoped", "--no-scope", "--dir", target);
+    expect(output).toContain(`path : ${target}`);
+    // Pin the marker version. Version 2 uses `namespaceId` in place of `projectId`.
+    const marker = JSON.parse(readFileSync(join(target, ".taskspace.json"), "utf-8"));
+    expect(marker).toMatchObject({ kind: "kozane.taskspace", version: 2 });
+    // A directory chosen with --dir stays the user's.
+    expect(marker.ownsDirectory).toBeUndefined();
+
+    const duplicate = runCli(
+      root,
+      "taskspace",
+      "create",
+      "duplicate",
+      "--no-scope",
+      "--dir",
+      target,
+    );
+    expect(duplicate.status).not.toBe(0);
+    expect(duplicate.stderr).toContain("already contains a Kozane taskspace");
+  }, 30_000);
+
+  it("refuses a name that is not one plain path segment unless --dir is given", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    const nested = runCli(root, "taskspace", "create", "a/b", "--no-scope");
+    expect(nested.status).not.toBe(0);
+    expect(nested.stderr).toContain("Taskspace name cannot contain a path separator");
+
+    const hidden = runCli(root, "taskspace", "create", ".hidden", "--no-scope");
+    expect(hidden.status).not.toBe(0);
+    expect(hidden.stderr).toContain("Taskspace name cannot start with a dot");
+
+    // With --dir the name is only a label.
+    const target = join(root, "explicit");
+    expect(cli(root, "taskspace", "create", "a/b", "--no-scope", "--dir", target)).toContain(
+      "Taskspace created.",
+    );
+  }, 30_000);
+
+  it("preserves database validation errors before directory claiming", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const result = runCli(
+      root,
+      "taskspace",
+      "create",
+      "x".repeat(256),
+      "--no-scope",
+      "--dir",
+      join(root, "explicit"),
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Taskspace name must be 255 characters or fewer");
+    expect(result.stderr).not.toContain("Failed to initialize taskspace directory");
+    expect(cli(root, "taskspace", "list")).toContain("No taskspaces found.");
+  }, 30_000);
+
+  it("stores a directory beside the workspace that shares its prefix as absolute", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    // `<root>-sibling` starts with the root's own path as a string.
+    const sibling = `${root}-sibling`;
+    tempRoots.push(sibling);
+    const target = join(sibling, "x");
+    cli(root, "taskspace", "create", "beside", "--no-scope", "--dir", target);
+
+    // Move the workspace under another parent. A path stored relative to the root would now
+    // resolve somewhere that does not exist.
+    const parent = mkdtempSync(join(tmpdir(), "kozane-taskspace-moved-"));
+    tempRoots.push(parent);
+    const moved = join(parent, "ws");
+    renameSync(root, moved);
+    expect(cli(moved, "taskspace", "list")).toContain(target);
+  }, 30_000);
+
+  it("accepts an explicit namespace and rejects an unknown namespace", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const namespaceId = outputId(cli(root, "namespace", "create", "Second"));
+
+    expect(
+      cli(root, "taskspace", "create", "selected", "--no-scope", "--namespace", namespaceId),
+    ).toContain("Taskspace created.");
+    const unknown = runCli(
+      root,
+      "taskspace",
+      "create",
+      "unknown",
+      "--no-scope",
+      "--namespace",
+      "ffff",
+    );
+    expect(unknown.status).not.toBe(0);
+    expect(unknown.stderr).toContain("Namespace not found: ffff");
+  }, 30_000);
+
+  it("marks only a directory it made itself as owned", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const readMarker = (dir: string) =>
+      JSON.parse(readFileSync(join(root, "taskspaces", "main", dir, ".taskspace.json"), "utf-8"));
+
+    cli(root, "taskspace", "create", "fresh", "--no-scope");
+    expect(readMarker("fresh").ownsDirectory).toBe(true);
+
+    // A directory that was already there stays the user's, even in the default folder.
+    mkdirSync(join(root, "taskspaces", "main", "existing"), { recursive: true });
+    writeFileSync(join(root, "taskspaces", "main", "existing", "keep.txt"), "mine");
+    cli(root, "taskspace", "create", "existing", "--no-scope");
+    expect(readMarker("existing").ownsDirectory).toBeUndefined();
+  });
+
+  it("warns, but creates, when --dir is inside another taskspace", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "taskspace", "create", "outer", "--no-scope");
+    const inner = join(root, "taskspaces", "main", "outer", "inner");
+
+    const result = runCli(root, "taskspace", "create", "inner", "--no-scope", "--dir", inner);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("Warning:");
+    expect(result.stderr).toContain(join(root, "taskspaces", "main", "outer"));
+    expect(readFileSync(join(inner, ".taskspace.json"), "utf-8")).toContain("taskspaceId");
+  });
+
+  it("detects and applies moved, missing, and orphan taskspace changes", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const scopeId = outputId(cli(root, "scope", "add", "Scan scope"));
+    cli(root, "taskspace", "create", "original", "--scope", scopeId);
+    const original = join(root, "taskspaces", "main", "original");
+    const moved = join(root, "moved");
+    const marker = JSON.parse(readFileSync(join(original, ".taskspace.json"), "utf-8"));
+    renameSync(original, moved);
+
+    const movedDryRun = cli(root, "taskspace", "scan");
+    expect(movedDryRun).toContain("moved");
+    expect(movedDryRun).toContain("taskspace scan --apply");
+    expect(cli(root, "taskspace", "scan", "--apply")).toContain("1 updated");
+    // Only one taskspace exists, so its short ID is the minimum width with no
+    // collision lengthening. Derived from the constant so it tracks the CLI.
+    const shortId = marker.taskspaceId.split("-").at(-1).slice(0, MIN_SHORT_ID_LENGTH);
+    expect(cli(root, "taskspace", "scan")).toContain(`ok      ${shortId}`);
+
+    rmSync(moved, { recursive: true, force: true });
+    const missingDryRun = cli(root, "taskspace", "scan");
+    expect(missingDryRun).toContain("missing");
+    expect(missingDryRun).toContain("--apply --cleanup");
+    expect(cli(root, "taskspace", "scan", "--apply", "--cleanup")).toContain("1 deleted");
+
+    const orphan = join(root, "orphan");
+    mkdirSync(orphan);
+    writeFileSync(join(orphan, ".taskspace.json"), JSON.stringify(marker, null, 2) + "\n");
+    expect(cli(root, "taskspace", "scan")).toContain("orphan");
+    expect(cli(root, "taskspace", "scan", "--apply", "--reattach")).toContain("reattached");
+    expect(cli(root, "taskspace", "scan")).toContain("Scan complete. Nothing to apply.");
+  }, 30_000);
+
+  it("rejects mutating scan flags without --apply", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    for (const option of ["--reattach", "--cleanup"]) {
+      const result = runCli(root, "taskspace", "scan", option);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain(`${option} requires --apply`);
+    }
+    const namespaceOnly = runCli(root, "taskspace", "scan", "--apply", "--namespace", "x");
+    expect(namespaceOnly.status).not.toBe(0);
+    expect(namespaceOnly.stderr).toContain("--namespace requires --reattach");
+  }, 30_000);
+
+  it("writes nothing when --namespace names no namespace", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "taskspace", "create", "notes", "--no-scope");
+    const parent = join(root, "taskspaces", "main");
+    renameSync(join(parent, "notes"), join(parent, "moved"));
+
+    const result = runCli(
+      root,
+      "taskspace",
+      "scan",
+      "--apply",
+      "--reattach",
+      "--namespace",
+      "ffff",
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Namespace not found: ffff");
+    // The moved path was not applied, so a dry run still reports it.
+    expect(cli(root, "taskspace", "scan")).toContain("update 1 moved path");
+  }, 30_000);
+
+  describe("reattaching a taskspace whose namespace was deleted", () => {
+    /** A workspace with a taskspace in "Client Acme", then that namespace deleted. */
+    function orphanedByDelete() {
+      const root = tempWorkspace();
+      cli(root, "init");
+      const doomed = outputId(cli(root, "namespace", "create", "Client Acme"));
+      cli(root, "taskspace", "create", "notes", "--no-scope", "--namespace", doomed);
+      const dir = join(root, "taskspaces", "Client-Acme", "notes");
+      cli(root, "namespace", "delete", doomed);
+      const marker = () => JSON.parse(readFileSync(join(dir, ".taskspace.json"), "utf-8"));
+      return { root, dir, marker };
+    }
+
+    it("joins the default namespace and updates the marker", () => {
+      const { root, dir, marker } = orphanedByDelete();
+      const before = marker();
+
+      const output = cli(root, "taskspace", "scan", "--apply", "--reattach");
+      expect(output).toMatch(
+        /reattached to namespace "main" \(its namespace \S+ no longer exists\)/,
+      );
+      expect(output).toContain("1 updated");
+
+      const listed = cli(root, "taskspace", "list");
+      expect(listed).toContain("notes");
+      expect(listed).toContain("main");
+      // The directory stays where it is, and the marker keeps its other fields.
+      expect(marker()).toEqual({ ...before, namespaceId: expect.any(String) });
+      expect(marker().namespaceId).not.toBe(before.namespaceId);
+      expect(cli(root, "taskspace", "scan")).toContain("Nothing to apply");
+      expect(readFileSync(join(dir, ".taskspace.json"), "utf-8")).toContain(marker().namespaceId);
+    }, 60_000);
+
+    it("joins the namespace chosen with --namespace", () => {
+      const { root, marker } = orphanedByDelete();
+      const chosen = outputId(cli(root, "namespace", "create", "Archive"));
+
+      const output = cli(root, "taskspace", "scan", "--apply", "--reattach", "--namespace", chosen);
+      expect(output).toContain('reattached to namespace "Archive"');
+      expect(cli(root, "taskspace", "list", "--namespace", chosen)).toContain("notes");
+      expect(idMatches(chosen, marker().namespaceId)).toBe(true);
+    }, 60_000);
+
+    it("reports the orphan and fails when there is no namespace to fall back to", () => {
+      const { root } = orphanedByDelete();
+      // Deleting the last namespace leaves nothing to fall back to.
+      const main = cli(root, "namespace", "list").trim().split(/\s+/)[0];
+      cli(root, "namespace", "delete", main);
+
+      const result = runCli(root, "taskspace", "scan", "--apply", "--reattach");
+      expect(result.stdout).toContain("not reattached: its namespace no longer exists");
+      expect(result.stdout).toContain("Pass --namespace <id>");
+      expect(result.stdout).toContain("1 failed");
+      expect(result.status).toBe(1);
+    }, 60_000);
+  });
+});

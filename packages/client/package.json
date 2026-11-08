@@ -1,0 +1,86 @@
+{
+  "name": "@kozane/client",
+  "version": "0.1.0",
+  "description": "Shared Kozane board, tags, map and editor views for Svelte.",
+  "license": "MIT",
+  "author": "Kozo Oeda",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kozmof/kozane.git",
+    "directory": "packages/client"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./board": {
+      "types": "./dist/board.d.ts",
+      "svelte": "./dist/board.js",
+      "default": "./dist/board.js"
+    },
+    "./tags": {
+      "types": "./dist/tags.d.ts",
+      "svelte": "./dist/tags.js",
+      "default": "./dist/tags.js"
+    },
+    "./map": {
+      "types": "./dist/map.d.ts",
+      "svelte": "./dist/map.js",
+      "default": "./dist/map.js"
+    },
+    "./editor": {
+      "types": "./dist/editor.d.ts",
+      "svelte": "./dist/editor.js",
+      "default": "./dist/editor.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "svelte": "./dist/ui.js",
+      "default": "./dist/ui.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
+    "./host": {
+      "types": "./dist/host.d.ts",
+      "default": "./dist/host.js"
+    },
+    "./base.css": "./dist/styles/base.css"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "pnpm run build",
+    "prepublishOnly": "pnpm --dir ../.. release:check:client"
+  },
+  "dependencies": {
+    "@kozmof/reed": "4.1.0"
+  },
+  "devDependencies": {
+    "@kozane/core": "workspace:0.1.0",
+    "@pandacss/dev": "1.12.1",
+    "@sveltejs/package": "3.0.1",
+    "svelte": "5.57.2",
+    "typescript": "6.0.3"
+  },
+  "peerDependencies": {
+    "@kozane/core": "0.1.0",
+    "svelte": "^5.57.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -43,6 +43,20 @@
   },
 
   "overrides": [
+    {
+      "files": ["packages/kozane/src/services/**"],
+      "rules": {
+        "eslint/no-restricted-imports": ["error", {"patterns": [{"group": ["node:*", "@sveltejs/kit", "@sveltejs/kit/**", "$app/**", "**/lib/server/**", "**/db/internal/**", "**/routes/**", "**/cli/**"], "message": "Shared services must stay transport-free and browser-safe."}]}],
+        "eslint/no-restricted-globals": ["error", "process", "Buffer", "require", "__dirname", "__filename"]
+      }
+    },
+    {
+      "files": ["packages/core/src/**"],
+      "rules": {
+        "eslint/no-restricted-imports": ["error", { "patterns": [{ "group": ["node:*", "@libsql/client", "@sveltejs/kit", "@sveltejs/kit/**", "$app/**", "$env/**", "**/lib/server/**", "**/db/internal/**", "**/routes/**", "**/cli/**"], "message": "Core runtime must stay driver-independent and browser-safe." }, { "group": ["**/src/lib/**", "**/src/db/**"], "message": "Core imports its owned helpers and records instead of application compatibility modules." }] }],
+        "eslint/no-restricted-globals": ["error", "process", "Buffer", "require", "__dirname", "__filename"]
+      }
+    },
     // ── Layer boundaries ────────────────────────────────────────────────────────────
     //
     // The dependency direction was upheld by convention and by the comments that state it,
@@ -63,8 +77,8 @@
       // Type-only imports of `db` are allowed and are not an exception to the direction:
       // `lib/types.ts` derives the wire types from the row types, and an erased import
       // creates no dependency at runtime. A value import of `db` from here is a real one.
-      "files": ["src/lib/**"],
-      "excludeFiles": ["src/lib/server/**"],
+      "files": ["packages/kozane/src/lib/**"],
+      "excludeFiles": ["packages/kozane/src/lib/server/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -73,15 +87,15 @@
               {
                 "group": ["**/db/**", "$db/**"],
                 "allowTypeImports": true,
-                "message": "src/lib is the leaf tier: import db types only, never its values. Move the shared value into lib/ instead."
+                "message": "packages/kozane/src/lib is the leaf tier: import db types only, never its values. Move the shared value into lib/ instead."
               },
               {
                 "group": ["**/lib/server/**", "./server/**", "../server/**"],
-                "message": "src/lib is imported by the browser; lib/server is Node-only and sits above db. Move the shared value down into lib/."
+                "message": "packages/kozane/src/lib is imported by the browser; lib/server is Node-only and sits above db. Move the shared value down into lib/."
               },
               {
                 "group": ["**/routes/**", "**/cli/**", "$app/**"],
-                "message": "src/lib is below both front ends and must not import either."
+                "message": "packages/kozane/src/lib is below both front ends and must not import either."
               }
             ]
           }
@@ -97,7 +111,7 @@
       // three-line stat that `db/internal/config` validates its cache with and that
       // `api-key`, `tag-cache` and `taskspace-files` use for theirs. It lives under
       // `lib/server` because it needs `node:fs`, not because it belongs to that tier.
-      "files": ["src/db/**"],
+      "files": ["packages/kozane/src/db/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -118,7 +132,7 @@
     },
     {
       // Server services may use everything below them, and neither front end above.
-      "files": ["src/lib/server/**"],
+      "files": ["packages/kozane/src/lib/server/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -138,7 +152,7 @@
       // each other: the CLI is built by `tsc` and cannot resolve SvelteKit's aliases, and a
       // route reaching into `src/cli` would pull `commander` and `process.exit` into the
       // server bundle.
-      "files": ["src/routes/**"],
+      "files": ["packages/kozane/src/routes/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -154,7 +168,7 @@
       }
     },
     {
-      "files": ["src/cli/**"],
+      "files": ["packages/kozane/src/cli/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -170,9 +184,55 @@
       }
     },
     {
+      // Board action composition and mutations depend on injected backend resources.
+      "files": ["packages/kozane/src/routes/*/namespace-actions.svelte.ts", "packages/kozane/src/routes/*/lib/actions/*.ts", "packages/kozane/src/routes/*/lib/*persistence*.ts", "packages/kozane/src/routes/*/lib/*inventory-actions.ts", "packages/kozane/src/routes/*/lib/editor/*.ts", "packages/kozane/src/routes/*/lib/taskspace-tree.svelte.ts"],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": ["error", { "patterns": [
+          { "group": ["**/cli/**"], "message": "routes and cli are siblings; share through db/api or lib/server." },
+          { "group": ["**/namespace-api", "**/namespace-api.*", "**/lib/api/**", "../api/**"], "message": "Board actions use injected KozaneClient resources instead of HTTP helpers." }
+        ] }],
+        "eslint/no-restricted-globals": ["error", { "name": "fetch", "message": "Board actions use the injected client." }],
+        "eslint/no-restricted-properties": ["error",
+          { "property": "fetch", "message": "Board actions use the injected client." },
+          { "property": "mutationFetcher", "message": "Board actions use the injected client." },
+          { "property": "fetcher", "message": "Board actions use the injected client." }
+        ]
+      }
+    },
+    {
+      // Shared client views depend on adapters instead of route or Node runtime modules.
+      "files": ["packages/client/src/**"],
+      "excludeFiles": ["**/*.test.ts", "packages/client/src/client/**"],
+      "rules": {
+        "eslint/no-restricted-imports": ["error", { "patterns": [
+          { "group": ["**/kozane/src/**", "$lib/**", "$db/**", "styled-system/**"], "message": "Client source imports public core entries and relative client modules." },
+          { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Shared client views use injected browser-safe adapters." },
+          { "group": ["**/db/**", "$db/**"], "allowTypeImports": true, "message": "Shared client views may import database types only." }
+        ] }],
+        "eslint/no-restricted-globals": ["error", { "name": "fetch", "message": "Shared client views use the injected client." }],
+        "eslint/no-restricted-properties": ["error",
+          { "property": "fetch", "message": "Shared client views use the injected client." },
+          { "property": "fetcher", "message": "Shared client views use the injected client." }
+        ]
+      }
+    },
+    {
+      // Client adapters may use their transport but stay browser-safe.
+      "files": ["packages/client/src/client/**"],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": ["error", { "patterns": [
+          { "group": ["**/kozane/src/**", "$lib/**", "$db/**", "styled-system/**"], "message": "Client adapters import public core entries and relative client modules." },
+          { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Client adapters must stay browser-safe." },
+          { "group": ["**/db/**", "$db/**"], "allowTypeImports": true, "message": "Client adapters may import database types only." }
+        ] }]
+      }
+    },
+    {
       // A test may reach for `any` to build a malformed payload the types forbid — which is
-      // exactly what the route guards in `lib/request.ts` exist to reject.
-      "files": ["**/*.test.ts", "**/*.spec.ts", "src/test-utils/**"],
+      // exactly what core validation and HTTP boundary checks exist to reject.
+      "files": ["**/*.test.ts", "**/*.spec.ts", "packages/kozane/src/test-utils/**"],
       "rules": { "typescript/no-explicit-any": "off" }
     }
   ],
@@ -184,6 +244,7 @@
     "build-ssg/",
     "dist/",
     "styled-system/",
+    "packages/client/src/styles/generated/",
     ".svelte-kit/",
     "drizzle/",
     "coverage/",

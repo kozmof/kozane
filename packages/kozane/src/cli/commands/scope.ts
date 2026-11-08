@@ -1,0 +1,155 @@
+import * as service from "../../services/scopes.js";
+import { composeWrite } from "../../db/database.js";
+import { createServiceContext } from "../../services/context.js";
+import { getUiConfigForRoot } from "../../db/internal/config.js";
+import { ValidationError } from "../../services/errors.js";
+import { getAllScopes, getScopeNamespaceUsage, getScopesInNamespace } from "../../db/api/scope.js";
+import { getAllNamespaces } from "../../db/api/namespace.js";
+import { resolveNamespaceId } from "../lib/namespace-selection.js";
+import { resolveShortId, shortId } from "../lib/short-id.js";
+import { runWorkspaceCommand } from "../lib/workspace-command.js";
+import { partitionTable, cardTable } from "../../db/schema.js";
+import { eq } from "drizzle-orm";
+
+export async function scopeAdd(name: string): Promise<void> {
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error("Scope name cannot be empty.");
+    const { id: scopeId } = await service.create(
+      db,
+      createServiceContext(getUiConfigForRoot(root)),
+      { name: trimmedName },
+    );
+    const scopeIds = (await getAllScopes({ db })).map((scope) => scope.id);
+    console.log("Scope added.");
+    console.log(`  id  : ${shortId(scopeId, scopeIds)}`);
+    console.log(`  name: ${trimmedName}`);
+  });
+}
+
+export type ScopeListOptions = { namespace?: string };
+
+/**
+ * List every scope and the namespaces it reaches. Include scopes outside the current board.
+ * `--namespace` narrows the result to that namespace's visible scopes.
+ */
+export async function scopeList(options: ScopeListOptions = {}): Promise<void> {
+  await runWorkspaceCommand(async ({ db }) => {
+    // Resolve short IDs against all workspace scopes so `--namespace` does not change them.
+    const allScopes = await getAllScopes({ db });
+    const scopeIds = allScopes.map((scope) => scope.id);
+
+    const namespaceId = options.namespace ? await resolveNamespaceId(db, options.namespace) : null;
+    const scopes = namespaceId ? await getScopesInNamespace({ db, namespaceId }) : allScopes;
+    if (scopes.length === 0) {
+      console.log(namespaceId ? "No scopes found in this namespace." : "No scopes found.");
+      return;
+    }
+
+    const namespaces = await getAllNamespaces({ db });
+    const namespaceNameById = new Map(
+      namespaces.map((namespace) => [namespace.id, namespace.name]),
+    );
+    const usage = await getScopeNamespaceUsage({ db });
+    const namespacesByScope = new Map<string, string[]>();
+    for (const { scopeId, namespaceId: usedBy } of usage) {
+      const names = namespacesByScope.get(scopeId) ?? [];
+      names.push(namespaceNameById.get(usedBy) ?? usedBy);
+      namespacesByScope.set(scopeId, names);
+    }
+
+    for (const scope of scopes) {
+      // Print an explicit unused label for scopes not placed in any namespace.
+      const where = namespacesByScope.get(scope.id)?.sort().join(", ") ?? "(unused)";
+      console.log(`${shortId(scope.id, scopeIds)}  ${scope.name}  ${where}`);
+    }
+  });
+}
+
+export async function scopeDelete(scopeId: string): Promise<void> {
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { resolvedId, scopeIds } = await composeWrite(db, async (tx) => {
+      const scopes = await getAllScopes({ db: tx });
+      const scopeIds = scopes.map((scope) => scope.id);
+      const resolvedId = resolveShortId(scopeId, scopeIds, "Scope");
+      await service.removeWorkspaceInTx(tx, context, resolvedId);
+      return { resolvedId, scopeIds };
+    });
+    console.log("Scope deleted.");
+    console.log(`  id: ${shortId(resolvedId, scopeIds)}`);
+    console.log("Taskspaces attached to this scope are now unscoped.");
+  });
+}
+
+type ScopeMembersOptions = { namespace?: string };
+
+async function changeScopeMembers(
+  requestedScopeId: string,
+  requestedCardIds: string[],
+  options: ScopeMembersOptions,
+  action: "add" | "remove",
+): Promise<void> {
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { cardIds, scopeId, scopes } = await composeWrite(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, options.namespace);
+      const scopes = await getAllScopes({ db: tx });
+      const scopeId = resolveShortId(
+        requestedScopeId,
+        scopes.map(({ id }) => id),
+        "Scope",
+      );
+      const cards = await tx
+        .select({ id: cardTable.id, namespaceId: partitionTable.namespaceId })
+        .from(cardTable)
+        .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id));
+      const allCardIds = cards.map(({ id }) => id);
+      const cardIds = requestedCardIds.map((id) => resolveShortId(id, allCardIds, "Card"));
+      try {
+        await (action === "add" ? service.addMembersInTx : service.removeMembersInTx)(
+          tx,
+          context,
+          namespaceId,
+          scopeId,
+          { cardIds },
+        );
+      } catch (error) {
+        if (error instanceof ValidationError)
+          throw new Error(
+            error.message === "Some cards do not belong to this namespace"
+              ? "Cards must belong to the selected namespace."
+              : "Scope not found.",
+            { cause: error },
+          );
+        throw error;
+      }
+      return { cardIds, scopeId, scopes };
+    });
+    console.log(
+      `${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} ${action === "add" ? "added to" : "removed from"} scope.`,
+    );
+    console.log(
+      `  scope: ${shortId(
+        scopeId,
+        scopes.map(({ id }) => id),
+      )}`,
+    );
+  });
+}
+
+export async function scopeAddCards(
+  scopeId: string,
+  cardIds: string[],
+  options: ScopeMembersOptions = {},
+): Promise<void> {
+  await changeScopeMembers(scopeId, cardIds, options, "add");
+}
+
+export async function scopeRemoveCards(
+  scopeId: string,
+  cardIds: string[],
+  options: ScopeMembersOptions = {},
+): Promise<void> {
+  await changeScopeMembers(scopeId, cardIds, options, "remove");
+}

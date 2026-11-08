@@ -2,15 +2,15 @@
 
 This reference covers JSON endpoints used by browser and API clients.
 For HTML pages, see the [browser UI handbook](../docs/browser-ui-handbook.md).
-Endpoint coverage is checked by `src/routes/spec.test.ts`.
+Endpoint coverage is checked by `packages/kozane/src/routes/spec.test.ts`.
 
 ## Conventions
 
 ### Namespace scoping
 
-Endpoints use `/[namespaceId]/api/...`, except `/health`.
-Requests are limited to the named namespace. Scope creation is workspace-wide
-and ignores the namespace in its path.
+Board endpoints use `/[namespaceId]/api/...` and operate on the named namespace.
+Workspace datasets and namespace metadata use `/api/...`. Health uses `/health`.
+Scope creation is workspace-wide and ignores the namespace in its path.
 
 ### Authentication
 
@@ -61,6 +61,79 @@ use the following statuses.
 
 Single-resource routes return `404` when the resource named in the path is absent.
 Batch routes return `400` when a submitted ID is invalid for the namespace.
+
+## Workspace data
+
+### `GET /api/changes`
+
+Return `{ token }` with an opaque workspace change token and
+`Cache-Control: no-store`. There is no request body or query parameter.
+Compare tokens for equality and reread affected datasets when the token changes.
+A token change can conservatively request a refresh even without a confirmed write.
+It is not a snapshot validator and does not describe taskspace file changes.
+
+The token combines the server's committed revision with database and sidecar state
+for file-backed workspaces. In-memory databases use the server revision.
+Return 500 with code `unavailable` and message `Unable to check workspace changes`
+if database signatures cannot be read.
+
+### `GET /api/map`
+
+Return the workspace map dataset. There is no request body or query parameter.
+The response contains these fields.
+
+- `namespaces` contains `{ id, name, isDefault }` metadata.
+- `partitions` contains partition `id`, `namespaceId`, `name`, `isDefault`,
+  card count `cards`, and palette colors `bg` and `dot`.
+- `activity` contains `{ day, partitionId, cards }` change counts.
+- `scopes` contains workspace scope records.
+- `partitionUsage` contains `{ scopeId, partitionId, cards }` usage counts.
+- `namespaceUsage` contains `{ scopeId, namespaceId }` links.
+- `tags` contains card tag `hits`, card metadata `cardData`,
+  `cardNamespaces` lookups and a `truncated` flag.
+
+The client derives map geometry and applies view filters to this dataset.
+Taskspace file tags are not included in the map's card tag dataset.
+
+### `GET /api/tags`
+
+Return gathered tags and display metadata. Optional query `namespaceId` limits
+card hits and taskspace scanning to that namespace, including unplaced taskspaces.
+Omit it for a workspace-wide gather. An unknown supplied namespace returns 404.
+
+The response contains `index`, `namespaces`, `cardPartitions` and `partitions`.
+`index` contains card and file `hits`, `cardData` and `cardNamespaces` lookups,
+scanned `taskspaces` metadata, per-taskspace `truncated` notices,
+`missing` taskspace IDs and a `cardsTruncated` flag.
+Each hit has `tag`, `excerpt` and `source`. A card source has `kind: "card"`
+and `cardId`. A file source has `kind: "file"`, `taskspaceId`, relative `path`
+and `line`.
+
+`namespaces` supplies workspace namespace metadata. `cardPartitions` maps hit
+cards to partition IDs and names. `partitions` maps partition IDs to display
+names and dot colors. File scan limits and missing directories are represented
+in the index warnings rather than presented as complete results.
+
+## Namespaces
+
+### `GET /api/namespaces`
+
+Return an array of workspace namespace metadata, each with `id`, `name` and
+`isDefault`. There is no request body or query parameter. An empty workspace
+returns an empty array.
+
+### `GET /api/namespaces/[namespaceId]`
+
+Return `{ id, name, isDefault }` for the named namespace. Return 404 with code
+`not_found` and message `Namespace not found` when it does not exist.
+
+### `POST /api/namespaces`
+
+Create a namespace. Body requires `name`, trimmed, nonblank and at most 255
+characters. Return 200 with `{ id, name, isDefault: false }`.
+The namespace and its default partition and layer are created in one transaction.
+Creating a namespace does not change the workspace's default namespace.
+Invalid names return 400 with code `validation`.
 
 ## Cards
 
@@ -172,6 +245,7 @@ Return `{ inventory, cards: [...], stacking: [{ cardId, zIndex }] }`.
 order, with null `glueId`. Their `posX` and `posY` are where a take without a position
 returns them, laid out from the original and clamped to the board. They take consecutive
 stacking values from the original. Cards above them are raised and included in `stacking`.
+Each piece includes `createdAt` and `updatedAt` timestamps as ISO 8601 strings.
 
 Return 400 for a card outside this namespace, a card stored in an inventory,
 fewer than two pieces, more than 2,000 pieces, or pieces that do not fit in one

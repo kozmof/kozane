@@ -7,7 +7,7 @@ import { connect } from "node:net";
 
 const packageRoot = process.env.KOZANE_PACKAGE_ROOT
   ? resolve(process.env.KOZANE_PACKAGE_ROOT)
-  : resolve(import.meta.dirname, "..");
+  : resolve(import.meta.dirname, "../packages/kozane");
 const workspace = mkdtempSync(join(tmpdir(), "kozane-production-smoke-"));
 
 function cli(...args) {

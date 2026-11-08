@@ -1,0 +1,33 @@
+/**
+ * Protect unsaved edits when navigation, reloading, or tab closing would discard the
+ * document. Panel closing has its own guard.
+ */
+
+/** The part of a host navigation intent needed to protect unsaved edits. */
+export type LeaveIntent = {
+  /** Use `"leave"` when the document unloads on tab close or reload. */
+  type: string;
+  cancel: () => void;
+};
+
+/**
+ * Confirmation text for in-app navigation. The browser supplies its own text for tab
+ * closing and reloading.
+ */
+export const UNSAVED_LEAVE_PROMPT = "This file has unsaved changes. Leave and discard them?";
+
+/**
+ * Cancel navigation if it would discard unsaved changes without confirmation. For leave
+ * events, let the browser show its unload dialog. For in-app navigation, use the synchronous
+ * `ask` callback.
+ */
+export function guardUnsavedLeave(nav: LeaveIntent, dirty: boolean, ask: () => boolean): boolean {
+  if (!dirty) return false;
+  if (nav.type === "leave") {
+    nav.cancel();
+    return true;
+  }
+  if (ask()) return false;
+  nav.cancel();
+  return true;
+}

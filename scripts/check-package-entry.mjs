@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import assert from "node:assert/strict";
 
 /**
  * Check that the published package contains a usable server with the intended default binding.
@@ -14,9 +15,23 @@ import { tmpdir } from "node:os";
  * `pnpm pack:check` runs this against the tarball produced by `pack:tmp`.
  */
 
-const packageRoot = resolve(import.meta.dirname, "..");
+const packageRoot = resolve(import.meta.dirname, "../packages/kozane");
 const { name, version } = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
 const tarball = join(process.env.TMPDIR ?? tmpdir(), `${name}-${version}.tgz`);
+const packedManifest = JSON.parse(
+  execFileSync("tar", ["-xOf", tarball, "package/package.json"], { encoding: "utf8" }),
+);
+const sourceManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+for (const dependency of ["@kozane/core", "@kozane/client"]) {
+  const expected = sourceManifest.dependencies[dependency].replace(/^workspace:/, "");
+  assert.match(expected, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
+  assert.equal(
+    packedManifest.dependencies[dependency],
+    expected,
+    `Packed dependency must pin tested ${dependency}`,
+  );
+}
+assert.equal(packedManifest.dependencies.svelte, sourceManifest.dependencies.svelte);
 
 /** Every path in the tarball, with npm's `package/` prefix stripped. */
 function entries() {
@@ -72,3 +87,17 @@ if (missing.length > 0 || shipped.length > 0) {
 console.log(
   `OK: server entry is bin/server.js, adapter entry excluded, ${REQUIRED.length} required files present.`,
 );
+
+// Binary imports must remain relative to the installed CLI package.
+for (const binary of ["kozane.js", "server.js"]) {
+  const source = readFileSync(join(packageRoot, "bin", binary), "utf8");
+  const packed = execFileSync("tar", ["-xOf", tarball, `package/bin/${binary}`], {
+    encoding: "utf8",
+  });
+  assert.equal(packed, source);
+  assert.doesNotMatch(
+    source,
+    /["']\.\.\/\.\.\//,
+    "Binary imports must stay inside the CLI package",
+  );
+}

@@ -1,0 +1,56 @@
+{
+  "name": "@kozane/core",
+  "version": "0.1.0",
+  "description": "Kozane database adapters, schema and domain services for Node and browsers.",
+  "license": "MIT",
+  "author": "Kozo Oeda",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kozmof/kozane.git",
+    "directory": "packages/core"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/packages/core/src/index.d.ts",
+      "import": "./dist/packages/core/src/index.js"
+    },
+    "./database": {
+      "types": "./dist/packages/core/src/database.d.ts",
+      "import": "./dist/packages/core/src/database.js"
+    },
+    "./schema": {
+      "types": "./dist/packages/core/src/schema.d.ts",
+      "import": "./dist/packages/core/src/schema.js"
+    },
+    "./services": {
+      "types": "./dist/packages/core/src/services.d.ts",
+      "import": "./dist/packages/core/src/services.js"
+    },
+    "./migrations": {
+      "types": "./dist/packages/core/src/migrations.d.ts",
+      "import": "./dist/packages/core/src/migrations.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "pnpm run build",
+    "check:migrations": "node scripts/generate-migrations.mjs --check",
+    "prepublishOnly": "pnpm --dir ../.. release:check:core",
+    "migrations:refresh": "node scripts/generate-migrations.mjs && node scripts/generate-schema.mjs"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.4",
+    "uuid": "13.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

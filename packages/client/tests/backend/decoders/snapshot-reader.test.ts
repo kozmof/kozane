@@ -1,0 +1,143 @@
+import { describe, expect, it } from "vitest";
+import type { NamespaceDataSnapshot } from "@kozane/core";
+import { readNamespaceSnapshot } from "../../../src/client/decoders/snapshot-reader.js";
+
+/** A board fixture containing one of each entity returned by the endpoint. */
+function fullSnapshot(): NamespaceDataSnapshot {
+  return {
+    namespace: { id: "p1" },
+    cards: [
+      {
+        id: "c1",
+        partitionId: "b1",
+        layerId: "l1",
+        content: "hello",
+        posX: 10,
+        posY: 20,
+        zIndex: 3,
+        taskspaceId: null,
+        inventory: null,
+        glueId: null,
+        width: null,
+      },
+    ],
+    partitions: [{ id: "b1", namespaceId: "p1", name: "General", isDefault: true }],
+    layers: [{ id: "l1", namespaceId: "p1", name: "Base", position: 0, isDefault: true }],
+    warps: [{ id: "w1", namespaceId: "p1", posX: 100, posY: 200 }],
+    inventories: [{ id: "i1", namespaceId: "p1", name: "Bag", posX: 300, posY: 400 }],
+    scopes: [{ id: "s1", name: "Draft" }],
+    scopeRels: [{ scopeId: "s1", cardId: "c1" }],
+    scopeAreas: [
+      { id: "a1", scopeId: "s1", namespaceId: "p1", posX: 40, posY: 60, width: 640, height: 480 },
+    ],
+    glueRels: [{ glueId: "g1", cardId: "c1" }],
+    taskspaces: [
+      { id: "t1", name: "draft", scopeId: "s1", path: "draft", pathKind: "workspace_relative" },
+    ],
+  };
+}
+
+/** Round-trips through JSON, as a real response does. */
+function read(value: unknown): NamespaceDataSnapshot | undefined {
+  return readNamespaceSnapshot(JSON.parse(JSON.stringify(value)));
+}
+
+describe("readNamespaceSnapshot", () => {
+  it("reads a whole snapshot back unchanged", () => {
+    const snapshot = fullSnapshot();
+    expect(read(snapshot)).toEqual(snapshot);
+  });
+
+  it("accepts the nulls that are values rather than omissions", () => {
+    const snapshot = fullSnapshot();
+    snapshot.cards[0].taskspaceId = null;
+    snapshot.cards[0].glueId = null;
+    snapshot.cards[0].width = null;
+    // Static exports omit taskspace paths. Taskspaces can also have no scope.
+    snapshot.taskspaces[0].path = null;
+    snapshot.taskspaces[0].scopeId = null;
+    expect(read(snapshot)).toEqual(snapshot);
+  });
+
+  it("accepts an empty card, which the board draws as one", () => {
+    const snapshot = fullSnapshot();
+    snapshot.cards[0].content = "";
+    expect(read(snapshot)?.cards[0].content).toBe("");
+  });
+
+  it("accepts a board with nothing on it", () => {
+    const empty: NamespaceDataSnapshot = {
+      namespace: { id: "p1" },
+      cards: [],
+      partitions: [],
+      layers: [],
+      warps: [],
+      inventories: [],
+      scopes: [],
+      scopeRels: [],
+      scopeAreas: [],
+      glueRels: [],
+      taskspaces: [],
+    };
+    expect(read(empty)).toEqual(empty);
+  });
+
+  it.each([
+    ["not an object", "a string"],
+    ["null", null],
+    ["an array", []],
+    ["no namespace", { cards: [] }],
+  ])("refuses %s", (_label, value) => {
+    expect(read(value)).toBeUndefined();
+  });
+
+  it.each([
+    "cards",
+    "partitions",
+    "layers",
+    "warps",
+    "scopes",
+    "scopeRels",
+    "scopeAreas",
+    "glueRels",
+    "taskspaces",
+  ])("refuses a snapshot missing %s", (key) => {
+    const snapshot: Record<string, unknown> = { ...fullSnapshot() };
+    delete snapshot[key];
+    expect(read(snapshot)).toBeUndefined();
+  });
+
+  it("refuses a card with a non-finite position", () => {
+    const snapshot = fullSnapshot();
+    // NaN travels through JSON as null, which is how one reaches the client at all.
+    const wire = JSON.parse(JSON.stringify(snapshot));
+    wire.cards[0].posX = null;
+    expect(readNamespaceSnapshot(wire)).toBeUndefined();
+  });
+
+  it("refuses a card missing its partition", () => {
+    const snapshot: NamespaceDataSnapshot = fullSnapshot();
+    const wire = JSON.parse(JSON.stringify(snapshot));
+    delete wire.cards[0].partitionId;
+    expect(readNamespaceSnapshot(wire)).toBeUndefined();
+  });
+
+  it("refuses an unknown path kind", () => {
+    const wire = JSON.parse(JSON.stringify(fullSnapshot()));
+    wire.taskspaces[0].pathKind = "somewhere_else";
+    expect(readNamespaceSnapshot(wire)).toBeUndefined();
+  });
+
+  it("refuses the whole list when one row of it is bad", () => {
+    const snapshot = fullSnapshot();
+    const wire = JSON.parse(JSON.stringify(snapshot));
+    wire.partitions.push({ id: "b2", namespaceId: "p1", name: "Other" }); // no isDefault
+    expect(readNamespaceSnapshot(wire)).toBeUndefined();
+  });
+
+  it("refuses a width that is neither a number nor null", () => {
+    const wire = JSON.parse(JSON.stringify(fullSnapshot()));
+    wire.cards[0].width = "220";
+    expect(readNamespaceSnapshot(wire)).toBeUndefined();
+  });
+});

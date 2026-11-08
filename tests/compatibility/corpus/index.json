@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "cohorts": [
+    {
+      "id": "core-0.1.0-rc1-wasm",
+      "sha256": "ad56612c0d1e8e25be05569a4336eb08b106780fd22a4b0cb3f5bc2db2780f0c"
+    },
+    {
+      "id": "core-0.1.0-rc2-libsql",
+      "sha256": "d5030b1a050166b59a2d875f9164314cdd548ff185928ec1701ca2e17db40150"
+    },
+    {
+      "id": "core-0.1.0-rc3-wasm-boundaries",
+      "sha256": "a120ef50e9582258f4e462324988a3db625a17e19d3f44134a8934792baf2d96"
+    },
+    {
+      "id": "core-0.1.0-rc4-libsql-boundaries",
+      "sha256": "9d5e350ad2197e91aabadc6c3a8cf27683c3f21384152a17f86020a7ba627703"
+    }
+  ]
+}

@@ -285,3 +285,19 @@ For persisted-cache contents, refresh rules, and safe cleanup, see
 ## License
 
 See [LICENCE](./LICENCE).
+
+## Workspace packages
+
+The repository root is a private tooling workspace. Published packages live in
+`packages/core`, `packages/client` and `packages/kozane`. The CLI package remains unscoped
+as `kozane`, with the same global installation and executable entry points.
+
+Run `pnpm install`, `pnpm check`, `pnpm test` and `pnpm build` from the repository root.
+The app source, configuration editor and CLI live in `packages/kozane/src`. App build
+configuration and generated `build`, `build-ssg` and `dist` output belong to that package.
+The original migration SQL stays under root `drizzle` and is copied unchanged into the
+CLI artifact during builds.
+
+## Contributor checks
+
+See [verification checks](docs/verification.md) to choose checks for a change.
