@@ -4,12 +4,12 @@
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
-  import { createNodeNavigation, type NavigationAdapter } from "../../../../client/src/navigation.js";
-  import { StaticBackend } from "../../../../client/src/backend/static-backend.js";
-  import { HttpBackend } from "../../../../client/src/backend/http-backend.js";
-  import { browserPollLifecycle } from "../../../../client/src/backend/workspace-poller.js";
+  import { createNodeNavigation, type NavigationAdapter } from "@kozane/client";
+  import { StaticBackend } from "@kozane/client";
+  import { HttpBackend } from "@kozane/client";
+  import { browserPollLifecycle } from "@kozane/client/host";
   import { normalizeTag } from "$lib/tag";
-  import { MapView } from "../../../../client/src/map/index.js";
+  import { MapView } from "@kozane/client/map";
 
   let { data, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
   const httpBackend = untrack(() => data.backendCapabilities

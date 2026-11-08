@@ -46,7 +46,9 @@ export const canonicalSchemaManifest: SchemaManifest = freezeSchema(${JSON.strin
     if (result.errors.length) throw new Error(JSON.stringify(result.errors));
     if (check) {
       if (readFileSync(output, "utf8") !== result.code)
-        throw new Error("Canonical schema manifest is stale. Run pnpm build:core.");
+        throw new Error(
+          "Canonical schema manifest is stale. Run pnpm --filter @kozane/core migrations:refresh.",
+        );
     } else writeFileSync(output, result.code);
   } finally {
     db.close();

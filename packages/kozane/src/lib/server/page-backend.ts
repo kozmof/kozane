@@ -1,5 +1,5 @@
-import type { BackendCapabilities } from "../../../../client/src/backend/contract.js";
-import type { StaticBackendData } from "../../../../client/src/backend/static-backend.js";
+import type { BackendCapabilities } from "@kozane/client";
+import type { StaticBackendData } from "@kozane/client";
 import { httpBackendCapabilities } from "./backend-capabilities.js";
 /** Optional fields retain compatibility with page data from older exports. */
 export interface PageBackendData {

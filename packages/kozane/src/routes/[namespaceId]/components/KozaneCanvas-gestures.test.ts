@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/svelte";
-import KozaneCanvas from "../../../../../client/src/board/components/KozaneCanvas.svelte";
+import { BoardCanvas as KozaneCanvas } from "@kozane/client/board";
 import CanvasBindingHarness from "./CanvasBindingHarness.svelte";
 import { SelectionState } from "../../../../../client/src/board/namespace-state.svelte.js";
 import type { CardPositionPatch } from "../../../../../client/src/board/lib/namespace-page.js";

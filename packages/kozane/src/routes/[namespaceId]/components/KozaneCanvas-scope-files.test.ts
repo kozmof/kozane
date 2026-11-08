@@ -1,7 +1,7 @@
 import { httpEditorContext } from "../../../test-utils/editor-context.js";
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/svelte";
-import KozaneCanvas from "../../../../../client/src/board/components/KozaneCanvas.svelte";
+import { BoardCanvas as KozaneCanvas } from "@kozane/client/board";
 import CanvasBindingHarness from "./CanvasBindingHarness.svelte";
 import { TaskspaceTreeState } from "../../../../../client/src/board/lib/taskspace-tree.svelte.js";
 import type { TaskspaceSummary } from "$lib/types";

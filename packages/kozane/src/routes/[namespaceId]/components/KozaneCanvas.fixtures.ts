@@ -1,7 +1,7 @@
 import { httpEditorContext } from "../../../test-utils/editor-context.js";
 import { vi } from "vitest";
-import { SelectionState } from "../../../../../client/src/board/namespace-state.svelte.js";
-import { TaskspaceTreeState } from "../../../../../client/src/board/lib/taskspace-tree.svelte.js";
+import { SelectionState } from "@kozane/client/board";
+import { TaskspaceTreeState } from "@kozane/client/board";
 import type { CardPositionPatch } from "../../../../../client/src/board/lib/namespace-page.js";
 import { PALETTE } from "$lib/palette";
 import type { NewCardPlacement } from "$lib/ui-config";

@@ -1,8 +1,9 @@
-import { archiveName, archiveDigest, validateReleaseArtifacts } from "./release-artifacts.mjs";
+import { preparePackageArtifacts } from "./prepare-package-artifacts.mjs";
+import { validateReleaseArtifacts } from "./release-artifacts.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,25 +32,28 @@ const directory = resolve(argument ?? join(root, "tmp", "releases", commit));
 const manifestPath = join(directory, "release.json");
 if (mode === "prepare") {
   assert.ok(!existsSync(manifestPath), "Release directory already contains a prepared release");
-  for (const script of ["release:check", "verify", "audit:production", "smoke:package", "test:e2e"])
-    run("pnpm", [script]);
-  for (const script of ["test:restoration-harness", "test:client-package"]) run("pnpm", [script]);
-  mkdirSync(directory, { recursive: true });
-  const artifacts = packages.map((pkg) => {
-    run("pnpm", ["--filter", pkg.name, "pack", "--pack-destination", directory]);
-    const file = archiveName(pkg);
-    const archive = join(directory, file);
+  const artifacts = preparePackageArtifacts({ repository: root, directory, run });
+  run(process.execPath, ["scripts/verify-workspace.mjs", "--artifacts=" + directory]);
+  run("pnpm", ["audit:production"]);
+  run("pnpm", ["test:e2e"]);
+  for (const config of [
+    "scripts/restoration-harness/playwright.config.ts",
+    "scripts/client-package/playwright.config.ts",
+  ]) {
+    run("pnpm", ["exec", "playwright", "test", "--config", config]);
+  }
+  for (const artifact of artifacts) {
     run("npm", [
       "publish",
-      archive,
+      join(directory, artifact.file),
       "--access",
       "public",
       "--ignore-scripts",
       "--dry-run",
       "--registry=https://registry.npmjs.org/",
     ]);
-    return { name: pkg.name, version: pkg.version, file, sha256: archiveDigest(archive) };
-  });
+  }
+  validateReleaseArtifacts({ format: 1, commit, artifacts }, packages, commit, directory);
   run(process.execPath, ["scripts/smoke-package.mjs", "--artifacts=" + directory]);
   assert.equal(
     output("git", ["status", "--porcelain"]),

@@ -20,7 +20,7 @@ Commit all source changes, then run the local release checks.
 pnpm release:local
 ```
 
-This runs release metadata and versioning regressions, verification and coverage, production dependency auditing, local/global archive installation and HTTP smoke, and the app, restoration and public-client browser suites. It builds the three tarballs and runs npm dry-run publication on them. It writes a release manifest containing their versions, SHA-256 hashes and source commit under `tmp/releases/<commit>/`. An optional directory argument chooses another destination.
+This runs release metadata and versioning regressions, verification and coverage, production dependency auditing, local/global archive installation and HTTP smoke, and the app, restoration and public-client browser suites. It builds once and packs all three packages once with lifecycle rebuilds disabled. Verification, installed-package tests, browser fixtures, installation smoke and npm dry-run publication consume those same archives. It writes a release manifest containing their versions, SHA-256 hashes and source commit under `tmp/releases/<commit>/`. An optional directory argument chooses another destination.
 
 Database driver parity checks are optional and are not part of release preparation. Run `pnpm test:db-wasm` or `pnpm test:db-browser` separately when needed.
 
@@ -51,3 +51,9 @@ The publisher runs `pnpm release:verify:registry` after all three packages are p
 It checks exact registry versions, repository paths, runtime and peer pins and integrity metadata. It installs those exact versions from the public registry locally and globally, checks both CLI versions and shared runtime identity, and tests the installed HTTP server. Registry mode does not build or substitute candidate archives.
 
 Retain the prepared manifest and registry verification output as release evidence. Publish and verify the intended package pair before starting the [web demo tasks](web-demo-tasks.md).
+
+## Development verification
+
+Run `pnpm verify` to build and pack once, then check the prepared outputs. Source unit tests use `vitest.source.config.ts` and source aliases. Installed-package tests use `vitest.package.config.ts` without source aliases. Run `pnpm test:packages` to prepare an isolated installation and run its public runtime tests.
+
+Normal builds check committed migration records and schema without rewriting them. After editing the application schema, run `pnpm db:generate`, review the SQL and generated core inputs, and commit them together.

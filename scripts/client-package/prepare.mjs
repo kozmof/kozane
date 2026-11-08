@@ -1,11 +1,22 @@
+import { archiveName } from "../release-artifacts.mjs";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { lockedDriver } from "../compatibility/locked-driver.mjs";
 /** Add the packed client and its exact runtime graph to the existing isolated core consumer. */
-export function prepareClientConsumer({ consumer, repository, run, coreReference, coreVersion }) {
-  run("pnpm", ["--filter", "@kozane/client", "pack", "--pack-destination", consumer]);
+export function prepareClientConsumer({
+  consumer,
+  repository,
+  run,
+  coreReference,
+  coreVersion,
+  artifacts,
+}) {
+  if (artifacts) {
+    const pkg = JSON.parse(readFileSync(join(repository, "packages/client/package.json"), "utf8"));
+    copyFileSync(join(artifacts, archiveName(pkg)), join(consumer, archiveName(pkg)));
+  } else run("pnpm", ["--filter", "@kozane/client", "pack", "--pack-destination", consumer]);
   const name = readdirSync(consumer).find(
     (name) => name.startsWith("kozane-client-") && name.endsWith(".tgz"),
   );

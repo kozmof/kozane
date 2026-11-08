@@ -1,6 +1,6 @@
 import { base } from "$app/paths";
 import type { NamespaceDataSnapshot } from "$lib/types.js";
-import type { InFlight } from "../../../../../client/src/board/lib/in-flight.js";
+import type { ActivityGuard } from "@kozane/client/host";
 import { readNamespaceSnapshot } from "./snapshot-reader.js";
 
 /** How often the board asks the server whether anything has changed. */
@@ -14,7 +14,7 @@ export type SnapshotPollOptions = {
    * Activity trackers for drags and mutations. Wait while any is active and discard responses
    * spanning a tracker change.
    */
-  activities: readonly InFlight[];
+  activities: readonly ActivityGuard[];
   /** Applied only once every guard above still holds. */
   apply: (snapshot: NamespaceDataSnapshot) => void;
   /** Skip polling while the tab is hidden. */

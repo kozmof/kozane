@@ -3,13 +3,13 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   ssr: {
+    noExternal: ["@kozane/client"],
     external: [
       "@kozane/core",
       "@kozane/core/database",
       "@kozane/core/schema",
       "@kozane/core/services",
       "@kozane/core/migrations",
-      "@kozane/client",
     ],
   },
   plugins: [

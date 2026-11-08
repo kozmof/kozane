@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/svelte";
-import KozaneCanvas from "../../../../../client/src/board/components/KozaneCanvas.svelte";
+import { BoardCanvas as KozaneCanvas } from "@kozane/client/board";
 import { SelectionState } from "../../../../../client/src/board/namespace-state.svelte.js";
 import { INACTIVE_LAYER_OPACITY } from "../../../../../client/src/board/lib/namespace-page.js";
 import {

@@ -62,8 +62,10 @@ Both modes reject duplicates, gaps, unknown timestamps and hash mismatches. The 
 sorts, writes or repairs history. `MigrationHistoryError.reason` identifies the failure.
 The ordinary Node workspace compatibility path remains separate from these strict checks.
 
-Build from the repository root with `pnpm build:core`. This regenerates migration records
-from the original journal and SQL. Run `pnpm --filter @kozane/core check:migrations` to check
+Build from the repository root with `pnpm build:core`. This checks committed migration records
+and the canonical schema before compiling. Run `pnpm db:generate` after changing the
+application schema to generate SQL and refresh both committed core inputs. Run
+`pnpm --filter @kozane/core migrations:refresh` to refresh them from existing SQL. Run `pnpm --filter @kozane/core check:migrations` to check
 that committed records are current. `pnpm check:core-package` checks freshness, installs the
 tarball outside the workspace with its declared dependencies and the adapter fixtures’ explicit
 Drizzle and sqlite-wasm dependencies. It checks public types and runtime exports, applies migrations through a
@@ -87,7 +89,7 @@ Ordinary write transactions cannot provide this boundary. An adapter without the
 application before preparation. Failures propagate without automatic retries or history repair.
 The Node adapter uses the existing native migration batch operation.
 
-The core build applies bundled migrations to a fresh database and generates
+The schema generator applies bundled migrations to a fresh database and generates
 `canonicalSchemaManifest`, including the history table. Run
 `node packages/core/scripts/generate-schema.mjs --check` to check freshness.
 The manifest is deeply frozen. It covers table definitions, columns, declared types,

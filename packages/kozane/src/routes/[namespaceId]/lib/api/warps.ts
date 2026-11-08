@@ -1,6 +1,6 @@
 /** Warp requests, and the directory of every namespace's warps. */
 import type { Warp } from "$lib/types.js";
-import { readFiniteNumber, readString } from "../../../../../../client/src/board/lib/response.js";
+import { readFiniteNumber, readString } from "@kozane/client/host";
 import { apiUrl, jsonRequest } from "./request.js";
 
 /** `posX`/`posY` are the world coordinates of the view centre to come back to. */
@@ -49,4 +49,4 @@ export function fetchWarpDirectory(fetcher: typeof fetch, namespaceId: string): 
   return fetcher(apiUrl(namespaceId, "/warp-directory"));
 }
 
-export { parseWarpEntries } from "../../../../../../client/src/backend/decoders/warp-directory.js";
+export { parseWarpEntries } from "@kozane/client/host";

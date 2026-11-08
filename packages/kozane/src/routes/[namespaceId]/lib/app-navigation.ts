@@ -1,5 +1,5 @@
 import { beforeNavigate, goto, replaceState } from "$app/navigation";
-import type { NavigationDriver } from "../../../../../client/src/navigation.js";
+import type { NavigationDriver } from "@kozane/client";
 /** SvelteKit host bridge. Shared views depend only on NavigationDriver. */
 export function createAppNavigationDriver(): NavigationDriver {
   return {

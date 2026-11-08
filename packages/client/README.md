@@ -107,3 +107,17 @@ This check exercises the bundled runtime through public entries without network 
 The packed client development dependency must match its exact core peer.
 
 The root entry also exports the map and tag view projections used by server loaders. These helpers run without browser globals.
+
+## Host adapters
+
+Import wire decoders, static-file helpers, polling lifecycle and structural activity types
+from `@kozane/client/host` when connecting a host application. This entry loads in Node
+without loading Svelte components. Use public entries for host imports. Private source
+paths are unsupported.
+
+A host that generates its own shared Panda utilities can import `@kozane/client/base.css`
+for the common base rules. Other consumers should import `@kozane/client/styles.css`.
+
+Source unit tests use `vitest.source.config.ts`. Run `pnpm test:packages` for the separate
+installed-package project, which resolves public exports from candidate archives without
+source aliases.

@@ -1,4 +1,1 @@
-export {
-  findStaticNode,
-  staticDirectoryEntries,
-} from "../../../../../client/src/backend/static-files.js";
+export { findStaticNode, staticDirectoryEntries } from "@kozane/client/host";

@@ -5,12 +5,12 @@
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { createAppNavigationDriver } from "./lib/app-navigation.js";
-  import { createNodeNavigation, type NavigationAdapter, type NavigationDriver } from "../../../../client/src/navigation.js";
-  import { createSessionPreferences, type PreferenceStorage } from "../../../../client/src/preferences.js";
-  import { HttpBackend } from "../../../../client/src/backend/http-backend.js";
-  import { StaticBackend } from "../../../../client/src/backend/static-backend.js";
-  import { browserPollLifecycle } from "../../../../client/src/backend/workspace-poller.js";
-  import { BoardView } from "../../../../client/src/board/index.js";
+  import { createNodeNavigation, type NavigationAdapter, type NavigationDriver } from "@kozane/client";
+  import { createSessionPreferences, type PreferenceStorage } from "@kozane/client";
+  import { HttpBackend } from "@kozane/client";
+  import { StaticBackend } from "@kozane/client";
+  import { browserPollLifecycle } from "@kozane/client/host";
+  import { BoardView } from "@kozane/client/board";
 
   let { data, navigation = createNodeNavigation({ base, boardTrailingSlash: () => page.url.pathname.endsWith("/") }), routing = createAppNavigationDriver(), preferences = createSessionPreferences() }: PageProps & { navigation?: NavigationAdapter; routing?: NavigationDriver; preferences?: PreferenceStorage } = $props();
   const staticExport = untrack(() => data.staticBackendData !== undefined || (data.readonly && !data.backendCapabilities));

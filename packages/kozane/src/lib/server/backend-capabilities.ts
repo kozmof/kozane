@@ -1,4 +1,4 @@
-import type { BackendCapabilities } from "../../../../client/src/backend/contract.js";
+import type { BackendCapabilities } from "@kozane/client";
 import { getDBURL, getWorkspaceRoot } from "../../db/internal/config.js";
 import { isMemoryDbUrl } from "../db-url.js";
 import { readApiKeyResult } from "./api-key.js";

@@ -1,7 +1,7 @@
 /** Card requests: create, edit, delete, glue, and batch moves. */
-import type { CardPositionPatch } from "../../../../../../client/src/board/lib/namespace-page.js";
+import type { CardPositionPatch } from "@kozane/client/host";
 import type { CardWithGlue } from "$lib/types.js";
-import { readArray } from "../../../../../../client/src/board/lib/response.js";
+import { readArray } from "@kozane/client/host";
 import { readCard } from "../snapshot-reader.js";
 import { apiUrl, jsonRequest } from "./request.js";
 

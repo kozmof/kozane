@@ -1,11 +1,11 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
-  import { createNodeNavigation, type NavigationAdapter } from "../../../client/src/navigation.js";
+  import { createNodeNavigation, type NavigationAdapter } from "@kozane/client";
   import { base } from "$app/paths";
   import { untrack } from "svelte";
-  import { StaticBackend } from "../../../client/src/backend/static-backend.js";
-  import { HttpBackend } from "../../../client/src/backend/http-backend.js";
-  import { NamespacesView } from "../../../client/src/namespaces/index.js";
+  import { StaticBackend } from "@kozane/client";
+  import { HttpBackend } from "@kozane/client";
+  import { NamespacesView } from "@kozane/client/ui";
   import { css } from "styled-system/css";
 
   let { data, form, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();

@@ -26,14 +26,15 @@
   "scripts": {
     "build": "pnpm --dir ../.. build",
     "prepack": "pnpm run build",
-    "build:app": "node ../../scripts/stage-cli-migrations.mjs && drizzle-kit generate && vite build && vite build --config vite.config-editor.ts && tsc --project tsconfig.cli.json && node ../../scripts/check-node-core.mjs .",
+    "build:app": "node ../../scripts/stage-cli-migrations.mjs && vite build && vite build --config vite.config-editor.ts && tsc --project tsconfig.cli.json && node ../../scripts/check-node-core.mjs .",
     "prepare:app": "svelte-kit sync && panda codegen --silent",
     "dev": "vite dev",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "build:cli": "tsc --project tsconfig.cli.json",
     "build:config-editor": "vite build --config vite.config-editor.ts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@kozane/client": "workspace:0.1.0",

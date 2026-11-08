@@ -52,7 +52,9 @@ export const schemaVersion: string = migrations[migrations.length - 1].id;
   if (result.errors.length) throw new Error(JSON.stringify(result.errors));
   if (check) {
     if (readFileSync(output, "utf8") !== result.code)
-      throw new Error("Bundled migrations are stale. Run pnpm build:core.");
+      throw new Error(
+        "Bundled migrations are stale. Run pnpm --filter @kozane/core migrations:refresh.",
+      );
   } else {
     mkdirSync(dirname(output), { recursive: true });
     writeFileSync(output, result.code);
