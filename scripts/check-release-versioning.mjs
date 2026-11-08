@@ -54,8 +54,8 @@ try {
   assert.equal(client.devDependencies[core.name], `workspace:${core.version}`);
   assert.equal(cli.dependencies[core.name], `workspace:${core.version}`);
   assert.equal(cli.dependencies[client.name], `workspace:${client.version}`);
-  assert.equal(read("package.json").dependencies[core.name], `workspace:${core.version}`);
-  assert.equal(read("package.json").dependencies[client.name], `workspace:${client.version}`);
+  assert.equal(read("package.json").devDependencies[core.name], `workspace:${core.version}`);
+  assert.equal(read("package.json").devDependencies[client.name], `workspace:${client.version}`);
   console.log(
     "Changesets versions the CLI and preserves exact core/client pins through a coordinated API upgrade in an isolated workspace.",
   );

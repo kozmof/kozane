@@ -27,8 +27,8 @@ assert.equal(client.devDependencies[core.name], `workspace:${core.version}`);
 assert.equal(client.dependencies[core.name], undefined);
 assert.equal(cli.dependencies[core.name], `workspace:${core.version}`);
 assert.equal(cli.dependencies[client.name], `workspace:${client.version}`);
-assert.equal(root.dependencies[core.name], `workspace:${core.version}`);
-assert.equal(root.dependencies[client.name], `workspace:${client.version}`);
+assert.equal(root.devDependencies[core.name], `workspace:${core.version}`);
+assert.equal(root.devDependencies[client.name], `workspace:${client.version}`);
 assert.equal(cli.bin.kozane, "./bin/kozane.js");
 assert.equal(root.scripts["publish:npm"], "pnpm release:publish");
 console.log(

@@ -79,7 +79,7 @@ async function retain(db, engine, name, requests) {
 }
 await (producer.scenarios === "boundaries" ? seedBoundaries : seedCorpus)(database, retain);
 // The exact driver version is supplied from the isolated consumer's locked installation.
-const version = JSON.parse(readFileSync("package.json", "utf8")).dependencies["@libsql/client"];
+const version = JSON.parse(readFileSync("package.json", "utf8")).devDependencies["@libsql/client"];
 writeFileSync(
   join(output, "manifest.json"),
   JSON.stringify(

@@ -53,7 +53,7 @@ export async function prepareCoreConsumer({
   ).version;
   const drizzleReference = `${drizzleVersion}(@libsql/client@${libsqlVersion})`;
   const wasmVersion = JSON.parse(readFileSync(join(repository, "package.json"), "utf8"))
-    .dependencies["@sqlite.org/sqlite-wasm"];
+    .devDependencies["@sqlite.org/sqlite-wasm"];
   for (const version of [drizzleVersion, uuidVersion])
     assert.match(
       version,
