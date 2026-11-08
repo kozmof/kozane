@@ -69,7 +69,7 @@
     "release:local": "node scripts/local-release.mjs prepare",
     "release:publish": "node scripts/local-release.mjs publish",
     "db:generate": "pnpm --filter kozane db:generate && pnpm --filter @kozane/core migrations:refresh",
-    "test:coverage:source": "TMPDIR=/tmp vitest run --config vitest.source.config.ts --coverage",
+    "test:coverage:source": "UV_THREADPOOL_SIZE=1 TOKIO_WORKER_THREADS=1 TMPDIR=/tmp vitest run --config vitest.source.config.ts --maxWorkers=2 --coverage",
     "test:packages": "node scripts/check-core-package.mjs --client-package",
     "check:app-imports": "node scripts/check-app-package-imports.mjs",
     "build:packages": "node scripts/pack-workspace.mjs",
