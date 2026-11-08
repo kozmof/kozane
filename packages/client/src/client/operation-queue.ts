@@ -23,6 +23,12 @@ export class OperationQueue {
    * not await it. Await active work before closing its database. Operations must
    * finish asynchronous cleanup before settling their returned promise.
    */
+  /** Stop new work and await active cleanup before closing storage. */
+  async close(): Promise<void> {
+    this.dispose();
+    await this.tail;
+  }
+
   dispose(): void {
     this.disposed = true;
   }

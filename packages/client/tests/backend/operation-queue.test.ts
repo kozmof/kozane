@@ -85,3 +85,27 @@ it("lets active cleanup finish while rejecting queued work after disposal", asyn
   await rejected;
   expect(cleaned).toBe(true);
 });
+
+it("close waits for active cleanup and prevents later work", async () => {
+  const queue = new OperationQueue();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let cleaned = false;
+  const active = queue.run(async () => {
+    await gate;
+    cleaned = true;
+  });
+  await Promise.resolve();
+  let closed = false;
+  const closing = queue.close().then(() => {
+    closed = true;
+  });
+  await Promise.resolve();
+  expect(closed).toBe(false);
+  await expect(queue.run(async () => 1)).rejects.toThrow("disposed");
+  release();
+  await Promise.all([active, closing]);
+  expect(cleaned).toBe(true);
+});

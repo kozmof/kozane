@@ -66,3 +66,34 @@ it("normalizes failures to start a transaction", async () => {
     ),
   ).rejects.toBeInstanceOf(UnavailableError);
 });
+
+it("does not publish success before commit and cleanup finish", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const close = vi.fn();
+  let settled = false;
+  const result = runNodeTransaction(
+    async () => ({
+      handle: 42,
+      commit: async () => {
+        await gate;
+      },
+      rollback: async () => {},
+      close,
+    }),
+    async (handle) => handle,
+    vi.fn(),
+  ).then((value) => {
+    settled = true;
+    return value;
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(settled).toBe(false);
+  expect(close).not.toHaveBeenCalled();
+  release();
+  await expect(result).resolves.toBe(42);
+  expect(close).toHaveBeenCalledOnce();
+});

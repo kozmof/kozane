@@ -124,7 +124,20 @@ for (const name of [
     false,
     "Application settings must not become core domain constants: " + name,
   );
-const handle = {};
+const handle = {
+  select() {
+    return this;
+  },
+  selectDistinct() {},
+  query: {},
+  all() {},
+  get() {},
+  values() {},
+  insert() {},
+  update() {},
+  delete() {},
+  run() {},
+};
 let writes = 0,
   reads = 0;
 const db = createDatabaseAdapter(handle, {
@@ -138,7 +151,13 @@ const db = createDatabaseAdapter(handle, {
   },
 });
 assert.equal(await withTx(db, async (tx) => tx), handle);
-assert.equal(await withReadTx(db, async (tx) => tx), handle);
+await withReadTx(db, async (tx) => {
+  assert.notEqual(tx, handle);
+  assert.ok(Object.isFrozen(tx));
+  assert.equal(tx.select(), handle);
+  for (const method of ["insert", "update", "delete", "run", "transaction"])
+    assert.equal(method in tx, false);
+});
 assert.equal(writes, 1);
 assert.equal(reads, 1);
 assert.equal(MigrationHistoryError, RootMigrationHistoryError);

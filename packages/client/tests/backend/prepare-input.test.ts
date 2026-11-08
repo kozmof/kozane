@@ -16,3 +16,8 @@ describe("input nesting limits", () => {
     });
   }
 });
+
+it("rejects broad inputs and oversized strings", () => {
+  expect(() => prepareInput(Array(100_001).fill(null))).toThrow(ValidationError);
+  expect(() => prepareInput("x".repeat(8 * 1024 * 1024 + 1))).toThrow(ValidationError);
+});

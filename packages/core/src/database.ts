@@ -61,7 +61,18 @@ export function withTx<T>(db: DB, operation: (tx: Tx) => Promise<T>): Promise<T>
   return adapter(db).write((handle) => operation(handle as Tx));
 }
 export function withReadTx<T>(db: DB, operation: (tx: ReadTx) => Promise<T>): Promise<T> {
-  return adapter(db).read((handle) => operation(handle as unknown as ReadTx));
+  return adapter(db).read((handle) => {
+    // Expose only reader methods. Raw SQL remains a trusted escape hatch.
+    const reader = Object.freeze({
+      select: handle.select.bind(handle),
+      selectDistinct: handle.selectDistinct.bind(handle),
+      query: handle.query,
+      all: handle.all.bind(handle),
+      get: handle.get.bind(handle),
+      values: handle.values.bind(handle),
+    });
+    return operation(reader as ReadTx);
+  });
 }
 /** Migration batches have a driver-owned boundary distinct from ordinary write transactions. */
 export async function withMigration(db: DB, prepare: MigrationPreparation): Promise<void> {
