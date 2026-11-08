@@ -10,6 +10,18 @@ Run `pnpm changeset` for a public package change. Core API signature or result c
 
 Run `pnpm release:status` to review the plan. Run `pnpm release:version` to update package versions and changelogs and refresh the lockfile. Review formatting and commit the resulting files. The initial candidate versions are core 0.1.0, client 0.1.0 and kozane 0.22.0.
 
+## Release with one command
+
+After finalizing versions, committing changes and completing the authentication and tool setup below, run:
+
+```sh
+pnpm release:auto
+```
+
+This prepares and publishes core, client and kozane in dependency order, then verifies their registry installations. It uses the versions already committed in the package manifests. It does not bump versions or create commits. npm authentication and 2FA prompts still apply.
+
+If a prepared release already exists for the current commit, the command reuses it. Rerun the command after a partial publication to resume with the same archives. The publisher validates the manifest and archive hashes and skips published versions only when their bytes match. Preparation failures stop publication.
+
 ## Prepare a local release
 
 Use Node 24 or newer and the pinned pnpm toolchain. Install dependencies with `pnpm install --frozen-lockfile`. Install the browser used by the local checks with `pnpm exec playwright install chromium`.
