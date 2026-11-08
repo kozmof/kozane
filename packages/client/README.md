@@ -40,18 +40,18 @@ utilities can use `@kozane/client/base.css` for the common base rules.
 
 Use public imports. Private source paths are unsupported.
 
-| Entry point | Purpose |
-| --- | --- |
-| `@kozane/client` | Client contracts, built-in clients, configuration, and rendering helpers |
-| `@kozane/client/ui` | Shared views and default UI configuration |
-| `@kozane/client/board` | Board view exports |
-| `@kozane/client/tags` | Tags view exports |
-| `@kozane/client/map` | Map view exports |
-| `@kozane/client/editor` | Editor exports |
-| `@kozane/client/host` | Wire decoders, static-file helpers, polling lifecycle, and activity types |
-| `@kozane/client/testing` | Framework-independent client contract checks |
-| `@kozane/client/styles.css` | Complete shared stylesheet |
-| `@kozane/client/base.css` | Base rules for hosts that generate shared utilities |
+| Entry point                 | Purpose                                                                   |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `@kozane/client`            | Client contracts, built-in clients, configuration, and rendering helpers  |
+| `@kozane/client/ui`         | Shared views and default UI configuration                                 |
+| `@kozane/client/board`      | Board view exports                                                        |
+| `@kozane/client/tags`       | Tags view exports                                                         |
+| `@kozane/client/map`        | Map view exports                                                          |
+| `@kozane/client/editor`     | Editor exports                                                            |
+| `@kozane/client/host`       | Wire decoders, static-file helpers, polling lifecycle, and activity types |
+| `@kozane/client/testing`    | Framework-independent client contract checks                              |
+| `@kozane/client/styles.css` | Complete shared stylesheet                                                |
+| `@kozane/client/base.css`   | Base rules for hosts that generate shared utilities                       |
 
 The root, host, and testing entries load in Node without compiling Svelte components.
 Use `DEFAULT_UI_CONFIG`, `parseUiOverrides`, and `validateUiOverrides` from the root
