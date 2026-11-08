@@ -307,10 +307,7 @@ it("cancels snapshot reads during recovery and cleanup without surfacing an erro
     },
     subscribe: f.backend.subscribe,
     subscribeState: f.backend.subscribeState,
-    snapshot: (
-      _id: string,
-      options?: import("../../src/client/contract.js").SnapshotReadOptions,
-    ) =>
+    snapshot: (_id: string, options?: import("../../src/client/contract.js").SnapshotReadOptions) =>
       new Promise<SnapshotResult>((_resolve, reject) => {
         signals.push(options!.signal!);
         options!.signal!.addEventListener("abort", () => reject(options!.signal!.reason), {
