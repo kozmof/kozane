@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { AnyDB } from "../db/database.js";
+import type { DB, Tx } from "../db/database.js";
 
 /** Triggers migration 0019 adds to `card`. */
 export const CARD_GUARD_TRIGGERS = [
@@ -18,7 +18,7 @@ export const DROP_CARD_GUARDS_SQL = CARD_GUARD_TRIGGERS.map(
  * Remove the 0019 triggers so a test can write the rows a database from before them may
  * still hold, such as a card with only one inventory column set.
  */
-export async function dropCardGuards(db: AnyDB): Promise<void> {
+export async function dropCardGuards(db: DB | Tx): Promise<void> {
   for (const statement of DROP_CARD_GUARDS_SQL) await db.run(sql.raw(statement));
 }
 
@@ -34,7 +34,7 @@ export const SQLITE_VARIABLE_MAX = 32_766;
  * insertion order.
  */
 export async function seedCards(
-  db: AnyDB,
+  db: DB | Tx,
   { partitionId, layerId, count, prefix = "card" }: SeedCards,
 ): Promise<string[]> {
   if (count <= 0) return [];

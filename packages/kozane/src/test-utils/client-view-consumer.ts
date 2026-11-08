@@ -17,7 +17,7 @@ import {
   BoardView,
 } from "../../../client/src/ui.js";
 
-import { tagDataset } from "../../../client/tests/client/tags.fixtures.js";
+import { tagDataset } from "../../../client/tests/backend/tags.fixtures.js";
 import { tagsView } from "../../../client/src/client/views/tags.js";
 import { boardViewProps } from "./board-view-props.js";
 import { boardCanvasProps } from "./board-canvas-props.js";

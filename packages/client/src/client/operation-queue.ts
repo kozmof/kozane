@@ -18,17 +18,17 @@ export class OperationQueue {
     return result;
   }
 
-  /** Prevent queued and future work from starting.
-   * Active work continues through commit or rollback and cleanup. Disposal does
-   * not await it. Await active work before closing its database. Operations must
-   * finish asynchronous cleanup before settling their returned promise.
-   */
   /** Stop new work and await active cleanup before closing storage. */
   async close(): Promise<void> {
     this.dispose();
     await this.tail;
   }
 
+  /** Prevent queued and future work from starting.
+   * Active work continues through commit or rollback and cleanup. Disposal does
+   * not await it. Await active work before closing its database. Operations must
+   * finish asynchronous cleanup before settling their returned promise.
+   */
   dispose(): void {
     this.disposed = true;
   }

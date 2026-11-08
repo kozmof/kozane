@@ -1,3 +1,42 @@
+import {
+  deleteNamespaceCardsInTx,
+  moveCardsToNamespaceInTx,
+  squashNamespaceCard,
+  type SquashCardResult,
+  deleteNamespaceCards,
+} from "../api/composite.js";
+import {
+  reassignCardsToPartitionInTx,
+  reassignCardsToLayerInTx,
+  updateCardInTx,
+  withCardInventory,
+  type CardStacking,
+  reassignCardsStackOrder,
+  updateNamespaceCardPositionsInTx,
+  addCardInTx,
+} from "../api/card.js";
+import { prepareInput } from "./prepare-input.js";
+import {
+  optionalNullableNumber,
+  optionalString,
+  requireObjectArray,
+  requireFiniteNumber,
+  requireUniqueStrings,
+  requireStringArray,
+  optionalNumber,
+  optionalId,
+  requireString,
+} from "./validation.js";
+import { refitStoredCardInTx, type Refit, stowCardsInTx } from "../api/inventory.js";
+import { BATCH_MAX, CARD_WIDTH_RANGE, checkCardContent, clamp } from "../constants/index.js";
+import { requireCardInNamespace } from "./guards.js";
+import { NotFoundError, ValidationError } from "./errors.js";
+import { getPartition } from "../api/partition.js";
+import { getDefaultLayer, getLayer } from "../api/layer.js";
+import { getScope } from "../api/scope.js";
+import { addScopeRel } from "../api/scope-rel.js";
+import { withTx } from "../database.js";
+import { rejectBatch } from "./rejection.js";
 export type {
   CardCreateInput,
   CardUpdateFields,
@@ -10,47 +49,11 @@ export type {
   CardSetStackingInput,
   CardSquashInput,
 } from "./inputs.js";
-import { deleteNamespaceCardsInTx, moveCardsToNamespaceInTx } from "../api/composite.js";
-import { reassignCardsToPartitionInTx } from "../api/card.js";
-import { prepareInput } from "./prepare-input.js";
-import { optionalNullableNumber, optionalString } from "./validation.js";
-import {
-  reassignCardsToLayerInTx,
-  updateCardInTx,
-  withCardInventory,
-  type CardStacking,
-} from "../api/card.js";
-import { refitStoredCardInTx, type Refit } from "../api/inventory.js";
-import { squashNamespaceCard, type SquashCardResult } from "../api/composite.js";
-import { BATCH_MAX, CARD_WIDTH_RANGE } from "../constants/index.js";
-import { requireCardInNamespace } from "./guards.js";
-import { NotFoundError } from "./errors.js";
-import { reassignCardsStackOrder } from "../api/card.js";
-import {
-  requireObjectArray,
-  requireFiniteNumber,
-  requireUniqueStrings,
-  requireStringArray,
-} from "./validation.js";
-import { updateNamespaceCardPositionsInTx } from "../api/card.js";
-import { deleteNamespaceCards } from "../api/composite.js";
 import type { CardWithGlue } from "../types.js";
-
-import { getPartition } from "../api/partition.js";
-import { getDefaultLayer, getLayer } from "../api/layer.js";
-import { getScope } from "../api/scope.js";
-import { addScopeRel } from "../api/scope-rel.js";
-import { withTx } from "../database.js";
-import { addCardInTx } from "../api/card.js";
-
-import { stowCardsInTx } from "../api/inventory.js";
-import { checkCardContent, clamp } from "../constants/index.js";
-import { optionalNumber, optionalId, requireString } from "./validation.js";
-import { rejectBatch } from "./rejection.js";
 
 import type { DB, Tx } from "../database.js";
 import type { ServiceContext } from "./context.js";
-import { ValidationError } from "./errors.js";
+/** Accepts untrusted input; CardCreateInput describes the valid caller shape. */
 export async function create(
   db: DB,
   context: ServiceContext,
@@ -58,7 +61,7 @@ export async function create(
   body: Record<string, unknown>,
 ) {
   const prepared = prepareInput(body);
-  return withTx(db, (tx) => createInTx(tx, context, namespaceId, prepared));
+  return withTx(db, (tx) => createPreparedInTx(tx, context, namespaceId, prepared));
 }
 
 export async function createInTx(
@@ -67,7 +70,16 @@ export async function createInTx(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
+  return createPreparedInTx(tx, context, namespaceId, prepareInput(body));
+}
+
+/** Input is copied before dispatch; domain validation still runs inside the transaction. */
+async function createPreparedInTx(
+  tx: Tx,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
   const partitionId = requireString(body, "partitionId");
   const checked = checkCardContent(requireString(body, "content"), context.contentMax);
   if (!checked.ok) throw new ValidationError(checked.issue);

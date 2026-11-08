@@ -25,6 +25,9 @@ describe("withReadTx", () => {
     const namespaces = await withReadTx(db, async (tx) => {
       // @ts-expect-error A write helper needs `DB | Tx`, not a read transaction.
       void (() => addNamespace({ db: tx, name: "Refused" }));
+      expect(Object.isFrozen(tx)).toBe(true);
+      for (const method of ["insert", "update", "delete", "run", "transaction", "$client"])
+        expect(tx).not.toHaveProperty(method);
       return getAllNamespaces({ db: tx });
     });
     expect(namespaces).toEqual([]);

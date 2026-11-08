@@ -112,3 +112,41 @@ it("never shortens throttling when already-dispatched requests settle later", as
   await expect(transport.request("/three")).rejects.toMatchObject({ retryAfterMs: 1500 });
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
+
+it("aborts a stalled request at its deadline without replaying a mutation", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(
+    (_url, options) =>
+      new Promise((_resolve, reject) => {
+        options!.signal!.addEventListener("abort", () => reject(options!.signal!.reason), {
+          once: true,
+        });
+      }),
+  );
+  const transport = new HttpTransport((path) => path, { fetcher, timeoutMs: 10 });
+  await expect(transport.request("/write", "POST", { content: "once" })).rejects.toMatchObject({
+    code: "network",
+    cause: { name: "TimeoutError" },
+  });
+  expect(fetcher).toHaveBeenCalledOnce();
+});
+
+it("preserves caller cancellation when a deadline is configured", async () => {
+  const controller = new AbortController();
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(
+    (_url, options) =>
+      new Promise((_resolve, reject) => {
+        options!.signal!.addEventListener("abort", () => reject(options!.signal!.reason), {
+          once: true,
+        });
+      }),
+  );
+  const transport = new HttpTransport((path) => path, { fetcher });
+  const request = transport.request("/read", "GET", undefined, { signal: controller.signal });
+  const reason = new Error("caller stopped");
+  controller.abort(reason);
+  await expect(request).rejects.toBe(reason);
+});
+
+it.each([0, -1, NaN, Infinity, 0.5, 2_147_483_648])("rejects invalid timeout %s", (timeoutMs) => {
+  expect(() => new HttpTransport((path) => path, { timeoutMs })).toThrow(RangeError);
+});

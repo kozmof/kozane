@@ -47,6 +47,8 @@ export function retryAfterMilliseconds(value: string | null, wallTime: number): 
 }
 
 export interface HttpTransportOptions {
+  /** Request deadline, including response consumption. Defaults to 30 seconds. */
+  timeoutMs?: number;
   fetcher?: typeof fetch;
   monotonicNow?: () => number;
   wallNow?: () => number;
@@ -57,10 +59,18 @@ export class HttpTransport {
   private readonly now: () => number;
   private readonly wallNow: () => number;
   private throttleUntil = 0;
+  private readonly timeoutMs: number;
   constructor(
     private readonly url: (path: string) => string,
     options: HttpTransportOptions = {},
   ) {
+    this.timeoutMs = options.timeoutMs ?? 30_000;
+    if (
+      !Number.isSafeInteger(this.timeoutMs) ||
+      this.timeoutMs <= 0 ||
+      this.timeoutMs > 2_147_483_647
+    )
+      throw new RangeError("timeoutMs must be a positive timer-safe integer");
     this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
     this.now = options.monotonicNow ?? (() => performance.now());
     this.wallNow = options.wallNow ?? Date.now;
@@ -88,11 +98,13 @@ export class HttpTransport {
       throw new ClientError("rate_limited", MESSAGES.rate_limited, { retryAfterMs: remaining });
     const headers = new Headers(options.headers);
     if (body !== undefined) headers.set("content-type", "application/json");
+    const deadline = AbortSignal.timeout(this.timeoutMs);
+    const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
     let response: Response;
     try {
       response = await this.fetcher(this.url(path), {
         method,
-        ...(options.signal ? { signal: options.signal } : {}),
+        signal,
         ...(options.cache ? { cache: options.cache } : {}),
         headers,
         body,

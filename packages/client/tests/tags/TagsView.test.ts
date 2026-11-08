@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/svelte";
 import { TagsView } from "../../src/ui.js";
 import { HttpClient, StaticClient } from "../../src/client/index.js";
-import { tagDataset } from "../client/tags.fixtures.js";
+import { tagDataset } from "../backend/tags.fixtures.js";
 import { tagsView } from "../../src/client/views/tags.js";
 import { createDemoNavigation } from "../../src/navigation.js";
 import type { TagHit } from "../../../kozane/src/lib/types.js";

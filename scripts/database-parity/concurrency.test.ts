@@ -52,3 +52,24 @@ it("queues complete multi-query writes, snapshot reads and failed rollbacks", as
   expect(await final).toEqual([[1], [2]]);
   queue.dispose();
 });
+
+it("keeps the read facade restricted and recovers after a rejected read", async () => {
+  const db = await createTestDB();
+  const failure = new Error("read callback failed");
+  await expect(
+    withReadTx(db, async (tx) => {
+      expect(Object.isFrozen(tx)).toBe(true);
+      for (const method of ["insert", "update", "delete", "run", "transaction", "$client"])
+        expect(tx).not.toHaveProperty(method);
+      await tx.values(sql`select 1`);
+      throw failure;
+    }),
+  ).rejects.toBe(failure);
+  await withTx(db, async (tx) => {
+    await tx.run(sql`create table after_failed_read (id integer primary key)`);
+    await tx.run(sql`insert into after_failed_read values (1)`);
+  });
+  expect(await withReadTx(db, (tx) => tx.values(sql`select id from after_failed_read`))).toEqual([
+    [1],
+  ]);
+});
