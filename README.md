@@ -297,3 +297,7 @@ The app source, configuration editor and CLI live in `packages/kozane/src`. App 
 configuration and generated `build`, `build-ssg` and `dist` output belong to that package.
 The original migration SQL stays under root `drizzle` and is copied unchanged into the
 CLI artifact during builds.
+
+## Contributor checks
+
+See [verification checks](docs/verification.md) to choose checks for a change.

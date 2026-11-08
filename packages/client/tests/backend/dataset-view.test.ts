@@ -2,6 +2,30 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ClientSignals } from "../../src/backend/signals.js";
 import { startDatasetView } from "../../src/backend/dataset-view.js";
 afterEach(() => vi.useRealTimers());
+it("reports application failures without retrying successful reads", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const failure = new Error("application failed");
+  f.apply.mockImplementation(() => {
+    throw failure;
+  });
+  const error = vi.fn();
+  const callbackError = vi.fn(() => {
+    throw new Error("diagnostics failed");
+  });
+  const stop = startDatasetView({
+    ...f,
+    dataset: "map",
+    isHidden: () => false,
+    error,
+    callbackError,
+  });
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(callbackError).toHaveBeenCalledWith(failure);
+  expect(error).not.toHaveBeenCalled();
+  expect(f.read).toHaveBeenCalledTimes(1);
+  stop();
+});
 function fixture() {
   const signals = new ClientSignals({ status: "ready" });
   const backend = {

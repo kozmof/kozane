@@ -5,6 +5,23 @@ import {
   staticDirectoryEntries,
 } from "../../src/backend/static-files.js";
 import type { TaskspaceFileNode, TaskspaceFileTree } from "@kozane/core";
+import { TASKSPACE_FILE_BYTES_MAX, TASKSPACE_SSG_NODES_MAX } from "@kozane/core";
+
+it("rejects oversized content and trees", () => {
+  expect(
+    isStaticFileTree({
+      root: directory("", [file("large", "x".repeat(TASKSPACE_FILE_BYTES_MAX + 1))]),
+    }),
+  ).toBe(false);
+  expect(
+    isStaticFileTree({
+      root: directory(
+        "",
+        Array.from({ length: TASKSPACE_SSG_NODES_MAX + 1 }, (_, i) => file(String(i))),
+      ),
+    }),
+  ).toBe(false);
+});
 
 function directory(
   name: string,

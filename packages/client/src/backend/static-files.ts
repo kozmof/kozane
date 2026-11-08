@@ -1,3 +1,8 @@
+import {
+  TASKSPACE_FILE_BYTES_MAX,
+  TASKSPACE_SSG_TOTAL_BYTES_MAX,
+  TASKSPACE_SSG_NODES_MAX,
+} from "@kozane/core";
 import type {
   TaskspaceEntry,
   TaskspaceFileNode,
@@ -64,10 +69,14 @@ export function isStaticFileTree(value: unknown): value is TaskspaceFileTree {
   if (!record(value) || !record(value.root) || value.root.kind !== "directory") return false;
   const pending: unknown[] = [value.root];
   const seen = new Set<object>();
+  let contentBytes = 0;
+  const encoder = new TextEncoder();
   while (pending.length) {
     const node = pending.pop();
     if (!record(node) || seen.has(node) || typeof node.name !== "string") return false;
     seen.add(node);
+    // The export budget counts descendants, excluding the taskspace root.
+    if (seen.size > TASKSPACE_SSG_NODES_MAX + 1) return false;
     if (node.kind === "directory") {
       if (
         !Array.isArray(node.children) ||
@@ -75,6 +84,7 @@ export function isStaticFileTree(value: unknown): value is TaskspaceFileTree {
       )
         return false;
       const names = new Set<string>();
+      if (node.children.length > TASKSPACE_SSG_NODES_MAX) return false;
       for (const child of node.children) {
         if (
           !record(child) ||
@@ -98,6 +108,11 @@ export function isStaticFileTree(value: unknown): value is TaskspaceFileTree {
         !Number.isFinite(node.size) ||
         node.size < 0
       )
+        return false;
+      if (node.content.length > TASKSPACE_FILE_BYTES_MAX) return false;
+      const bytes = encoder.encode(node.content).byteLength;
+      contentBytes += bytes;
+      if (bytes > TASKSPACE_FILE_BYTES_MAX || contentBytes > TASKSPACE_SSG_TOTAL_BYTES_MAX)
         return false;
     } else if (node.kind === "file-skipped") {
       if (

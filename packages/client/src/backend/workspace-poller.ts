@@ -41,6 +41,7 @@ export class WorkspacePoller {
       changed: () => void;
       filesystemRefresh: () => void;
       failed?: (error: unknown) => void;
+      callbackError?: (error: unknown) => void;
       succeeded?: () => void;
     },
   ) {}
@@ -67,6 +68,17 @@ export class WorkspacePoller {
       released = true;
       if (--this.subscribers === 0) this.stop();
     };
+  }
+  private notify(callback?: () => void): void {
+    try {
+      callback?.();
+    } catch (error) {
+      try {
+        this.options.callbackError?.(error);
+      } catch {
+        // Diagnostics must not interrupt polling.
+      }
+    }
   }
   private stop() {
     const session = this.session;
@@ -96,16 +108,16 @@ export class WorkspacePoller {
           session.refreshRequired || session.baseline === undefined || token !== session.baseline;
         session.baseline = token;
         session.refreshRequired = false;
-        if (changed) this.options.changed();
-        else this.options.filesystemRefresh();
-        this.options.succeeded?.();
+        if (changed) this.notify(this.options.changed);
+        else this.notify(this.options.filesystemRefresh);
+        this.notify(this.options.succeeded);
       })
       .catch((error: unknown) => {
         // Retain the last successful baseline and data. Recovery must revalidate all
         // datasets even when the next successful token equals that baseline.
         if (this.session === session) {
           session.refreshRequired = true;
-          this.options.failed?.(error);
+          this.notify(() => this.options.failed?.(error));
         }
       })
       .finally(() => {

@@ -16,6 +16,8 @@ export function startDatasetView<T>(options: {
   retryIntervalMs?: number | false;
   lifecycle?: Pick<PollLifecycle, "listen">;
   error?: (error: unknown) => void;
+  /** Application callback failures do not trigger read retries. */
+  callbackError?: (error: unknown) => void;
 }): () => void {
   const { backend } = options;
   let disposed = false,
@@ -53,7 +55,15 @@ export function startDatasetView<T>(options: {
         dirty = true;
         return;
       }
-      options.apply(result);
+      try {
+        options.apply(result);
+      } catch (error) {
+        try {
+          options.callbackError?.(error);
+        } catch {
+          // Diagnostics must not interrupt the view lifecycle.
+        }
+      }
     } catch (error) {
       if (!disposed) {
         dirty = true;
