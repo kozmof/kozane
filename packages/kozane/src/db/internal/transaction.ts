@@ -5,7 +5,7 @@ export interface TransactionLifecycle<Handle> {
   handle: Handle;
   commit(): Promise<void>;
   rollback(): Promise<void>;
-  close(): void;
+  close(): void | Promise<void>;
 }
 
 /** Own cleanup before publishing a failure. A failed rollback invalidates the connection. */
@@ -40,6 +40,6 @@ export async function runNodeTransaction<Handle, Result>(
       throw normalizeDatabaseFailure(cause, failure);
     throw cause;
   } finally {
-    transaction.close();
+    await transaction.close();
   }
 }
