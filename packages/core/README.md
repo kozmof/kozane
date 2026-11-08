@@ -148,3 +148,28 @@ Registration rejects missing hooks and duplicate handles before changing adapter
 Migration preparation creates the history table outside the atomic batch. If preparation
 or batch execution fails, that empty table can remain. Schema changes and history inserts
 inside the batch roll back together. Inspect the failure before explicitly retrying.
+
+## Choose an operation layer
+
+Use resource services for application writes. Services apply configured limits and
+validate domain inputs. Use transaction-bound service variants inside composeWrite.
+The records export provides low-level access for reference resolution and compatibility.
+Calling it directly does not provide configured service validation.
+
+ReadTx exposes query builders without mutation builders or nested transactions.
+Raw SQL readers remain trusted interfaces and cannot enforce read-only SQL.
+Input preparation accepts up to 64 nested object or array containers, counting the
+root. Deeper input fails with ValidationError before dispatch.
+
+## Implement an adapter
+
+Resolve hooks only after commit and cleanup finish. Reject failed commits.
+When a callback fails, roll back and finish cleanup before rejecting. Preserve the
+callback error. If rollback fails, invalidate the connection before accepting more
+work. Read hooks must provide one consistent snapshot. Serialize operations that
+share a connection. Never retry callbacks automatically.
+
+Run `pnpm check:core-package` for every adapter change. Its isolated libsql and
+sqlite-wasm consumers exercise migrations, committed writes and rollback through
+public exports. Add host-specific failure injection checks for commit and rollback.
+See [verification guidance](../../docs/verification.md) for checks by change type.

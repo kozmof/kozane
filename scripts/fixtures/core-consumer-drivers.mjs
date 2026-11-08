@@ -126,6 +126,16 @@ for (const driver of ["libsql", "wasm"]) {
     assert.equal(result.snapshot.cards[0].content, "Public driver 日本語");
     assert.equal(result.snapshot.cards[0].width, null);
     assert.equal(await snapshot.get(db, context, "00000000-0000-4000-8000-000000000000"), null);
+    const recovered = await cards.create(db, context, ns.id, {
+      partitionId,
+      content: "Committed after rollback",
+    });
+    assert.ok(
+      (await snapshot.get(db, context, ns.id)).snapshot.cards.some(
+        (row) => row.id === recovered.id,
+      ),
+    );
+    await cards.removeOne(db, context, ns.id, recovered.id);
     await cards.removeOne(db, context, ns.id, card.id);
     assert.equal((await snapshot.get(db, context, ns.id)).snapshot.cards.length, 0);
   } finally {

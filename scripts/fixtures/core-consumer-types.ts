@@ -110,6 +110,10 @@ void nameIssue;
 void message;
 const context = createServiceContext();
 void withReadTx(db, async (tx) => {
+  // @ts-expect-error Read transactions do not expose mutation builders.
+  tx.insert(cardTable);
+  // @ts-expect-error Read transactions cannot open nested write transactions.
+  tx.transaction(async () => {});
   const rows: Namespace[] = await records.namespace.getAllNamespaces({ db: tx });
   // @ts-expect-error Read transactions cannot call table-level writes.
   await records.namespace.addNamespace({ db: tx, name: "invalid" });

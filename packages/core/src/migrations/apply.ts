@@ -3,7 +3,7 @@ import {
   withMigration,
   withReadTx,
   type DB,
-  type DatabaseHandle,
+  type ReadHandle,
   type MigrationBatchStatement,
 } from "../database.js";
 import { schemaVersion } from "../generated/migrations.js";
@@ -15,7 +15,7 @@ import type {
 import { validateMigrationHistory } from "./history.js";
 import { migrationHistoryTableSql } from "./history-sql.js";
 
-async function history(handle: DatabaseHandle): Promise<unknown[]> {
+async function history(handle: ReadHandle): Promise<unknown[]> {
   const rows = await handle.values<unknown[]>(
     sql`SELECT hash, created_at FROM "__drizzle_migrations" ORDER BY created_at`,
   );
