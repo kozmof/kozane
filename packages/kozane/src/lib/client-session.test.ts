@@ -81,3 +81,31 @@ it("cannot activate a replacement after an old client's listener disposes its ow
   expect(client.state.status).toBe("unavailable");
   expect(() => session.select(data)).toThrow("disposed");
 });
+
+it("reuses equivalent static data but replaces changed content", async () => {
+  const session = new WorkspaceClientSession({ base: "" });
+  const snapshot = { namespaces: [{ id: "a", name: "A", isDefault: true }] };
+  const first = session.select({ staticClientData: snapshot })!;
+  expect(session.select({ staticClientData: structuredClone(snapshot) })).toBe(first);
+  snapshot.namespaces[0].name = "Updated";
+  const next = session.select({ staticClientData: snapshot })!;
+  expect(next).not.toBe(first);
+  expect((await next.namespaces.list())[0].name).toBe("Updated");
+  session.dispose();
+});
+it("prefers embedded data over capabilities and limits readonly fallback", () => {
+  const session = new WorkspaceClientSession({ base: "" });
+  const fallback = vi.fn(() => ({ namespaces: [] }));
+  expect(session.select({})).toBeUndefined();
+  expect(session.select({ readonly: true }, fallback).kind).toBe("static");
+  expect(fallback).toHaveBeenCalledTimes(1);
+  expect(session.select({ readonly: true, clientCapabilities: capabilities }, fallback).kind).toBe(
+    "http",
+  );
+  expect(fallback).toHaveBeenCalledTimes(1);
+  expect(
+    session.select({ clientCapabilities: capabilities, staticClientData: { namespaces: [] } })!
+      .kind,
+  ).toBe("static");
+  session.dispose();
+});

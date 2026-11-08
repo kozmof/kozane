@@ -16,7 +16,7 @@ export interface PageClientSelection {
 /** One owner per root layout, never a module-global client or SSR singleton. */
 export class WorkspaceClientSession {
   private active?: ManagedClient;
-  private key?: string | object;
+  private key?: string;
   private initialPage?: PageClientSelection;
   private release?: () => void;
   private disposed = false;
@@ -31,42 +31,9 @@ export class WorkspaceClientSession {
     if (this.selecting)
       throw new ClientError("unavailable", "Workspace selection is already in progress");
     if (this.disposed) throw new ClientError("unavailable", "Workspace session is disposed");
-    const embedded =
-      data.staticClientData ??
-      (data.readonly && !data.clientCapabilities ? fallback?.() : undefined);
-    let key: string | object;
-    let create: () => ManagedClient;
-    if (embedded) {
-      key = data.staticClientData ?? data;
-      create = () => new StaticClient(embedded);
-    } else {
-      const capabilities =
-        data.clientCapabilities ??
-        (fallback
-          ? {
-              writable: !data.readonly,
-              persistent: true,
-              taskspaces: true,
-              externalWrites: true,
-              auth: false,
-            }
-          : undefined);
-      if (!capabilities) return undefined;
-      key = JSON.stringify([
-        capabilities.writable,
-        capabilities.persistent,
-        capabilities.taskspaces,
-        capabilities.externalWrites,
-        capabilities.auth,
-      ]);
-      create = () =>
-        new HttpClient({
-          base: this.options.base,
-          fetcher: this.options.fetcher,
-          capabilities,
-          pollingInitialDelayMs: 1000,
-        });
-    }
+    const selection = resolveClientSelection(data, this.options, fallback);
+    if (!selection) return undefined;
+    const { key, create } = selection;
     if (this.active && this.key === key) {
       if (this.initialPage !== data) this.initialPage = undefined;
       return this.active;
@@ -115,4 +82,50 @@ export class WorkspaceClientSession {
     release?.();
     previous?.dispose();
   }
+}
+
+/** Embedded data wins; legacy readonly fallback applies only without capabilities. */
+function resolveClientSelection(
+  data: PageClientSelection,
+  options: { base: string; fetcher?: typeof fetch },
+  fallback?: () => StaticClientData,
+): { key: string; create: () => ManagedClient } | undefined {
+  const embedded =
+    data.staticClientData ?? (data.readonly && !data.clientCapabilities ? fallback?.() : undefined);
+  let key: string;
+  let create: () => ManagedClient;
+  if (embedded) {
+    key = "static:" + JSON.stringify(embedded);
+    create = () => new StaticClient(embedded);
+  } else {
+    const capabilities =
+      data.clientCapabilities ??
+      (fallback
+        ? {
+            writable: !data.readonly,
+            persistent: true,
+            taskspaces: true,
+            externalWrites: true,
+            auth: false,
+          }
+        : undefined);
+    if (!capabilities) return undefined;
+    key =
+      "http:" +
+      JSON.stringify([
+        capabilities.writable,
+        capabilities.persistent,
+        capabilities.taskspaces,
+        capabilities.externalWrites,
+        capabilities.auth,
+      ]);
+    create = () =>
+      new HttpClient({
+        base: options.base,
+        fetcher: options.fetcher,
+        capabilities,
+        pollingInitialDelayMs: 1000,
+      });
+  }
+  return { key, create };
 }

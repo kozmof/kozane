@@ -24,6 +24,15 @@ export async function prepareCoreConsumer({
       .trim()
       .split("\n"),
   );
+  function checkExportTargets(value) {
+    if (typeof value === "string") {
+      assert.ok(value.startsWith("./"), "Invalid export target: " + value);
+      assert.ok(entries.has("package/" + value.slice(2)), "Missing export target: " + value);
+    } else {
+      for (const target of Object.values(value ?? {})) checkExportTargets(target);
+    }
+  }
+  checkExportTargets(candidate.exports);
   assert.ok(entries.has("package/LICENCE"));
   assert.ok(entries.has("package/README.md"));
   assert.ok(
