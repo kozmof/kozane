@@ -29,12 +29,12 @@ The repository contains core, client and the unscoped CLI package. The current r
 
 | Area              | Existing implementation                                                | Demo requirement                                                   |
 | ----------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Shared UI         | Client views receive client, navigation and preference adapters       | Supply one browser-root local client                              |
+| Shared UI         | Client views receive client, navigation and preference adapters        | Supply one browser-root local client                               |
 | Domain rules      | Core owns schema, records, services, validation and transactions       | Use public services through the worker queue                       |
 | HTTP and CLI      | Node adapters retain transport, filesystem and workspace policy        | Keep Node-only features out of the demo                            |
 | Database adapters | Core exposes generic async SQLite handles and transaction hooks        | Implement hooks for worker-backed SQLite wasm                      |
 | Migrations        | Public ordered SQL, history validation and canonical schema APIs       | Generate and validate sample/recovery bytes through public exports |
-| Static export     | StaticClient serves embedded read-only data                            | Prerender the preview and attach the local client after hydration |
+| Static export     | StaticClient serves embedded read-only data                            | Prerender the preview and attach the local client after hydration  |
 | Package checks    | Isolated consumers, runtime identity and retained compatibility corpus | Exercise the same corpus through the production restoration path   |
 
 ## Target architecture

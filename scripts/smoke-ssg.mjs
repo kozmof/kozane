@@ -105,10 +105,7 @@ try {
       } finally {
         dom.window.close();
       }
-      assert.ok(
-        html.includes("staticClientData"),
-        `Missing static client seed on ${route || "/"}`,
-      );
+      assert.ok(html.includes("staticClientData"), `Missing static client seed on ${route || "/"}`);
     }
     const root = readFileSync(join(output, "index.html"), "utf8");
     const rootDom = new JSDOM(root, { url: "https://example.test/preview/" });

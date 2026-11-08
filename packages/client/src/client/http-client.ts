@@ -170,8 +170,7 @@ export class HttpClient implements ManagedClient {
     options?: MutationOptions,
   ): Promise<T> {
     this.assertActive();
-    if (!this.capabilities.writable)
-      throw new ClientError("read_only", "This client is read-only");
+    if (!this.capabilities.writable) throw new ClientError("read_only", "This client is read-only");
     const response = await this.transport.request(path, method, input, {
       keepalive: options?.keepalive,
     });
@@ -224,8 +223,7 @@ export class HttpClient implements ManagedClient {
   /** Copy once at the client boundary, before encoding or checking response semantics. */
   private prepareMutation<Input>(input: Input): Input {
     this.assertActive();
-    if (!this.capabilities.writable)
-      throw new ClientError("read_only", "This client is read-only");
+    if (!this.capabilities.writable) throw new ClientError("read_only", "This client is read-only");
     if (input === undefined) return input;
     try {
       return prepareInput(input);
