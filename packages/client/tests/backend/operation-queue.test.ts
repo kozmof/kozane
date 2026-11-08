@@ -60,3 +60,28 @@ describe("whole-operation queue", () => {
     expect(called).toBe(false);
   });
 });
+
+it("lets active cleanup finish while rejecting queued work after disposal", async () => {
+  const queue = new OperationQueue();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let cleaned = false;
+  const active = queue.run(async () => {
+    await gate;
+    cleaned = true;
+    return 42;
+  });
+  await Promise.resolve();
+  const queued = queue.run(async () => {
+    throw new Error("must not run");
+  });
+  const rejected = expect(queued).rejects.toThrow("disposed");
+  queue.dispose();
+  expect(cleaned).toBe(false);
+  release();
+  await expect(active).resolves.toBe(42);
+  await rejected;
+  expect(cleaned).toBe(true);
+});

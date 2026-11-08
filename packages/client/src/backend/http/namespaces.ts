@@ -8,13 +8,13 @@ import { ClientError } from "../contract.js";
 export function createNamespaces(context: HttpResourceContext): KozaneClient["namespaces"] {
   return {
     list: async (options) => {
-      const result = readNamespaceList(await context.read<unknown>("/api/namespaces", options));
+      const result = readNamespaceList(await context.read("/api/namespaces", options));
       if (!result) throw new ClientError("unavailable", "Invalid namespace list");
       return result;
     },
     get: async (namespaceId: string, options?: ReadOptions) => {
       const result = readNamespaceMetadata(
-        await context.read<unknown>(`/api/namespaces/${encodeURIComponent(namespaceId)}`, options),
+        await context.read(`/api/namespaces/${encodeURIComponent(namespaceId)}`, options),
       );
       if (!result || result.id !== namespaceId)
         throw new ClientError("unavailable", "Invalid namespace metadata");

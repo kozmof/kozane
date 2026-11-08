@@ -15,10 +15,15 @@ const methods = {
   removeEntry: true,
 } satisfies Record<keyof TaskspacesApi, true>;
 
-export type ClientFeatures = Readonly<{
-  capabilities: ClientCapabilities;
-  taskspaces: TaskspacesApi | undefined;
-}>;
+export type ClientFeatures =
+  | Readonly<{
+      capabilities: ClientCapabilities & { readonly taskspaces: true };
+      taskspaces: TaskspacesApi;
+    }>
+  | Readonly<{
+      capabilities: ClientCapabilities & { readonly taskspaces: false };
+      taskspaces: undefined;
+    }>;
 
 function checkApi(api: TaskspacesApi) {
   for (const method of Object.keys(methods) as (keyof TaskspacesApi)[])
@@ -32,9 +37,14 @@ export function createClientFeatures(
   taskspaces?: TaskspacesApi,
 ): ClientFeatures {
   if (taskspaces !== undefined) checkApi(taskspaces);
+  if (taskspaces !== undefined)
+    return Object.freeze({
+      capabilities: Object.freeze({ ...capabilities, taskspaces: true as const }),
+      taskspaces,
+    });
   return Object.freeze({
-    capabilities: Object.freeze({ ...capabilities, taskspaces: taskspaces !== undefined }),
-    taskspaces,
+    capabilities: Object.freeze({ ...capabilities, taskspaces: false as const }),
+    taskspaces: undefined,
   });
 }
 

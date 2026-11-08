@@ -55,8 +55,15 @@ export class HttpClient implements ManagedClient {
       capabilities: ClientCapabilities;
       lifecycle?: PollLifecycle;
       pollingInitialDelayMs?: number;
+      /** Minimum interval between filesystem-only refreshes. */
+      filesystemRefreshIntervalMs?: number;
     },
   ) {
+    const interval = options.filesystemRefreshIntervalMs ?? 1000;
+    if (!Number.isFinite(interval) || interval < 1000)
+      throw new TypeError("Filesystem refresh interval must be at least 1000ms");
+    const now = options.monotonicNow ?? (() => performance.now());
+    let lastRefresh = -Infinity;
     this.features = createClientFeatures(
       options.capabilities,
       options.capabilities.taskspaces ? this.taskspaceApi : undefined,
@@ -68,10 +75,14 @@ export class HttpClient implements ManagedClient {
         initialDelayMs: options.pollingInitialDelayMs,
         throttleMs: () => this.transport.retryAfterMs,
         token: async () => {
-          const value = await this.read<{
-            token?: unknown;
-          }>("/api/changes");
-          if (typeof value.token !== "string" || !value.token)
+          const value = await this.read("/api/changes");
+          if (
+            value === null ||
+            typeof value !== "object" ||
+            !("token" in value) ||
+            typeof value.token !== "string" ||
+            !value.token
+          )
             throw new ClientError("unavailable", "Invalid change token");
           return value.token;
         },
@@ -89,7 +100,10 @@ export class HttpClient implements ManagedClient {
             this.signals.transition({ status: "ready" });
         },
         filesystemRefresh: () => {
-          if (this.capabilities.taskspaces) this.signals.publish(["tags", "snapshot"]);
+          if (this.capabilities.taskspaces && now() - lastRefresh >= interval) {
+            lastRefresh = now();
+            this.signals.publish(["tags", "snapshot"]);
+          }
         },
       });
   }
@@ -130,18 +144,18 @@ export class HttpClient implements ManagedClient {
   private ns(namespaceId: string, path: string) {
     return `/${encodeURIComponent(namespaceId)}/api${path}`;
   }
-  private async read<T>(
+  private async read(
     path: string,
     options?: {
       signal?: AbortSignal;
       cache?: RequestInit["cache"];
     },
-  ): Promise<T> {
+  ): Promise<unknown> {
     const signal = this.readSignal(options?.signal);
     signal.throwIfAborted();
     const response = await this.transport.request(path, "GET", undefined, { ...options, signal });
     try {
-      const result = (await response.json()) as T;
+      const result: unknown = await response.json();
       signal.throwIfAborted();
       return result;
     } catch (cause) {
@@ -192,7 +206,7 @@ export class HttpClient implements ManagedClient {
       signal?: AbortSignal;
     },
   ): Promise<T> {
-    return this.checked(await this.read<unknown>(path, options), decode);
+    return this.checked(await this.read(path, options), decode);
   }
   private async writeTaskspace<T>(
     path: string,

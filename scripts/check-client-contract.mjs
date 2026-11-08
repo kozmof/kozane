@@ -77,3 +77,15 @@ if (problems.length) throw new Error(problems.join("\n"));
 console.log(
   `Client contract coverage passed for ${expected.size} methods, matrix rows and consumer calls.`,
 );
+
+const context = source("packages/client/src/backend/http/context.ts");
+function checkRawRead(node) {
+  if (
+    ts.isMethodSignature(node) &&
+    node.name?.getText() === "read" &&
+    (node.typeParameters?.length || node.type?.getText() !== "Promise<unknown>")
+  )
+    throw new Error("Raw HTTP reads must return Promise<unknown> without type parameters");
+  ts.forEachChild(node, checkRawRead);
+}
+checkRawRead(context);

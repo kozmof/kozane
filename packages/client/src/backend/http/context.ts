@@ -4,7 +4,7 @@ export interface HttpResourceContext {
   capabilities(): ClientCapabilities;
   disposed(): boolean;
   ns(namespaceId: string, path: string): string;
-  read<T>(path: string, options?: ReadOptions & { cache?: RequestInit["cache"] }): Promise<T>;
+  read(path: string, options?: ReadOptions & { cache?: RequestInit["cache"] }): Promise<unknown>;
   readTaskspace<T>(
     path: string,
     decode: (value: unknown) => T | null,

@@ -10,7 +10,7 @@ export function createTags(context: HttpResourceContext): KozaneClient["tags"] {
   return {
     get: async (namespaceId?: string, options?: ReadOptions) => {
       const result = readTagsViewData(
-        await context.read<unknown>(
+        await context.read(
           "/api/tags" +
             (namespaceId !== undefined ? "?namespaceId=" + encodeURIComponent(namespaceId) : ""),
           { ...options, cache: "no-store" },
@@ -26,7 +26,7 @@ export function createMap(context: HttpResourceContext): KozaneClient["map"] {
   return {
     get: async (options) => {
       const result = readMapSnapshot(
-        await context.read<unknown>("/api/map", { ...options, cache: "no-store" }),
+        await context.read("/api/map", { ...options, cache: "no-store" }),
       );
       if (!result) throw new ClientError("unavailable", "Invalid map dataset");
       return result;
@@ -38,7 +38,7 @@ export function createWarpDirectory(context: HttpResourceContext): KozaneClient[
   return {
     get: async (namespaceId: string, options?: ReadOptions) => {
       const result = parseWarpEntries(
-        await context.read<unknown>(context.ns(namespaceId, "/warp-directory"), options),
+        await context.read(context.ns(namespaceId, "/warp-directory"), options),
       );
       if (!result) throw new ClientError("unavailable", "Invalid warp directory");
       return result;

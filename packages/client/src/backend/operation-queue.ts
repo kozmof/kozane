@@ -18,7 +18,11 @@ export class OperationQueue {
     return result;
   }
 
-  /** Prevent queued work from starting. An active operation owns its own cancellation. */
+  /** Prevent queued and future work from starting.
+   * Active work continues through commit or rollback and cleanup. Disposal does
+   * not await it. Await active work before closing its database. Operations must
+   * finish asynchronous cleanup before settling their returned promise.
+   */
   dispose(): void {
     this.disposed = true;
   }
