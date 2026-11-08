@@ -192,40 +192,40 @@
           { "group": ["**/cli/**"], "message": "routes and cli are siblings; share through db/api or lib/server." },
           { "group": ["**/namespace-api", "**/namespace-api.*", "**/lib/api/**", "../api/**"], "message": "Board actions use injected KozaneClient resources instead of HTTP helpers." }
         ] }],
-        "eslint/no-restricted-globals": ["error", { "name": "fetch", "message": "Board actions use the injected backend." }],
+        "eslint/no-restricted-globals": ["error", { "name": "fetch", "message": "Board actions use the injected client." }],
         "eslint/no-restricted-properties": ["error",
-          { "property": "fetch", "message": "Board actions use the injected backend." },
-          { "property": "mutationFetcher", "message": "Board actions use the injected backend." },
-          { "property": "fetcher", "message": "Board actions use the injected backend." }
+          { "property": "fetch", "message": "Board actions use the injected client." },
+          { "property": "mutationFetcher", "message": "Board actions use the injected client." },
+          { "property": "fetcher", "message": "Board actions use the injected client." }
         ]
       }
     },
     {
       // Shared client views depend on adapters instead of route or Node runtime modules.
       "files": ["packages/client/src/**"],
-      "excludeFiles": ["**/*.test.ts", "packages/client/src/backend/**"],
+      "excludeFiles": ["**/*.test.ts", "packages/client/src/client/**"],
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [
           { "group": ["**/kozane/src/**", "$lib/**", "$db/**", "styled-system/**"], "message": "Client source imports public core entries and relative client modules." },
           { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Shared client views use injected browser-safe adapters." },
           { "group": ["**/db/**", "$db/**"], "allowTypeImports": true, "message": "Shared client views may import database types only." }
         ] }],
-        "eslint/no-restricted-globals": ["error", { "name": "fetch", "message": "Shared client views use the injected backend." }],
+        "eslint/no-restricted-globals": ["error", { "name": "fetch", "message": "Shared client views use the injected client." }],
         "eslint/no-restricted-properties": ["error",
-          { "property": "fetch", "message": "Shared client views use the injected backend." },
-          { "property": "fetcher", "message": "Shared client views use the injected backend." }
+          { "property": "fetch", "message": "Shared client views use the injected client." },
+          { "property": "fetcher", "message": "Shared client views use the injected client." }
         ]
       }
     },
     {
-      // Backend adapters may use their transport but stay browser-safe.
-      "files": ["packages/client/src/backend/**"],
+      // Client adapters may use their transport but stay browser-safe.
+      "files": ["packages/client/src/client/**"],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [
           { "group": ["**/kozane/src/**", "$lib/**", "$db/**", "styled-system/**"], "message": "Client adapters import public core entries and relative client modules." },
-          { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Backend adapters must stay browser-safe." },
-          { "group": ["**/db/**", "$db/**"], "allowTypeImports": true, "message": "Backend adapters may import database types only." }
+          { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Client adapters must stay browser-safe." },
+          { "group": ["**/db/**", "$db/**"], "allowTypeImports": true, "message": "Client adapters may import database types only." }
         ] }]
       }
     },
