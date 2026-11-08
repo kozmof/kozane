@@ -42,7 +42,6 @@
     "verify": "node scripts/verify-workspace.mjs",
     "test:e2e": "TMPDIR=/tmp playwright test",
     "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e",
-    "publish:npm": "pnpm release:publish",
     "check:client-browser": "node scripts/check-client-browser.mjs",
     "check:core-browser": "node scripts/check-core-browser.mjs",
     "check:client-contract": "node scripts/check-client-contract.mjs",

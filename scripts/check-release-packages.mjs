@@ -30,7 +30,6 @@ assert.equal(cli.dependencies[client.name], `workspace:${client.version}`);
 assert.equal(root.devDependencies[core.name], `workspace:${core.version}`);
 assert.equal(root.devDependencies[client.name], `workspace:${client.version}`);
 assert.equal(cli.bin.kozane, "./bin/kozane.js");
-assert.equal(root.scripts["publish:npm"], "pnpm release:publish");
 console.log(
   `Release order: ${core.name}@${core.version}, ${client.name}@${client.version}, ${cli.name}@${cli.version}. Exact runtime and peer versions agree.`,
 );

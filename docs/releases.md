@@ -52,7 +52,7 @@ Publish the prepared directory explicitly.
 pnpm release:publish tmp/releases/<commit>
 ```
 
-The publisher requires a clean checkout at the prepared commit. It checks package order, versions, archive filenames and hashes before contacting npm. It publishes those archives with lifecycle scripts disabled, so publication cannot rebuild them. npm handles your account authentication and 2FA challenge. `pnpm publish:npm <directory>` is an alias for the same local publisher.
+The publisher requires a clean checkout at the prepared commit. It checks package order, versions, archive filenames and hashes before contacting npm. It publishes those archives with lifecycle scripts disabled, so publication cannot rebuild them. npm handles your account authentication and 2FA challenge.
 
 Publication is not atomic across packages. A rerun skips a published version only when its registry integrity matches the prepared archive. It rejects an existing version with different bytes and preserves unpublished archives for investigation.
 
