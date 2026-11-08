@@ -1,1 +1,1 @@
-export * from "../../backend/decoders/response.js";
+export * from "../../client/decoders/response.js";

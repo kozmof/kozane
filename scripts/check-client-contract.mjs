@@ -13,7 +13,7 @@ function source(path) {
   );
 }
 const declarations = ["contract", "resources", "taskspaces-api"].map((name) =>
-  source(`packages/client/src/backend/${name}.ts`),
+  source(`packages/client/src/client/${name}.ts`),
 );
 const interfaces = new Map();
 for (const file of declarations) {
@@ -35,7 +35,7 @@ for (const member of backend.members) {
     }
   }
 }
-const matrixURL = new URL("packages/client/src/backend/operation-matrix.md", root);
+const matrixURL = new URL("packages/client/src/client/operation-matrix.md", root);
 const matrix = readFileSync(matrixURL, "utf8");
 const rows = matrixOperations(matrix);
 const problems = [];
@@ -78,7 +78,7 @@ console.log(
   `Client contract coverage passed for ${expected.size} methods, matrix rows and consumer calls.`,
 );
 
-const context = source("packages/client/src/backend/http/context.ts");
+const context = source("packages/client/src/client/http/context.ts");
 function checkRawRead(node) {
   if (
     ts.isMethodSignature(node) &&

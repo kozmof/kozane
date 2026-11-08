@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { readTagsViewData } from "../../../src/backend/decoders/tags.js";
+import { readTagsViewData } from "../../../src/client/decoders/tags.js";
 import { tagDataset } from "../tags.fixtures.js";
 it("accepts card/file gathers with warnings and optional lookup entries omitted", () => {
   const data = tagDataset([

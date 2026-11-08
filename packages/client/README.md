@@ -174,7 +174,7 @@ The host entry uses explicit exports. Its `ActivityGuard` and `BoardPoint` inter
 
 ## HTTP implementation
 
-`HttpClient` owns transport, lifetime, snapshot validators and invalidation. Resource modules under `src/backend/http` wire namespace, card, collection, dataset and taskspace operations through that shared context. They do not create connections or own subscriptions.
+`HttpClient` owns transport, lifetime, snapshot validators and invalidation. Resource modules under `src/client/http` wire namespace, card, collection, dataset and taskspace operations through that shared context. They do not create connections or own subscriptions.
 
 The client prepares mutation inputs once through the public core helper before dispatch and response validation. Transport encodes the prepared copy and handles HTTP status, authentication, throttling, cancellation and keepalive. Services still validate inputs at their own boundary. Production views use this client rather than separate route-local request helpers.
 

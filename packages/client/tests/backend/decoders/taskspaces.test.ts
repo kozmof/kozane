@@ -6,7 +6,7 @@ import {
   readTaskspaceFile,
   readTaskspaceEntryResult,
   readTaskspaceListing,
-} from "../../../src/backend/decoders/taskspaces.js";
+} from "../../../src/client/decoders/taskspaces.js";
 const entry = { name: "notes.md", kind: "file", size: 0, modifiedAt: null };
 it("accepts empty content, nullable paths/signatures, and every directory outcome", () => {
   expect(readTaskspaceFile({ path: "notes.md", content: "", signature: null })).toEqual({

@@ -1,8 +1,8 @@
-import { ClientSignals } from "../../src/backend/signals.js";
+import { ClientSignals } from "../../src/client/signals.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { NamespacesView } from "../../src/ui.js";
-import { HttpClient, StaticClient } from "../../src/backend/index.js";
+import { HttpClient, StaticClient } from "../../src/client/index.js";
 import { createDemoNavigation } from "../../src/navigation.js";
 const navigation = createDemoNavigation({ base: "/demo" });
 const capabilities = {

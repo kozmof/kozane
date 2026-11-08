@@ -1,10 +1,10 @@
-import { ClientError } from "../../src/backend/contract.js";
-import { ClientSignals } from "../../src/backend/signals.js";
-import type { KozaneClient, SnapshotResult } from "../../src/backend/contract.js";
+import { ClientError } from "../../src/client/contract.js";
+import { ClientSignals } from "../../src/client/signals.js";
+import type { KozaneClient, SnapshotResult } from "../../src/client/contract.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { BoardView } from "../../src/ui.js";
-import { HttpClient, StaticClient } from "../../src/backend/index.js";
+import { HttpClient, StaticClient } from "../../src/client/index.js";
 import { boardViewProps } from "../../../kozane/src/test-utils/board-view-props.js";
 const capabilities = {
   writable: true,

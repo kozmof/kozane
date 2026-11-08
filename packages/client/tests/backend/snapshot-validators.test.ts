@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { SnapshotValidators } from "../../src/backend/snapshot-validators.js";
-import type { SnapshotData } from "../../src/backend/contract.js";
+import { SnapshotValidators } from "../../src/client/snapshot-validators.js";
+import type { SnapshotData } from "../../src/client/contract.js";
 const data: SnapshotData = {
   namespace: { id: "ns" },
   cards: [],

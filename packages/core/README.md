@@ -140,3 +140,11 @@ adapter state and error constructors against the installed version. Package smok
 install the candidate core tarball alongside the CLI tarball for local and global installs.
 
 See the [local release guide](../../docs/releases.md) for package preparation and publication.
+
+Adapter hooks must resolve only after commit and reject after rollback. Keep read
+transactions consistent for the entire callback. Register each database handle once.
+Registration rejects missing hooks and duplicate handles before changing adapter state.
+
+Migration preparation creates the history table outside the atomic batch. If preparation
+or batch execution fails, that empty table can remain. Schema changes and history inserts
+inside the batch roll back together. Inspect the failure before explicitly retrying.

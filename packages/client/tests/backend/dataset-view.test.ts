@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { ClientSignals } from "../../src/backend/signals.js";
-import { startDatasetView } from "../../src/backend/dataset-view.js";
+import { ClientSignals } from "../../src/client/signals.js";
+import { startDatasetView } from "../../src/client/dataset-view.js";
 afterEach(() => vi.useRealTimers());
 it("reports application failures without retrying successful reads", async () => {
   vi.useFakeTimers();

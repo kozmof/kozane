@@ -2,7 +2,7 @@ import {
   httpEditorContext,
   staticEditorContext,
 } from "../../../kozane/src/test-utils/editor-context.js";
-import type { TaskspaceFileData } from "../../src/backend/contract.js";
+import type { TaskspaceFileData } from "../../src/client/contract.js";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { TaskspaceFileTree } from "../../../kozane/src/lib/types.js";
 import { EditorSession } from "../../src/editor/editor-session.svelte.js";
@@ -857,7 +857,7 @@ describe("EditorSession", () => {
 });
 
 it("reads static backend files and skip messages and retains edits after a rejected save", async () => {
-  const { StaticClient } = await import("../../src/backend/static-client.js");
+  const { StaticClient } = await import("../../src/client/static-client.js");
   const backend = new StaticClient({
     namespaces: [{ id: "p-1", name: "One", isDefault: true }],
     snapshots: [

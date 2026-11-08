@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpClient } from "../../src/backend/http-client.js";
+import { HttpClient } from "../../src/client/http-client.js";
 import { staticEditorContext } from "../../../kozane/src/test-utils/editor-context.js";
 
 const taskspace = { id: "t1", path: "notes" };

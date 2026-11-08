@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { StaticClient, type StaticClientData } from "../../src/backend/static-client.js";
-import type { SnapshotData } from "../../src/backend/contract.js";
+import { StaticClient, type StaticClientData } from "../../src/client/static-client.js";
+import type { SnapshotData } from "../../src/client/contract.js";
 import type { TaskspaceFileTree } from "../../../kozane/src/lib/types.js";
 import { tagDataset } from "./tags.fixtures.js";
 function snapshot(id: string): SnapshotData {

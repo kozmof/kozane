@@ -1,5 +1,5 @@
-import type { KozaneClient, ReadOptions } from "../../backend/contract.js";
-import { ClientError } from "../../backend/contract.js";
+import type { KozaneClient, ReadOptions } from "../../client/contract.js";
+import { ClientError } from "../../client/contract.js";
 import type { TaskspaceEntry, TaskspaceTruncation } from "@kozane/core";
 import { entryNameIssue } from "@kozane/core";
 /** What is known about one directory of one taskspace. */

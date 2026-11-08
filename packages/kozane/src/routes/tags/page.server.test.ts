@@ -1,4 +1,4 @@
-import type { StaticClientData } from "../../../../client/src/backend/static-client.js";
+import type { StaticClientData } from "../../../../client/src/client/static-client.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

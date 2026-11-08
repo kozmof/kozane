@@ -1,5 +1,5 @@
-import type { KozaneClient, MutationOptions as SaveOptions } from "../backend/contract.js";
-import { ClientError } from "../backend/contract.js";
+import type { KozaneClient, MutationOptions as SaveOptions } from "../client/contract.js";
+import { ClientError } from "../client/contract.js";
 import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
 export type EditorSessionContext = {

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { readMapSnapshot } from "../../../src/backend/decoders/map.js";
+import { readMapSnapshot } from "../../../src/client/decoders/map.js";
 export const emptyMap = {
   namespaces: [],
   partitions: [],

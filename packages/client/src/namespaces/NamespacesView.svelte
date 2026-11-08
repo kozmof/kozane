@@ -2,11 +2,11 @@
   import RefreshNotice from "../RefreshNotice.svelte";
   import ClientNotice from "../ClientNotice.svelte";
   import type { NavigationAdapter } from "../navigation.js";
-  import type { NamespaceGetResult } from "../backend/contract.js";
-  import type { NamespacesViewClient } from "../backend/view-clients.js";
+  import type { NamespaceGetResult } from "../client/contract.js";
+  import type { NamespacesViewClient } from "../client/view-clients.js";
   import type { Snippet } from "svelte";
   import { untrack } from "svelte";
-  import { NamespaceIndex } from "../backend/namespace-index.svelte.js";
+  import { NamespaceIndex } from "../client/namespace-index.svelte.js";
   import { css } from "../styles/css.js";
   import NavIcon from "../components/NavIcon.svelte";
 

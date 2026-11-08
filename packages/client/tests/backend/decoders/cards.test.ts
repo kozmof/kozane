@@ -7,7 +7,7 @@ import {
   readCardSquashed,
   readGlueCreated,
   readGlueRemoved,
-} from "../../../src/backend/decoders/cards.js";
+} from "../../../src/client/decoders/cards.js";
 const create = { partitionId: "p", content: "Text" };
 it("preserves canvas and stored creation fields, including repaired neighbours", () => {
   expect(readCardCreated(cardResults["cards.create"], create)).toEqual(cardResults["cards.create"]);

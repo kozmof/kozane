@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { tagDataset } from "./tags.fixtures.js";
-import { HttpClient } from "../../src/backend/http-client.js";
+import { HttpClient } from "../../src/client/http-client.js";
 const capabilities = {
   writable: true,
   persistent: true,

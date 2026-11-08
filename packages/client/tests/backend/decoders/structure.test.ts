@@ -7,7 +7,7 @@ import {
   readLayerCreated,
   readLayerRemoved,
   readPartitionRemoved,
-} from "../../../src/backend/decoders/structure.js";
+} from "../../../src/client/decoders/structure.js";
 
 it("accepts complete namespace, layer and partition results", () => {
   expect(readNamespaceCreated(structureResults["namespaces.create"])).toEqual(

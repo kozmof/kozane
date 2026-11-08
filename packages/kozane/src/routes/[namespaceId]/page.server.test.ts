@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   StaticClient,
   type StaticClientData,
-} from "../../../../client/src/backend/static-client.js";
+} from "../../../../client/src/client/static-client.js";
 const roots: string[] = [];
 afterEach(async () => {
   vi.unstubAllEnvs();

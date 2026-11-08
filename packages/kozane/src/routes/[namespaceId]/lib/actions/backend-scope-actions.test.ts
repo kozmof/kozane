@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { NamespaceState } from "../../../../../../client/src/board/namespace-state.svelte.js";
-import { HttpClient } from "../../../../../../client/src/backend/http-client.js";
+import { HttpClient } from "../../../../../../client/src/client/http-client.js";
 import { createClientScopeActions } from "../../../../../../client/src/board/lib/actions/backend-scope-actions.js";
 import { data } from "../../page.fixtures.js";
 const capabilities = {

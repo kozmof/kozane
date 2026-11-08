@@ -1,8 +1,8 @@
 import type { NamespaceState } from "../namespace-state.svelte.js";
-import type { KozaneClient } from "../../backend/contract.js";
-import { ClientError } from "../../backend/contract.js";
-import { readCard, readWarp, readScopeArea } from "../../backend/decoders/snapshot-reader.js";
-import { readPlacements } from "../../backend/decoders/placements.js";
+import type { KozaneClient } from "../../client/contract.js";
+import { ClientError } from "../../client/contract.js";
+import { readCard, readWarp, readScopeArea } from "../../client/decoders/snapshot-reader.js";
+import { readPlacements } from "../../client/decoders/placements.js";
 import type { BoardRect } from "../../constants/index.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import type { CardPositionPatch } from "./namespace-page.js";

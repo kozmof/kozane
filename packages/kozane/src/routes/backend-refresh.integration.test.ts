@@ -18,10 +18,10 @@ import {
   type SnapshotData,
   type TagsResult,
   type MapResult,
-} from "../../../client/src/backend/index.js";
+} from "../../../client/src/client/index.js";
 import { TaskspaceTreeState } from "../../../client/src/board/lib/taskspace-tree.svelte.js";
-import { startSnapshotView } from "../../../client/src/backend/snapshot-view.js";
-import { startDatasetView } from "../../../client/src/backend/dataset-view.js";
+import { startSnapshotView } from "../../../client/src/client/snapshot-view.js";
+import { startDatasetView } from "../../../client/src/client/dataset-view.js";
 import { GET as changes } from "./api/changes/+server.js";
 import { GET as snapshot } from "./[namespaceId]/api/snapshot/+server.js";
 import { GET as tags } from "./api/tags/+server.js";

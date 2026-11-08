@@ -10,9 +10,9 @@ async function attempt<T>(
     return { ok: false, error };
   }
 }
-import type { KozaneClient } from "../../../backend/contract.js";
-import { ClientError } from "../../../backend/contract.js";
-import { readScopeArea } from "../../../backend/decoders/snapshot-reader.js";
+import type { KozaneClient } from "../../../client/contract.js";
+import { ClientError } from "../../../client/contract.js";
+import { readScopeArea } from "../../../client/decoders/snapshot-reader.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
 import type { BoardRect } from "../../../constants/index.js";
 import type { TaskspaceDirectoryOutcome } from "@kozane/core";

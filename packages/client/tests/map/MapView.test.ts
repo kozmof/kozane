@@ -1,8 +1,8 @@
 import { expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { MapView } from "../../src/ui.js";
-import { HttpClient, StaticClient } from "../../src/backend/index.js";
-import { mapView } from "../../src/backend/views/map.js";
+import { HttpClient, StaticClient } from "../../src/client/index.js";
+import { mapView } from "../../src/client/views/map.js";
 import { createDemoNavigation } from "../../src/navigation.js";
 import { mapDataset } from "../../../kozane/src/test-utils/map-dataset.js";
 import { DEFAULT_ZOOM, zoomPercent } from "../../src/map/lib/view.js";

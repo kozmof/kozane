@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpClient, type KozaneClient } from "../../src/backend/index.js";
+import { HttpClient, type KozaneClient } from "../../src/client/index.js";
 import { inventoryResults } from "../../../kozane/src/test-utils/inventory-results.js";
 const capabilities = {
   writable: true,

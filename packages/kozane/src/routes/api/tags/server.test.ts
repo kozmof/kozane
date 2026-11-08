@@ -9,7 +9,7 @@ import { createNamespace } from "../../../db/api/namespace.js";
 import { getDefaultPartition } from "../../../db/api/partition.js";
 import { create } from "../../../services/cards.js";
 import { createServiceContext } from "../../../services/context.js";
-import { readTagsViewData } from "../../../../../client/src/backend/decoders/tags.js";
+import { readTagsViewData } from "../../../../../client/src/client/decoders/tags.js";
 import { GET } from "./+server";
 import { GET as getMap } from "../map/+server";
 it("serves shared tag and map datasets and rejects unknown destinations", async () => {

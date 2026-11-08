@@ -1,4 +1,4 @@
-import { HttpClient } from "../../../../client/src/backend/http-client.js";
+import { HttpClient } from "../../../../client/src/client/http-client.js";
 import { createClientBoardPersistence } from "../../../../client/src/board/lib/board-backend-persistence.js";
 import { createMemoryPreferences } from "../../../../client/src/preferences.js";
 import { describe, it, expect, beforeEach } from "vitest";

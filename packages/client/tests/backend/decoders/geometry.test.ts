@@ -5,8 +5,8 @@ import {
   readScopeRenamed,
   readScopeAreaResult,
   readWarpResult,
-} from "../../../src/backend/decoders/geometry.js";
-import { readCreatedId, readMutationOk } from "../../../src/backend/decoders/structure.js";
+} from "../../../src/client/decoders/geometry.js";
+import { readCreatedId, readMutationOk } from "../../../src/client/decoders/structure.js";
 
 it("decodes complete results and rejects malformed or mismatched geometry", () => {
   const area = geometryResults["scopes.createArea"];

@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { HttpClient } from "../../src/backend/http-client.js";
+import { HttpClient } from "../../src/client/http-client.js";
 const capabilities = {
   writable: true,
   persistent: true,

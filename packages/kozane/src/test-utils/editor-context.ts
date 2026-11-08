@@ -1,4 +1,4 @@
-import { HttpClient, StaticClient, type SnapshotData } from "../../../client/src/backend/index.js";
+import { HttpClient, StaticClient, type SnapshotData } from "../../../client/src/client/index.js";
 import type { TaskspaceFileTree } from "../lib/types.js";
 import type { EditorSessionContext } from "../../../client/src/editor/index.js";
 

@@ -8,13 +8,13 @@ import {
   StaticClient,
   type ClientInvalidation,
   type KozaneClient,
-} from "../../src/backend/index.js";
+} from "../../src/client/index.js";
 
 import {
   clientMutationCases as cases,
   type MutationName,
   type MutationCase,
-} from "../../src/backend/testing/mutations.js";
+} from "../../src/client/testing/mutations.js";
 const entries = Object.entries(cases) as [MutationName, MutationCase][];
 const capabilities = {
   writable: true,

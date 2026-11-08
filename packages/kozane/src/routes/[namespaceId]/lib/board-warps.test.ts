@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { BoardWarps } from "../../../../../client/src/board/lib/board-warps.svelte.js";
 import { NamespaceState } from "../../../../../client/src/board/namespace-state.svelte.js";
 import { data } from "../page.fixtures.js";
-import { ClientError } from "../../../../../client/src/backend/contract.js";
+import { ClientError } from "../../../../../client/src/client/contract.js";
 import { createDemoNavigation } from "../../../../../client/src/navigation.js";
 
 function setup(readonly = false) {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createNamespaceActions } from "../../../../client/src/board/namespace-actions.svelte.js";
 import { NamespaceState } from "../../../../client/src/board/namespace-state.svelte.js";
 import type { CardWithGlue } from "$lib/types";
-import { ClientError, type KozaneClient } from "../../../../client/src/backend/contract.js";
+import { ClientError, type KozaneClient } from "../../../../client/src/client/contract.js";
 
 const backend = {
   cards: {

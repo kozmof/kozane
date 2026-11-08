@@ -28,6 +28,15 @@ const adapters = new WeakMap<DB, DatabaseAdapterHooks>();
 
 /** Driver hooks own transaction start, commit and rollback. */
 export function createDatabaseAdapter(handle: DatabaseHandle, hooks: DatabaseAdapterHooks): DB {
+  if (
+    typeof hooks?.write !== "function" ||
+    typeof hooks?.read !== "function" ||
+    (hooks.migrate !== undefined && typeof hooks.migrate !== "function")
+  )
+    throw new TypeError(
+      "Database adapter requires read/write hooks and an optional migration hook",
+    );
+  if (adapters.has(handle as DB)) throw new Error("Database handle already has an adapter");
   const db = handle as DB;
   adapters.set(db, hooks);
   return db;

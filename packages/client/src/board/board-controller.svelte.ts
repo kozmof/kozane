@@ -1,6 +1,5 @@
 import type { BoardViewProps } from "./types.js";
-import { startDatasetView } from "../backend/dataset-view.js";
-import { ClientError } from "../backend/contract.js";
+import { startBoardFileRefresh } from "./lib/board-file-refresh.js";
 import { onMount, onDestroy, tick, untrack } from "svelte";
 import { type BoardArrivalParameter } from "../navigation.js";
 import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
@@ -19,7 +18,7 @@ import { EditorSession } from "../editor/index.js";
 import type { FileManagementActions } from "./lib/file-management.js";
 import { InFlight } from "./lib/in-flight.js";
 import { bindViewWrites } from "./lib/view-writes.js";
-import { startSnapshotView, type SnapshotViewStatus } from "../backend/snapshot-view.js";
+import { startSnapshotView, type SnapshotViewStatus } from "../client/snapshot-view.js";
 import type { WarpCanvas } from "./lib/board-warps.svelte.js";
 import type { BoardPoint } from "../host-types.js";
 import type { WorldRect } from "./lib/namespace-page.js";
@@ -342,34 +341,22 @@ export function createBoardController(options: BoardControllerOptions) {
       wake = options.lifecycle,
       hidden = options.isHidden;
     if (!current.capabilities.externalWrites || !current.taskspaces) return;
-    return untrack(() => {
-      let active = true;
-      const generation = current.version.generation;
-      const stop = startDatasetView({
-        backend: current,
-        dataset: "snapshot",
+    return untrack(() =>
+      startBoardFileRefresh({
+        client: current,
+        context,
+        tree,
         retryIntervalMs: interval,
         lifecycle: wake,
         isHidden: hidden,
-        read: async (isCurrent, readOptions) => {
-          const ok = await tree.refreshWatched(
-            { ...context, readOptions },
-            () => active && current.version.generation === generation && isCurrent(),
-          );
-          if (!ok) throw new ClientError("unavailable", "Could not refresh files");
-        },
-        apply: () => {
+        refreshed: () => {
           if (attempt === refreshAttempt) filesRefreshFailed = false;
         },
         error: () => {
           if (attempt === refreshAttempt) filesRefreshFailed = true;
         },
-      });
-      return () => {
-        active = false;
-        stop();
-      };
-    });
+      }),
+    );
   });
   /** What the file browser changes. */
   const fileActions: FileManagementActions = {

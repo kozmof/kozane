@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { HttpClient } from "../../src/backend/http-client.js";
-import { startDatasetView } from "../../src/backend/dataset-view.js";
+import { HttpClient } from "../../src/client/http-client.js";
+import { startDatasetView } from "../../src/client/dataset-view.js";
 import { tagDataset } from "./tags.fixtures.js";
 
 afterEach(() => vi.useRealTimers());

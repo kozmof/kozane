@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { HttpClient } from "../../src/backend/http-client.js";
+import { HttpClient } from "../../src/client/http-client.js";
 import { EditorSession } from "../../src/editor/editor-session.svelte.js";
 it("forwards read cancellation and preserves signatures and dirty text on backend conflicts", async () => {
   const fetcher = vi

@@ -39,7 +39,7 @@ export async function buildRestorationHarness(
     await copyFile(new URL(name, import.meta.url), join(sources, name));
   }
   await copyFile(
-    new URL("../../packages/client/src/backend/operation-queue.ts", import.meta.url),
+    new URL("../../packages/client/src/client/operation-queue.ts", import.meta.url),
     join(sources, "operation-queue.ts"),
   );
   execFileSync(process.execPath, [join(sources, "generate-fixture.mjs"), output], {

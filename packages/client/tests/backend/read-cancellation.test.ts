@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
-import type { KozaneClient, ReadOptions } from "../../src/backend/contract.js";
-import { HttpClient } from "../../src/backend/http-client.js";
-import { StaticClient } from "../../src/backend/static-client.js";
+import type { KozaneClient, ReadOptions } from "../../src/client/contract.js";
+import { HttpClient } from "../../src/client/http-client.js";
+import { StaticClient } from "../../src/client/static-client.js";
 const capabilities = {
   writable: true,
   persistent: true,

@@ -4,7 +4,7 @@ import {
   ClientError,
   type KozaneClient,
   type CardCreateResult,
-} from "../../../../../client/src/backend/contract.js";
+} from "../../../../../client/src/client/contract.js";
 import { NamespaceState } from "../../../../../client/src/board/namespace-state.svelte.js";
 import { createClientBoardPersistence } from "../../../../../client/src/board/lib/board-backend-persistence.js";
 

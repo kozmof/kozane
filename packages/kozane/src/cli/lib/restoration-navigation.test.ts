@@ -5,7 +5,7 @@ import {
   HarnessFailure,
   restoreCandidate,
 } from "../../../../../scripts/restoration-harness/recovery";
-import { OperationQueue } from "../../../../client/src/backend/operation-queue.js";
+import { OperationQueue } from "../../../../client/src/client/operation-queue.js";
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {

@@ -1,7 +1,7 @@
-import type { KozaneClient } from "../../backend/contract.js";
-import { ClientError } from "../../backend/contract.js";
-import { readInventory } from "../../backend/decoders/snapshot-reader.js";
-import { readPlacements } from "../../backend/decoders/placements.js";
+import type { KozaneClient } from "../../client/contract.js";
+import { ClientError } from "../../client/contract.js";
+import { readInventory } from "../../client/decoders/snapshot-reader.js";
+import { readPlacements } from "../../client/decoders/placements.js";
 function clientFailureMessage(error: unknown, fallback: string) {
   return error instanceof ClientError ? error.message : fallback;
 }

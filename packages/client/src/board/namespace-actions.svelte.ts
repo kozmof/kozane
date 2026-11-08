@@ -1,6 +1,6 @@
 import { createClientScopeActions } from "./lib/actions/backend-scope-actions.js";
 import { createClientBoardActions } from "./lib/actions/backend-board-actions.js";
-import type { KozaneClient } from "../backend/contract.js";
+import type { KozaneClient } from "../client/contract.js";
 import { createClientCardActions } from "./lib/actions/backend-card-actions.js";
 import type { NamespaceState } from "./namespace-state.svelte.js";
 

@@ -121,3 +121,15 @@ it("upgrades a valid older prefix without rewriting existing history", async () 
   ).toEqual(before);
   expect(await validateDatabaseMigrationHistory(db, "complete")).toMatchObject({ complete: true });
 });
+
+it("rejects invalid hooks and duplicate registration without replacing the adapter", async () => {
+  const handle = {} as DatabaseHandle;
+  const write = vi.fn();
+  const read = vi.fn();
+  expect(() => createDatabaseAdapter(handle, { write, read: undefined! })).toThrow(TypeError);
+  const db = createDatabaseAdapter(handle, { write, read });
+  expect(db).toBe(handle);
+  expect(() => createDatabaseAdapter(handle, { write: vi.fn(), read: vi.fn() })).toThrow(
+    "already has an adapter",
+  );
+});

@@ -1,11 +1,11 @@
 import { expect, it } from "vitest";
-import { StaticClient } from "../../../../client/src/backend/static-client.js";
-import { HttpClient } from "../../../../client/src/backend/http-client.js";
+import { StaticClient } from "../../../../client/src/client/static-client.js";
+import { HttpClient } from "../../../../client/src/client/http-client.js";
 import {
   clientContractCases,
   runClientContract,
   ClientContractFailure,
-} from "../../../../client/src/backend/testing/index.js";
+} from "../../../../client/src/client/testing/index.js";
 import * as database from "../../db/database";
 import * as services from "../../services/index";
 import * as schema from "../../db/schema";

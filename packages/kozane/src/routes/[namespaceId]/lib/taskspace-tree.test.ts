@@ -633,7 +633,7 @@ describe("TaskspaceTreeState rename and remove while listings are in flight", ()
 
 describe("taskspace backend tree integration", () => {
   it("uses the backend for listing and mutations and refreshes the parent", async () => {
-    const { HttpClient } = await import("../../../../../client/src/backend/http-client.js");
+    const { HttpClient } = await import("../../../../../client/src/client/http-client.js");
     const fetcher = vi.fn(async (_url: unknown, options?: RequestInit) =>
       jsonResponse(
         options?.method === "POST"
@@ -699,7 +699,7 @@ describe("taskspace backend tree integration", () => {
 });
 
 it("keeps static backend directory truncation reasons without falling back to HTTP", async () => {
-  const { StaticClient } = await import("../../../../../client/src/backend/static-client.js");
+  const { StaticClient } = await import("../../../../../client/src/client/static-client.js");
   const backend = new StaticClient({
     namespaces: [{ id: "namespace-1", name: "One", isDefault: true }],
     snapshots: [

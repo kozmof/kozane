@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createClientFeatures, assertTaskspaceSupport } from "../../src/backend/capabilities.js";
-import type { TaskspacesApi } from "../../src/backend/taskspaces-api.js";
-import { clientContractCases } from "../../src/backend/testing/suite.js";
-import type { KozaneClient } from "../../src/backend/contract.js";
+import { createClientFeatures, assertTaskspaceSupport } from "../../src/client/capabilities.js";
+import type { TaskspacesApi } from "../../src/client/taskspaces-api.js";
+import { clientContractCases } from "../../src/client/testing/suite.js";
+import type { KozaneClient } from "../../src/client/contract.js";
 
 const capabilities = { writable: false, persistent: true, externalWrites: false, auth: false };
 function api() {

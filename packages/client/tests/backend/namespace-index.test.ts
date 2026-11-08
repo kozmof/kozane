@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { NamespaceIndex } from "../../src/backend/namespace-index.svelte.js";
-import { HttpClient } from "../../src/backend/http-client.js";
-import { ClientSignals } from "../../src/backend/signals.js";
+import { NamespaceIndex } from "../../src/client/namespace-index.svelte.js";
+import { HttpClient } from "../../src/client/http-client.js";
+import { ClientSignals } from "../../src/client/signals.js";
 const initial = [{ id: "one", name: "One", isDefault: true }];
 afterEach(() => vi.useRealTimers());
 function fixture() {

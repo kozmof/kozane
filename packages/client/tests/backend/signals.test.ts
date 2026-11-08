@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
-import { ClientSignals } from "../../src/backend/signals.js";
-import { ClientError } from "../../src/backend/contract.js";
+import { ClientSignals } from "../../src/client/signals.js";
+import { ClientError } from "../../src/client/contract.js";
 it("delivers lifecycle state immediately and independently from data", () => {
   const signals = new ClientSignals({ status: "initializing" });
   const state = vi.fn(),

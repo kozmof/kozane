@@ -3,7 +3,7 @@ import {
   HttpTransport,
   retryAfterMilliseconds,
   KEEPALIVE_BYTES_MAX,
-} from "../../src/backend/http-transport.js";
+} from "../../src/client/http-transport.js";
 const jsonError = (status: number, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify({ message: "existing wording" }), {
     status,

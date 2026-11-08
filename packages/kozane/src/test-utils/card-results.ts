@@ -4,7 +4,7 @@ import type {
   CardUpdateResult,
   GlueCreateResult,
   GlueRemoveResult,
-} from "../../../client/src/backend/index.js";
+} from "../../../client/src/client/index.js";
 export const baseCard = {
   id: "c",
   partitionId: "p",

@@ -1,4 +1,4 @@
-import { ClientError, type KozaneClient } from "../../backend/contract.js";
+import { ClientError, type KozaneClient } from "../../client/contract.js";
 
 /** Bind UI mutation chains to one generation and check readiness at every dispatch. */
 export function bindViewWrites<T extends Pick<KozaneClient, "version" | "state" | "capabilities">>(

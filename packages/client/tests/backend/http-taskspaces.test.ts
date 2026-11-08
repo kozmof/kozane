@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpClient, type TaskspacesApi } from "../../src/backend/index.js";
+import { HttpClient, type TaskspacesApi } from "../../src/client/index.js";
 const ns = "n /";
 const id = "t /";
 const prefix = "/n%20%2F/api/taskspaces/t%20%2F";

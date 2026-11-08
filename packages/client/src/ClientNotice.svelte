@@ -1,6 +1,6 @@
 <script lang="ts">
   import { css, cx } from "./styles/css.js";
-  import type { ClientCapabilities } from "./backend/contract.js";
+  import type { ClientCapabilities } from "./client/contract.js";
   let { capabilities, lifetimeNotice, floating = false }: { capabilities: Pick<ClientCapabilities, "writable">; lifetimeNotice?: string; floating?: boolean } = $props();
 </script>
 

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { css } from "./styles/css.js";
-  import type { ClientState } from "./backend/contract.js";
-  import type { ClientStatus } from "./backend/view-clients.js";
+  import type { ClientState } from "./client/contract.js";
+  import type { ClientStatus } from "./client/view-clients.js";
   let { backend, failed = false, message, retry, floating = false }: {
     backend?: ClientStatus;
     failed?: boolean;

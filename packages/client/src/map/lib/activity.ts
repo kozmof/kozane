@@ -51,7 +51,7 @@ export function activityCells(rows: ActivityCount[], today = utcDay(new Date()))
   });
 }
 
-export { validActivityDay } from "../../backend/views/map.js";
+export { validActivityDay } from "../../client/views/map.js";
 
 /**
  * Filter partition activity and card tags by the same selected day. Return inputs unchanged

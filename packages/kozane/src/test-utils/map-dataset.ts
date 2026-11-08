@@ -1,4 +1,4 @@
-import type { MapResult } from "../../../client/src/backend/contract.js";
+import type { MapResult } from "../../../client/src/client/contract.js";
 
 /** Small complete map dataset for shared view and standalone consumer checks. */
 export function mapDataset(name = "Seed partition"): MapResult {

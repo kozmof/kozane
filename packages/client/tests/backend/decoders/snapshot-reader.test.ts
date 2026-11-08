@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NamespaceDataSnapshot } from "@kozane/core";
-import { readNamespaceSnapshot } from "../../../src/backend/decoders/snapshot-reader.js";
+import { readNamespaceSnapshot } from "../../../src/client/decoders/snapshot-reader.js";
 
 /** A board fixture containing one of each entity returned by the endpoint. */
 function fullSnapshot(): NamespaceDataSnapshot {

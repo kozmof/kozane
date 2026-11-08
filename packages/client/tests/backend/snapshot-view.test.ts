@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { ClientSignals } from "../../src/backend/signals.js";
-import { startSnapshotView } from "../../src/backend/snapshot-view.js";
-import type { SnapshotData, SnapshotResult } from "../../src/backend/contract.js";
+import { ClientSignals } from "../../src/client/signals.js";
+import { startSnapshotView } from "../../src/client/snapshot-view.js";
+import type { SnapshotData, SnapshotResult } from "../../src/client/contract.js";
 const data: SnapshotData = {
   namespace: { id: "ns" },
   cards: [],
@@ -309,7 +309,7 @@ it("cancels snapshot reads during recovery and cleanup without surfacing an erro
     subscribeState: f.backend.subscribeState,
     snapshot: (
       _id: string,
-      options?: import("../../src/backend/contract.js").SnapshotReadOptions,
+      options?: import("../../src/client/contract.js").SnapshotReadOptions,
     ) =>
       new Promise<SnapshotResult>((_resolve, reject) => {
         signals.push(options!.signal!);

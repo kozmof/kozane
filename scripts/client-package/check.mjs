@@ -79,7 +79,7 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
     }
   }
   walk(join(installed, "dist"));
-  const mapDeclaration = join(installed, "dist/backend/views/map.d.ts");
+  const mapDeclaration = join(installed, "dist/client/views/map.d.ts");
   const originalDeclaration = readFileSync(mapDeclaration);
   try {
     rmSync(mapDeclaration);
@@ -109,7 +109,7 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
     new URL("../../packages/kozane/src/test-utils/backend-inputs.typecheck.ts", import.meta.url),
     "utf8",
   );
-  const backendSource = "../../../client/src/backend/index.js";
+  const backendSource = "../../../client/src/client/index.js";
   assert.equal(resourceFixture.split(backendSource).length - 1, 2);
   writeFileSync(inputs, resourceFixture.replaceAll(backendSource, "@kozane/client"));
   run(

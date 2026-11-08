@@ -6,7 +6,7 @@ import {
   readInventoryRemoved,
   readInventoryStowed,
   readInventoryTaken,
-} from "../../../src/backend/decoders/inventories.js";
+} from "../../../src/client/decoders/inventories.js";
 const take = { cards: [{ cardId: "c" }] };
 it("preserves blank inventory names and binds returned rows to their destination", () => {
   const row = inventoryResults["inventories.create"];

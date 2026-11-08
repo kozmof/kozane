@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import {
   readNamespaceList,
   readNamespaceMetadata,
-} from "../../../src/backend/decoders/namespaces.js";
+} from "../../../src/client/decoders/namespaces.js";
 const row = { id: "opaque / namespace", name: "Board", isDefault: false };
 it("returns only declared metadata and preserves opaque identifiers", () => {
   expect(readNamespaceMetadata({ ...row, privatePath: "/private/workspace" })).toEqual(row);

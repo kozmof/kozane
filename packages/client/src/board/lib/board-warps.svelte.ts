@@ -1,9 +1,9 @@
 import { withoutWarp, type WarpListEntry } from "../../warp-list.js";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
-import type { KozaneClient } from "../../backend/contract.js";
-import { ClientError } from "../../backend/contract.js";
-import { parseWarpEntries } from "../../backend/decoders/warp-directory.js";
+import type { KozaneClient } from "../../client/contract.js";
+import { ClientError } from "../../client/contract.js";
+import { parseWarpEntries } from "../../client/decoders/warp-directory.js";
 import { ARROW_DIRECTIONS, warpInDirection } from "./namespace-page.js";
 import type { NavigationAdapter } from "../../navigation.js";
 import { reachableWarps } from "./warp-navigation.js";

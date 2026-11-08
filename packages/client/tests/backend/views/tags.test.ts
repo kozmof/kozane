@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { tagsView } from "../../../src/backend/views/tags.js";
+import { tagsView } from "../../../src/client/views/tags.js";
 import { tagDataset } from "../tags.fixtures.js";
 import { TAG_HITS_SHOWN_MAX } from "../../../src/constants/index.js";
 import type { TagHit } from "../../../../kozane/src/lib/types.js";

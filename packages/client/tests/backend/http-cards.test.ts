@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpClient, type KozaneClient } from "../../src/backend/index.js";
+import { HttpClient, type KozaneClient } from "../../src/client/index.js";
 import { cardResults } from "../../../kozane/src/test-utils/card-results.js";
 const capabilities = {
   writable: true,

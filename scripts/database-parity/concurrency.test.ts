@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { createTestDB, exportTestDB } from "./driver.js";
 import { withTx, withReadTx } from "@kozane/core/database";
-import { OperationQueue } from "../../packages/client/src/backend/operation-queue.js";
+import { OperationQueue } from "../../packages/client/src/client/operation-queue.js";
 
 it("queues complete multi-query writes, snapshot reads and failed rollbacks", async () => {
   const db = await createTestDB();

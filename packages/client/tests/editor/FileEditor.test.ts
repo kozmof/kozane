@@ -1,5 +1,5 @@
 import { httpEditorContext } from "../../../kozane/src/test-utils/editor-context.js";
-import type { TaskspaceFileData } from "../../src/backend/contract.js";
+import type { TaskspaceFileData } from "../../src/client/contract.js";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";

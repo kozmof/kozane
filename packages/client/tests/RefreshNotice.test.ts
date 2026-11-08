@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
-import { ClientSignals } from "../src/backend/signals.js";
-import { ClientError } from "../src/backend/contract.js";
+import { ClientSignals } from "../src/client/signals.js";
+import { ClientError } from "../src/client/contract.js";
 import RefreshNotice from "../src/RefreshNotice.svelte";
 it("reports transient polling errors without changing readiness and rejects old-backend updates", async () => {
   const first = new ClientSignals({ status: "ready" });

@@ -17,12 +17,12 @@ import {
   BoardView,
 } from "../../../client/src/ui.js";
 
-import { tagDataset } from "../../../client/tests/backend/tags.fixtures.js";
-import { tagsView } from "../../../client/src/backend/views/tags.js";
+import { tagDataset } from "../../../client/tests/client/tags.fixtures.js";
+import { tagsView } from "../../../client/src/client/views/tags.js";
 import { boardViewProps } from "./board-view-props.js";
 import { boardCanvasProps } from "./board-canvas-props.js";
 import { mapDataset } from "./map-dataset.js";
-import { mapView } from "../../../client/src/backend/views/map.js";
+import { mapView } from "../../../client/src/client/views/map.js";
 import { staticEditorContext } from "./editor-context.js";
 
 export async function renderViews() {

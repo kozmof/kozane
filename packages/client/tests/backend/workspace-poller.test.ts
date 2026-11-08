@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { WorkspacePoller } from "../../src/backend/workspace-poller.js";
+import { WorkspacePoller } from "../../src/client/workspace-poller.js";
 afterEach(() => vi.useRealTimers());
 async function flush() {
   await Promise.resolve();

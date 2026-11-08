@@ -1,6 +1,6 @@
-import type { NamespaceGetResult, SnapshotData } from "../backend/contract.js";
-import type { BoardViewClient } from "../backend/view-clients.js";
-import type { PollLifecycle } from "../backend/workspace-poller.js";
+import type { NamespaceGetResult, SnapshotData } from "../client/contract.js";
+import type { BoardViewClient } from "../client/view-clients.js";
+import type { PollLifecycle } from "../client/workspace-poller.js";
 import type { NavigationAdapter, NavigationDriver } from "../navigation.js";
 import type { PreferenceStorage } from "../preferences.js";
 import type { UiConfig } from "../ui-config.js";

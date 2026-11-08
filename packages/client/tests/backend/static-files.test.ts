@@ -3,7 +3,7 @@ import {
   findStaticNode,
   isStaticFileTree,
   staticDirectoryEntries,
-} from "../../src/backend/static-files.js";
+} from "../../src/client/static-files.js";
 import type { TaskspaceFileNode, TaskspaceFileTree } from "@kozane/core";
 import { TASKSPACE_FILE_BYTES_MAX, TASKSPACE_SSG_NODES_MAX } from "@kozane/core";
 

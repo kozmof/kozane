@@ -10,9 +10,9 @@ async function attempt<T>(
     return { ok: false, error };
   }
 }
-import type { KozaneClient } from "../../../backend/contract.js";
-import { ClientError } from "../../../backend/contract.js";
-import { readWarp } from "../../../backend/decoders/snapshot-reader.js";
+import type { KozaneClient } from "../../../client/contract.js";
+import { ClientError } from "../../../client/contract.js";
+import { readWarp } from "../../../client/decoders/snapshot-reader.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
 import { readFiniteNumber, readString } from "../response.js";
 import { readStacking } from "./shared.js";

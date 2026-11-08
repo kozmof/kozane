@@ -1,4 +1,4 @@
-import type { TagsViewPageData } from "../backend/views/tags.js";
+import type { TagsViewPageData } from "../client/views/tags.js";
 /** Older exports may omit scan-warning fields. */
 export type TagsPageData = Omit<TagsViewPageData, "missing" | "cardsTruncated"> &
   Partial<Pick<TagsViewPageData, "missing" | "cardsTruncated">>;

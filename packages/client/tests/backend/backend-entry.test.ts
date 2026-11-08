@@ -7,7 +7,7 @@ import {
   type SnapshotData,
   type CardCreateInput,
   type MutationOptions,
-} from "../../src/backend/index.js";
+} from "../../src/client/index.js";
 import { tagDataset } from "./tags.fixtures.js";
 const namespace = { id: "ns", name: "Namespace", isDefault: true };
 const data: SnapshotData = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OperationQueue } from "../../src/backend/operation-queue.js";
+import { OperationQueue } from "../../src/client/operation-queue.js";
 
 describe("whole-operation queue", () => {
   it("keeps reads and exports behind a complete multi-query write", async () => {

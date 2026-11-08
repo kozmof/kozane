@@ -2,12 +2,12 @@
   import RefreshNotice from "../RefreshNotice.svelte";
   import ClientNotice from "../ClientNotice.svelte";
   import type { NavigationAdapter } from "../navigation.js";
-  import type { TagsViewClient } from "../backend/view-clients.js";
-  import type { PollLifecycle } from "../backend/workspace-poller.js";
+  import type { TagsViewClient } from "../client/view-clients.js";
+  import type { PollLifecycle } from "../client/workspace-poller.js";
   import type { TagsPageData, TagsSelection } from "./types.js";
   import { untrack } from "svelte";
-  import { startDatasetView } from "../backend/dataset-view.js";
-  import { tagsView, type TagsViewPageData } from "../backend/views/tags.js";
+  import { startDatasetView } from "../client/dataset-view.js";
+  import { tagsView, type TagsViewPageData } from "../client/views/tags.js";
   import { css } from "../styles/css.js";
   import NavIcon from "../components/NavIcon.svelte";
   import {
