@@ -16,7 +16,8 @@ const run = (command, parameters) =>
 try {
   const artifacts =
     options.mode === "reuse" ? undefined : preparePackageArtifacts({ repository, directory, run });
-  for (const [command, parameters] of verificationPlan(directory)) run(command, parameters);
+  for (const [command, parameters] of verificationPlan(directory, options))
+    run(command, parameters);
   for (const artifact of artifacts ?? [])
     assert.equal(
       archiveDigest(join(directory, artifact.file)),

@@ -1,5 +1,5 @@
 /** No build or pack command belongs in this plan. All checks consume the prepared outputs. */
-export function verificationPlan(directory) {
+export function verificationPlan(directory, { skipBrowserTests = false } = {}) {
   return [
     ["pnpm", ["release:check"]],
     ["pnpm", ["--filter", "kozane", "check"]],
@@ -8,8 +8,7 @@ export function verificationPlan(directory) {
       [
         "scripts/check-core-package.mjs",
         "--client-package",
-        "--client-browser-harness",
-        "--restoration-harness",
+        ...(skipBrowserTests ? [] : ["--client-browser-harness", "--restoration-harness"]),
         "--artifacts=" + directory,
       ],
     ],

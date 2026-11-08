@@ -15,7 +15,7 @@ export function autoRelease({ root, args = [], run, output, exists = existsSync 
   const directory = join(root, "tmp", "releases", commit);
   const script = join(root, "scripts", "local-release.mjs");
   if (!exists(join(directory, "release.json")))
-    run(process.execPath, [script, "prepare", directory]);
+    run(process.execPath, [script, "prepare", directory, "--skip-browser-tests"]);
   const registry = "--registry=https://registry.npmjs.org/";
   try {
     output("npm", ["whoami", registry]);

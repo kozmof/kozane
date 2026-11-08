@@ -22,6 +22,8 @@ This prepares and publishes core, client and kozane in dependency order, then ve
 
 If a prepared release already exists for the current commit, the command reuses it. Rerun the command after a partial publication to resume with the same archives. The publisher validates the manifest and archive hashes and skips published versions only when their bytes match. Preparation failures stop publication.
 
+`release:auto` skips Playwright browser execution because those suites run in CI. Source coverage, package checks, browser compilation, auditing, and smoke checks still run. Use `pnpm release:local` for full local preparation with browser tests. A source test failure still stops automatic release.
+
 ## Prepare a local release
 
 Use Node 24 or newer and the pinned pnpm toolchain. Install dependencies with `pnpm install --frozen-lockfile`. Install the browser used by the local checks with `pnpm exec playwright install chromium`.

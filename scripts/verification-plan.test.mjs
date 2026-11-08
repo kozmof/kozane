@@ -74,3 +74,17 @@ test("verification distinguishes retained candidates from reused archives and te
   ])
     assert.throws(() => verificationOptions(args), /Usage/);
 });
+
+test("automatic release can omit browser harnesses while retaining source coverage", () => {
+  const options = verificationOptions(["--artifacts=tmp/candidate", "--skip-browser-tests"]);
+  assert.equal(options.skipBrowserTests, true);
+  const plan = verificationPlan(options.directory, options);
+  const args = plan.flatMap(([, args]) => args);
+  assert.ok(!args.includes("--client-browser-harness"));
+  assert.ok(!args.includes("--restoration-harness"));
+  assert.ok(args.includes("--client-package"));
+  assert.ok(args.includes("test:coverage:source"));
+  const full = verificationPlan(options.directory).flatMap(([, args]) => args);
+  assert.ok(full.includes("--client-browser-harness"));
+  assert.ok(full.includes("--restoration-harness"));
+});

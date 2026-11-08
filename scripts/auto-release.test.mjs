@@ -16,7 +16,12 @@ test("prepares and publishes the same commit archives", () => {
   const f = fixture();
   autoRelease(f);
   assert.deepEqual(f.calls, [
-    ["/repo/scripts/local-release.mjs", "prepare", "/repo/tmp/releases/abc"],
+    [
+      "/repo/scripts/local-release.mjs",
+      "prepare",
+      "/repo/tmp/releases/abc",
+      "--skip-browser-tests",
+    ],
     ["/repo/scripts/local-release.mjs", "publish", "/repo/tmp/releases/abc"],
   ]);
 });

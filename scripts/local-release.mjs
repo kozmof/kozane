@@ -17,10 +17,14 @@ const packages = ["core", "client", "kozane"].map((directory) => ({
   directory,
   ...JSON.parse(readFileSync(join(root, "packages", directory, "package.json"), "utf8")),
 }));
-const [mode = "prepare", argument, ...extra] = process.argv.slice(2);
+const releaseArgs = process.argv.slice(2);
+const skipBrowserTests = releaseArgs.includes("--skip-browser-tests");
+const [mode = "prepare", argument, ...extra] = releaseArgs.filter(
+  (value) => value !== "--skip-browser-tests",
+);
 assert.ok(
   ["prepare", "publish"].includes(mode) && !extra.length,
-  "Usage: local-release.mjs prepare [directory] | publish <directory>",
+  "Usage: local-release.mjs prepare [directory] [--skip-browser-tests] | publish <directory>",
 );
 assert.equal(
   output("git", ["status", "--porcelain"]),
@@ -33,14 +37,20 @@ const manifestPath = join(directory, "release.json");
 if (mode === "prepare") {
   assert.ok(!existsSync(manifestPath), "Release directory already contains a prepared release");
   const artifacts = preparePackageArtifacts({ repository: root, directory, run });
-  run(process.execPath, ["scripts/verify-workspace.mjs", "--artifacts=" + directory]);
+  run(process.execPath, [
+    "scripts/verify-workspace.mjs",
+    "--artifacts=" + directory,
+    ...(skipBrowserTests ? ["--skip-browser-tests"] : []),
+  ]);
   run("pnpm", ["audit:production"]);
-  run("pnpm", ["test:e2e"]);
-  for (const config of [
-    "scripts/restoration-harness/playwright.config.ts",
-    "scripts/client-package/playwright.config.ts",
-  ]) {
-    run("pnpm", ["exec", "playwright", "test", "--config", config]);
+  if (!skipBrowserTests) {
+    run("pnpm", ["test:e2e"]);
+    for (const config of [
+      "scripts/restoration-harness/playwright.config.ts",
+      "scripts/client-package/playwright.config.ts",
+    ]) {
+      run("pnpm", ["exec", "playwright", "test", "--config", config]);
+    }
   }
   for (const artifact of artifacts) {
     run("npm", [
