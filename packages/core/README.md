@@ -1,196 +1,221 @@
 # @kozane/core
 
-Kozane database contracts, schema and domain services for Node and browsers.
+Kozane core provides the data model and application rules shared by Kozane hosts.
+Use it to read and change Kozane data from Node or a browser while keeping the same
+validation, placement rules, and database schema.
 
-| Export                    | Contents                                                        |
-| ------------------------- | --------------------------------------------------------------- |
-| `@kozane/core`            | Domain types, errors and shared domain helpers                  |
-| `@kozane/core/database`   | Adapter factory, transactions, service context and table APIs   |
-| `@kozane/core/schema`     | Drizzle tables and relations                                    |
-| `@kozane/core/services`   | Domain services and input validation                            |
-| `@kozane/core/migrations` | Migration application, history validation and schema comparison |
+Core owns domain types, errors, services, and schema migrations. Your host supplies
+the database driver, transaction handling, filesystem access, and presentation.
+This lets each host choose its environment without implementing the domain rules again.
 
-The host supplies its database driver and transaction hooks through the adapter factory.
-The package declares Drizzle and UUID as runtime dependencies and includes JavaScript and
-TypeScript declarations. Private module paths are unsupported.
+## What core is for
 
-Import entity, board snapshot, taskspace-file and tag types from `@kozane/core`.
-These declarations share the schema and adapter types supplied by the package.
+Core supports three main tasks.
 
-The root entry also exports inventory geometry and layout helpers such as `cardSpan` and
-`planStow`, plus card splitting and squash placement helpers. Use these for local placement
-previews that follow the same rules as database services. Mutations remain in
-`@kozane/core/services`.
+- Build application features with services that validate inputs and change domain data.
+- Share types and pure helpers between hosts, including placement previews and tag parsing.
+- Create, upgrade, and inspect databases against the bundled migrations and schema.
 
-Import `scanTagLines`, `tagMatches` and `buildTagTree` from the root entry to use the shared
-tag grammar and grouping rules. It also exports `scanUrls` for text boundaries, `applyPalette`
-for partition colors and `compareIds` for stable ID ordering.
+The package includes JavaScript and TypeScript declarations. Drizzle and UUID are
+runtime dependencies. Database drivers belong to the host.
 
-Domain limits and defaults are available from the root entry, including `CONTENT_MAX`,
-`BATCH_MAX`, `CARD_WIDTH_RANGE`, canvas bounds and `PATH_KINDS`. Use `createServiceContext`
-from `@kozane/core/database` to apply configured write limits. The host owns server settings
-and gesture thresholds.
+## Where to start
 
-Taskspace listing/export bounds and `taskspaceNameIssue` are also exported from the root
-entry. Hosts perform filesystem operations using these shared limits and name checks.
+For an application integration, follow this flow.
 
-The root entry also exports `byteLength`, `entryNameIssue`, `errorMessage` and `isPlainObject`
-for shared adapter checks. `isPlainObject` accepts non-null objects other than arrays and
-does not inspect prototypes. JSON input preparation through services applies its own
-stricter prototype checks.
+1. Create a Drizzle database handle using the exported schema and your chosen driver.
+2. Register the handle with `createDatabaseAdapter` and supply read and write transaction hooks.
+3. Create a service context with `createServiceContext` to apply configured write limits.
+4. Pass the adapter and context to resource operations from `@kozane/core/services`.
+5. Keep filesystem operations and other host I/O in your application.
 
-Import `records` from `@kozane/core/database` for table-level reference lookups and Node
-compatibility. Its namespaces include `records.namespace`, `records.partition` and
-`records.card`. Use `composeWrite` to resolve references and invoke a transaction-bound
-service on one write transaction. Resource services own configured validation and mutations.
+If core will also apply migrations, provide the optional migration hook described below.
+Use pure helpers directly when a feature only needs a local calculation or preview.
 
-Import resource operations from `@kozane/core/services`. The `validation` and `guards`
-namespaces provide the same checks for host filesystem adapters. The `rejection` namespace
-provides batch validation errors and their messages. Keep host I/O outside these services
-and pass the database adapter and service context to each operation.
+### Public entry points
 
-Migration records preserve the journal ID, tag, index, timestamp, journal version and
-breakpoint flag. Each record contains its original SQL, SHA-256 hash and ordered statements.
-Statements split only at Drizzle breakpoint markers, preserving trigger bodies. The
-`schemaVersion` export is the final migration ID.
+Import from these five entry points. Private module paths are unsupported and may change.
 
-Read history rows from the candidate database ordered by `created_at`, including `hash` and
-`created_at`, before calling `validateMigrationHistory(rows, mode)`. Choose the mode explicitly.
-`prefix` accepts an empty history or a matching contiguous prefix and returns the pending
-records. `complete` requires every bundled migration and is required for restoration.
-Both modes reject duplicates, gaps, unknown timestamps and hash mismatches. The helper never
-sorts, writes or repairs history. `MigrationHistoryError.reason` identifies the failure.
-The ordinary Node workspace compatibility path remains separate from these strict checks.
+| Entry point | Purpose |
+| --- | --- |
+| `@kozane/core` | Domain types, errors, limits, and pure helpers |
+| `@kozane/core/database` | Adapter registration, transactions, service context, and low-level records |
+| `@kozane/core/schema` | Drizzle tables and relations |
+| `@kozane/core/services` | Resource operations and domain input validation |
+| `@kozane/core/migrations` | Migration application, history checks, and schema comparison |
 
-Build from the repository root with `pnpm build:core`. This checks committed migration records
-and the canonical schema before compiling. Run `pnpm db:generate` after changing the
-application schema to generate SQL and refresh both committed core inputs. Run
-`pnpm --filter @kozane/core migrations:refresh` to refresh them from existing SQL. Run `pnpm --filter @kozane/core check:migrations` to check
-that committed records are current. `pnpm check:core-package` checks freshness, installs the
-tarball outside the workspace with its declared dependencies and the adapter fixtures’ explicit
-Drizzle and sqlite-wasm dependencies. It checks public types and runtime exports, applies migrations through a
-SQLite proxy adapter, compares history and application schema with the existing Node migrator,
-and builds the browser entries. It also checks upgrades, relation preservation, rollback,
-read-only history validation and driver commit boundaries. Schema checks run against native
-SQLite and sqlite-wasm under Node. Browser runtime entries are bundled separately.
+## Application operations
 
-Call `validateDatabaseMigrationHistory(db, mode)` to read and validate history in one read
-transaction. A missing history table counts as empty and is never created by validation.
-Call `applyMigrations(db)` to apply the pending prefix and verify complete history after commit.
-The result contains `schemaVersion` and the IDs applied by that call.
+Use resource services for application writes. They own domain validation, configured
+limits, and mutations. The `validation` and `guards` namespaces expose checks for
+host filesystem adapters. The `rejection` namespace supplies batch validation errors
+and messages.
 
-Provide the optional `migrate(prepare)` adapter hook to support application. Invoke `prepare`
-with the database handle before opening the migration transaction. It initializes the history
-table and returns ordered SQL statements with bound arguments. Execute those statements
-atomically with foreign keys disabled before the transaction begins. Restore foreign keys
-after commit or rollback, and resolve the hook only after commit. Keep preparation and the
-batch exclusive to that migration operation. Preserve statement boundaries and bound arguments.
-Ordinary write transactions cannot provide this boundary. An adapter without the hook rejects
-application before preparation. Failures propagate without automatic retries or history repair.
+Use `composeWrite` when several operations must commit together. Within its callback,
+resolve references and call transaction-bound service variants on the same transaction.
+The `records` export provides table-level access through namespaces such as
+`records.namespace`, `records.partition`, and `records.card`. It supports reference
+lookups and Node compatibility, but does not apply configured service validation.
+
+Input preparation accepts up to 64 nested object or array containers, counting the
+root. Deeper inputs fail with `ValidationError` before dispatch. JSON input preparation
+uses stricter prototype checks than the root `isPlainObject` helper, which accepts
+non-null objects other than arrays without inspecting their prototypes.
+
+## Shared data and helpers
+
+Use the root entry to share domain behavior across application features.
+
+| Need | Exports |
+| --- | --- |
+| Describe application data | Entity, board snapshot, taskspace-file, tag, and service input types |
+| Preview inventory placement | `cardSpan`, `planStow`, and other inventory geometry and layout helpers |
+| Preview splitting and squash placement | Card splitting and squash placement helpers |
+| Parse and group tags | `scanTagLines`, `tagMatches`, `buildTagTree`, and related tag helpers |
+| Find text boundaries and display values | `scanUrls`, `applyPalette`, and `compareIds` |
+| Apply domain bounds | `CONTENT_MAX`, `BATCH_MAX`, `CARD_WIDTH_RANGE`, canvas bounds, and `PATH_KINDS` |
+| Validate host file operations | Taskspace listing/export bounds and `taskspaceNameIssue` |
+| Share adapter checks | `byteLength`, `entryNameIssue`, `errorMessage`, and `isPlainObject` |
+
+Placement helpers allow previews to follow the same rules as services. Persist changes
+through services. Hosts own server settings, gesture thresholds, and filesystem work.
+Core's portable domain bounds do not depend on presentation configuration.
+
+## Implement a database adapter
+
+Register each database handle once with `createDatabaseAdapter`. Registration rejects
+invalid handles, missing required hooks, and duplicate registration before changing
+adapter state. Core owns adapter state and database failure normalization.
+
+The driver hooks define the transaction guarantees on which services depend.
+
+- Resolve only after commit and cleanup finish. Reject failed commits.
+- On callback failure, roll back and finish cleanup before rejecting. Preserve the callback error.
+- If rollback fails, invalidate the connection before accepting more work.
+- Provide one consistent snapshot for the entire read callback.
+- Serialize operations that share a connection.
+- Never retry callbacks automatically. Callbacks may have external effects.
+
+`ReadTx` exposes query builders without mutation builders or nested transactions.
+Raw SQL readers remain trusted interfaces and can execute arbitrary SQL. Hosts must
+enforce read-only access through driver or connection configuration. Type brands
+separate handles at compile time, while registration and dispatch check required
+reader methods at runtime.
+
+### Migration hook
+
+Migration application requires a separate `migrate(prepare)` hook. Ordinary write
+transactions cannot provide its driver-owned boundary.
+
+Invoke `prepare` with the database handle before opening the migration transaction.
+It initializes the history table and returns ordered SQL statements with bound arguments.
+Execute those statements atomically, disabling foreign keys before the transaction
+begins. Restore foreign keys after commit or rollback. Resolve only after commit and
+cleanup. Keep preparation and the batch exclusive to that migration operation, and
+preserve statement boundaries and bound arguments.
+
+Without this hook, application rejects before preparation. Failures propagate without
+automatic retries or history repair. Preparation creates the history table outside
+the atomic batch, so a failure may leave an empty table. Schema changes and history
+inserts within the batch roll back together. Inspect failures before explicitly retrying.
 The Node adapter uses the existing native migration batch operation.
 
-The schema generator applies bundled migrations to a fresh database and generates
-`canonicalSchemaManifest`, including the history table. Run
-`node packages/core/scripts/generate-schema.mjs --check` to check freshness.
-The manifest is deeply frozen. It covers table definitions, columns, declared types,
-nullability, defaults, primary and foreign keys, constraints, indexes, triggers and views.
+## Manage database compatibility
 
-Call `validateDatabaseSchema(db)` to compare an entire database in one read transaction.
+Migration history and schema validation answer different questions. History checks
+verify which bundled migrations were recorded. Schema checks verify the database's
+actual structure. Integrity and foreign-key checks remain separate requirements.
+
+### Apply and validate migrations
+
+Call `applyMigrations(db)` to apply pending migrations and verify complete history
+after commit. Its result includes `schemaVersion` and the IDs applied by that call.
+`schemaVersion` is the final bundled migration ID.
+
+Call `validateDatabaseMigrationHistory(db, mode)` to read and validate history in one
+read transaction. A missing history table counts as empty and is never created by validation.
+Choose the mode explicitly.
+
+| Mode | Purpose |
+| --- | --- |
+| `prefix` | Accept an empty history or a matching contiguous prefix and return pending records |
+| `complete` | Require every bundled migration, including when validating a restoration |
+
+For custom history reads, pass rows ordered by `created_at`, including `hash` and
+`created_at`, to `validateMigrationHistory(rows, mode)`. Both modes reject duplicates,
+gaps, unknown timestamps, and hash mismatches. The helper never sorts, writes, or
+repairs history. `MigrationHistoryError.reason` identifies the failure. The ordinary
+Node workspace compatibility path remains separate from these strict checks.
+
+Bundled records preserve journal metadata, original SQL, SHA-256 hashes, and ordered
+statements. Statements split only at Drizzle breakpoint markers to preserve trigger bodies.
+
+### Validate the schema
+
+Call `validateDatabaseSchema(db)` to compare the entire database in one read transaction.
 It returns a frozen successful comparison or throws `SchemaMismatchError` with
-`reason: "schema_mismatch"` and a `comparison` containing missing, unexpected and altered
-object keys. Other read failures propagate without becoming schema mismatches. History,
-integrity and foreign-key checks remain separate requirements. Schema validation never
-repairs or migrates a database.
+`reason: "schema_mismatch"`. The error's `comparison` lists missing, unexpected, and
+altered object keys. Other read failures propagate unchanged. Validation never repairs
+or migrates a database.
 
-For custom inspection, pass an async SQL-to-row-array callback to `readSchemaManifest`.
-Compare its output with `compareSchemaManifests(actual, expected)`. Omit `expected` to use
-the canonical manifest. Keep custom inspection inside the driver's read transaction.
+For custom inspection, pass an async SQL-to-row-array callback to `readSchemaManifest`
+inside the driver's read transaction. Compare the result with
+`compareSchemaManifests(actual, expected)`. Omitting `expected` uses the deeply frozen
+`canonicalSchemaManifest`, generated from a fresh database with all bundled migrations,
+including the history table.
 
-Schema objects are ordered by SQLite's binary ordering of type and name. Columns retain
-ordinal order, foreign keys use ID and sequence order, and index shapes sort by their JSON
-representation. Implicit index names are excluded from index shapes. Ordered index columns,
-uniqueness, origin and partial flags remain. SQLite-owned objects with names beginning
-`sqlite_`, including runtime statistics, are excluded. Other extra objects are rejected.
+The manifest covers tables, columns, declared types, nullability, defaults, primary
+and foreign keys, constraints, indexes, triggers, and views. Objects use SQLite binary
+ordering by type and name. Columns retain ordinal order, foreign keys use ID and
+sequence order, and index shapes sort by their JSON representation. Index shapes omit
+implicit names but retain ordered columns, uniqueness, origin, and partial flags.
+SQLite-owned objects whose names begin with `sqlite_` are excluded. Other extra objects
+are rejected.
+
 `normalizeSchemaSql` removes whitespace and comments outside quoted tokens and trailing
-statement terminators. It preserves token spelling, case, quoting, literals, operators and
-expressions. Declared types and column defaults use the same normalization. Constraints,
-partial predicates, triggers and views retain their normalized SQL definitions.
+statement terminators. It preserves token spelling, case, quoting, literals, operators,
+and expressions. Declared types and defaults use the same normalization. Constraints,
+partial predicates, triggers, and views retain their normalized SQL definitions.
 
-Before source publication, `prepublishOnly` runs the repository's `release:check:core`
-command. It packs isolated core/client candidates, validates retained corpus bytes and
-outcomes through both packages, and runs the client style and restoration Chromium suites. The retention check requires full Git history
-and prevents rewriting earlier corpus records. See the
-[corpus workflow](../../tests/compatibility/README.md). This source-release command requires
-the repository's development dependencies and pinned Chromium installation.
+## Develop and verify core
 
-Packed checks also initialize libsql and sqlite-wasm through public adapter hooks. Both
-apply migrations, validate history/schema and exercise service writes, nullable updates,
-missing reads and transaction-bound rollback. Driver dependencies belong to the isolated
-consumer and are not added to core runtime dependencies.
+Run commands from the repository root.
 
-Write validation and workspace configuration share portable domain bounds for card width,
-content limits and canvas dimensions. Core services use these bounds without importing
-presentation configuration. Packed checks reject UI configuration files in the core archive.
+| Task | Command |
+| --- | --- |
+| Check committed migration inputs and build core | `pnpm build:core` |
+| Generate SQL and refresh core inputs after schema changes | `pnpm db:generate` |
+| Refresh core inputs from existing SQL | `pnpm --filter @kozane/core migrations:refresh` |
+| Check committed migration records | `pnpm --filter @kozane/core check:migrations` |
+| Check the canonical schema manifest | `node packages/core/scripts/generate-schema.mjs --check` |
+| Verify the installed core package and adapter contracts | `pnpm check:core-package` |
+| Verify client package compatibility | `pnpm test:client-package` |
 
-Schema, adapter state, database failure normalization and domain error classes are owned
-by this package. The Node compatibility modules forward through public exports.
-The root package builds core before checking, testing or building consumers. Node server
-builds keep core external, and the compiled Node check verifies shared schema objects,
-adapter state and error constructors against the installed version. Package smoke checks
-install the candidate core tarball alongside the CLI tarball for local and global installs.
+Run `pnpm check:core-package` for every adapter change. Add host-specific failure
+injection checks for commit and rollback. Before releasing API boundary changes, run
+both package checks, review exported declarations, and record intentional changes in
+a changeset. Removing or changing exports requires a compatibility review.
 
-See the [local release guide](../../docs/releases.md) for package preparation and publication.
+The core package check installs an isolated tarball with declared dependencies and
+explicit driver dependencies. It checks public types and runtime exports, browser
+bundles, migrations, schema compatibility, upgrades, relation preservation, rollback,
+and driver commit boundaries. Packed libsql and sqlite-wasm consumers exercise public
+adapter hooks, writes, nullable updates, missing reads, and rollback. Schema checks
+also run against native SQLite. Packed checks reject UI configuration in the archive.
 
-Adapter hooks must resolve only after commit and reject after rollback. Keep read
-transactions consistent for the entire callback. Register each database handle once.
-Registration rejects missing hooks and duplicate handles before changing adapter state.
+The repository builds core before checking, testing, or building consumers. Node
+builds keep core external and check that schema objects, adapter state, and error
+constructors are shared with the installed package. Package smoke checks install the
+core candidate alongside the CLI candidate for local and global installs.
 
-Migration preparation creates the history table outside the atomic batch. If preparation
-or batch execution fails, that empty table can remain. Schema changes and history inserts
-inside the batch roll back together. Inspect the failure before explicitly retrying.
+### Release preparation
 
-## Choose an operation layer
+`prepublishOnly` runs `release:check:core`. It packs isolated core and client candidates,
+checks retained corpus bytes and outcomes through both packages, and runs client style
+and restoration Chromium suites. This requires repository development dependencies,
+the pinned Chromium installation, and full Git history for corpus retention checks.
+Earlier corpus records must remain unchanged.
 
-Use resource services for application writes. Services apply configured limits and
-validate domain inputs. Use transaction-bound service variants inside composeWrite.
-The records export provides low-level access for reference resolution and compatibility.
-Calling it directly does not provide configured service validation.
-
-ReadTx exposes query builders without mutation builders or nested transactions.
-Raw SQL readers remain trusted interfaces and cannot enforce read-only SQL.
-Input preparation accepts up to 64 nested object or array containers, counting the
-root. Deeper input fails with ValidationError before dispatch.
-
-## Implement an adapter
-
-Resolve hooks only after commit and cleanup finish. Reject failed commits.
-When a callback fails, roll back and finish cleanup before rejecting. Preserve the
-callback error. If rollback fails, invalidate the connection before accepting more
-work. Read hooks must provide one consistent snapshot. Serialize operations that
-share a connection. Never retry callbacks automatically.
-
-Run `pnpm check:core-package` for every adapter change. Its isolated libsql and
-sqlite-wasm consumers exercise migrations, committed writes and rollback through
-public exports. Add host-specific failure injection checks for commit and rollback.
-See [verification guidance](../../docs/verification.md) for checks by change type.
-
-## Choosing an API boundary
-
-Use the root entry for domain data and helpers, and resource services for validated
-application writes. Use `composeWrite` when several service operations must commit
-together. Keep imports on the five public entry points listed above; internal paths
-can change between releases.
-
-Database adapters are trusted infrastructure. Handle validation checks the required
-reader methods at registration and transaction dispatch. Type brands distinguish
-handles during compilation; raw SQL reader methods still execute trusted SQL.
-Hosts must enforce read-only access through their driver or connection configuration.
-Adapter hooks must await commit or rollback and cleanup before settling, serialize
-shared connections, and never automatically retry callbacks with external effects.
-
-Before releasing changes to these boundaries, run `pnpm check:core-package` and
-`pnpm test:client-package` from the repository root. These checks exercise installed
-package entry points and adapter behavior. Review exported declarations for API
-changes and record intentional changes in a changeset. Preserve existing entry
-points when adding APIs; removing or changing an export requires a compatibility
-review.
+See the [corpus workflow](../../tests/compatibility/README.md),
+[verification guidance](../../docs/verification.md), and
+[local release guide](../../docs/releases.md) for maintenance and publication procedures.
