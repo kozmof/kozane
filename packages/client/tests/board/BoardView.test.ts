@@ -29,7 +29,7 @@ it("renders the full read-only board with supplied navigation and no requests", 
   expect(fetcher).not.toHaveBeenCalled();
 });
 
-it("isolates pending mutations and navigation guards when the backend changes", async () => {
+it("isolates pending mutations and navigation guards when the client changes", async () => {
   const props = boardViewProps();
   let finish!: (value: Response) => void;
   const firstFetch = vi.fn<typeof fetch>().mockImplementation(
@@ -40,7 +40,7 @@ it("isolates pending mutations and navigation guards when the backend changes", 
   );
   const secondFetch = vi
     .fn<typeof fetch>()
-    .mockResolvedValue(Response.json({ message: "New backend refusal" }, { status: 400 }));
+    .mockResolvedValue(Response.json({ message: "New client refusal" }, { status: 400 }));
   const first = new HttpClient({ capabilities, fetcher: firstFetch });
   const second = new HttpClient({ capabilities, fetcher: secondFetch });
   const release = vi.fn();
@@ -50,29 +50,29 @@ it("isolates pending mutations and navigation guards when the backend changes", 
     initialDataApplied: true,
     routing: { ...props.routing, beforeNavigate },
   };
-  const view = render(BoardView, { props: { ...host, backend: first } });
+  const view = render(BoardView, { props: { ...host, client: first } });
   let input = screen.getByRole("textbox", { name: "Write a card" });
   await fireEvent.input(input, { target: { value: "Old draft" } });
   await fireEvent.click(screen.getByRole("button", { name: "Create card" }));
   await waitFor(() => expect(firstFetch).toHaveBeenCalledOnce());
-  await view.rerender({ ...host, backend: second });
+  await view.rerender({ ...host, client: second });
   expect(release).toHaveBeenCalledOnce();
   expect(beforeNavigate).toHaveBeenCalledTimes(2);
   input = screen.getByRole("textbox", { name: "Write a card" });
   await fireEvent.input(input, { target: { value: "New draft" } });
-  finish(Response.json({ message: "Old backend refusal" }, { status: 400 }));
+  finish(Response.json({ message: "Old client refusal" }, { status: 400 }));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(input).toHaveValue("New draft");
-  expect(screen.queryByText("Old backend refusal")).not.toBeInTheDocument();
+  expect(screen.queryByText("Old client refusal")).not.toBeInTheDocument();
   await fireEvent.click(screen.getByRole("button", { name: "Create card" }));
-  await waitFor(() => expect(screen.getByText("New backend refusal")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText("New client refusal")).toBeInTheDocument());
   expect(secondFetch).toHaveBeenCalledOnce();
   expect(firstFetch).toHaveBeenCalledOnce();
   view.unmount();
   expect(release).toHaveBeenCalledTimes(2);
 });
 
-it("reuses the view for namespace navigation on the same backend", async () => {
+it("reuses the view for namespace navigation on the same client", async () => {
   const props = boardViewProps();
   const next = {
     ...props.data,
@@ -85,12 +85,12 @@ it("reuses the view for namespace navigation on the same backend", async () => {
     partitions: props.data.partitions.map((row) => ({ ...row, namespaceId: "next" })),
     layers: props.data.layers.map((row) => ({ ...row, namespaceId: "next" })),
   };
-  const backend = new StaticClient({
+  const client = new StaticClient({
     namespaces: [props.data.namespace, next.namespace],
     snapshots: [props.data, next],
   });
   const beforeNavigate = vi.fn(() => () => {});
-  const host = { ...props, backend, routing: { ...props.routing, beforeNavigate } };
+  const host = { ...props, client, routing: { ...props.routing, beforeNavigate } };
   const view = render(BoardView, { props: host });
   await view.rerender({ ...host, data: next });
   await waitFor(() =>
@@ -103,11 +103,11 @@ it("reuses the view for namespace navigation on the same backend", async () => {
 
 it("handles a new card arrival on an already-mounted board", async () => {
   const props = boardViewProps();
-  const backend = new HttpClient({ capabilities, fetcher: vi.fn() });
+  const client = new HttpClient({ capabilities, fetcher: vi.fn() });
   const replace = vi.fn();
   const host = {
     ...props,
-    backend,
+    client,
     initialDataApplied: true,
     routing: { ...props.routing, replace },
   };
@@ -133,7 +133,7 @@ function recoveringHost() {
   const signals = new ClientSignals({ status: "ready" });
   const snapshot = vi.fn<KozaneClient["snapshot"]>();
   const create = vi.fn<KozaneClient["cards"]["create"]>();
-  const backend = new Proxy(props.backend, {
+  const client = new Proxy(props.client, {
     get(target, key) {
       if (key === "capabilities") return capabilities;
       if (key === "state") return signals.state;
@@ -146,7 +146,7 @@ function recoveringHost() {
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
-  return { props: { ...props, backend, initialDataApplied: true }, signals, snapshot, create };
+  return { props: { ...props, client, initialDataApplied: true }, signals, snapshot, create };
 }
 
 it("retains a composer draft and blocks dispatch until recovery data is applied", async () => {

@@ -19,8 +19,8 @@ export async function hydrateCapabilityViews(
     await tick();
     await new Promise((resolve) => setTimeout(resolve, 0));
     const result = {
-      kind: props.board.backend.kind,
-      capabilities: props.board.backend.capabilities,
+      kind: props.board.client.kind,
+      capabilities: props.board.client.capabilities,
       namespaceCreate: !!indexTarget.querySelector('[aria-label="Create namespace"]'),
       cardCreate: !!boardTarget.querySelector('[aria-label="Create card"]'),
       modeText: [...document.querySelectorAll('aside[aria-label="Workspace mode"]')].map(

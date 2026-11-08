@@ -861,7 +861,7 @@ describe("FileEditor auto save", () => {
     await session.open(ctx, { ...REF, path: "other.md" });
     expect(asked).toHaveBeenCalledOnce();
     expect(session.file?.path).toBe(REF.path);
-    expect(session.error).toBe("The backend is unavailable");
+    expect(session.error).toBe("The client is unavailable");
     asked.mockRestore();
   });
 

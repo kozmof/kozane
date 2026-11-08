@@ -11,7 +11,7 @@
 
   let { data, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
   const session = useWorkspaceClientSession();
-  const backend = $derived(selectWorkspaceClient(session, data));
+  const client = $derived(selectWorkspaceClient(session, data));
   const lifecycle = browserPollLifecycle();
   const selection = $derived.by(() => {
     const filters = browser ? navigation.readFilters(page.url) : { tag: null, namespaceId: null };
@@ -24,8 +24,8 @@
   {data}
   {selection}
   {navigation}
-  {backend}
-  retryIntervalMs={backend?.kind === "static" ? false : undefined}
-  lifecycle={backend?.kind === "static" ? lifecycle : undefined}
+  {client}
+  retryIntervalMs={client?.kind === "static" ? false : undefined}
+  lifecycle={client?.kind === "static" ? lifecycle : undefined}
   isHidden={() => document.hidden}
 />

@@ -107,7 +107,7 @@ try {
       }
       assert.ok(
         html.includes("staticClientData"),
-        `Missing static backend seed on ${route || "/"}`,
+        `Missing static client seed on ${route || "/"}`,
       );
     }
     const root = readFileSync(join(output, "index.html"), "utf8");

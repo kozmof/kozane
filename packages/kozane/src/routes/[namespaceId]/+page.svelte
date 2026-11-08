@@ -12,16 +12,16 @@
 
   let { data, navigation = createNodeNavigation({ base, boardTrailingSlash: () => page.url.pathname.endsWith("/") }), routing = createAppNavigationDriver(), preferences = createSessionPreferences() }: PageProps & { navigation?: NavigationAdapter; routing?: NavigationDriver; preferences?: PreferenceStorage } = $props();
   const session = useWorkspaceClientSession();
-  const backend = $derived(selectWorkspaceClient(session, data, () => ({ namespaces: [data.namespace, ...data.otherNamespaces], snapshots: [data], files: data.taskspaceFiles, warpDirectories: { [data.namespace.id]: data.warpDirectory ?? [] } })));
+  const client = $derived(selectWorkspaceClient(session, data, () => ({ namespaces: [data.namespace, ...data.otherNamespaces], snapshots: [data], files: data.taskspaceFiles, warpDirectories: { [data.namespace.id]: data.warpDirectory ?? [] } })));
   const lifecycle = browserPollLifecycle();
 </script>
 
 <BoardView
   lifetimeNotice={data.clientLifetimeNotice}
-  {data} {backend} {navigation} {routing} {preferences}
+  {data} {client} {navigation} {routing} {preferences}
   readRouteUrl={() => browser ? page.url : null}
   initialDataApplied={session.trustsInitialSeed(data)}
-  retryIntervalMs={backend.kind === "static" ? false : undefined}
-  lifecycle={backend.kind === "static" ? lifecycle : undefined}
+  retryIntervalMs={client.kind === "static" ? false : undefined}
+  lifecycle={client.kind === "static" ? lifecycle : undefined}
   isHidden={() => document.visibilityState === "hidden"}
 />

@@ -52,7 +52,7 @@ export async function createServiceContractFixture(dependencies) {
     await migrate(db);
     const context = database.createServiceContext();
     const seed = await services.namespaces.create(db, context, { name: "Contract fixture" });
-    const backend = new HttpClient({
+    const client = new HttpClient({
       capabilities: {
         writable: true,
         persistent: false,
@@ -106,7 +106,7 @@ export async function createServiceContractFixture(dependencies) {
         }
       },
     });
-    return { backend, namespaceId: seed.id, cleanup: () => sqlite.close() };
+    return { client, namespaceId: seed.id, cleanup: () => sqlite.close() };
   } catch (error) {
     sqlite.close();
     throw error;

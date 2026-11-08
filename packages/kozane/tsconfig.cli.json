@@ -21,8 +21,8 @@
     "dist",
     "src/**/*.test.ts",
     "../client/src/**",
-    "src/lib/server/backend-capabilities.ts",
-    "src/lib/server/page-backend.ts",
+    "src/lib/server/client-capabilities.ts",
+    "src/lib/server/page-client.ts",
     "src/lib/server/http/**"
   ]
 }

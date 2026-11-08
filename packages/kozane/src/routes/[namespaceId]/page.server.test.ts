@@ -14,7 +14,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 it.each([false, true])(
-  "seeds the board static backend after scoped-file privacy gates (files %s)",
+  "seeds the board static client after scoped-file privacy gates (files %s)",
   async (includeFiles) => {
     const root = mkdtempSync(join(tmpdir(), "kozane-static-board-"));
     roots.push(root);
@@ -74,18 +74,18 @@ it.each([false, true])(
     expect(JSON.stringify(data.staticClientData)).not.toContain(root);
     expect(JSON.stringify(data.staticClientData)).not.toContain("Unlinked private");
     expect(data.staticClientData.files?.[unlinked]).toBeUndefined();
-    const backend = new StaticClient(data.staticClientData);
-    expect(backend.capabilities.writable).toBe(false);
+    const client = new StaticClient(data.staticClientData);
+    expect(client.capabilities.writable).toBe(false);
     if (includeFiles) {
       expect(Object.keys(data.staticClientData.files ?? {})).toEqual([scoped]);
-      expect(await backend.taskspaces!.readFile(namespaceId, scoped, "notes.md")).toMatchObject({
+      expect(await client.taskspaces!.readFile(namespaceId, scoped, "notes.md")).toMatchObject({
         content: "scoped content",
         signature: null,
       });
     } else {
       expect(data.staticClientData.files).toBeUndefined();
       expect(data.staticClientData.snapshots?.[0].scopes).toEqual([]);
-      expect(backend.taskspaces).toBeUndefined();
+      expect(client.taskspaces).toBeUndefined();
     }
   },
 );

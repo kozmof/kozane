@@ -1,7 +1,7 @@
 import type { NamespaceGetResult, NamespaceListResult } from "../resources.js";
 import { readBoolean, readString } from "./response.js";
 
-/** Decode metadata before a backend consumer can use its identity or default selection. */
+/** Decode metadata before a client consumer can use its identity or default selection. */
 export function readNamespaceMetadata(value: unknown): NamespaceGetResult | null {
   const id = readString(value, "id");
   const name = readString(value, "name");

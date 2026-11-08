@@ -22,9 +22,9 @@ for (const file of declarations) {
   }
 }
 const expected = new Set();
-const backend = interfaces.get("KozaneClient");
-if (!backend) throw new Error("KozaneClient interface is missing");
-for (const member of backend.members) {
+const client = interfaces.get("KozaneClient");
+if (!client) throw new Error("KozaneClient interface is missing");
+for (const member of client.members) {
   const name = member.name?.getText().replace(/^['"]|['"]$/g, "");
   if (ts.isMethodSignature(member)) expected.add(name);
   else if (member.type && ts.isTypeReferenceNode(member.type)) {
@@ -49,8 +49,8 @@ for (const match of matrix.matchAll(/\]\(([^)]+)\)/g)) {
   const url = new URL(match[1], matrixURL);
   if (!existsSync(fileURLToPath(url))) problems.push(`Missing matrix link: ${match[1]}`);
 }
-const fixture = source("packages/kozane/src/test-utils/backend-inputs.typecheck.ts");
-const aliases = new Map([["backend", ""]]);
+const fixture = source("packages/kozane/src/test-utils/client-inputs.typecheck.ts");
+const aliases = new Map([["client", ""]]);
 const calls = new Set();
 function access(node) {
   if (ts.isIdentifier(node)) return aliases.get(node.text);

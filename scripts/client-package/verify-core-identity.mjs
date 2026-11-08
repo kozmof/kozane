@@ -3,7 +3,7 @@ import { ClientError, HttpClient } from "@kozane/client";
 /** Execute in both Node and the production browser, using only public package entries. */
 export async function verifyCoreIdentity() {
   const coreError = new ValidationError("Application core runtime identity");
-  const backend = new HttpClient({
+  const client = new HttpClient({
     capabilities: {
       writable: true,
       persistent: false,
@@ -24,7 +24,7 @@ export async function verifyCoreIdentity() {
     },
   );
   try {
-    await backend.cards.update("n", "c", input);
+    await client.cards.update("n", "c", input);
   } catch (error) {
     if (
       error instanceof ClientError &&

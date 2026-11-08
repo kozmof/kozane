@@ -3,16 +3,16 @@
   import { css } from "./styles/css.js";
   import type { ClientState } from "./client/contract.js";
   import type { ClientStatus } from "./client/view-clients.js";
-  let { backend, failed = false, message, retry, floating = false }: {
-    backend?: ClientStatus;
+  let { client, failed = false, message, retry, floating = false }: {
+    client?: ClientStatus;
     failed?: boolean;
     message: string;
     retry: () => void;
     floating?: boolean;
   } = $props();
-  let currentState = $state.raw<ClientState | undefined>(untrack(() => backend?.state));
+  let currentState = $state.raw<ClientState | undefined>(untrack(() => client?.state));
   $effect(() => {
-    const current = backend;
+    const current = client;
     return untrack(() => {
       currentState = current?.state;
       return current?.subscribeState((value) => { currentState = value; });

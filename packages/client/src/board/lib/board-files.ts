@@ -4,7 +4,7 @@ import type { EditorSession, EditorSessionContext } from "../../editor/index.js"
 type BoardFilesHost = {
   s: NamespaceState;
   editor: EditorSession;
-  /** Read on use, because namespace navigation changes the namespace and backend. */
+  /** Read on use, because namespace navigation changes the namespace and client. */
   context: () => EditorSessionContext;
   closeFilePalette: () => void;
   /** Create a scope, taskspace, and file, answering where the file is, or null on failure. */
@@ -26,7 +26,7 @@ export function createBoardFiles({
   function open(taskspaceId: string, taskspaceName: string, path: string): void {
     const ctx = context();
     const taskspace = s.taskspaces.find((row) => row.id === taskspaceId);
-    if (!taskspace || !ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).read) return;
+    if (!taskspace || !ctx.client.taskspaces?.access(ctx.namespaceId, taskspace).read) return;
     void editor.open(ctx, { taskspaceId, taskspaceName, path });
   }
 

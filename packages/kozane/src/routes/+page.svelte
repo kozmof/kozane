@@ -8,7 +8,7 @@
 
   let { data, form, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
   const session = useWorkspaceClientSession();
-  const backend = $derived(selectWorkspaceClient(session, data, () => ({ namespaces: data.namespaces })));
+  const client = $derived(selectWorkspaceClient(session, data, () => ({ namespaces: data.namespaces })));
 </script>
 
 {#snippet readonlyEmptyState()}
@@ -21,9 +21,9 @@
 
 <NamespacesView
   lifetimeNotice={data.clientLifetimeNotice}
-  {backend}
+  {client}
   {navigation}
-  retryIntervalMs={backend.kind === "static" ? false : undefined}
+  retryIntervalMs={client.kind === "static" ? false : undefined}
   initialNamespaces={data.namespaces}
   workspaceName={data.workspaceName}
   workspaceLabel={data.workspaceRoot ?? "Kozane"}

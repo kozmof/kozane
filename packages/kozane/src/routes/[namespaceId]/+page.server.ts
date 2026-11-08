@@ -1,4 +1,4 @@
-import { pageClientData } from "$lib/server/page-backend.js";
+import { pageClientData } from "$lib/server/page-client.js";
 import type { EntryGenerator, PageServerLoad } from "./$types";
 import { error } from "@sveltejs/kit";
 import { getDb } from "$db/client";

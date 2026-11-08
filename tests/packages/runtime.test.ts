@@ -36,7 +36,7 @@ test("host integration imports work in Node and private package paths stay close
     const entry = realpathSync(fileURLToPath(import.meta.resolve('@kozane/client')));
     assert.ok(entry.startsWith(process.cwd() + '/'), 'Package must resolve inside the isolated consumer');
     assert.match(readFileSync(fileURLToPath(import.meta.resolve('@kozane/client/base.css')), 'utf8'), /@layer reset/);
-    await assert.rejects(import('@kozane/client/dist/backend/contract.js'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
+    await assert.rejects(import('@kozane/client/dist/client/contract.js'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
     console.log('Installed host and exports passed');
   `,
     ],

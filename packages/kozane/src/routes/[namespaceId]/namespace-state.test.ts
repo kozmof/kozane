@@ -1,5 +1,5 @@
 import { HttpClient } from "../../../../client/src/client/http-client.js";
-import { createClientBoardPersistence } from "../../../../client/src/board/lib/board-backend-persistence.js";
+import { createClientBoardPersistence } from "../../../../client/src/board/lib/board-client-persistence.js";
 import { createMemoryPreferences } from "../../../../client/src/preferences.js";
 import { describe, it, expect, beforeEach } from "vitest";
 import {
@@ -362,9 +362,9 @@ describe("the snapshot prune helpers", () => {
   });
 });
 
-describe("backend mutation activity", () => {
+describe("client mutation activity", () => {
   function persistence(s: NamespaceState, fetcher: typeof fetch) {
-    const backend = new HttpClient({
+    const client = new HttpClient({
       fetcher,
       capabilities: {
         writable: true,
@@ -374,7 +374,7 @@ describe("backend mutation activity", () => {
         auth: false,
       },
     });
-    return { backend, persist: createClientBoardPersistence(s, backend) };
+    return { client, persist: createClientBoardPersistence(s, client) };
   }
   /** A response whose body arrives only when `finish` is called. */
   function slowResponse(text: string) {
@@ -390,15 +390,15 @@ describe("backend mutation activity", () => {
     return { response: new Response(body, { status: 200 }), finish: () => finish() };
   }
 
-  it("stays in flight until the backend response body has been decoded", async () => {
+  it("stays in flight until the client response body has been decoded", async () => {
     const s = new NamespaceState();
     s.namespaceId = "ns";
     const { response, finish } = slowResponse('{"ok":true,"stacking":[]}');
-    const { backend, persist } = persistence(s, async () => response);
+    const { client, persist } = persistence(s, async () => response);
     const pending = persist.persistWidth("c1", 300);
     // The committed response headers do not end the view's mutation activity.
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(backend.version.revision).toBe(1);
+    expect(client.version.revision).toBe(1);
     expect(s.mutations.idle).toBe(false);
     finish();
     expect(await pending).toBe(true);
@@ -407,9 +407,9 @@ describe("backend mutation activity", () => {
 
   it("ends tracking when a successful response has no required result body", async () => {
     const s = new NamespaceState();
-    const { backend, persist } = persistence(s, async () => new Response(null, { status: 204 }));
+    const { client, persist } = persistence(s, async () => new Response(null, { status: 204 }));
     expect(await persist.persistWidth("c1", 300)).toBe(false);
-    expect(backend.version.revision).toBe(1);
+    expect(client.version.revision).toBe(1);
     expect(s.mutations.idle).toBe(true);
   });
 
@@ -420,9 +420,9 @@ describe("backend mutation activity", () => {
         controller.error(new Error("connection reset"));
       },
     });
-    const { backend, persist } = persistence(s, async () => new Response(body));
+    const { client, persist } = persistence(s, async () => new Response(body));
     expect(await persist.persistWidth("c1", 300)).toBe(false);
-    expect(backend.version.revision).toBe(1);
+    expect(client.version.revision).toBe(1);
     expect(s.mutations.idle).toBe(true);
   });
 });

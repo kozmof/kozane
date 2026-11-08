@@ -32,7 +32,7 @@ type ArrivalBoard = {
  * Read every arrival parameter before any is applied or removed, so asynchronous actions
  * cannot read a partially cleared URL. Names that are not on this board resolve to null.
  *
- * `canOpenFiles` checks whether the backend can read the named taskspace.
+ * `canOpenFiles` checks whether the client can read the named taskspace.
  */
 export function readArrival(
   destination: BoardDestination,

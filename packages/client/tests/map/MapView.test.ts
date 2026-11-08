@@ -24,7 +24,7 @@ const capabilities = {
 const partition = (container: HTMLElement, name: string) =>
   container.querySelector(`a[aria-label^="${name},"]`);
 
-it("preserves zoom and pan across backend replacement and rejects the old reply", async () => {
+it("preserves zoom and pan across client replacement and rejects the old reply", async () => {
   let finish!: (value: Response) => void;
   const fetcher = vi.fn<typeof fetch>().mockImplementation(
     () =>
@@ -33,7 +33,7 @@ it("preserves zoom and pan across backend replacement and rejects the old reply"
       }),
   );
   const first = new HttpClient({ capabilities, fetcher });
-  const view = render(MapView, { props: { ...props, backend: first } });
+  const view = render(MapView, { props: { ...props, client: first } });
   await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
   await fireEvent.click(screen.getByLabelText("Zoom in"));
   const surface = view.container.querySelector('[role="presentation"]')!;
@@ -50,7 +50,7 @@ it("preserves zoom and pan across backend replacement and rejects the old reply"
   const next = mapDataset("Fresh partition");
   await view.rerender({
     ...props,
-    backend: new StaticClient({ namespaces: next.namespaces, map: next }),
+    client: new StaticClient({ namespaces: next.namespaces, map: next }),
   });
   await waitFor(() => expect(partition(view.container, "Fresh partition")).not.toBeNull());
   expect(partition(view.container, "Fresh partition")).toHaveAttribute(
@@ -79,10 +79,10 @@ it("discards an old selection's projection while the next namespace loads", asyn
           finish = resolve;
         }),
     );
-  const backend = new HttpClient({ capabilities, fetcher });
-  const view = render(MapView, { props: { ...props, backend } });
+  const client = new HttpClient({ capabilities, fetcher });
+  const view = render(MapView, { props: { ...props, client } });
   await waitFor(() => expect(partition(view.container, "First filtered partition")).not.toBeNull());
-  await view.rerender({ ...props, backend, selection: { ...selection, namespaceId: "p2" } });
+  await view.rerender({ ...props, client, selection: { ...selection, namespaceId: "p2" } });
   await waitFor(() => expect(finish).toBeTypeOf("function"));
   expect(partition(view.container, "First filtered partition")).toBeNull();
   const next = mapDataset("Excluded partition");
@@ -101,11 +101,11 @@ it("uses injected visibility and wake callbacks and releases the lifecycle", asy
   const fetcher = vi
     .fn<typeof fetch>()
     .mockResolvedValue(Response.json(mapDataset("Visible partition")));
-  const backend = new HttpClient({ capabilities, fetcher });
+  const client = new HttpClient({ capabilities, fetcher });
   const view = render(MapView, {
     props: {
       ...props,
-      backend,
+      client,
       isHidden: () => hidden,
       lifecycle: {
         listen(callback) {
@@ -128,8 +128,8 @@ it("retains map data and viewport while a failed refresh is retried", async () =
     .fn()
     .mockRejectedValueOnce(new Error("offline"))
     .mockImplementation(async () => Response.json(mapDataset("Recovered partition")));
-  const backend = new HttpClient({ capabilities, fetcher });
-  const view = render(MapView, { props: { ...props, backend } });
+  const client = new HttpClient({ capabilities, fetcher });
+  const view = render(MapView, { props: { ...props, client } });
   await fireEvent.click(screen.getByLabelText("Zoom in"));
   const zoom = `${zoomPercent(DEFAULT_ZOOM + 0.05)}%`;
   expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();

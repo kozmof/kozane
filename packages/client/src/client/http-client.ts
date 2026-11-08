@@ -28,7 +28,7 @@ import { createTags, createMap, createWarpDirectory } from "./http/datasets.js";
 import { createTaskspaces } from "./http/taskspaces.js";
 export type { MutationOptions } from "./contract.js";
 const ALL: readonly ClientDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
-/** HTTP implementation of the shared backend data and lifecycle contract. */
+/** HTTP implementation of the shared client data and lifecycle contract. */
 export class HttpClient implements ManagedClient {
   private disposed = false;
   private readonly lifetime = new AbortController();
@@ -160,7 +160,7 @@ export class HttpClient implements ManagedClient {
       return result;
     } catch (cause) {
       signal.throwIfAborted();
-      throw new ClientError("unavailable", "Invalid backend response", { cause });
+      throw new ClientError("unavailable", "Invalid client response", { cause });
     }
   }
   private async write<T>(
@@ -171,7 +171,7 @@ export class HttpClient implements ManagedClient {
   ): Promise<T> {
     this.assertActive();
     if (!this.capabilities.writable)
-      throw new ClientError("read_only", "This backend is read-only");
+      throw new ClientError("read_only", "This client is read-only");
     const response = await this.transport.request(path, method, input, {
       keepalive: options?.keepalive,
     });
@@ -180,7 +180,7 @@ export class HttpClient implements ManagedClient {
     try {
       return (await response.json()) as T;
     } catch (cause) {
-      throw new ClientError("unavailable", "Invalid backend response", { cause });
+      throw new ClientError("unavailable", "Invalid client response", { cause });
     }
   }
   private invalidateAll(): void {
@@ -225,7 +225,7 @@ export class HttpClient implements ManagedClient {
   private prepareMutation<Input>(input: Input): Input {
     this.assertActive();
     if (!this.capabilities.writable)
-      throw new ClientError("read_only", "This backend is read-only");
+      throw new ClientError("read_only", "This client is read-only");
     if (input === undefined) return input;
     try {
       return prepareInput(input);

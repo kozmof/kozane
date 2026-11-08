@@ -103,7 +103,7 @@
     return taskspaces.filter(
       (taskspace) =>
         taskspace.scopeId === scopeId &&
-        (ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).browse ?? false),
+        (ctx.client.taskspaces?.access(ctx.namespaceId, taskspace).browse ?? false),
     );
   }
 
@@ -321,8 +321,8 @@
                     {ctx}
                     taskspaceId={taskspace.id}
                     path=""
-                    canCreate={!readonly && (ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).write ?? false)}
-                    onOpenFile={ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).read ? (filePath) => onOpenFile(taskspace.id, taskspace.name, filePath) : undefined}
+                    canCreate={!readonly && (ctx.client.taskspaces?.access(ctx.namespaceId, taskspace).write ?? false)}
+                    onOpenFile={ctx.client.taskspaces?.access(ctx.namespaceId, taskspace).read ? (filePath) => onOpenFile(taskspace.id, taskspace.name, filePath) : undefined}
                   />
                 {/if}
               </div>

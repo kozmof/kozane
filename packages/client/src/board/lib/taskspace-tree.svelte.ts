@@ -33,13 +33,13 @@ export type TaskspaceCreated = {
 };
 
 export type TaskspaceTreeContext = {
-  backend: Pick<KozaneClient, "taskspaces">;
+  client: Pick<KozaneClient, "taskspaces">;
   namespaceId: string;
   readOptions?: ReadOptions;
 };
 
 function taskspaceApi(ctx: TaskspaceTreeContext) {
-  const api = ctx.backend.taskspaces;
+  const api = ctx.client.taskspaces;
   if (!api) throw new ClientError("unavailable", "Taskspaces are not available");
   return api;
 }

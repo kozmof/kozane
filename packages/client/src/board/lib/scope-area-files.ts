@@ -63,7 +63,7 @@ export type FileGroup = {
 };
 
 /**
- * Select taskspaces that the backend can browse. Share
+ * Select taskspaces that the client can browse. Share
  * this rule with the sidebar.
  */
 export function taskspacesForScope(

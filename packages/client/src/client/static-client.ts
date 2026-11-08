@@ -80,7 +80,7 @@ export class StaticClient implements ManagedClient {
   }
   private readonly readOnly = async (..._args: unknown[]): Promise<never> => {
     this.assertActive();
-    throw new ClientError("read_only", "This backend is read-only");
+    throw new ClientError("read_only", "This client is read-only");
   };
   readonly version = Object.freeze({ generation: 0, revision: 0 });
   private readonly data: StaticClientData;

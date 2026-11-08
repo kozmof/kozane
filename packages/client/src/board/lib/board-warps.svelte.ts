@@ -19,7 +19,7 @@ type BoardWarpsHost = {
   s: NamespaceState;
   navigation: () => NavigationAdapter;
   navigate: (href: string) => Promise<void>;
-  backend: {
+  client: {
     warpDirectory: Pick<KozaneClient["warpDirectory"], "get">;
     warps: Pick<KozaneClient["warps"], "remove">;
   };
@@ -69,11 +69,11 @@ export class BoardWarps {
   async refreshDirectory(): Promise<void> {
     // A static export has no endpoint to ask, and nothing can have changed under it.
     if (this.#host.readonly) return;
-    const { s, backend } = this.#host;
+    const { s, client } = this.#host;
     const namespaceId = s.namespaceId;
     const request = ++this.#directoryRequest;
     try {
-      const result = await backend.warpDirectory.get(namespaceId);
+      const result = await client.warpDirectory.get(namespaceId);
       if (request !== this.#directoryRequest || namespaceId !== s.namespaceId) return;
       const parsed = parseWarpEntries(result);
       // An answer that is not a list of rows is treated as no answer at all.
@@ -99,7 +99,7 @@ export class BoardWarps {
    */
   async remove(entry: WarpListEntry): Promise<void> {
     if (this.#host.readonly) return;
-    const { s, backend } = this.#host;
+    const { s, client } = this.#host;
     if (entry.namespaceId === s.namespaceId) {
       // Same path the `x` key takes, so one warp cannot be removed two different ways.
       await this.#host.removeWarp(entry.id);
@@ -110,7 +110,7 @@ export class BoardWarps {
       const previous = this.directory;
       this.directory = withoutWarp(this.directory, entry.id);
       try {
-        await backend.warps.remove(entry.namespaceId, entry.id);
+        await client.warps.remove(entry.namespaceId, entry.id);
       } catch (error) {
         this.directory = previous;
         s.setError(error instanceof ClientError ? error.message : "Failed to remove warp");

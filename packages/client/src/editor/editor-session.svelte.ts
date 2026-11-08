@@ -3,7 +3,7 @@ import { ClientError } from "../client/contract.js";
 import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
 export type EditorSessionContext = {
-  backend: Pick<KozaneClient, "taskspaces">;
+  client: Pick<KozaneClient, "taskspaces">;
   namespaceId: string;
   /** Checked immediately before each save dispatch, including queued flushes. */
   canWrite?: () => boolean;
@@ -130,7 +130,7 @@ export class EditorSession {
     // session's document, error, or loading state.
     const current = () => !opening.aborted;
     try {
-      const api = ctx.backend.taskspaces;
+      const api = ctx.client.taskspaces;
       if (!api) throw new ClientError("unavailable", "Taskspaces are not available");
       const body = await api.readFile(ctx.namespaceId, ref.taskspaceId, ref.path, {
         signal: opening,
@@ -231,8 +231,8 @@ export class EditorSession {
 
     try {
       if (ctx.canWrite && !ctx.canWrite())
-        throw new ClientError("unavailable", "The backend is not ready");
-      const api = ctx.backend.taskspaces;
+        throw new ClientError("unavailable", "The client is not ready");
+      const api = ctx.client.taskspaces;
       if (!api) throw new ClientError("unavailable", "Taskspaces are not available");
       const body = await api.saveFile(
         ctx.namespaceId,

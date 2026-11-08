@@ -6,9 +6,9 @@ import {
   type CardCreateResult,
 } from "../../../../../client/src/client/contract.js";
 import { NamespaceState } from "../../../../../client/src/board/namespace-state.svelte.js";
-import { createClientBoardPersistence } from "../../../../../client/src/board/lib/board-backend-persistence.js";
+import { createClientBoardPersistence } from "../../../../../client/src/board/lib/board-client-persistence.js";
 
-const backend = {
+const client = {
   cards: {
     create: vi.fn<KozaneClient["cards"]["create"]>(),
     update: vi.fn<KozaneClient["cards"]["update"]>(),
@@ -64,7 +64,7 @@ function state(): NamespaceState {
   return s;
 }
 function persistence(s: NamespaceState) {
-  return createClientBoardPersistence(s, backend);
+  return createClientBoardPersistence(s, client);
 }
 beforeEach(() => vi.resetAllMocks());
 
@@ -72,22 +72,22 @@ describe("createClientBoardPersistence", () => {
   it("answers whether positions and widths were saved", async () => {
     const s = state();
     const persist = persistence(s);
-    backend.cards.updatePositions.mockResolvedValueOnce({ ok: true });
-    backend.cards.update.mockRejectedValueOnce(refused);
+    client.cards.updatePositions.mockResolvedValueOnce({ ok: true });
+    client.cards.update.mockRejectedValueOnce(refused);
     await expect(persist.persistPositions([{ cardId: "c1", posX: 1, posY: 2 }])).resolves.toBe(
       true,
     );
     await expect(persist.persistWidth("c1", 300)).resolves.toBe(false);
-    expect(backend.cards.updatePositions).toHaveBeenCalledWith("ns-1", {
+    expect(client.cards.updatePositions).toHaveBeenCalledWith("ns-1", {
       positions: [{ cardId: "c1", posX: 1, posY: 2 }],
     });
-    expect(backend.cards.update).toHaveBeenCalledWith("ns-1", "c1", { width: 300 });
+    expect(client.cards.update).toHaveBeenCalledWith("ns-1", "c1", { width: 300 });
   });
   it("writes back the stored warp after a move", async () => {
     const s = state();
     s.warps = [{ id: "w1", namespaceId: "ns-1", posX: 0, posY: 0 }];
     const stored: Warp = { id: "w1", namespaceId: "ns-1", posX: 1000, posY: 800 };
-    backend.warps.update.mockResolvedValueOnce(stored);
+    client.warps.update.mockResolvedValueOnce(stored);
     await expect(persistence(s).persistWarpPosition("w1", { posX: 1005, posY: 801 })).resolves.toBe(
       true,
     );
@@ -105,7 +105,7 @@ describe("createClientBoardPersistence", () => {
       height: 200,
     });
     s.scopeAreas = [frame("a1", 0), frame("a2", 500)];
-    backend.scopes.updateArea.mockResolvedValueOnce(frame("a2", 600));
+    client.scopes.updateArea.mockResolvedValueOnce(frame("a2", 600));
     await persistence(s).persistScopeArea("s1", "a2", {
       posX: 600,
       posY: 0,
@@ -117,7 +117,7 @@ describe("createClientBoardPersistence", () => {
   it("does not touch the board when a frame save is refused", async () => {
     const s = state();
     const previous = s.scopeAreas;
-    backend.scopes.updateArea.mockRejectedValueOnce(refused);
+    client.scopes.updateArea.mockRejectedValueOnce(refused);
     await expect(
       persistence(s).persistScopeArea("s1", "a1", { posX: 0, posY: 0, width: 200, height: 200 }),
     ).resolves.toBe(false);
@@ -129,24 +129,24 @@ describe("createClientBoardPersistence", () => {
       const s = state();
       s.cards = [card("c1")];
       s.selection.composerCard = s.cards[0];
-      backend.cards.update.mockResolvedValueOnce({ ...succeeded, content: "new text" });
+      client.cards.update.mockResolvedValueOnce({ ...succeeded, content: "new text" });
       const placeNew = vi.fn();
       await persistence(s).submitComposer("c1", "new text", "p2", placeNew);
       expect(s.cards[0]).toMatchObject({ content: "new text", partitionId: "p2" });
       expect(s.selection.composerCard).toBeNull();
       expect(placeNew).not.toHaveBeenCalled();
     });
-    it("falls back to trimmed text when a backend omits normalized content", async () => {
+    it("falls back to trimmed text when a client omits normalized content", async () => {
       const s = state();
       s.cards = [card("c1")];
-      backend.cards.update.mockResolvedValueOnce(succeeded);
+      client.cards.update.mockResolvedValueOnce(succeeded);
       await persistence(s).submitComposer("c1", "  new text \n", "p1", vi.fn());
       expect(s.cards[0].content).toBe("new text");
     });
-    it("holds the text the backend says it stored", async () => {
+    it("holds the text the client says it stored", async () => {
       const s = state();
       s.cards = [card("c1")];
-      backend.cards.update.mockResolvedValueOnce({ ...succeeded, content: "normalized" });
+      client.cards.update.mockResolvedValueOnce({ ...succeeded, content: "normalized" });
       await persistence(s).submitComposer("c1", "  typed  ", "p1", vi.fn());
       expect(s.cards[0].content).toBe("normalized");
     });
@@ -154,7 +154,7 @@ describe("createClientBoardPersistence", () => {
       const s = state();
       const stored = (slot: number) => ({ inventory: { id: "i1", slot } });
       s.cards = [card("c1", stored(0)), card("c2", stored(6)), card("c3", stored(2))];
-      backend.cards.update.mockResolvedValueOnce({
+      client.cards.update.mockResolvedValueOnce({
         ...succeeded,
         content: "longer text",
         placements: [
@@ -168,26 +168,26 @@ describe("createClientBoardPersistence", () => {
       expect(s.cards[0].content).toBe("longer text");
       expect(s.cards[2]).toBe(untouched);
     });
-    it("reports the backend reason and retains the composer when an edit is refused", async () => {
+    it("reports the client reason and retains the composer when an edit is refused", async () => {
       const s = state();
       s.cards = [card("c1")];
       s.selection.composerCard = s.cards[0];
-      backend.cards.update.mockRejectedValueOnce(new ClientError("validation", "Too long"));
+      client.cards.update.mockRejectedValueOnce(new ClientError("validation", "Too long"));
       await persistence(s).submitComposer("c1", "x", "p1", () => ({ posX: 0, posY: 0 }));
       expect(s.lastError).toBe("Too long");
       expect(s.cards[0].content).toBe("c1");
       expect(s.selection.composerCard).toEqual(s.cards[0]);
       expect(s.mutations.idle).toBe(true);
     });
-    it("creates a card in the active scope from the stored row, leaving stacking to the backend", async () => {
+    it("creates a card in the active scope from the stored row, leaving stacking to the client", async () => {
       const s = state();
       s.cards = [card("c1", { zIndex: 4 }), card("c2", { layerId: "l2", zIndex: 9 })];
       s.activeLayerId = "l1";
       s.sidebar.activeScope = "s1";
       const created = card("c3", { posX: 10, posY: 20, zIndex: 5 });
-      backend.cards.create.mockResolvedValueOnce(creationResult(created));
+      client.cards.create.mockResolvedValueOnce(creationResult(created));
       await persistence(s).submitComposer(null, "c3", "p1", () => ({ posX: 10, posY: 20 }));
-      expect(backend.cards.create).toHaveBeenCalledWith("ns-1", {
+      expect(client.cards.create).toHaveBeenCalledWith("ns-1", {
         partitionId: "p1",
         content: "c3",
         posX: 10,
@@ -202,7 +202,7 @@ describe("createClientBoardPersistence", () => {
       const s = state();
       s.sidebar.activeScope = "s1";
       const created = card("c3", { posX: 10, posY: 20, zIndex: 5 });
-      backend.cards.create.mockImplementationOnce(async () => {
+      client.cards.create.mockImplementationOnce(async () => {
         await Promise.resolve();
         s.cards = [card("c1"), card("c3")];
         s.scopeRels = [{ scopeId: "s1", cardId: "c3" }];
@@ -215,8 +215,8 @@ describe("createClientBoardPersistence", () => {
     });
     it("refuses a created card whose answer is not a row", async () => {
       const s = state();
-      // @ts-expect-error Exercise a noncompliant custom backend's malformed result.
-      backend.cards.create.mockResolvedValueOnce({});
+      // @ts-expect-error Exercise a noncompliant custom client's malformed result.
+      client.cards.create.mockResolvedValueOnce({});
       await persistence(s).submitComposer(null, "x", "p1", () => ({ posX: 0, posY: 0 }));
       expect(s.lastError).toBe("Failed to create card");
       expect(s.cards).toEqual([]);
@@ -225,7 +225,7 @@ describe("createClientBoardPersistence", () => {
       const s = state();
       s.cards = [card("c1")];
       let finish!: (value: Awaited<ReturnType<KozaneClient["cards"]["update"]>>) => void;
-      backend.cards.update.mockReturnValueOnce(
+      client.cards.update.mockReturnValueOnce(
         new Promise((resolve) => {
           finish = resolve;
         }),

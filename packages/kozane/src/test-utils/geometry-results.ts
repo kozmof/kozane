@@ -4,7 +4,7 @@ import type {
   ScopeCreateAreaResult,
   WarpCreateResult,
 } from "../../../client/src/client/index.js";
-/** Complete service-shaped results used by backend transport and decoder tests. */
+/** Complete service-shaped results used by client transport and decoder tests. */
 export const geometryResults = {
   "scopes.create": { id: "s" } satisfies ScopeCreateResult,
   "scopes.rename": { id: "s", name: "Scope" } satisfies ScopeRenameResult,

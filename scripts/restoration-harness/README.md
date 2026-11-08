@@ -153,5 +153,5 @@ incompatible-copy fallback and sample validation before deletion. Unknown IDs bl
 A current-ID producer cohort is mandatory, so a migration change cannot pass with only
 fallback cases. No retained fixture or expectation is rewritten for a new candidate.
 Basic `run()` cases close their candidate after reporting validation. Retained cases
-keep it until `close()`. The persistent editing backend is implemented in Phase 4.
+keep it until `close()`. The persistent editing client is implemented in Phase 4.
 See the [web demo tasks](../../docs/web-demo-tasks.md) and [specification](../../docs/web-demo-specification.md).

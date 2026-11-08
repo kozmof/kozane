@@ -10,8 +10,8 @@
   import { css } from "../styles/css.js";
   import NavIcon from "../components/NavIcon.svelte";
 
-  let { backend, initialNamespaces, navigation, workspaceName = null, workspaceLabel = "Kozane", formError = null, lifetimeNotice, createAction, emptyState, retryIntervalMs = 1000 }: {
-    backend: NamespacesViewClient;
+  let { client, initialNamespaces, navigation, workspaceName = null, workspaceLabel = "Kozane", formError = null, lifetimeNotice, createAction, emptyState, retryIntervalMs = 1000 }: {
+    client: NamespacesViewClient;
     initialNamespaces: NamespaceGetResult[];
     navigation: NavigationAdapter;
     workspaceName?: string | null;
@@ -26,7 +26,7 @@
     retryIntervalMs?: number | false;
   } = $props();
   let refreshAttempt = $state(0);
-  const index = $derived(new NamespaceIndex(backend, initialNamespaces));
+  const index = $derived(new NamespaceIndex(client, initialNamespaces));
   $effect(() => {
     const current = index;
     // oxlint-disable-next-line no-unused-expressions
@@ -37,9 +37,9 @@
   async function createNamespace(event: SubmitEvent) {
     event.preventDefault();
     const current = index;
-    const generation = backend.version.generation;
+    const generation = client.version.generation;
     const created = await current.create(nameInput?.value ?? "");
-    if (current !== index || generation !== backend.version.generation || backend.state.status !== "ready") return;
+    if (current !== index || generation !== client.version.generation || client.state.status !== "ready") return;
     if (created) {
       if (nameInput) nameInput.value = "";
     }
@@ -90,11 +90,11 @@
     </nav>
   </div>
 
-  <ClientNotice capabilities={backend.capabilities} {lifetimeNotice} />
-  <RefreshNotice {backend} failed={index.refreshError !== null} message="Could not refresh namespaces. Showing the last results." retry={() => refreshAttempt++} />
+  <ClientNotice capabilities={client.capabilities} {lifetimeNotice} />
+  <RefreshNotice {client} failed={index.refreshError !== null} message="Could not refresh namespaces. Showing the last results." retry={() => refreshAttempt++} />
 
   {#if index.namespaces.length === 0}
-    {#if !backend.capabilities.writable && emptyState}
+    {#if !client.capabilities.writable && emptyState}
       <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>{@render emptyState()}</p>
     {:else}
       <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>No namespaces yet.</p>
@@ -149,7 +149,7 @@
     </ul>
   {/if}
 
-  {#if backend.capabilities.writable}
+  {#if client.capabilities.writable}
     <form
       method="POST"
       action={createAction}
@@ -180,7 +180,7 @@
         />
         <button
           type="submit"
-          disabled={index.submitting || !backend.capabilities.writable || !index.current}
+          disabled={index.submitting || !client.capabilities.writable || !index.current}
           title="Create namespace"
           aria-label="Create namespace"
           class={css({
