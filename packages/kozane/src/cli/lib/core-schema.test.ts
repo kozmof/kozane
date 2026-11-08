@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
+import * as coreSchema from "@kozane/core/schema";
 import { createClient } from "@libsql/client";
 import { openDb, type OpenedDb } from "../../db/client.js";
 import { fileDbUrl } from "../../lib/db-url.js";
@@ -161,7 +162,7 @@ it("accepts formatting, escaped names, default spacing and SQLite-owned statisti
 it("propagates read failures without labeling them as schema defects", async () => {
   const failure = new Error("connection lost");
   const db = createDatabaseAdapter(
-    drizzle(async () => ({ rows: [] })),
+    drizzle(async () => ({ rows: [] }), { schema: coreSchema }),
     {
       write: async () => {
         throw failure;

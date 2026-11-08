@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
+import * as coreSchema from "@kozane/core/schema";
 import { openDb, type OpenedDb } from "../../db/client.js";
 import { createDatabaseAdapter } from "../../db/database.js";
 import { fileDbUrl } from "../../lib/db-url.js";
@@ -94,7 +95,7 @@ it("rolls back a late batch failure, restores foreign keys and allows an explici
 });
 it("rejects an unsupported adapter before preparation", async () => {
   const run = vi.fn();
-  const handle = drizzle(run);
+  const handle = drizzle(run, { schema: coreSchema });
   const db = createDatabaseAdapter(handle, {
     write: (operation) => operation(handle),
     read: (operation) => operation(handle),
@@ -124,7 +125,7 @@ it("upgrades a valid older prefix without rewriting existing history", async () 
 });
 
 it("rejects invalid hooks and duplicate registration without replacing the adapter", async () => {
-  const handle = drizzle(async () => ({ rows: [] }));
+  const handle = drizzle(async () => ({ rows: [] }), { schema: coreSchema });
   const write = vi.fn();
   const read = vi.fn();
   expect(() => createDatabaseAdapter(handle, { write, read: undefined! })).toThrow(TypeError);
