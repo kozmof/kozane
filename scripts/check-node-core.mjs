@@ -222,12 +222,30 @@ if (!process.execArgv.includes(flag)) {
     assert.equal(legacyErrors[name], core[name]);
   for (const name of ["NotFoundError", "DefaultPartitionError", "DefaultLayerError"])
     assert.equal(legacyUtils[name], core[name]);
-  const handle = {};
+  const handle = {
+    query: {},
+    ...Object.fromEntries(
+      ["select", "selectDistinct", "all", "get", "values"].map((method) => [
+        method,
+        function () {
+          return this;
+        },
+      ]),
+    ),
+  };
   const db = legacyDb.createDatabaseAdapter(handle, {
     read: (operation) => operation(handle),
     write: (operation) => operation(handle),
   });
-  assert.equal(await database.withReadTx(db, async (tx) => tx), handle);
+  await database.withReadTx(db, async (tx) => {
+    assert.notEqual(tx, handle);
+    assert.ok(Object.isFrozen(tx));
+    assert.equal(tx.query, handle.query);
+    for (const method of ["select", "selectDistinct", "all", "get", "values"])
+      assert.equal(tx[method](), handle, "Read methods retain their database receiver");
+    assert.equal(tx.insert, undefined);
+    assert.equal(tx.transaction, undefined);
+  });
   assert.equal(await legacyDb.withTx(db, async (tx) => tx), handle);
   assert.throws(() => legacyDb.createServiceContext({ contentMax: 0 }), core.ValidationError);
   console.log("Node package uses the expected public core runtime and client UI configuration.");
