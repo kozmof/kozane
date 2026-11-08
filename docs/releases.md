@@ -8,7 +8,7 @@ The packages publish in dependency order as core, client and the unscoped CLI. C
 
 Run `pnpm changeset` for a public package change. Core API signature or result changes require a minor bump during 0.x and a major bump during 1.x. Include a client change when it adopts a changed core API.
 
-Run `pnpm release:status` to review the plan. Run `pnpm release:version` to update package versions and changelogs and refresh the lockfile. Review formatting and commit the resulting files. The initial candidate versions are core 0.1.0, client 0.1.0 and kozane 0.22.0.
+Run `pnpm release:status` to review the plan. Run `pnpm release:version` to update package versions and refresh the lockfile. Review formatting and commit the resulting files. The initial candidate versions are core 0.1.0, client 0.1.0 and kozane 0.22.0.
 
 ## Release with one command
 
