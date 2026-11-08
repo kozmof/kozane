@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { findStaticNode, staticDirectoryEntries } from "./taskspace-static.js";
-import type { TaskspaceFileNode, TaskspaceFileTree } from "$lib/types";
+import { findStaticNode, staticDirectoryEntries } from "../../src/backend/static-files.js";
+import type { TaskspaceFileNode, TaskspaceFileTree } from "@kozane/core";
 
 function directory(
   name: string,

@@ -53,3 +53,24 @@ test("one build produces three archives and verification reuses them without lif
     rmSync(repository, { recursive: true, force: true });
   }
 });
+
+import { verificationOptions } from "./verification-options.mjs";
+import { resolve } from "node:path";
+test("verification distinguishes retained candidates from reused archives and temporary outputs", () => {
+  assert.deepEqual(verificationOptions([]), { mode: "temporary" });
+  assert.deepEqual(verificationOptions(["--output=tmp/candidate"]), {
+    mode: "retain",
+    directory: resolve("tmp/candidate"),
+  });
+  assert.deepEqual(verificationOptions(["--artifacts=tmp/candidate"]), {
+    mode: "reuse",
+    directory: resolve("tmp/candidate"),
+  });
+  for (const args of [
+    ["--output="],
+    ["--artifacts="],
+    ["--unknown"],
+    ["--output=x", "--artifacts=y"],
+  ])
+    assert.throws(() => verificationOptions(args), /Usage/);
+});

@@ -1,4 +1,4 @@
-import { httpErrorFromDb } from "../[namespaceId]/lib/api-handler.js";
+import { httpErrorFromDb } from "$lib/server/http/api-handler.js";
 import type { PageServerLoad } from "./$types";
 import * as namespacesService from "../../services/namespaces.js";
 import { displayMetadata } from "../../services/tags.js";

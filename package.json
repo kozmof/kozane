@@ -73,7 +73,8 @@
     "db:generate": "pnpm --filter kozane db:generate && pnpm --filter @kozane/core migrations:refresh",
     "test:coverage:source": "TMPDIR=/tmp vitest run --config vitest.source.config.ts --coverage",
     "test:packages": "node scripts/check-core-package.mjs --client-package",
-    "check:app-imports": "node scripts/check-app-package-imports.mjs"
+    "check:app-imports": "node scripts/check-app-package-imports.mjs",
+    "build:packages": "node scripts/pack-workspace.mjs"
   },
   "dependencies": {
     "@kozane/client": "workspace:0.1.0",

@@ -231,7 +231,7 @@
     },
     {
       // A test may reach for `any` to build a malformed payload the types forbid — which is
-      // exactly what the route guards in `lib/request.ts` exist to reject.
+      // exactly what core validation and HTTP boundary checks exist to reject.
       "files": ["**/*.test.ts", "**/*.spec.ts", "packages/kozane/src/test-utils/**"],
       "rules": { "typescript/no-explicit-any": "off" }
     }

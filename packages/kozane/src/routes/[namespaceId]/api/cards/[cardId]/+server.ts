@@ -1,8 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
 import { workspaceServiceContext } from "$lib/server/service-context";
-import { readJsonObject } from "../../../lib/request.js";
-import { apiHandler } from "../../../lib/api-handler.js";
+import { readJsonObject } from "$lib/server/http/request.js";
+import { apiHandler } from "$lib/server/http/api-handler.js";
 import { update, removeOne } from "../../../../../services/cards.js";
 export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) =>
   json(

@@ -1,5 +1,3 @@
-import { prepareInput } from "@kozane/core/services";
-import { ValidationError } from "@kozane/core";
 import { ClientError, type ClientErrorCode } from "./contract.js";
 
 const DOMAIN_CODES = new Set<ClientErrorCode>([
@@ -83,15 +81,8 @@ export class HttpTransport {
     } = {},
   ): Promise<Response> {
     options.signal?.throwIfAborted();
-    let body: string | undefined;
-    if (input !== undefined) {
-      try {
-        body = JSON.stringify(prepareInput(input));
-      } catch (error) {
-        if (error instanceof ValidationError) throw new ClientError("validation", error.message);
-        throw error;
-      }
-    }
+    // HttpClient supplies a prepared JSON-compatible copy. Transport only encodes it.
+    const body = input === undefined ? undefined : JSON.stringify(input);
     const remaining = this.retryAfterMs;
     if (remaining > 0)
       throw new ClientError("rate_limited", MESSAGES.rate_limited, { retryAfterMs: remaining });

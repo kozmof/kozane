@@ -156,3 +156,23 @@ it("forwards cancellation and rejects malformed committed JSON without retry", a
   expect(fetcher).toHaveBeenCalledTimes(2);
   expect(backend.version.revision).toBe(1);
 });
+
+it("rejects non-JSON taskspace inputs before dispatch without invoking accessors", async () => {
+  const getter = vi.fn(() => "must not run");
+  const input = Object.defineProperty({ path: "notes.md", signature: null }, "content", {
+    enumerable: true,
+    get: getter,
+  });
+  const fetcher = vi.fn();
+  const backend = new HttpClient({ capabilities, fetcher });
+  await expect(
+    backend.taskspaces!.saveFile(
+      ns,
+      id,
+      input as { path: string; content: string; signature: null },
+    ),
+  ).rejects.toMatchObject({ code: "validation" });
+  expect(getter).not.toHaveBeenCalled();
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(backend.version.revision).toBe(0);
+});

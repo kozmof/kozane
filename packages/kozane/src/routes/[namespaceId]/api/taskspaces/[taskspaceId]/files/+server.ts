@@ -1,8 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
 import * as service from "$lib/server/taskspace-service/files";
-import { readJsonObject } from "../../../../lib/request.js";
-import { apiHandler } from "../../../../lib/api-handler.js";
+import { readJsonObject } from "$lib/server/http/request.js";
+import { apiHandler } from "$lib/server/http/api-handler.js";
 export const GET: RequestHandler = apiHandler(async ({ locals, params, url }) =>
   json(await service.listDirectory(locals, params, url.searchParams.get("path"))),
 );

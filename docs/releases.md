@@ -57,3 +57,14 @@ Retain the prepared manifest and registry verification output as release evidenc
 Run `pnpm verify` to build and pack once, then check the prepared outputs. Source unit tests use `vitest.source.config.ts` and source aliases. Installed-package tests use `vitest.package.config.ts` without source aliases. Run `pnpm test:packages` to prepare an isolated installation and run its public runtime tests.
 
 Normal builds check committed migration records and schema without rewriting them. After editing the application schema, run `pnpm db:generate`, review the SQL and generated core inputs, and commit them together.
+
+Retain a verified candidate when later checks need the same archives.
+
+```sh
+pnpm verify --output=tmp/verified-packages
+pnpm smoke:package --artifacts=tmp/verified-packages
+```
+
+The verifier checks that its prepared archive hashes remain unchanged. Pass `--artifacts=<directory>` to verify existing archives without rebuilding. Run `pnpm build:packages --output=tmp/packages` to build and pack a candidate without running verification.
+
+Each CI verification job retains its candidate and passes those archives to package smoke checks. The browser job builds its own candidate once, compiles both harnesses from those archives and runs the suites without rebuilding packages. Jobs remain independent so the Node versions and browser checks can run in parallel. These are test workflows. Publication continues through the local release flow.

@@ -4,7 +4,6 @@ import {
   retryAfterMilliseconds,
   KEEPALIVE_BYTES_MAX,
 } from "../../src/backend/http-transport.js";
-import { INPUT_VALIDATION_MESSAGE } from "../../../kozane/src/services/prepare-input.js";
 const jsonError = (status: number, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify({ message: "existing wording" }), {
     status,
@@ -73,14 +72,9 @@ it("shares a monotonic throttle deadline without retaining rejected mutations", 
   await transport.request("/read");
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
-it("prepares input before dispatch and applies the UTF-8 keepalive byte guard", async () => {
+it("encodes prepared bodies and applies the UTF-8 keepalive byte guard", async () => {
   const fetcher = vi.fn().mockImplementation(async () => new Response("ok"));
   const transport = new HttpTransport((path) => path, { fetcher });
-  await expect(transport.request("/write", "POST", { invalid: NaN })).rejects.toMatchObject({
-    code: "validation",
-    message: INPUT_VALIDATION_MESSAGE,
-  });
-  expect(fetcher).not.toHaveBeenCalled();
   for (const content of ["small", "界".repeat(KEEPALIVE_BYTES_MAX / 2)])
     await transport.request("/write", "POST", { content }, { keepalive: true });
   expect(fetcher.mock.calls[0][1].keepalive).toBe(true);

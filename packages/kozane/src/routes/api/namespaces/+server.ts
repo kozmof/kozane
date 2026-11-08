@@ -2,8 +2,8 @@ import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
 import * as namespaces from "../../../services/namespaces.js";
 import { workspaceServiceContext } from "$lib/server/service-context";
-import { apiHandler } from "../../[namespaceId]/lib/api-handler.js";
-import { readJsonObject } from "../../[namespaceId]/lib/request.js";
+import { apiHandler } from "$lib/server/http/api-handler.js";
+import { readJsonObject } from "$lib/server/http/request.js";
 export const GET: RequestHandler = apiHandler(async ({ locals }) =>
   json(await namespaces.list(locals.db, workspaceServiceContext())),
 );

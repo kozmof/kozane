@@ -18,7 +18,7 @@ import type { DB } from "$db/tx.js";
 import { _resetWorkspaceRootForTest } from "$db/internal/config.js";
 import { createTestDB } from "../../../test-utils/db.js";
 import { loadNamespaceSnapshot } from "./namespace-snapshot.js";
-import { readNamespaceSnapshot } from "./snapshot-reader.js";
+import { readNamespaceSnapshot } from "@kozane/client/host";
 
 /** Card fields returned in a board snapshot, matching `CardData`. */
 const CARD_KEYS = [

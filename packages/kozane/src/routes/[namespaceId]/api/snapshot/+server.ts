@@ -9,7 +9,7 @@ import {
   unchangedSnapshotEtag,
 } from "$lib/server/snapshot-etag";
 import { loadNamespaceSnapshot } from "../../lib/namespace-snapshot.js";
-import { apiHandler } from "../../lib/api-handler.js";
+import { apiHandler } from "$lib/server/http/api-handler.js";
 
 export const GET: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { namespaceId } = params;

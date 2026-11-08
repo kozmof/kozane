@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { error, isHttpError } from "@sveltejs/kit";
 import { DefaultLayerError, DefaultPartitionError, NotFoundError } from "$db/api/utils";
-import { API_HANDLER, apiHandler, httpErrorFromDb } from "./api-handler.js";
+import { API_HANDLER, apiHandler, httpErrorFromDb } from "$lib/server/http/api-handler.js";
 
 function sqliteError(message: string): Error {
   return new Error("SQLITE_CONSTRAINT", { cause: new Error(message) });
@@ -82,10 +82,13 @@ describe("apiHandler", () => {
   });
 });
 
-describe("namespace API routes", () => {
-  const routes = import.meta.glob<Record<string, unknown>>("../api/**/+server.ts", {
-    eager: true,
-  });
+describe("HTTP API routes", () => {
+  const routes = import.meta.glob<Record<string, unknown>>(
+    ["../../../routes/*/api/**/+server.ts", "../../../routes/api/**/+server.ts"],
+    {
+      eager: true,
+    },
+  );
 
   it("finds the route modules", () => {
     expect(Object.keys(routes).length).toBeGreaterThan(20);

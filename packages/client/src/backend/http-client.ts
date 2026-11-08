@@ -2,58 +2,31 @@ import type {
   KozaneClient,
   ManagedClient,
   MutationOptions,
-  ReadOptions,
   SnapshotReadOptions,
 } from "./contract.js";
-export type { MutationOptions } from "./contract.js";
 import type { TaskspaceLifecycleApi } from "./contract.js";
 import { WorkspacePoller, browserPollLifecycle, type PollLifecycle } from "./workspace-poller.js";
-import { readNamespaceList, readNamespaceMetadata } from "./decoders/namespaces.js";
-import { parseWarpEntries } from "./decoders/warp-directory.js";
-import {
-  readTaskspaceCreated,
-  readTaskspaceRenamed,
-  readTaskspaceRemoved,
-  readTaskspaceFile,
-  readTaskspaceEntryResult,
-  readTaskspaceListing,
-} from "./decoders/taskspaces.js";
-import {
-  readMutationOk,
-  readCreatedId,
-  readNamespaceCreated,
-  readLayerCreated,
-  readLayerRemoved,
-  readPartitionRemoved,
-} from "./decoders/structure.js";
-import { readScopeRenamed, readScopeAreaResult, readWarpResult } from "./decoders/geometry.js";
-import {
-  readInventoryResult,
-  readInventoryRemoved,
-  readInventoryStowed,
-  readInventoryTaken,
-} from "./decoders/inventories.js";
 import { prepareInput } from "@kozane/core/services";
 import { ValidationError } from "@kozane/core";
-import {
-  readCardCreated,
-  readCardUpdated,
-  readCardStacked,
-  readCardSquashed,
-  readGlueCreated,
-  readGlueRemoved,
-} from "./decoders/cards.js";
-import { readTagsViewData } from "./decoders/tags.js";
-import { readMapSnapshot } from "./decoders/map.js";
 import { SnapshotValidators } from "./snapshot-validators.js";
 import { readNamespaceSnapshot } from "./decoders/snapshot-reader.js";
 import type { SnapshotResult } from "./contract.js";
 import { ClientError, type ClientCapabilities, type ClientDataset } from "./contract.js";
 import { ClientSignals } from "./signals.js";
 import { HttpTransport, type HttpTransportOptions } from "./http-transport.js";
-
+import type { HttpResourceContext } from "./http/context.js";
+import { createNamespaces } from "./http/namespaces.js";
+import { createCards } from "./http/cards.js";
+import { createGlues } from "./http/glues.js";
+import { createLayers } from "./http/layers.js";
+import { createPartitions } from "./http/partitions.js";
+import { createScopes } from "./http/scopes.js";
+import { createWarps } from "./http/warps.js";
+import { createInventories } from "./http/inventories.js";
+import { createTags, createMap, createWarpDirectory } from "./http/datasets.js";
+import { createTaskspaces } from "./http/taskspaces.js";
+export type { MutationOptions } from "./contract.js";
 const ALL: readonly ClientDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
-
 /** HTTP implementation of the shared backend data and lifecycle contract. */
 export class HttpClient implements ManagedClient {
   private disposed = false;
@@ -63,6 +36,15 @@ export class HttpClient implements ManagedClient {
   private readonly signals = new ClientSignals({ status: "ready" });
   private readonly transport: HttpTransport;
   private readonly poller?: WorkspacePoller;
+  private readonly resourceContext: HttpResourceContext = {
+    ns: this.ns.bind(this),
+    read: this.read.bind(this),
+    readTaskspace: this.readTaskspace.bind(this),
+    writeTaskspace: this.writeTaskspace.bind(this),
+    writeDomain: this.writeDomain.bind(this),
+    capabilities: () => this.capabilities,
+    disposed: () => this.disposed,
+  };
   constructor(
     options: HttpTransportOptions & {
       base?: string;
@@ -79,7 +61,9 @@ export class HttpClient implements ManagedClient {
         initialDelayMs: options.pollingInitialDelayMs,
         throttleMs: () => this.transport.retryAfterMs,
         token: async () => {
-          const value = await this.read<{ token?: unknown }>("/api/changes");
+          const value = await this.read<{
+            token?: unknown;
+          }>("/api/changes");
           if (typeof value.token !== "string" || !value.token)
             throw new ClientError("unavailable", "Invalid change token");
           return value.token;
@@ -141,7 +125,10 @@ export class HttpClient implements ManagedClient {
   }
   private async read<T>(
     path: string,
-    options?: { signal?: AbortSignal; cache?: RequestInit["cache"] },
+    options?: {
+      signal?: AbortSignal;
+      cache?: RequestInit["cache"];
+    },
   ): Promise<T> {
     const signal = this.readSignal(options?.signal);
     signal.throwIfAborted();
@@ -194,7 +181,9 @@ export class HttpClient implements ManagedClient {
   private async readTaskspace<T>(
     path: string,
     decode: (value: unknown) => T | null,
-    options?: { signal?: AbortSignal },
+    options?: {
+      signal?: AbortSignal;
+    },
   ): Promise<T> {
     return this.checked(await this.read<unknown>(path, options), decode);
   }
@@ -206,7 +195,23 @@ export class HttpClient implements ManagedClient {
     options?: MutationOptions,
   ): Promise<T> {
     // Preserve committed invalidation even when a successful response has malformed fields.
-    return this.checked(await this.write<unknown>(path, method, input, options), decode);
+    return this.checked(
+      await this.write<unknown>(path, method, this.prepareMutation(input), options),
+      decode,
+    );
+  }
+  /** Copy once at the client boundary, before encoding or checking response semantics. */
+  private prepareMutation<Input>(input: Input): Input {
+    this.assertActive();
+    if (!this.capabilities.writable)
+      throw new ClientError("read_only", "This backend is read-only");
+    if (input === undefined) return input;
+    try {
+      return prepareInput(input);
+    } catch (error) {
+      if (error instanceof ValidationError) throw new ClientError("validation", error.message);
+      throw error;
+    }
   }
   private async writeDomain<T, Input>(
     path: string,
@@ -215,257 +220,21 @@ export class HttpClient implements ManagedClient {
     decode: (value: unknown, input: Input) => T | null,
     options?: MutationOptions,
   ): Promise<T> {
-    this.assertActive();
-    if (!this.capabilities.writable)
-      throw new ClientError("read_only", "This backend is read-only");
-    let prepared = input;
-    if (input !== undefined) {
-      try {
-        prepared = prepareInput(input);
-      } catch (error) {
-        if (error instanceof ValidationError) throw new ClientError("validation", error.message);
-        throw error;
-      }
-    }
+    const prepared = this.prepareMutation(input);
     return this.checked(
       await this.write<unknown>(path, method, prepared, options),
       (value) => decode(value, prepared),
       "Invalid mutation response",
     );
   }
-  readonly namespaces: KozaneClient["namespaces"] = {
-    list: async (options) => {
-      const result = readNamespaceList(await this.read<unknown>("/api/namespaces", options));
-      if (!result) throw new ClientError("unavailable", "Invalid namespace list");
-      return result;
-    },
-    get: async (namespaceId: string, options?: ReadOptions) => {
-      const result = readNamespaceMetadata(
-        await this.read<unknown>(`/api/namespaces/${encodeURIComponent(namespaceId)}`, options),
-      );
-      if (!result || result.id !== namespaceId)
-        throw new ClientError("unavailable", "Invalid namespace metadata");
-      return result;
-    },
-    create: (input: { name: string }) =>
-      this.writeDomain("/api/namespaces", "POST", input, readNamespaceCreated),
-  };
-  readonly cards: KozaneClient["cards"] = {
-    create: (ns, input, options) =>
-      this.writeDomain(this.ns(ns, "/cards"), "POST", input, readCardCreated, options),
-    update: (ns, id, input, options) =>
-      this.writeDomain(
-        this.ns(ns, `/cards/${encodeURIComponent(id)}`),
-        "PATCH",
-        input,
-        (value, prepared) => readCardUpdated(value, id, prepared),
-        options,
-      ),
-    updatePositions: (ns, input, options) =>
-      this.writeDomain(this.ns(ns, "/cards"), "PATCH", input, readMutationOk, options),
-    remove: (ns, input) => this.writeDomain(this.ns(ns, "/cards"), "DELETE", input, readMutationOk),
-    removeOne: (ns, id) =>
-      this.writeDomain(
-        this.ns(ns, `/cards/${encodeURIComponent(id)}`),
-        "DELETE",
-        undefined,
-        readMutationOk,
-      ),
-    move: (ns, input) =>
-      this.writeDomain(this.ns(ns, "/cards/move"), "POST", input, readMutationOk),
-    setLayer: (ns, input) =>
-      this.writeDomain(this.ns(ns, "/cards/layer"), "PATCH", input, readCardStacked),
-    setPartition: (ns, input) =>
-      this.writeDomain(this.ns(ns, "/cards/partition"), "PATCH", input, readMutationOk),
-    setStacking: (ns, input) =>
-      this.writeDomain(this.ns(ns, "/cards/stacking"), "PATCH", input, readCardStacked),
-    squash: (ns, input) =>
-      this.writeDomain(this.ns(ns, "/cards/squash"), "POST", input, (value) =>
-        readCardSquashed(value, ns),
-      ),
-  };
-  readonly glues: KozaneClient["glues"] = {
-    create: (ns, input, options) =>
-      this.writeDomain(this.ns(ns, "/glues"), "POST", input, readGlueCreated, options),
-    remove: (ns, input, options) =>
-      this.writeDomain(this.ns(ns, "/glues"), "DELETE", input, readGlueRemoved, options),
-  };
-
-  readonly layers: KozaneClient["layers"] = {
-    create: (ns: string, input, options?: MutationOptions) =>
-      this.writeDomain(this.ns(ns, "/layers"), "POST", input, readLayerCreated, options),
-    rename: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/layers/${encodeURIComponent(id)}`),
-        "PATCH",
-        input,
-        readMutationOk,
-        options,
-      ),
-    remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/layers/${encodeURIComponent(id)}`),
-        "DELETE",
-        undefined,
-        readLayerRemoved,
-        options,
-      ),
-    reorder: (ns: string, input, options?: MutationOptions) =>
-      this.writeDomain(this.ns(ns, "/layers"), "PATCH", input, readMutationOk, options),
-  };
-
-  readonly partitions: KozaneClient["partitions"] = {
-    create: (ns: string, input, options?: MutationOptions) =>
-      this.writeDomain(this.ns(ns, "/partitions"), "POST", input, readCreatedId, options),
-    rename: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/partitions/${encodeURIComponent(id)}`),
-        "PATCH",
-        input,
-        readMutationOk,
-        options,
-      ),
-    remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/partitions/${encodeURIComponent(id)}`),
-        "DELETE",
-        undefined,
-        readPartitionRemoved,
-        options,
-      ),
-  };
-
-  readonly scopes: KozaneClient["scopes"] = {
-    create: (ns: string, input, options?: MutationOptions) =>
-      this.writeDomain(this.ns(ns, "/scopes"), "POST", input, readCreatedId, options),
-    rename: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/scopes/${encodeURIComponent(id)}`),
-        "PATCH",
-        input,
-        (value) => readScopeRenamed(value, id),
-        options,
-      ),
-    remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/scopes/${encodeURIComponent(id)}`),
-        "DELETE",
-        undefined,
-        readMutationOk,
-        options,
-      ),
-    addMembers: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/scopes/${encodeURIComponent(id)}/members`),
-        "POST",
-        input,
-        readMutationOk,
-        options,
-      ),
-    removeMembers: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/scopes/${encodeURIComponent(id)}/members`),
-        "DELETE",
-        input,
-        readMutationOk,
-        options,
-      ),
-    createArea: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/scopes/${encodeURIComponent(id)}/areas`),
-        "POST",
-        input,
-        (value) => readScopeAreaResult(value, ns, id),
-        options,
-      ),
-    updateArea: (ns: string, id: string, areaId: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/scopes/${encodeURIComponent(id)}/areas/${encodeURIComponent(areaId)}`),
-        "PATCH",
-        input,
-        (value) => readScopeAreaResult(value, ns, id, areaId),
-        options,
-      ),
-    removeArea: (ns: string, id: string, areaId: string, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/scopes/${encodeURIComponent(id)}/areas/${encodeURIComponent(areaId)}`),
-        "DELETE",
-        undefined,
-        readMutationOk,
-        options,
-      ),
-  };
-
-  readonly warps: KozaneClient["warps"] = {
-    create: (ns: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, "/warps"),
-        "POST",
-        input,
-        (value) => readWarpResult(value, ns),
-        options,
-      ),
-    update: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/warps/${encodeURIComponent(id)}`),
-        "PATCH",
-        input,
-        (value) => readWarpResult(value, ns, id),
-        options,
-      ),
-    remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/warps/${encodeURIComponent(id)}`),
-        "DELETE",
-        undefined,
-        readMutationOk,
-        options,
-      ),
-  };
-
-  readonly inventories: KozaneClient["inventories"] = {
-    create: (ns: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, "/inventories"),
-        "POST",
-        input,
-        (value) => readInventoryResult(value, ns),
-        options,
-      ),
-    update: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/inventories/${encodeURIComponent(id)}`),
-        "PATCH",
-        input,
-        (value) => readInventoryResult(value, ns, id),
-        options,
-      ),
-    remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/inventories/${encodeURIComponent(id)}`),
-        "DELETE",
-        undefined,
-        readInventoryRemoved,
-        options,
-      ),
-    stow: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, `/inventories/${encodeURIComponent(id)}/cards`),
-        "POST",
-        input,
-        (value) => readInventoryStowed(value, id),
-        options,
-      ),
-    take: (ns: string, input, options?: MutationOptions) =>
-      this.writeDomain(
-        this.ns(ns, "/inventories/take"),
-        "POST",
-        input,
-        readInventoryTaken,
-        options,
-      ),
-  };
-
+  readonly namespaces: KozaneClient["namespaces"] = createNamespaces(this.resourceContext);
+  readonly cards: KozaneClient["cards"] = createCards(this.resourceContext);
+  readonly glues: KozaneClient["glues"] = createGlues(this.resourceContext);
+  readonly layers: KozaneClient["layers"] = createLayers(this.resourceContext);
+  readonly partitions: KozaneClient["partitions"] = createPartitions(this.resourceContext);
+  readonly scopes: KozaneClient["scopes"] = createScopes(this.resourceContext);
+  readonly warps: KozaneClient["warps"] = createWarps(this.resourceContext);
+  readonly inventories: KozaneClient["inventories"] = createInventories(this.resourceContext);
   private readonly validators = new SnapshotValidators();
   async snapshot(namespaceId: string, options: SnapshotReadOptions = {}): Promise<SnapshotResult> {
     const signal = this.readSignal(options.signal);
@@ -513,113 +282,10 @@ export class HttpClient implements ManagedClient {
       options.validator,
     );
   }
-
-  readonly tags: KozaneClient["tags"] = {
-    get: async (namespaceId?: string, options?: ReadOptions) => {
-      const result = readTagsViewData(
-        await this.read<unknown>(
-          "/api/tags" +
-            (namespaceId !== undefined ? "?namespaceId=" + encodeURIComponent(namespaceId) : ""),
-          { ...options, cache: "no-store" },
-        ),
-      );
-      if (!result) throw new ClientError("unavailable", "Invalid tags dataset");
-      return result;
-    },
-  };
-  readonly map: KozaneClient["map"] = {
-    get: async (options) => {
-      const result = readMapSnapshot(
-        await this.read<unknown>("/api/map", { ...options, cache: "no-store" }),
-      );
-      if (!result) throw new ClientError("unavailable", "Invalid map dataset");
-      return result;
-    },
-  };
-  readonly warpDirectory: KozaneClient["warpDirectory"] = {
-    get: async (namespaceId: string, options?: ReadOptions) => {
-      const result = parseWarpEntries(
-        await this.read<unknown>(this.ns(namespaceId, "/warp-directory"), options),
-      );
-      if (!result) throw new ClientError("unavailable", "Invalid warp directory");
-      return result;
-    },
-  };
-
-  private readonly taskspaceApi: TaskspaceLifecycleApi = {
-    access: (_namespaceId, taskspace) => {
-      const browse = !this.disposed && this.capabilities.taskspaces && taskspace.path !== null;
-      const write = browse && this.capabilities.writable;
-      return { browse, read: write, write, refresh: write && this.capabilities.externalWrites };
-    },
-    readFile: (ns, id, path, options) =>
-      this.readTaskspace(
-        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file?path=${encodeURIComponent(path)}`),
-        readTaskspaceFile,
-        options,
-      ),
-    saveFile: (ns, id, input, options) =>
-      this.writeTaskspace(
-        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file`),
-        "PUT",
-        input,
-        readTaskspaceFile,
-        options,
-      ),
-    list: (ns, id, path, options) =>
-      this.readTaskspace(
-        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`),
-        readTaskspaceListing,
-        options,
-      ),
-    createDirectory: (ns, id, input) =>
-      this.writeTaskspace(
-        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files`),
-        "POST",
-        input,
-        readTaskspaceListing,
-      ),
-    renameEntry: (ns, id, input) =>
-      this.writeTaskspace(
-        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files`),
-        "PATCH",
-        input,
-        readTaskspaceEntryResult,
-      ),
-    removeEntry: (ns, id, path) =>
-      this.writeTaskspace(
-        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`),
-        "DELETE",
-        undefined,
-        readTaskspaceEntryResult,
-      ),
-    create: (ns, input) =>
-      this.writeTaskspace(this.ns(ns, "/taskspaces"), "POST", input, readTaskspaceCreated),
-    rename: async (ns, id, input) => {
-      const result = await this.writeTaskspace(
-        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}`),
-        "PATCH",
-        input,
-        readTaskspaceRenamed,
-      );
-      if (result.id !== id) throw new ClientError("unavailable", "Invalid taskspace response");
-      return result;
-    },
-    remove: (ns, id) =>
-      this.writeTaskspace(
-        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}`),
-        "DELETE",
-        undefined,
-        readTaskspaceRemoved,
-      ),
-    createFile: (ns, id, input) =>
-      this.writeTaskspace(
-        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file`),
-        "POST",
-        input,
-        readTaskspaceFile,
-      ),
-  };
+  readonly tags: KozaneClient["tags"] = createTags(this.resourceContext);
+  readonly map: KozaneClient["map"] = createMap(this.resourceContext);
+  readonly warpDirectory: KozaneClient["warpDirectory"] = createWarpDirectory(this.resourceContext);
+  private readonly taskspaceApi: TaskspaceLifecycleApi = createTaskspaces(this.resourceContext);
   get taskspaces(): TaskspaceLifecycleApi | undefined {
     return this.capabilities.taskspaces ? this.taskspaceApi : undefined;
   }

@@ -1,5 +1,7 @@
 # HTTP error compatibility
 
+Shared Node HTTP utilities live under `packages/kozane/src/lib/server/http`. Routes use the same error adapter and JSON-object reader. Domain validation stays in core services.
+
 Domain codes travel in `X-Kozane-Error-Code`. Error bodies retain the existing `{ message }` shape. Authentication, permission and throttling errors retain their transport statuses without a domain header.
 
 | Operation or error                 | Status | Domain code | Message                                       |

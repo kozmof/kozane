@@ -3,7 +3,7 @@ import type { RequestHandler } from "./$types";
 import { get as getNamespace } from "../../../../services/namespaces.js";
 import { workspaceServiceContext } from "$lib/server/service-context";
 import { loadWarpDirectory } from "$lib/server/warp-directory";
-import { apiHandler } from "../../lib/api-handler.js";
+import { apiHandler } from "$lib/server/http/api-handler.js";
 
 /**
  * Fetch other namespaces' warps when the palette opens. Avoid rereading their cards on every
