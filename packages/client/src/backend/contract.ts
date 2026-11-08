@@ -13,6 +13,7 @@ import type {
   TaskspacesApi,
 } from "./resources.js";
 export * from "./resources.js";
+import type { ReadOptions } from "./resources.js";
 import type { NamespaceDataSnapshot } from "@kozane/core";
 export type ClientErrorCode =
   | "validation"
@@ -71,7 +72,7 @@ export type SnapshotResult =
   | { status: "changed"; validator: string; data: SnapshotData }
   | { status: "unchanged"; validator: string };
 
-export interface SnapshotReadOptions {
+export interface SnapshotReadOptions extends ReadOptions {
   validator?: string;
 }
 /** Shared data and lifecycle surface implemented by every deployment adapter.
@@ -97,4 +98,10 @@ export interface KozaneClient {
   readonly map: MapApi;
   readonly warpDirectory: WarpDirectoryApi;
   readonly taskspaces?: TaskspacesApi;
+}
+
+/** Owned by a host session. Views borrow the client and never dispose it. */
+export interface ManagedClient extends KozaneClient {
+  /** Synchronous and idempotent. Never implies rollback of a dispatched mutation. */
+  dispose(): void;
 }

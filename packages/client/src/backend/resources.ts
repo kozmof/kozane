@@ -78,6 +78,10 @@ import type { TreemapSnapshot } from "@kozane/core";
 import type { WarpListEntry } from "../warp-list.js";
 export type * from "./taskspaces-api.js";
 
+/** Cancellation stops a read only. Mutation dispatch has separate semantics. */
+export interface ReadOptions {
+  readonly signal?: AbortSignal;
+}
 export interface MutationOptions {
   keepalive?: boolean;
 }
@@ -299,19 +303,19 @@ export type NamespaceCreateResult = Result<typeof NamespaceServices.create>;
 export type NamespaceListResult = Result<typeof NamespaceServices.list>;
 export type NamespaceGetResult = Result<typeof NamespaceServices.get>;
 export interface NamespacesApi {
-  list(): Promise<NamespaceListResult>;
-  get(namespaceId: string): Promise<NamespaceGetResult>;
+  list(options?: ReadOptions): Promise<NamespaceListResult>;
+  get(namespaceId: string, options?: ReadOptions): Promise<NamespaceGetResult>;
   create(input: NamespaceCreateInput): Promise<NamespaceCreateResult>;
 }
 export type TagsResult = TagsViewData;
 export interface TagsApi {
-  get(namespaceId?: string): Promise<TagsResult>;
+  get(namespaceId?: string, options?: ReadOptions): Promise<TagsResult>;
 }
 export type MapResult = TreemapSnapshot;
 export interface MapApi {
-  get(): Promise<MapResult>;
+  get(options?: ReadOptions): Promise<MapResult>;
 }
 export type WarpDirectoryResult = WarpListEntry[];
 export interface WarpDirectoryApi {
-  get(namespaceId: string): Promise<WarpDirectoryResult>;
+  get(namespaceId: string, options?: ReadOptions): Promise<WarpDirectoryResult>;
 }

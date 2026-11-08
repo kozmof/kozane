@@ -149,3 +149,31 @@ function rejectInvalidViewData() {
   fixture.map.data.zoomStep = "invalid";
 }
 void rejectInvalidViewData;
+
+// Borrowed views accept minimal capabilities and cannot dispose their host's client.
+function publicViewContracts(
+  tags: import("@kozane/client").TagsViewClient,
+  map: import("@kozane/client").MapViewClient,
+  namespaces: import("@kozane/client").NamespacesViewClient,
+  owned: import("@kozane/client").ManagedClient,
+  signal: AbortSignal,
+) {
+  const tagsProps: Pick<ComponentProps<typeof PublicTags>, "backend"> = { backend: tags };
+  const mapProps: Pick<ComponentProps<typeof PublicMap>, "backend"> = { backend: map };
+  const indexProps: Pick<ComponentProps<typeof NamespacesView>, "backend"> = {
+    backend: namespaces,
+  };
+  void tagsProps;
+  void mapProps;
+  void indexProps;
+  void owned.snapshot("namespace", { signal });
+  void namespaces.namespaces.list({ signal });
+  void tags.tags.get(undefined, { signal });
+  void map.map.get({ signal });
+  // @ts-expect-error A tags view does not receive card mutations.
+  void tags.cards;
+  // @ts-expect-error A borrowed view cannot dispose the shared connection.
+  tags.dispose();
+  owned.dispose();
+}
+void publicViewContracts;

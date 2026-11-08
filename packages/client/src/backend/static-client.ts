@@ -1,4 +1,4 @@
-import type { KozaneClient } from "./contract.js";
+import type { KozaneClient, ManagedClient } from "./contract.js";
 import type { TagsViewData } from "@kozane/core";
 import type { TreemapSnapshot } from "@kozane/core";
 import type { WarpListEntry } from "../warp-list.js";
@@ -10,8 +10,10 @@ import {
   type ClientState,
   type SnapshotData,
   type SnapshotResult,
+  type SnapshotReadOptions,
   type TaskspaceLifecycleApi,
 } from "./contract.js";
+import { ClientSignals } from "./signals.js";
 import { SnapshotValidators } from "./snapshot-validators.js";
 import { readNamespaceSnapshot } from "./decoders/snapshot-reader.js";
 import { readTagsViewData } from "./decoders/tags.js";
@@ -48,15 +50,34 @@ function copy<T>(value: T): T {
 function invalid(): never {
   throw new ClientError("unavailable", "Invalid static export data");
 }
-async function readOnly(..._args: unknown[]): Promise<never> {
-  throw new ClientError("read_only", "This backend is read-only");
-}
 
 /** Read embedded export data without live endpoints, polling, or writable storage. */
-export class StaticClient implements KozaneClient {
+export class StaticClient implements ManagedClient {
   readonly kind = "static" as const;
   readonly capabilities: ClientCapabilities;
-  readonly state: ClientState = Object.freeze({ status: "ready" });
+  private disposed = false;
+  private readonly signals = new ClientSignals({ status: "ready" });
+  get state(): ClientState {
+    return this.signals.state;
+  }
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.validators.clear();
+    this.signals.transition({
+      status: "unavailable",
+      error: new ClientError("unavailable", "Client is disposed"),
+      recovery: "reload",
+    });
+    this.signals.dispose();
+  }
+  private assertActive(): void {
+    if (this.disposed) throw new ClientError("unavailable", "Client is disposed");
+  }
+  private readonly readOnly = async (..._args: unknown[]): Promise<never> => {
+    this.assertActive();
+    throw new ClientError("read_only", "This backend is read-only");
+  };
   readonly version = Object.freeze({ generation: 0, revision: 0 });
   private readonly data: StaticClientData;
   private readonly metadata = new Map<string, StaticNamespace>();
@@ -110,25 +131,19 @@ export class StaticClient implements KozaneClient {
   }
 
   subscribe(_listener: (event: ClientInvalidation) => void): () => void {
-    return () => {};
+    return this.signals.subscribe(_listener);
   }
   subscribeState(listener: (state: ClientState) => void): () => void {
-    try {
-      listener(this.state);
-    } catch {
-      /* Match listener isolation in the other adapters. */
-    }
-    return () => {};
+    return this.signals.subscribeState(listener);
   }
   private requireNamespace(namespaceId: string): StaticNamespace {
+    this.assertActive();
     const row = this.metadata.get(namespaceId);
     if (!row) throw new ClientError("not_found", "Namespace not found");
     return row;
   }
-  async snapshot(
-    namespaceId: string,
-    options: { validator?: string } = {},
-  ): Promise<SnapshotResult> {
+  async snapshot(namespaceId: string, options: SnapshotReadOptions = {}): Promise<SnapshotResult> {
+    options.signal?.throwIfAborted();
     this.requireNamespace(namespaceId);
     const data = this.snapshots.get(namespaceId);
     if (!data)
@@ -137,62 +152,71 @@ export class StaticClient implements KozaneClient {
     return result.status === "changed" ? { ...result, data: copy(result.data) } : result;
   }
   readonly namespaces: KozaneClient["namespaces"] = Object.freeze<KozaneClient["namespaces"]>({
-    list: async () => copy([...this.metadata.values()]),
-    get: async (namespaceId) => copy(this.requireNamespace(namespaceId)),
-    create: readOnly,
+    list: async (options) => {
+      options?.signal?.throwIfAborted();
+      this.assertActive();
+      return copy([...this.metadata.values()]);
+    },
+    get: async (namespaceId, options) => {
+      options?.signal?.throwIfAborted();
+      return copy(this.requireNamespace(namespaceId));
+    },
+    create: this.readOnly,
   });
   readonly cards: KozaneClient["cards"] = Object.freeze<KozaneClient["cards"]>({
-    create: readOnly,
-    update: readOnly,
-    updatePositions: readOnly,
-    remove: readOnly,
-    removeOne: readOnly,
-    move: readOnly,
-    setLayer: readOnly,
-    setPartition: readOnly,
-    setStacking: readOnly,
-    squash: readOnly,
+    create: this.readOnly,
+    update: this.readOnly,
+    updatePositions: this.readOnly,
+    remove: this.readOnly,
+    removeOne: this.readOnly,
+    move: this.readOnly,
+    setLayer: this.readOnly,
+    setPartition: this.readOnly,
+    setStacking: this.readOnly,
+    squash: this.readOnly,
   });
   readonly glues: KozaneClient["glues"] = Object.freeze<KozaneClient["glues"]>({
-    create: readOnly,
-    remove: readOnly,
+    create: this.readOnly,
+    remove: this.readOnly,
   });
   readonly layers: KozaneClient["layers"] = Object.freeze<KozaneClient["layers"]>({
-    create: readOnly,
-    rename: readOnly,
-    remove: readOnly,
-    reorder: readOnly,
+    create: this.readOnly,
+    rename: this.readOnly,
+    remove: this.readOnly,
+    reorder: this.readOnly,
   });
   readonly partitions: KozaneClient["partitions"] = Object.freeze<KozaneClient["partitions"]>({
-    create: readOnly,
-    rename: readOnly,
-    remove: readOnly,
+    create: this.readOnly,
+    rename: this.readOnly,
+    remove: this.readOnly,
   });
   readonly scopes: KozaneClient["scopes"] = Object.freeze<KozaneClient["scopes"]>({
-    create: readOnly,
-    rename: readOnly,
-    remove: readOnly,
-    addMembers: readOnly,
-    removeMembers: readOnly,
-    createArea: readOnly,
-    updateArea: readOnly,
-    removeArea: readOnly,
+    create: this.readOnly,
+    rename: this.readOnly,
+    remove: this.readOnly,
+    addMembers: this.readOnly,
+    removeMembers: this.readOnly,
+    createArea: this.readOnly,
+    updateArea: this.readOnly,
+    removeArea: this.readOnly,
   });
   readonly warps: KozaneClient["warps"] = Object.freeze<KozaneClient["warps"]>({
-    create: readOnly,
-    update: readOnly,
-    remove: readOnly,
+    create: this.readOnly,
+    update: this.readOnly,
+    remove: this.readOnly,
   });
   readonly inventories: KozaneClient["inventories"] = Object.freeze<KozaneClient["inventories"]>({
-    create: readOnly,
-    update: readOnly,
-    remove: readOnly,
-    stow: readOnly,
-    take: readOnly,
+    create: this.readOnly,
+    update: this.readOnly,
+    remove: this.readOnly,
+    stow: this.readOnly,
+    take: this.readOnly,
   });
 
   readonly tags: KozaneClient["tags"] = Object.freeze<KozaneClient["tags"]>({
-    get: async (namespaceId) => {
+    get: async (namespaceId, options) => {
+      options?.signal?.throwIfAborted();
+      this.assertActive();
       if (namespaceId !== undefined) this.requireNamespace(namespaceId);
       if (!this.data.tags)
         throw new ClientError("unavailable", "Tags are not included in this export");
@@ -237,7 +261,9 @@ export class StaticClient implements KozaneClient {
     },
   });
   readonly map: KozaneClient["map"] = Object.freeze<KozaneClient["map"]>({
-    get: async () => {
+    get: async (options) => {
+      options?.signal?.throwIfAborted();
+      this.assertActive();
       if (!this.data.map)
         throw new ClientError("unavailable", "Map data is not included in this export");
       return copy(this.data.map);
@@ -246,7 +272,8 @@ export class StaticClient implements KozaneClient {
   readonly warpDirectory: KozaneClient["warpDirectory"] = Object.freeze<
     KozaneClient["warpDirectory"]
   >({
-    get: async (namespaceId) => {
+    get: async (namespaceId, options) => {
+      options?.signal?.throwIfAborted();
       this.requireNamespace(namespaceId);
       const directories = this.data.warpDirectories;
       const entries =
@@ -272,20 +299,23 @@ export class StaticClient implements KozaneClient {
   private readonly fileApi: TaskspaceLifecycleApi = Object.freeze<TaskspaceLifecycleApi>({
     access: (namespaceId, taskspace) => {
       const browse =
+        !this.disposed &&
         this.snapshots.get(namespaceId)?.taskspaces.some((row) => row.id === taskspace.id) ===
-          true && Object.hasOwn(this.data.files ?? {}, taskspace.id);
+          true &&
+        Object.hasOwn(this.data.files ?? {}, taskspace.id);
       return { browse, read: browse, write: false, refresh: false };
     },
-    create: readOnly,
-    rename: readOnly,
-    remove: readOnly,
-    createFile: readOnly,
-    saveFile: readOnly,
-    createDirectory: readOnly,
-    renameEntry: readOnly,
-    removeEntry: readOnly,
+    create: this.readOnly,
+    rename: this.readOnly,
+    remove: this.readOnly,
+    createFile: this.readOnly,
+    saveFile: this.readOnly,
+    createDirectory: this.readOnly,
+    renameEntry: this.readOnly,
+    removeEntry: this.readOnly,
     readFile: async (namespaceId, taskspaceId, path, options) => {
-      if (options?.signal?.aborted) throw new ClientError("unavailable", "File read was cancelled");
+      options?.signal?.throwIfAborted();
+      this.assertActive();
       const node = findStaticNode(this.tree(namespaceId, taskspaceId), path);
       if (node?.kind === "file") return { path, content: node.content, signature: null };
       if (node?.kind === "file-skipped")
@@ -295,7 +325,8 @@ export class StaticClient implements KozaneClient {
         );
       throw new ClientError("not_found", "File not found");
     },
-    list: async (namespaceId, taskspaceId, path) => {
+    list: async (namespaceId, taskspaceId, path, options) => {
+      options?.signal?.throwIfAborted();
       const node = findStaticNode(this.tree(namespaceId, taskspaceId), path);
       if (node?.kind !== "directory") throw new ClientError("not_found", "Directory not found");
       const { entries, truncated } = staticDirectoryEntries(node);

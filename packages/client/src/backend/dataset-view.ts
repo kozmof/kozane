@@ -1,5 +1,5 @@
 import type { PollLifecycle } from "./workspace-poller.js";
-import type { ClientDataset, KozaneClient } from "./contract.js";
+import type { ClientDataset, KozaneClient, ReadOptions } from "./contract.js";
 export type DatasetClient = Pick<
   KozaneClient,
   "version" | "state" | "subscribe" | "subscribeState"
@@ -9,7 +9,7 @@ export function startDatasetView<T>(options: {
   backend: DatasetClient;
   dataset: ClientDataset;
   /** Internal readers can guard incremental results before their promise settles. */
-  read: (isCurrent: () => boolean) => Promise<T>;
+  read: (isCurrent: () => boolean, options: ReadOptions) => Promise<T>;
   apply: (value: T) => void;
   isHidden: () => boolean;
   /** Static data needs no scheduled retries. */
@@ -22,11 +22,15 @@ export function startDatasetView<T>(options: {
     running = false,
     dirty = true,
     sequence = 0;
+  let pending: AbortController | undefined;
+  let observedGeneration = backend.version.generation;
   const refresh = async () => {
     if (disposed || running || !dirty || options.isHidden() || backend.state.status !== "ready")
       return;
     running = true;
     dirty = false;
+    const controller = new AbortController();
+    pending = controller;
     const request = sequence,
       generation = backend.version.generation;
     try {
@@ -37,8 +41,9 @@ export function startDatasetView<T>(options: {
           generation === backend.version.generation &&
           backend.state.status === "ready" &&
           !options.isHidden(),
+        { signal: controller.signal },
       );
-      if (disposed) return;
+      if (disposed || controller.signal.aborted) return;
       if (
         sequence !== request ||
         generation !== backend.version.generation ||
@@ -61,12 +66,16 @@ export function startDatasetView<T>(options: {
           options.error?.(error);
       }
     } finally {
+      if (pending === controller) pending = undefined;
       running = false;
+      if (!disposed && dirty && sequence !== request) void refresh();
     }
   };
   const unsubscribe = backend.subscribe((event) => {
-    if (event.datasets.includes(options.dataset)) {
+    if (event.generation !== observedGeneration || event.datasets.includes(options.dataset)) {
+      observedGeneration = event.generation;
       sequence++;
+      pending?.abort();
       dirty = true;
       void refresh();
     }
@@ -74,6 +83,7 @@ export function startDatasetView<T>(options: {
   const unsubscribeState = backend.subscribeState((state) => {
     if (state.status !== "ready") {
       sequence++;
+      pending?.abort();
       dirty = true;
     } else void refresh();
   });
@@ -90,6 +100,7 @@ export function startDatasetView<T>(options: {
   return () => {
     disposed = true;
     sequence++;
+    pending?.abort();
     if (timer !== undefined) clearInterval(timer);
     unsubscribe();
     unsubscribeState();

@@ -1,7 +1,10 @@
 import { ClientError, type KozaneClient } from "../../backend/contract.js";
 
 /** Bind UI mutation chains to one generation and check readiness at every dispatch. */
-export function bindViewWrites(backend: KozaneClient, canWrite: () => boolean): KozaneClient {
+export function bindViewWrites<T extends Pick<KozaneClient, "version" | "state" | "capabilities">>(
+  backend: T,
+  canWrite: () => boolean,
+): T {
   const generation = backend.version.generation;
   const resources = new Set([
     "cards",
@@ -15,7 +18,7 @@ export function bindViewWrites(backend: KozaneClient, canWrite: () => boolean): 
     "taskspaces",
   ]);
   const wrapped = new Map<PropertyKey, object>();
-  return new Proxy(Object.create(null) as KozaneClient, {
+  return new Proxy(Object.create(null) as T, {
     get(_target, key) {
       const resource = Reflect.get(backend, key, backend);
       if (typeof key !== "string" || !resources.has(key) || !resource)

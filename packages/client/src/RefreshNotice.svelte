@@ -1,9 +1,10 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { css } from "./styles/css.js";
-  import type { ClientState, KozaneClient } from "./backend/contract.js";
+  import type { ClientState } from "./backend/contract.js";
+  import type { ClientStatus } from "./backend/view-clients.js";
   let { backend, failed = false, message, retry, floating = false }: {
-    backend?: Pick<KozaneClient, "state" | "subscribeState">;
+    backend?: ClientStatus;
     failed?: boolean;
     message: string;
     retry: () => void;

@@ -27,7 +27,7 @@
   {:else if data.view === "map"}
     <MapView {...fixture.map} {navigation} />
   {:else if data.view === "namespaces"}
-    <NamespacesView backend={fixture.board.backend} initialNamespaces={[fixture.board.data.namespace]} {navigation} />
+    <NamespacesView {...fixture.namespaces} {navigation} />
   {:else if data.view === "editor"}
     <EditorSurface {doc} caret={{ line: 0, column: 0 }} anchor={null} />
   {/if}

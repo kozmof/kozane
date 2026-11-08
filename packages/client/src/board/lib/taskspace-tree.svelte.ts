@@ -1,4 +1,4 @@
-import type { KozaneClient } from "../../backend/contract.js";
+import type { KozaneClient, ReadOptions } from "../../backend/contract.js";
 import { ClientError } from "../../backend/contract.js";
 import type { TaskspaceEntry, TaskspaceTruncation } from "@kozane/core";
 import { entryNameIssue } from "@kozane/core";
@@ -35,6 +35,7 @@ export type TaskspaceCreated = {
 export type TaskspaceTreeContext = {
   backend: Pick<KozaneClient, "taskspaces">;
   namespaceId: string;
+  readOptions?: ReadOptions;
 };
 
 function taskspaceApi(ctx: TaskspaceTreeContext) {
@@ -397,7 +398,12 @@ export class TaskspaceTreeState {
     const superseded = () => this.#pending.get(key) !== request || !active();
 
     try {
-      const body = await taskspaceApi(ctx).list(ctx.namespaceId, taskspaceId, path);
+      const body = await taskspaceApi(ctx).list(
+        ctx.namespaceId,
+        taskspaceId,
+        path,
+        ctx.readOptions,
+      );
       if (superseded()) return;
       this.#pending.delete(key);
       this.nodes[key] = {

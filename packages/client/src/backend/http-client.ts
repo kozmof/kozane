@@ -1,4 +1,10 @@
-import type { KozaneClient, MutationOptions } from "./contract.js";
+import type {
+  KozaneClient,
+  ManagedClient,
+  MutationOptions,
+  ReadOptions,
+  SnapshotReadOptions,
+} from "./contract.js";
 export type { MutationOptions } from "./contract.js";
 import type { TaskspaceLifecycleApi } from "./contract.js";
 import { WorkspacePoller, browserPollLifecycle, type PollLifecycle } from "./workspace-poller.js";
@@ -49,7 +55,9 @@ import { HttpTransport, type HttpTransportOptions } from "./http-transport.js";
 const ALL: readonly ClientDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 
 /** HTTP implementation of the shared backend data and lifecycle contract. */
-export class HttpClient implements KozaneClient {
+export class HttpClient implements ManagedClient {
+  private disposed = false;
+  private readonly lifetime = new AbortController();
   readonly kind = "http" as const;
   readonly capabilities: ClientCapabilities;
   private readonly signals = new ClientSignals({ status: "ready" });
@@ -94,6 +102,23 @@ export class HttpClient implements KozaneClient {
         },
       });
   }
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.poller?.dispose();
+    const error = new ClientError("unavailable", "Client is disposed");
+    this.lifetime.abort(error);
+    this.validators.clear();
+    this.signals.transition({ status: "unavailable", error, recovery: "reload" });
+    this.signals.dispose();
+  }
+  private assertActive(): void {
+    this.lifetime.signal.throwIfAborted();
+  }
+  private readSignal(signal?: AbortSignal): AbortSignal {
+    this.assertActive();
+    return signal ? AbortSignal.any([this.lifetime.signal, signal]) : this.lifetime.signal;
+  }
   get version() {
     return this.signals.version;
   }
@@ -101,6 +126,7 @@ export class HttpClient implements KozaneClient {
     return this.signals.state;
   }
   subscribe: ClientSignals["subscribe"] = (listener) => {
+    if (this.disposed) return () => {};
     const unsubscribe = this.signals.subscribe(listener);
     const release = this.poller?.retain();
     return () => {
@@ -117,10 +143,15 @@ export class HttpClient implements KozaneClient {
     path: string,
     options?: { signal?: AbortSignal; cache?: RequestInit["cache"] },
   ): Promise<T> {
-    const response = await this.transport.request(path, "GET", undefined, options);
+    const signal = this.readSignal(options?.signal);
+    signal.throwIfAborted();
+    const response = await this.transport.request(path, "GET", undefined, { ...options, signal });
     try {
-      return (await response.json()) as T;
+      const result = (await response.json()) as T;
+      signal.throwIfAborted();
+      return result;
     } catch (cause) {
+      signal.throwIfAborted();
       throw new ClientError("unavailable", "Invalid backend response", { cause });
     }
   }
@@ -130,9 +161,12 @@ export class HttpClient implements KozaneClient {
     input?: unknown,
     options?: MutationOptions,
   ): Promise<T> {
+    this.assertActive();
     if (!this.capabilities.writable)
       throw new ClientError("read_only", "This backend is read-only");
-    const response = await this.transport.request(path, method, input, options);
+    const response = await this.transport.request(path, method, input, {
+      keepalive: options?.keepalive,
+    });
     // The HTTP mutation committed even if its response body cannot be decoded.
     this.invalidateAll();
     try {
@@ -144,6 +178,7 @@ export class HttpClient implements KozaneClient {
   private invalidateAll(): void {
     // Conservative tokens and committed writes must force a server read, rather
     // than reuse a metadata-only conditional-response cache entry.
+    if (this.disposed) return;
     this.validators.clear();
     this.signals.publish(ALL);
   }
@@ -180,6 +215,7 @@ export class HttpClient implements KozaneClient {
     decode: (value: unknown, input: Input) => T | null,
     options?: MutationOptions,
   ): Promise<T> {
+    this.assertActive();
     if (!this.capabilities.writable)
       throw new ClientError("read_only", "This backend is read-only");
     let prepared = input;
@@ -198,14 +234,14 @@ export class HttpClient implements KozaneClient {
     );
   }
   readonly namespaces: KozaneClient["namespaces"] = {
-    list: async () => {
-      const result = readNamespaceList(await this.read<unknown>("/api/namespaces"));
+    list: async (options) => {
+      const result = readNamespaceList(await this.read<unknown>("/api/namespaces", options));
       if (!result) throw new ClientError("unavailable", "Invalid namespace list");
       return result;
     },
-    get: async (namespaceId: string) => {
+    get: async (namespaceId: string, options?: ReadOptions) => {
       const result = readNamespaceMetadata(
-        await this.read<unknown>(`/api/namespaces/${encodeURIComponent(namespaceId)}`),
+        await this.read<unknown>(`/api/namespaces/${encodeURIComponent(namespaceId)}`, options),
       );
       if (!result || result.id !== namespaceId)
         throw new ClientError("unavailable", "Invalid namespace metadata");
@@ -431,10 +467,8 @@ export class HttpClient implements KozaneClient {
   };
 
   private readonly validators = new SnapshotValidators();
-  async snapshot(
-    namespaceId: string,
-    options: { validator?: string } = {},
-  ): Promise<SnapshotResult> {
+  async snapshot(namespaceId: string, options: SnapshotReadOptions = {}): Promise<SnapshotResult> {
+    const signal = this.readSignal(options.signal);
     const generation = this.version.generation;
     const signature = this.validators.signature(namespaceId, generation, options.validator);
     const etag = signature?.startsWith("etag:") ? signature.slice(5) : undefined;
@@ -446,8 +480,10 @@ export class HttpClient implements KozaneClient {
         headers: etag ? { "if-none-match": etag } : undefined,
         allowNotModified: etag !== undefined,
         cache: "no-store",
+        signal,
       },
     );
+    signal.throwIfAborted();
     if (response.status === 304) {
       if (
         !options.validator ||
@@ -461,8 +497,10 @@ export class HttpClient implements KozaneClient {
     try {
       raw = await response.json();
     } catch (cause) {
+      signal.throwIfAborted();
       throw new ClientError("unavailable", "Invalid snapshot response", { cause });
     }
+    signal.throwIfAborted();
     const data = readNamespaceSnapshot(raw);
     if (!data || data.namespace.id !== namespaceId)
       throw new ClientError("unavailable", "Invalid snapshot response");
@@ -477,12 +515,12 @@ export class HttpClient implements KozaneClient {
   }
 
   readonly tags: KozaneClient["tags"] = {
-    get: async (namespaceId?: string) => {
+    get: async (namespaceId?: string, options?: ReadOptions) => {
       const result = readTagsViewData(
         await this.read<unknown>(
           "/api/tags" +
             (namespaceId !== undefined ? "?namespaceId=" + encodeURIComponent(namespaceId) : ""),
-          { cache: "no-store" },
+          { ...options, cache: "no-store" },
         ),
       );
       if (!result) throw new ClientError("unavailable", "Invalid tags dataset");
@@ -490,16 +528,18 @@ export class HttpClient implements KozaneClient {
     },
   };
   readonly map: KozaneClient["map"] = {
-    get: async () => {
-      const result = readMapSnapshot(await this.read<unknown>("/api/map", { cache: "no-store" }));
+    get: async (options) => {
+      const result = readMapSnapshot(
+        await this.read<unknown>("/api/map", { ...options, cache: "no-store" }),
+      );
       if (!result) throw new ClientError("unavailable", "Invalid map dataset");
       return result;
     },
   };
   readonly warpDirectory: KozaneClient["warpDirectory"] = {
-    get: async (namespaceId: string) => {
+    get: async (namespaceId: string, options?: ReadOptions) => {
       const result = parseWarpEntries(
-        await this.read<unknown>(this.ns(namespaceId, "/warp-directory")),
+        await this.read<unknown>(this.ns(namespaceId, "/warp-directory"), options),
       );
       if (!result) throw new ClientError("unavailable", "Invalid warp directory");
       return result;
@@ -508,7 +548,7 @@ export class HttpClient implements KozaneClient {
 
   private readonly taskspaceApi: TaskspaceLifecycleApi = {
     access: (_namespaceId, taskspace) => {
-      const browse = this.capabilities.taskspaces && taskspace.path !== null;
+      const browse = !this.disposed && this.capabilities.taskspaces && taskspace.path !== null;
       const write = browse && this.capabilities.writable;
       return { browse, read: write, write, refresh: write && this.capabilities.externalWrites };
     },
@@ -526,10 +566,11 @@ export class HttpClient implements KozaneClient {
         readTaskspaceFile,
         options,
       ),
-    list: (ns, id, path) =>
+    list: (ns, id, path, options) =>
       this.readTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`),
         readTaskspaceListing,
+        options,
       ),
     createDirectory: (ns, id, input) =>
       this.writeTaskspace(

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import '../app.css';
+  import { provideWorkspaceClientSession } from './client-context.js';
+  provideWorkspaceClientSession();
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children } = $props();

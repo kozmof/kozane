@@ -2,7 +2,8 @@
   import RefreshNotice from "../RefreshNotice.svelte";
   import ClientNotice from "../ClientNotice.svelte";
   import type { NavigationAdapter } from "../navigation.js";
-  import type { KozaneClient, NamespaceGetResult } from "../backend/contract.js";
+  import type { NamespaceGetResult } from "../backend/contract.js";
+  import type { NamespacesViewClient } from "../backend/view-clients.js";
   import type { Snippet } from "svelte";
   import { untrack } from "svelte";
   import { NamespaceIndex } from "../backend/namespace-index.svelte.js";
@@ -10,7 +11,7 @@
   import NavIcon from "../components/NavIcon.svelte";
 
   let { backend, initialNamespaces, navigation, workspaceName = null, workspaceLabel = "Kozane", formError = null, lifetimeNotice, createAction, emptyState, retryIntervalMs = 1000 }: {
-    backend: KozaneClient;
+    backend: NamespacesViewClient;
     initialNamespaces: NamespaceGetResult[];
     navigation: NavigationAdapter;
     workspaceName?: string | null;

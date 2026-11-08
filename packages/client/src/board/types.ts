@@ -1,4 +1,5 @@
-import type { KozaneClient, NamespaceGetResult, SnapshotData } from "../backend/contract.js";
+import type { NamespaceGetResult, SnapshotData } from "../backend/contract.js";
+import type { BoardViewClient } from "../backend/view-clients.js";
 import type { PollLifecycle } from "../backend/workspace-poller.js";
 import type { NavigationAdapter, NavigationDriver } from "../navigation.js";
 import type { PreferenceStorage } from "../preferences.js";
@@ -12,7 +13,7 @@ export type BoardPageData = SnapshotData & {
 };
 export interface BoardViewProps {
   data: BoardPageData;
-  backend: KozaneClient;
+  backend: BoardViewClient;
   navigation: NavigationAdapter;
   routing: NavigationDriver;
   preferences: PreferenceStorage;

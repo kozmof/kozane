@@ -163,3 +163,36 @@ it("lets incremental readers reject superseded and disposed work", async () => {
   expect(f.apply).not.toHaveBeenCalled();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it("aborts obsolete reads on invalidation, generation change and view cleanup", async () => {
+  const f = fixture();
+  const signals: AbortSignal[] = [];
+  const error = vi.fn();
+  const stop = startDatasetView({
+    backend: f.backend,
+    dataset: "map",
+    retryIntervalMs: false,
+    isHidden: () => false,
+    apply: f.apply,
+    error,
+    read: (_current, options) =>
+      new Promise<string>((_resolve, reject) => {
+        signals.push(options.signal!);
+        options.signal!.addEventListener("abort", () => reject(options.signal!.reason), {
+          once: true,
+        });
+      }),
+  });
+  expect(signals).toHaveLength(1);
+  f.signals.publish(["map"]);
+  await vi.waitFor(() => expect(signals).toHaveLength(2));
+  expect(signals[0].aborted).toBe(true);
+  f.signals.publish(["tags"], undefined, true);
+  await vi.waitFor(() => expect(signals).toHaveLength(3));
+  expect(signals[1].aborted).toBe(true);
+  stop();
+  expect(signals[2].aborted).toBe(true);
+  await Promise.resolve();
+  expect(f.apply).not.toHaveBeenCalled();
+  expect(error).not.toHaveBeenCalled();
+});

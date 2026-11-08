@@ -2,23 +2,13 @@
   import type { PageProps } from "./$types";
   import { createNodeNavigation, type NavigationAdapter } from "@kozane/client";
   import { base } from "$app/paths";
-  import { untrack } from "svelte";
-  import { StaticClient } from "@kozane/client";
-  import { HttpClient } from "@kozane/client";
+  import { useWorkspaceClientSession, selectWorkspaceClient } from "./client-context.js";
   import { NamespacesView } from "@kozane/client/ui";
   import { css } from "styled-system/css";
 
   let { data, form, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
-  const backend = untrack(() => data.staticClientData || (data.readonly && !data.clientCapabilities)
-    ? new StaticClient(data.staticClientData ?? { namespaces: data.namespaces })
-    : new HttpClient({
-        base,
-        fetcher: fetch,
-        pollingInitialDelayMs: 1000,
-        capabilities: data.clientCapabilities ?? {
-          writable: !data.readonly, persistent: true, externalWrites: true, taskspaces: true, auth: false,
-        },
-      }));
+  const session = useWorkspaceClientSession();
+  const backend = $derived(selectWorkspaceClient(session, data, () => ({ namespaces: data.namespaces })));
 </script>
 
 {#snippet readonlyEmptyState()}

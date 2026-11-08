@@ -23,3 +23,12 @@ export * from "../constants/tag.js";
 
 export * from "./views/map.js";
 export * from "./views/tags.js";
+
+export type {
+  ClientStatus,
+  ClientEvents,
+  TagsViewClient,
+  MapViewClient,
+  NamespacesViewClient,
+  BoardViewClient,
+} from "./view-clients.js";

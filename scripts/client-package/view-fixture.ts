@@ -125,6 +125,7 @@ export function createViewFixture(
   };
   return {
     board,
+    namespaces: { backend, initialNamespaces: namespaces, navigation },
     tags: { data: tags, selection: { namespaceId: "packed", tag: "release" }, navigation },
     map: { data: map, selection: { namespaceId: "packed", tag: null, day: null }, navigation },
   };

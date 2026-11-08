@@ -30,6 +30,7 @@ interface Session {
 /** One polling session per nonempty data-subscriber lifetime. No mutation is retained. */
 export class WorkspacePoller {
   private subscribers = 0;
+  private disposed = false;
   private session?: Session;
   constructor(
     private readonly options: {
@@ -43,7 +44,12 @@ export class WorkspacePoller {
       succeeded?: () => void;
     },
   ) {}
+  dispose(): void {
+    this.disposed = true;
+    this.stop();
+  }
   retain(): () => void {
+    if (this.disposed) return () => {};
     this.subscribers++;
     if (this.session) {
       if (this.session.refreshRequired) this.refresh(this.session);

@@ -191,3 +191,24 @@ it("isolates namespace creation completions across generations", async () => {
   expect(f.index.submitting).toBe(false);
   stop();
 });
+
+it("drops a departed view's creation result and prevents new submissions without closing its shared client", async () => {
+  const f = fixture();
+  const stop = f.index.start({ retryIntervalMs: false });
+  await vi.waitFor(() => expect(f.index.current).toBe(true));
+  let finish!: (value: { id: string; name: string; isDefault: boolean }) => void;
+  f.backend.namespaces.create.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const pending = f.index.create("Committed elsewhere");
+  stop();
+  expect(f.index.submitting).toBe(false);
+  expect(await f.index.create("Late intent")).toBe(false);
+  finish({ id: "new", name: "Committed elsewhere", isDefault: false });
+  expect(await pending).toBe(false);
+  expect(f.backend.namespaces.create).toHaveBeenCalledOnce();
+  expect(f.backend.state.status).toBe("ready");
+});

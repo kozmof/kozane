@@ -1,13 +1,11 @@
 import { ClientError } from "./contract.js";
-import type { KozaneClient, NamespaceGetResult } from "./contract.js";
+import type { NamespaceGetResult } from "./contract.js";
+import type { NamespacesViewClient } from "./view-clients.js";
 import { readNamespaceList } from "./decoders/namespaces.js";
 import { NAME_MAX } from "../constants/index.js";
 
 export type NamespaceRow = NamespaceGetResult;
-type NamespaceClient = Pick<
-  KozaneClient,
-  "version" | "state" | "subscribe" | "subscribeState" | "namespaces"
->;
+type NamespaceClient = Omit<NamespacesViewClient, "capabilities">;
 
 function rows(value: unknown): NamespaceRow[] {
   const result = readNamespaceList(value);
@@ -25,6 +23,7 @@ export class NamespaceIndex {
   error = $state<string | null>(null);
   refreshError = $state<string | null>(null);
   #active = false;
+  #pending?: AbortController;
   #running = false;
   #dirty = true;
   #sequence = 0;
@@ -58,6 +57,7 @@ export class NamespaceIndex {
       if (state.status !== "ready") {
         this.current = false;
         this.#sequence++;
+        this.#pending?.abort();
         this.#dirty = true;
       } else void this.#refresh();
     });
@@ -70,7 +70,11 @@ export class NamespaceIndex {
     void this.#refresh();
     return () => {
       this.#active = false;
+      this.current = false;
+      this.submitting = false;
+      this.#creation++;
       this.#sequence++;
+      this.#pending?.abort();
       if (timer !== undefined) clearInterval(timer);
       unsubscribe();
       unsubscribeState();
@@ -114,6 +118,7 @@ export class NamespaceIndex {
 
   #invalidate() {
     this.#sequence++;
+    this.#pending?.abort();
     this.#dirty = true;
     void this.#refresh();
   }
@@ -123,11 +128,13 @@ export class NamespaceIndex {
       return;
     this.#running = true;
     this.#dirty = false;
+    const controller = new AbortController();
+    this.#pending = controller;
     const sequence = this.#sequence;
     const generation = this.backend.version.generation;
     try {
-      const result = rows(await this.backend.namespaces.list());
-      if (!this.#active) return;
+      const result = rows(await this.backend.namespaces.list({ signal: controller.signal }));
+      if (!this.#active || controller.signal.aborted) return;
       if (
         sequence !== this.#sequence ||
         generation !== this.backend.version.generation ||
@@ -151,6 +158,7 @@ export class NamespaceIndex {
           this.refreshError = "Could not refresh namespaces";
       }
     } finally {
+      if (this.#pending === controller) this.#pending = undefined;
       this.#running = false;
       // An invalidation during this read must not depend on a retry timer.
       if (this.#dirty && sequence !== this.#sequence) void this.#refresh();

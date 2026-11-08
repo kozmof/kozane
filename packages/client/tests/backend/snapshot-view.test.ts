@@ -294,3 +294,48 @@ it("clears refresh errors on a validated unchanged result without replacing appl
   expect(f.apply).toHaveBeenCalledOnce();
   stop();
 });
+
+it("cancels snapshot reads during recovery and cleanup without surfacing an error", async () => {
+  const f = fixture();
+  const signals: AbortSignal[] = [];
+  const backend = {
+    get version() {
+      return f.signals.version;
+    },
+    get state() {
+      return f.signals.state;
+    },
+    subscribe: f.backend.subscribe,
+    subscribeState: f.backend.subscribeState,
+    snapshot: (
+      _id: string,
+      options?: import("../../src/backend/contract.js").SnapshotReadOptions,
+    ) =>
+      new Promise<SnapshotResult>((_resolve, reject) => {
+        signals.push(options!.signal!);
+        options!.signal!.addEventListener("abort", () => reject(options!.signal!.reason), {
+          once: true,
+        });
+      }),
+  };
+  const error = vi.fn();
+  const stop = startSnapshotView({
+    backend,
+    namespaceId: () => "ns",
+    activities: [],
+    apply: f.apply,
+    isHidden: () => false,
+    retryIntervalMs: false,
+    error,
+  });
+  expect(signals).toHaveLength(1);
+  f.signals.transition({ status: "recovering" });
+  expect(signals[0].aborted).toBe(true);
+  f.signals.transition({ status: "ready" });
+  await vi.waitFor(() => expect(signals).toHaveLength(2));
+  stop();
+  expect(signals[1].aborted).toBe(true);
+  await Promise.resolve();
+  expect(f.apply).not.toHaveBeenCalled();
+  expect(error).not.toHaveBeenCalled();
+});

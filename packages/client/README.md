@@ -142,3 +142,32 @@ Views use the `KozaneClient` contract. Import `HttpClient` for the local server 
 A future `WorkerClient` will use an injected message transport. Planned runtime packages are `@kozane/web-worker` for a dedicated worker and `@kozane/service-worker` for a Service Worker. Neither package nor `WorkerClient` is implemented yet. Keep request handling independent of Svelte and let each transport own its lifecycle. Service Worker support requires explicit restart and reconnection handling.
 
 See the [worker package design](../../docs/web-demo-specification.md#future-worker-packages) for the protocol boundaries and the separate focus-sharing contract.
+
+## Client ownership
+
+Create one owned client for the active workspace in the host's root layout. Share it across board, tags, map and namespace navigation. During SSR, create an owner for each render request. Keep mutable clients out of module-level singletons. Static clients receive only the data allowed for the current exported page.
+
+`ManagedClient` extends `KozaneClient` with synchronous, idempotent `dispose()`. The host owns disposal. Views borrow clients and release only their own subscriptions and reads. Leaving a view also disables its undispatched UI actions without closing the shared connection. The Node host retains its HTTP subscription for the root layout lifetime, so route changes share polling and transport state. A capability change replaces the client and closes the previous one. Reusing a client on another board page requires a fresh snapshot before editing, since navigation may restore an older server seed.
+
+Disposal cancels pending reads, stops polling, removes listeners and prevents new operations. An HTTP mutation already dispatched may still settle with its known result, but it publishes no later invalidation through the disposed client. Disposal never implies server rollback. Do not replay a mutation after an unknown outcome. Connection replacement or worker recovery belongs to the host, not to an individual view.
+
+Preserve the owner when `pagehide.persisted` is true. Dispose it when the root layout is destroyed or the document is discarded. Future worker hosts must also implement their transport's suspension and reconnection policy.
+
+## Read cancellation
+
+Pass `ReadOptions` with an `AbortSignal` to namespace list/get, tags, map, warp-directory and taskspace file/directory reads. Snapshot reads accept the same signal through `SnapshotReadOptions`. Pre-cancelled reads perform no HTTP request or static lookup. Cancellation rejects with the signal's original reason and does not become a network failure. Injected fetch implementations must honor the supplied signal.
+
+Views cancel obsolete reads on invalidation, generation changes and cleanup. They retain generation and sequence checks to discard late results from readers that cannot stop immediately. Read cancellation publishes no invalidation. Mutation options support keepalive and do not expose read cancellation.
+
+## View interfaces
+
+Use the smallest public client interface accepted by each view. Full `KozaneClient` implementations satisfy these interfaces. View interfaces do not expose owner disposal.
+
+| Interface              | Available operations                                                         |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `TagsViewClient`       | Lifecycle observations, writable capability and tag reads                    |
+| `MapViewClient`        | Lifecycle observations, writable capability and map reads                    |
+| `NamespacesViewClient` | Lifecycle observations, writable capability and namespace list/create        |
+| `BoardViewClient`      | Board snapshots, mutations, warp directory and optional taskspace operations |
+
+The host entry uses explicit exports. Its `ActivityGuard` and `BoardPoint` interfaces are independent of board implementation modules, and `CardPositionPatch` comes from the public core domain type. New private decoder helpers do not automatically become public API.

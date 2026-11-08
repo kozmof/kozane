@@ -5,11 +5,8 @@ export type SnapshotClient = Pick<
   KozaneClient,
   "version" | "state" | "subscribe" | "subscribeState" | "snapshot"
 >;
-export interface ViewActivity {
-  readonly idle: boolean;
-  readonly version: number;
-  unchangedSince(version: number): boolean;
-}
+export type { ActivityGuard as ViewActivity } from "../host-types.js";
+import type { ActivityGuard as ViewActivity } from "../host-types.js";
 export interface SnapshotViewStatus {
   current: boolean;
   namespaceId: string;
@@ -53,6 +50,7 @@ export function startSnapshotView(options: {
       namespaceId: options.namespaceId(),
       generation: backend.version.generation,
     });
+  let pending: AbortController | undefined;
   const refresh = async () => {
     if (
       disposed ||
@@ -65,6 +63,8 @@ export function startSnapshotView(options: {
       return;
     running = true;
     dirty = false;
+    const controller = new AbortController();
+    pending = controller;
     const namespaceId = options.namespaceId(),
       generation = backend.version.generation,
       request = sequence;
@@ -74,8 +74,8 @@ export function startSnapshotView(options: {
         applied?.namespaceId === namespaceId && applied.generation === generation
           ? applied.validator
           : undefined;
-      const result = await backend.snapshot(namespaceId, { validator });
-      if (disposed) return;
+      const result = await backend.snapshot(namespaceId, { validator, signal: controller.signal });
+      if (disposed || controller.signal.aborted) return;
       if (
         sequence !== request ||
         options.namespaceId() !== namespaceId ||
@@ -116,12 +116,14 @@ export function startSnapshotView(options: {
           options.error?.(error);
       }
     } finally {
+      if (pending === controller) pending = undefined;
       running = false;
       if (!disposed && dirty && request !== sequence) void refresh();
     }
   };
   const invalidate = () => {
     sequence++;
+    pending?.abort();
     dirty = true;
     void refresh();
   };
@@ -146,6 +148,7 @@ export function startSnapshotView(options: {
       validated = undefined;
       applied = undefined;
       sequence++;
+      pending?.abort();
       dirty = true;
     } else void refresh();
     report();
@@ -164,6 +167,7 @@ export function startSnapshotView(options: {
             validated = undefined;
             report();
             sequence++;
+            pending?.abort();
             dirty = true;
           }
           void refresh();
@@ -172,6 +176,7 @@ export function startSnapshotView(options: {
   return () => {
     disposed = true;
     sequence++;
+    pending?.abort();
     if (timer !== undefined) clearInterval(timer);
     unsubscribe();
     unsubscribeState();

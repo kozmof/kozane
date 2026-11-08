@@ -165,6 +165,16 @@ Keep lifecycle handling in the host transport. A dedicated worker belongs to its
 
 Future focus sharing between the local CLI and Web UI belongs to a separate `FocusClient` contract. The local server coordinates that state and provides reads, writes and subscriptions. A worker may process events, but it does not replace the server connection or require focus tracking to become part of `KozaneClient`.
 
+### Client ownership
+
+The Node host owns one HTTP client session in the root layout and shares it across route changes. SSR owners are scoped to individual render requests. Static client instances receive only the data supplied by the current exported page. No mutable client is shared across prerender requests.
+
+`ManagedClient` adds synchronous, idempotent disposal to `KozaneClient`. The host owns that lifecycle. Views borrow smaller interfaces and clean up their subscriptions and reads. Preserve the owner during internal navigation and BFCache suspension. Dispose it when its document is discarded. A connection replacement belongs to the host and must close the previous connection without replaying mutations.
+
+Read methods accept `ReadOptions.signal`. Snapshot reads carry it in `SnapshotReadOptions`. Abort obsolete reads on view cleanup, invalidation and generation replacement. Preserve generation and sequence guards because cancellation cannot guarantee that underlying work stopped. Cancellation rejects with the signal reason and publishes no invalidation. Do not add these cancellation semantics to mutation dispatch or interpret disposal as rollback.
+
+The demo follows the same ownership rule with `WorkerClient`. Its stronger worker termination, queue and recovery requirements remain specified below.
+
 ### Interface contract
 
 Public TypeScript declarations are the authoritative operation contract. Service signatures and their input/result types belong to core. The client contract entry at `packages/client/src/backend/contract.ts` defines the resource APIs referenced by `KozaneClient`. Re-export these declarations through the public package entry points specified below. This specification defines the behavior those declarations must satisfy. Resolve disagreements before releasing the affected packages.
@@ -234,7 +244,7 @@ export type RecoveryStatus =
       olderCopyMayRestore: boolean;
     };
 
-export interface DemoClient extends KozaneClient {
+export interface DemoClient extends ManagedClient {
   reset(): Promise<void>;
   retry(): Promise<void>;
   readonly recoveryStatus: RecoveryStatus;

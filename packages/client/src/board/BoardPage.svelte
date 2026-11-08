@@ -49,7 +49,7 @@
   const readonly = $derived(!backend.capabilities.writable);
   let snapshotStatus = $state.raw<SnapshotViewStatus>(untrack(() => ({ current: initialDataApplied && backend.state.status === "ready", namespaceId: data.namespace.id, generation: backend.version.generation })));
   const editingBlocked = $derived(!readonly && (!snapshotStatus.current || snapshotStatus.namespaceId !== data.namespace.id || snapshotStatus.generation !== backend.version.generation));
-  const mutationClient = untrack(() => bindViewWrites(backend, () => !editingBlocked));
+  const mutationClient = untrack(() => bindViewWrites(backend, () => active && !editingBlocked));
   let refreshAttempt = $state(0);
   let refreshFailed = $state(false);
   let filesRefreshFailed = $state(false);
@@ -308,7 +308,7 @@
   }
 
   const editorContext = $derived({
-    canWrite: () => !readonly && !editingBlocked,
+    canWrite: () => active && !readonly && !editingBlocked,
     backend,
     namespaceId: s.namespaceId,
   });
@@ -322,8 +322,8 @@
       const generation = current.version.generation;
       const stop = startDatasetView({
         backend: current, dataset: "snapshot", retryIntervalMs: interval, lifecycle: wake, isHidden: hidden,
-        read: async (isCurrent) => {
-          const ok = await tree.refreshWatched(context, () => active && current.version.generation === generation && isCurrent());
+        read: async (isCurrent, readOptions) => {
+          const ok = await tree.refreshWatched({ ...context, readOptions }, () => active && current.version.generation === generation && isCurrent());
           if (!ok) throw new ClientError("unavailable", "Could not refresh files");
         },
         apply: () => { if (attempt === refreshAttempt) filesRefreshFailed = false; },

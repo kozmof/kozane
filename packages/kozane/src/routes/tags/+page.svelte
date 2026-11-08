@@ -1,21 +1,17 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
-  import { untrack } from "svelte";
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { createNodeNavigation, type NavigationAdapter } from "@kozane/client";
-  import { StaticClient } from "@kozane/client";
-  import { HttpClient } from "@kozane/client";
+  import { useWorkspaceClientSession, selectWorkspaceClient } from "../client-context.js";
   import { browserPollLifecycle } from "@kozane/client/host";
   import { normalizeTag } from "$lib/tag";
   import { TagsView } from "@kozane/client/tags";
 
   let { data, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
-  const httpClient = untrack(() => data.clientCapabilities
-    ? new HttpClient({ base, fetcher: fetch, capabilities: data.clientCapabilities, pollingInitialDelayMs: 1000 })
-    : undefined);
-  const backend = $derived(data.staticClientData ? new StaticClient(data.staticClientData) : httpClient);
+  const session = useWorkspaceClientSession();
+  const backend = $derived(selectWorkspaceClient(session, data));
   const lifecycle = browserPollLifecycle();
   const selection = $derived.by(() => {
     const filters = browser ? navigation.readFilters(page.url) : { tag: null, namespaceId: null };

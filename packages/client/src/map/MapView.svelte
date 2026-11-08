@@ -2,7 +2,7 @@
   import RefreshNotice from "../RefreshNotice.svelte";
   import ClientNotice from "../ClientNotice.svelte";
   import type { NavigationAdapter } from "../navigation.js";
-  import type { KozaneClient } from "../backend/contract.js";
+  import type { MapViewClient } from "../backend/view-clients.js";
   import type { PollLifecycle } from "../backend/workspace-poller.js";
   import type { MapPageData, MapSelection } from "./types.js";
   import { untrack } from "svelte";
@@ -49,7 +49,7 @@
     data: MapPageData;
     selection: MapSelection;
     navigation: NavigationAdapter;
-    backend?: KozaneClient;
+    backend?: MapViewClient;
     lifetimeNotice?: string;
     retryIntervalMs?: number | false;
     lifecycle?: Pick<PollLifecycle, "listen">;
@@ -77,7 +77,7 @@
       retryIntervalMs: interval,
       lifecycle: wake,
       dataset: "map",
-      read: async () => mapView(await current.map.get(), { namespaceId: currentSource.namespaceId, tag: currentSource.tag, day: currentSource.day, zoomStep: currentSource.data.zoomStep }),
+      read: async (_isCurrent, options) => mapView(await current.map.get(options), { namespaceId: currentSource.namespaceId, tag: currentSource.tag, day: currentSource.day, zoomStep: currentSource.data.zoomStep }),
       apply: (value) => { if (attempt !== refreshAttempt) return; refreshed = { source: currentSource, value }; failedSource = null; },
       error: () => { if (attempt === refreshAttempt) failedSource = currentSource; },
       isHidden: hidden,

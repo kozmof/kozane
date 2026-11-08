@@ -5,7 +5,7 @@ import type {
   TaskspaceListing,
   TaskspaceSummary,
 } from "@kozane/core";
-import type { MutationOptions } from "./resources.js";
+import type { MutationOptions, ReadOptions } from "./resources.js";
 
 export interface TaskspaceCreated {
   id: string;
@@ -31,9 +31,7 @@ export type TaskspaceRemoveResult = { ok: boolean; directory: TaskspaceDirectory
 export type TaskspaceCreateFileInput = { path: string };
 export type TaskspaceCreateFileResult = TaskspaceFileData;
 export type TaskspaceReadFileResult = TaskspaceFileData;
-export interface TaskspaceReadFileOptions {
-  signal?: AbortSignal;
-}
+export type TaskspaceReadFileOptions = ReadOptions;
 /** The last-read signature is required, including null. A mismatch rejects the save. */
 export type TaskspaceSaveFileInput = TaskspaceFileData;
 export type TaskspaceSaveFileResult = TaskspaceFileData;
@@ -79,7 +77,12 @@ export interface TaskspacesApi {
     input: TaskspaceSaveFileInput,
     options?: MutationOptions,
   ): Promise<TaskspaceSaveFileResult>;
-  list(namespaceId: string, taskspaceId: string, path: string): Promise<TaskspaceListResult>;
+  list(
+    namespaceId: string,
+    taskspaceId: string,
+    path: string,
+    options?: ReadOptions,
+  ): Promise<TaskspaceListResult>;
   createDirectory(
     namespaceId: string,
     taskspaceId: string,

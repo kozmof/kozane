@@ -144,20 +144,30 @@ describe("Layers", () => {
   });
 
   it("creates the card on the namespace navigated to, not the one left behind", async () => {
-    const fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        id: "card-9",
-        partitionId: "b3",
-        layerId: "l3",
-        content: "Gamma",
-        posX: 0,
-        posY: 0,
-        zIndex: 1,
-        glueId: null,
-        taskspaceId: null,
-        inventory: null,
-      }),
+    let releaseSnapshot!: (response: Response) => void;
+    let gate = true;
+    const fetch = vi.fn((url: unknown, _init?: RequestInit) => {
+      if (String(url).endsWith("/api/snapshot")) {
+        if (gate)
+          return new Promise<Response>((resolve) => {
+            releaseSnapshot = resolve;
+          });
+        return Promise.resolve(Response.json(other));
+      }
+      return Promise.resolve(
+        Response.json({
+          id: "card-9",
+          partitionId: "b3",
+          layerId: "l3",
+          content: "Gamma",
+          posX: 0,
+          posY: 0,
+          zIndex: 1,
+          glueId: null,
+          taskspaceId: null,
+          inventory: null,
+        }),
+      );
     });
     vi.stubGlobal("fetch", fetch);
     const { rerender } = render(NamespacePage, {
@@ -179,14 +189,21 @@ describe("Layers", () => {
     };
     await rerender({ data: other, params: { namespaceId: "namespace-2" }, form: null });
 
+    await waitFor(() => expect(releaseSnapshot).toBeDefined());
     const input = screen.getByLabelText("Write a card");
+    expect(input).toBeDisabled();
+    gate = false;
+    releaseSnapshot(Response.json(other));
+    await waitFor(() => expect(input).not.toBeDisabled());
     await fireEvent.input(input, { target: { value: "Gamma" } });
     await fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    const [url, init] = fetch.mock.calls[0];
+    const creates = () => fetch.mock.calls.filter(([url]) => String(url).endsWith("/api/cards"));
+    await waitFor(() => expect(creates()).toHaveLength(1));
+    const [url] = creates()[0];
+    const init = fetch.mock.calls.find(([target]) => target === url)![1] as RequestInit;
     expect(url).toBe("/namespace-2/api/cards");
-    expect(JSON.parse(init.body)).toMatchObject({ partitionId: "b3", layerId: "l3" });
+    expect(JSON.parse(String(init.body))).toMatchObject({ partitionId: "b3", layerId: "l3" });
   });
 
   it("renames a layer from a double-click on its row", async () => {

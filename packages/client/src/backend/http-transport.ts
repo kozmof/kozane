@@ -82,6 +82,7 @@ export class HttpTransport {
       signal?: AbortSignal;
     } = {},
   ): Promise<Response> {
+    options.signal?.throwIfAborted();
     let body: string | undefined;
     if (input !== undefined) {
       try {
@@ -110,8 +111,10 @@ export class HttpTransport {
           new TextEncoder().encode(body).byteLength <= KEEPALIVE_BYTES_MAX,
       });
     } catch (cause) {
+      options.signal?.throwIfAborted();
       throw new ClientError("network", MESSAGES.network, { cause });
     }
+    options.signal?.throwIfAborted();
     if (response.ok || (options.allowNotModified && response.status === 304)) return response;
     const authoritative = FALLBACK[response.status];
     const header = response.headers.get("X-Kozane-Error-Code") as ClientErrorCode | null;
@@ -145,6 +148,7 @@ export class HttpTransport {
         /* Keep the safe status message. */
       }
     }
+    options.signal?.throwIfAborted();
     throw new ClientError(code, message, { retryAfterMs });
   }
 }

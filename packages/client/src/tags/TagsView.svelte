@@ -2,7 +2,7 @@
   import RefreshNotice from "../RefreshNotice.svelte";
   import ClientNotice from "../ClientNotice.svelte";
   import type { NavigationAdapter } from "../navigation.js";
-  import type { KozaneClient } from "../backend/contract.js";
+  import type { TagsViewClient } from "../backend/view-clients.js";
   import type { PollLifecycle } from "../backend/workspace-poller.js";
   import type { TagsPageData, TagsSelection } from "./types.js";
   import { untrack } from "svelte";
@@ -36,7 +36,7 @@
     data: TagsPageData;
     selection: TagsSelection;
     navigation: NavigationAdapter;
-    backend?: KozaneClient;
+    backend?: TagsViewClient;
     lifetimeNotice?: string;
     retryIntervalMs?: number | false;
     lifecycle?: Pick<PollLifecycle, "listen">;
@@ -63,7 +63,7 @@
       retryIntervalMs: interval,
       lifecycle: wake,
       dataset: "tags",
-      read: async () => tagsView(await current.tags.get(currentSource.namespaceId ?? undefined), {
+      read: async (_isCurrent, options) => tagsView(await current.tags.get(currentSource.namespaceId ?? undefined, options), {
         namespaceId: currentSource.namespaceId, tag: currentSource.tag,
       }),
       apply: (value) => {

@@ -146,7 +146,10 @@ it("forwards cancellation and rejects malformed committed JSON without retry", a
     .mockResolvedValueOnce(new Response("invalid JSON"));
   const backend = new HttpClient({ capabilities, fetcher });
   await backend.taskspaces!.readFile(ns, id, "notes.md", { signal: controller.signal });
-  expect(fetcher.mock.calls[0][1].signal).toBe(controller.signal);
+  const forwarded = fetcher.mock.calls[0][1].signal as AbortSignal;
+  expect(forwarded.aborted).toBe(false);
+  controller.abort();
+  expect(forwarded.aborted).toBe(true);
   await expect(backend.taskspaces!.saveFile(ns, id, file)).rejects.toMatchObject({
     code: "unavailable",
   });

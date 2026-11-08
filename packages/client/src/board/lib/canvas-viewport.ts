@@ -13,7 +13,8 @@ import {
 } from "./namespace-page.js";
 
 /** Board point using the stored `posX` and `posY` field names. */
-export type BoardPoint = { posX: number; posY: number };
+import type { BoardPoint } from "../../host-types.js";
+export type { BoardPoint } from "../../host-types.js";
 
 /**
  * Read canvas bounds, scroll offsets, and zoom for coordinate conversion and viewport

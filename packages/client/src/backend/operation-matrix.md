@@ -6,6 +6,10 @@ Use the exported declarations in [contract.ts](contract.ts), [resources.ts](reso
 
 Identifiers are strings. A supplied namespace identifies the board, and taskspace IDs must be visible there. Optional fields accept omission or undefined. Null is accepted only where the exported type includes it. No operation automatically replays a rejected mutation.
 
+Read methods accept an optional `ReadOptions.signal`, including through `SnapshotReadOptions` and `TaskspaceReadFileOptions`. A pre-aborted signal rejects with its original reason before I/O. HTTP reads combine it with the owner lifetime signal. Cancellation performs no write, replay or invalidation and is not classified as a network error.
+
+`ManagedClient` adds owner-only `dispose()` outside the borrowed operation interface. Disposal is synchronous and idempotent. It stops subscriptions and polling, aborts reads and rejects new operations. An already dispatched HTTP mutation can settle with its known result, without publishing through the disposed client. Disposal never establishes rollback.
+
 Reads do not publish invalidations. Successful HTTP mutations publish all five datasets (`snapshot`, `tags`, `map`, `namespaces`, `warpDirectory`) after the response succeeds, including when response decoding fails afterward. Failed requests publish nothing. Static mutations reject with `read_only` and publish nothing.
 
 HTTP requests share authentication, permission, throttling and network handling. Statuses 401, 403 and 429 are authoritative. Other errors use the allowlisted `X-Kozane-Error-Code` header or the status fallback. See the [HTTP compatibility mappings](../../../../docs/http-errors.md). Static reads reject missing records with `not_found` and datasets absent from an export with `unavailable`.
