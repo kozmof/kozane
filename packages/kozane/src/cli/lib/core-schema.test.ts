@@ -3,10 +3,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { createClient } from "@libsql/client";
 import { openDb, type OpenedDb } from "../../db/client.js";
 import { fileDbUrl } from "../../lib/db-url.js";
-import { createDatabaseAdapter, type DatabaseHandle } from "../../db/database.js";
+import { createDatabaseAdapter } from "../../db/database.js";
 import {
   applyMigrations,
   validateDatabaseMigrationHistory,
@@ -159,13 +160,16 @@ it("accepts formatting, escaped names, default spacing and SQLite-owned statisti
 
 it("propagates read failures without labeling them as schema defects", async () => {
   const failure = new Error("connection lost");
-  const db = createDatabaseAdapter({} as DatabaseHandle, {
-    write: async () => {
-      throw failure;
+  const db = createDatabaseAdapter(
+    drizzle(async () => ({ rows: [] })),
+    {
+      write: async () => {
+        throw failure;
+      },
+      read: async () => {
+        throw failure;
+      },
     },
-    read: async () => {
-      throw failure;
-    },
-  });
+  );
   await expect(validateDatabaseSchema(db)).rejects.toBe(failure);
 });

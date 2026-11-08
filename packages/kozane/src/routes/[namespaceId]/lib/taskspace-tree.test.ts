@@ -322,6 +322,7 @@ describe("TaskspaceTreeState creation", () => {
       headers: expect.any(Headers),
       keepalive: false,
       body: JSON.stringify({ path: "src/new.ts" }),
+      signal: expect.any(AbortSignal),
     });
     // The field closes only once the file is actually there.
     expect(tree.creating).toBeNull();
