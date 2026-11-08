@@ -1,7 +1,7 @@
-import { createBackendScopeActions } from "./lib/actions/backend-scope-actions.js";
-import { createBackendBoardActions } from "./lib/actions/backend-board-actions.js";
-import type { KozaneBackend } from "../backend/contract.js";
-import { createBackendCardActions } from "./lib/actions/backend-card-actions.js";
+import { createClientScopeActions } from "./lib/actions/backend-scope-actions.js";
+import { createClientBoardActions } from "./lib/actions/backend-board-actions.js";
+import type { KozaneClient } from "../backend/contract.js";
+import { createClientCardActions } from "./lib/actions/backend-card-actions.js";
 import type { NamespaceState } from "./namespace-state.svelte.js";
 
 /**
@@ -11,13 +11,13 @@ import type { NamespaceState } from "./namespace-state.svelte.js";
 export function createNamespaceActions(
   state: NamespaceState,
   backend: Pick<
-    KozaneBackend,
+    KozaneClient,
     "cards" | "glues" | "layers" | "partitions" | "warps" | "scopes" | "taskspaces"
   >,
 ) {
   return {
-    ...createBackendCardActions(state, backend),
-    ...createBackendBoardActions(state, backend),
-    ...createBackendScopeActions(state, backend),
+    ...createClientCardActions(state, backend),
+    ...createClientBoardActions(state, backend),
+    ...createClientScopeActions(state, backend),
   };
 }

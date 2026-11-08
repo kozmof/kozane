@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { NamespaceState } from "../../../../../../client/src/board/namespace-state.svelte.js";
-import { HttpBackend } from "../../../../../../client/src/backend/http-backend.js";
-import { createBackendBoardActions } from "../../../../../../client/src/board/lib/actions/backend-board-actions.js";
+import { HttpClient } from "../../../../../../client/src/backend/http-client.js";
+import { createClientBoardActions } from "../../../../../../client/src/board/lib/actions/backend-board-actions.js";
 import { data } from "../../page.fixtures.js";
 const capabilities = {
   writable: true,
@@ -21,7 +21,7 @@ it("restores an optimistic layer rename and preserves the backend conflict messa
         finish = resolve;
       }),
   );
-  const actions = createBackendBoardActions(state, new HttpBackend({ fetcher, capabilities }));
+  const actions = createClientBoardActions(state, new HttpClient({ fetcher, capabilities }));
   const pending = actions.handleRenameLayer(layer.id, "Renamed");
   expect(state.layers[0].name).toBe("Renamed");
   expect(state.mutations.idle).toBe(false);
@@ -44,9 +44,9 @@ it("adds a layer from stored backend position and selects it", async () => {
     .mockImplementation(
       async () => new Response('{"id":"created","name":"New","position":10,"isDefault":false}'),
     );
-  await createBackendBoardActions(
+  await createClientBoardActions(
     state,
-    new HttpBackend({ fetcher, capabilities }),
+    new HttpClient({ fetcher, capabilities }),
   ).handleCreateLayer("New");
   expect(state.layers.find((layer) => layer.id === "created")?.position).toBe(10);
   expect(state.activeLayerId).toBe("created");

@@ -1,5 +1,5 @@
 function failureMessage(error: unknown, fallback: string) {
-  return error instanceof BackendError ? error.message : fallback;
+  return error instanceof ClientError ? error.message : fallback;
 }
 async function attempt<T>(
   work: () => Promise<T>,
@@ -10,16 +10,16 @@ async function attempt<T>(
     return { ok: false, error };
   }
 }
-import type { KozaneBackend } from "../../../backend/contract.js";
-import { BackendError } from "../../../backend/contract.js";
+import type { KozaneClient } from "../../../backend/contract.js";
+import { ClientError } from "../../../backend/contract.js";
 import { readWarp } from "../../../backend/decoders/snapshot-reader.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
 import { readFiniteNumber, readString } from "../response.js";
 import { readStacking } from "./shared.js";
 /** Board structure actions: partitions, layers, and warps. */
-export function createBackendBoardActions(
+export function createClientBoardActions(
   state: NamespaceState,
-  backend: Pick<KozaneBackend, "layers" | "partitions" | "warps">,
+  backend: Pick<KozaneClient, "layers" | "partitions" | "warps">,
 ) {
   function track<Args extends unknown[], R>(work: (...args: Args) => Promise<R>) {
     return (...args: Args) => state.mutations.track(() => work(...args));

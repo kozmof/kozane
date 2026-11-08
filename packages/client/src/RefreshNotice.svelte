@@ -1,15 +1,15 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { css } from "./styles/css.js";
-  import type { BackendState, KozaneBackend } from "./backend/contract.js";
+  import type { ClientState, KozaneClient } from "./backend/contract.js";
   let { backend, failed = false, message, retry, floating = false }: {
-    backend?: Pick<KozaneBackend, "state" | "subscribeState">;
+    backend?: Pick<KozaneClient, "state" | "subscribeState">;
     failed?: boolean;
     message: string;
     retry: () => void;
     floating?: boolean;
   } = $props();
-  let currentState = $state.raw<BackendState | undefined>(untrack(() => backend?.state));
+  let currentState = $state.raw<ClientState | undefined>(untrack(() => backend?.state));
   $effect(() => {
     const current = backend;
     return untrack(() => {

@@ -190,7 +190,7 @@
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [
           { "group": ["**/cli/**"], "message": "routes and cli are siblings; share through db/api or lib/server." },
-          { "group": ["**/namespace-api", "**/namespace-api.*", "**/lib/api/**", "../api/**"], "message": "Board actions use injected KozaneBackend resources instead of HTTP helpers." }
+          { "group": ["**/namespace-api", "**/namespace-api.*", "**/lib/api/**", "../api/**"], "message": "Board actions use injected KozaneClient resources instead of HTTP helpers." }
         ] }],
         "eslint/no-restricted-globals": ["error", { "name": "fetch", "message": "Board actions use the injected backend." }],
         "eslint/no-restricted-properties": ["error",

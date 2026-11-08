@@ -665,7 +665,7 @@ it("clears handled demo arrivals through supplied history while preserving names
   }
 });
 
-it("reads export snapshots through StaticBackend and refreshes it on namespace navigation", async () => {
+it("reads export snapshots through StaticClient and refreshes it on namespace navigation", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
   const one = {
@@ -682,7 +682,7 @@ it("reads export snapshots through StaticBackend and refreshes it on namespace n
   const exported = (snapshot: typeof one | typeof two) => ({
     ...snapshot,
     readonly: true,
-    staticBackendData: {
+    staticClientData: {
       namespaces,
       snapshots: [snapshot],
       warpDirectories: { [snapshot.namespace.id]: [] },
@@ -743,7 +743,7 @@ it("opens scoped export files through the static backend while keeping the edito
           ...snapshot,
           readonly: true,
           taskspaceFiles: { t1: tree("SSR file") },
-          staticBackendData: {
+          staticClientData: {
             namespaces: [data.namespace],
             snapshots: [snapshot],
             files: { t1: tree("Backend file") },

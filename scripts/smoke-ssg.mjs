@@ -106,7 +106,7 @@ try {
         dom.window.close();
       }
       assert.ok(
-        html.includes("staticBackendData"),
+        html.includes("staticClientData"),
         `Missing static backend seed on ${route || "/"}`,
       );
     }

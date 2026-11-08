@@ -1,5 +1,5 @@
 import {
-  StaticBackend,
+  StaticClient,
   createDemoNavigation,
   type NavigationDriver,
 } from "../../../client/src/index.js";
@@ -61,7 +61,7 @@ export async function renderViews() {
   });
   const namespaces = render(NamespacesView, {
     props: {
-      backend: new StaticBackend({ namespaces: [{ id: "n", name: "Research", isDefault: true }] }),
+      backend: new StaticClient({ namespaces: [{ id: "n", name: "Research", isDefault: true }] }),
       initialNamespaces: [{ id: "n", name: "Research", isDefault: true }],
       navigation: createDemoNavigation({ base: "/demo" }),
       workspaceLabel: "Standalone workspace",
@@ -77,7 +77,7 @@ export async function renderViews() {
       data: tagsView(tagData, selection),
       selection,
       navigation: createDemoNavigation({ base: "/demo" }),
-      backend: new StaticBackend({ namespaces: tagData.namespaces, tags: tagData }),
+      backend: new StaticClient({ namespaces: tagData.namespaces, tags: tagData }),
       retryIntervalMs: false,
     },
   });
@@ -88,7 +88,7 @@ export async function renderViews() {
       data: mapView(mapData, { ...mapSelection, zoomStep: 0.05 }),
       selection: mapSelection,
       navigation: createDemoNavigation({ base: "/demo" }),
-      backend: new StaticBackend({ namespaces: mapData.namespaces, map: mapData }),
+      backend: new StaticClient({ namespaces: mapData.namespaces, map: mapData }),
       retryIntervalMs: false,
     },
   });
@@ -106,7 +106,7 @@ export async function renderViews() {
 }
 
 export function renderCapabilityViews(
-  capabilities: import("../../../client/src/index.js").BackendCapabilities,
+  capabilities: import("../../../client/src/index.js").ClientCapabilities,
   lifetimeNotice?: string,
 ) {
   const props = capabilityViewProps(capabilities, lifetimeNotice);

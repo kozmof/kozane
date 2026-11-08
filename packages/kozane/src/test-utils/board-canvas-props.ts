@@ -1,5 +1,5 @@
 import { NamespaceState, type BoardCanvasProps } from "../../../client/src/board/index.js";
-import { StaticBackend, type SnapshotData } from "../../../client/src/backend/index.js";
+import { StaticClient, type SnapshotData } from "../../../client/src/backend/index.js";
 import { createDemoNavigation } from "../../../client/src/navigation.js";
 
 /** Initialize the public canvas without a route, storage, fetch, or test-runner globals. */
@@ -37,7 +37,7 @@ export function boardCanvasProps(): BoardCanvasProps {
     taskspaces: [],
   };
   state.resetFromData(snapshot);
-  const backend = new StaticBackend({
+  const backend = new StaticClient({
     namespaces: [{ id: "board", name: "Board", isDefault: true }],
   });
   const navigation = createDemoNavigation({ base: "/demo" });

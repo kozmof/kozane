@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { MapView } from "../../src/ui.js";
-import { HttpBackend, StaticBackend } from "../../src/backend/index.js";
+import { HttpClient, StaticClient } from "../../src/backend/index.js";
 import { mapView } from "../../src/backend/views/map.js";
 import { createDemoNavigation } from "../../src/navigation.js";
 import { mapDataset } from "../../../kozane/src/test-utils/map-dataset.js";
@@ -32,7 +32,7 @@ it("preserves zoom and pan across backend replacement and rejects the old reply"
         finish = resolve;
       }),
   );
-  const first = new HttpBackend({ capabilities, fetcher });
+  const first = new HttpClient({ capabilities, fetcher });
   const view = render(MapView, { props: { ...props, backend: first } });
   await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
   await fireEvent.click(screen.getByLabelText("Zoom in"));
@@ -50,7 +50,7 @@ it("preserves zoom and pan across backend replacement and rejects the old reply"
   const next = mapDataset("Fresh partition");
   await view.rerender({
     ...props,
-    backend: new StaticBackend({ namespaces: next.namespaces, map: next }),
+    backend: new StaticClient({ namespaces: next.namespaces, map: next }),
   });
   await waitFor(() => expect(partition(view.container, "Fresh partition")).not.toBeNull());
   expect(partition(view.container, "Fresh partition")).toHaveAttribute(
@@ -79,7 +79,7 @@ it("discards an old selection's projection while the next namespace loads", asyn
           finish = resolve;
         }),
     );
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   const view = render(MapView, { props: { ...props, backend } });
   await waitFor(() => expect(partition(view.container, "First filtered partition")).not.toBeNull());
   await view.rerender({ ...props, backend, selection: { ...selection, namespaceId: "p2" } });
@@ -101,7 +101,7 @@ it("uses injected visibility and wake callbacks and releases the lifecycle", asy
   const fetcher = vi
     .fn<typeof fetch>()
     .mockResolvedValue(Response.json(mapDataset("Visible partition")));
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   const view = render(MapView, {
     props: {
       ...props,
@@ -128,7 +128,7 @@ it("retains map data and viewport while a failed refresh is retried", async () =
     .fn()
     .mockRejectedValueOnce(new Error("offline"))
     .mockImplementation(async () => Response.json(mapDataset("Recovered partition")));
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   const view = render(MapView, { props: { ...props, backend } });
   await fireEvent.click(screen.getByLabelText("Zoom in"));
   const zoom = `${zoomPercent(DEFAULT_ZOOM + 0.05)}%`;

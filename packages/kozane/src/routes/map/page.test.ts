@@ -634,7 +634,7 @@ describe("backend map data", () => {
     const { container } = draw({
       namespaceId: "p1",
       tag: "perf",
-      backendCapabilities: {
+      clientCapabilities: {
         writable: true,
         persistent: true,
         taskspaces: false,
@@ -719,7 +719,7 @@ it("projects static backend data for the selected namespace without HTTP", async
     };
     const { container } = draw({
       namespaceId: "p1",
-      staticBackendData: { namespaces: initial.namespaces, map },
+      staticClientData: { namespaces: initial.namespaces, map },
     });
     await waitFor(() => expect(rectOf(container, "Embedded partition")).toBeDefined());
     expect(rectOf(container, "Other partition")).toBeUndefined();

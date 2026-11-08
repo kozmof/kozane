@@ -1,10 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 /** A disposable service-backed HTTP fixture. Dependencies are public packed entries in consumer checks.
- * @param {{database: any, services: any, schema: any, migrate: any, HttpBackend: any, domainErrorCode: any}} dependencies
+ * @param {{database: any, services: any, schema: any, migrate: any, HttpClient: any, domainErrorCode: any}} dependencies
  */
 export async function createServiceContractFixture(dependencies) {
-  const { database, services, schema, migrate, HttpBackend, domainErrorCode } = dependencies;
+  const { database, services, schema, migrate, HttpClient, domainErrorCode } = dependencies;
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys=ON");
   const handle = drizzle(
@@ -52,7 +52,7 @@ export async function createServiceContractFixture(dependencies) {
     await migrate(db);
     const context = database.createServiceContext();
     const seed = await services.namespaces.create(db, context, { name: "Contract fixture" });
-    const backend = new HttpBackend({
+    const backend = new HttpClient({
       capabilities: {
         writable: true,
         persistent: false,

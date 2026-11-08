@@ -77,7 +77,7 @@ for (const cohort of cohorts) {
         if (clientModule) {
           const context = createServiceContext();
           const rows = await namespaces.list(db, context);
-          const client = new clientModule.StaticBackend({
+          const client = new clientModule.StaticClient({
             namespaces: rows,
             snapshots: view.kind === "selected" ? [view.snapshot.snapshot] : [],
             tags: await tags.view(db, context),

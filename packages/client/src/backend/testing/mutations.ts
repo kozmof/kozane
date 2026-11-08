@@ -1,6 +1,6 @@
-import type { KozaneBackend } from "../contract.js";
+import type { KozaneClient } from "../contract.js";
 type MutationResource = Pick<
-  KozaneBackend,
+  KozaneClient,
   "cards" | "glues" | "layers" | "partitions" | "scopes" | "warps" | "inventories"
 >;
 export type MutationName =
@@ -9,14 +9,14 @@ export type MutationName =
     }[keyof MutationResource]
   | "namespaces.create";
 export interface MutationCase {
-  call: (backend: KozaneBackend) => Promise<unknown>;
+  call: (backend: KozaneClient) => Promise<unknown>;
   method: string;
   path: string;
   body?: unknown;
   keepalive: boolean;
 }
 // A new domain mutation requires a case before the project can type-check.
-export const backendMutationCases: Readonly<Record<MutationName, MutationCase>> = {
+export const clientMutationCases: Readonly<Record<MutationName, MutationCase>> = {
   "cards.create": {
     call: (b) => b.cards.create("n /", { partitionId: "p", content: "Text" }, { keepalive: true }),
     method: "POST",
@@ -282,5 +282,5 @@ export const backendMutationCases: Readonly<Record<MutationName, MutationCase>> 
   },
 } satisfies Record<MutationName, MutationCase>;
 
-for (const mutation of Object.values(backendMutationCases)) Object.freeze(mutation);
-Object.freeze(backendMutationCases);
+for (const mutation of Object.values(clientMutationCases)) Object.freeze(mutation);
+Object.freeze(clientMutationCases);

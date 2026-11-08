@@ -1,5 +1,5 @@
 function failureMessage(error: unknown, fallback: string) {
-  return error instanceof BackendError ? error.message : fallback;
+  return error instanceof ClientError ? error.message : fallback;
 }
 async function attempt<T>(
   work: () => Promise<T>,
@@ -10,8 +10,8 @@ async function attempt<T>(
     return { ok: false, error };
   }
 }
-import type { KozaneBackend } from "../../../backend/contract.js";
-import { BackendError } from "../../../backend/contract.js";
+import type { KozaneClient } from "../../../backend/contract.js";
+import { ClientError } from "../../../backend/contract.js";
 import { readScopeArea } from "../../../backend/decoders/snapshot-reader.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
 import type { BoardRect } from "../../../constants/index.js";
@@ -35,13 +35,13 @@ async function orFailure<T>(
 }
 /** Scope, scope frame, membership, and taskspace actions. */
 
-export function createBackendScopeActions(
+export function createClientScopeActions(
   state: NamespaceState,
-  backend: Pick<KozaneBackend, "scopes" | "taskspaces">,
+  backend: Pick<KozaneClient, "scopes" | "taskspaces">,
 ) {
   function taskspaces() {
     const api = backend.taskspaces;
-    if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
+    if (!api) throw new ClientError("unavailable", "Taskspaces are not available");
     return api;
   }
   function track<Args extends unknown[], R>(work: (...args: Args) => Promise<R>) {

@@ -284,7 +284,7 @@ describe("backend tags refresh", () => {
     vi.stubGlobal("fetch", fetcher);
     draw([cardHit("c1", "perf", "Old content")], {
       namespaceId: "p1",
-      backendCapabilities: capabilities,
+      clientCapabilities: capabilities,
     });
     await waitFor(() => expect(screen.getByText("New card content")).toBeInTheDocument());
     expect(screen.queryByText("Old content")).not.toBeInTheDocument();
@@ -304,7 +304,7 @@ describe("backend tags refresh", () => {
   it("retains current results when a refresh response is malformed", async () => {
     const fetcher = vi.fn(async () => new Response('{"index":{}}'));
     vi.stubGlobal("fetch", fetcher);
-    draw([cardHit("c1", "perf", "Retained content")], { backendCapabilities: capabilities });
+    draw([cardHit("c1", "perf", "Retained content")], { clientCapabilities: capabilities });
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("Could not refresh tags"),
     );
@@ -371,7 +371,7 @@ it("reads static tag data through the backend while retaining tag result selecti
   try {
     const tags = tagDataset([cardHit("c1", "perf", "Embedded result")]);
     draw([cardHit("c1", "perf", "SSR result")], {
-      staticBackendData: { namespaces: tags.namespaces, tags },
+      staticClientData: { namespaces: tags.namespaces, tags },
     });
     await waitFor(() => expect(screen.getByText("Embedded result")).toBeInTheDocument());
     expect(screen.queryByText("SSR result")).not.toBeInTheDocument();

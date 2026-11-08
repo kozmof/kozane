@@ -3,19 +3,19 @@
   import { createNodeNavigation, type NavigationAdapter } from "@kozane/client";
   import { base } from "$app/paths";
   import { untrack } from "svelte";
-  import { StaticBackend } from "@kozane/client";
-  import { HttpBackend } from "@kozane/client";
+  import { StaticClient } from "@kozane/client";
+  import { HttpClient } from "@kozane/client";
   import { NamespacesView } from "@kozane/client/ui";
   import { css } from "styled-system/css";
 
   let { data, form, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
-  const backend = untrack(() => data.staticBackendData || (data.readonly && !data.backendCapabilities)
-    ? new StaticBackend(data.staticBackendData ?? { namespaces: data.namespaces })
-    : new HttpBackend({
+  const backend = untrack(() => data.staticClientData || (data.readonly && !data.clientCapabilities)
+    ? new StaticClient(data.staticClientData ?? { namespaces: data.namespaces })
+    : new HttpClient({
         base,
         fetcher: fetch,
         pollingInitialDelayMs: 1000,
-        capabilities: data.backendCapabilities ?? {
+        capabilities: data.clientCapabilities ?? {
           writable: !data.readonly, persistent: true, externalWrites: true, taskspaces: true, auth: false,
         },
       }));
@@ -30,7 +30,7 @@
 {/snippet}
 
 <NamespacesView
-  lifetimeNotice={data.backendLifetimeNotice}
+  lifetimeNotice={data.clientLifetimeNotice}
   {backend}
   {navigation}
   retryIntervalMs={backend.kind === "static" ? false : undefined}

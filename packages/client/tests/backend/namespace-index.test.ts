@@ -1,11 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { NamespaceIndex } from "../../src/backend/namespace-index.svelte.js";
-import { HttpBackend } from "../../src/backend/http-backend.js";
-import { BackendSignals } from "../../src/backend/signals.js";
+import { HttpClient } from "../../src/backend/http-client.js";
+import { ClientSignals } from "../../src/backend/signals.js";
 const initial = [{ id: "one", name: "One", isDefault: true }];
 afterEach(() => vi.useRealTimers());
 function fixture() {
-  const signals = new BackendSignals({ status: "ready" });
+  const signals = new ClientSignals({ status: "ready" });
   const list = vi.fn().mockResolvedValue(initial);
   const backend = {
     get version() {
@@ -94,7 +94,7 @@ it("creates through the HTTP backend, coalesces duplicate submissions and report
         finish = resolve;
       }),
   );
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     fetcher,
     capabilities: {
       writable: true,

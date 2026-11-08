@@ -1,8 +1,8 @@
 <script lang="ts">
   import RefreshNotice from "../RefreshNotice.svelte";
-  import BackendNotice from "../BackendNotice.svelte";
+  import ClientNotice from "../ClientNotice.svelte";
   import type { NavigationAdapter } from "../navigation.js";
-  import type { KozaneBackend } from "../backend/contract.js";
+  import type { KozaneClient } from "../backend/contract.js";
   import type { PollLifecycle } from "../backend/workspace-poller.js";
   import type { MapPageData, MapSelection } from "./types.js";
   import { untrack } from "svelte";
@@ -49,7 +49,7 @@
     data: MapPageData;
     selection: MapSelection;
     navigation: NavigationAdapter;
-    backend?: KozaneBackend;
+    backend?: KozaneClient;
     lifetimeNotice?: string;
     retryIntervalMs?: number | false;
     lifecycle?: Pick<PollLifecycle, "listen">;
@@ -267,7 +267,7 @@
 </svelte:head>
 
 <!-- Fill the fixed-height viewport with the map and overlay controls. Hide page overflow so panning is the single way to move the map and graph coordinates remain aligned. -->
-{#if backend}<BackendNotice capabilities={backend.capabilities} {lifetimeNotice} floating />{/if}
+{#if backend}<ClientNotice capabilities={backend.capabilities} {lifetimeNotice} floating />{/if}
 <RefreshNotice {backend} failed={refreshFailed} message="Could not refresh map. Showing the last map." retry={() => refreshAttempt++} floating />
 
 <main

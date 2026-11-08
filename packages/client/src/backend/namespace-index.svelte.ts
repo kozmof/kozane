@@ -1,17 +1,17 @@
-import { BackendError } from "./contract.js";
-import type { KozaneBackend, NamespaceGetResult } from "./contract.js";
+import { ClientError } from "./contract.js";
+import type { KozaneClient, NamespaceGetResult } from "./contract.js";
 import { readNamespaceList } from "./decoders/namespaces.js";
 import { NAME_MAX } from "../constants/index.js";
 
 export type NamespaceRow = NamespaceGetResult;
-type NamespaceBackend = Pick<
-  KozaneBackend,
+type NamespaceClient = Pick<
+  KozaneClient,
   "version" | "state" | "subscribe" | "subscribeState" | "namespaces"
 >;
 
 function rows(value: unknown): NamespaceRow[] {
   const result = readNamespaceList(value);
-  if (!result) throw new BackendError("unavailable", "Invalid namespace list");
+  if (!result) throw new ClientError("unavailable", "Invalid namespace list");
   return result;
 }
 
@@ -30,7 +30,7 @@ export class NamespaceIndex {
   #sequence = 0;
 
   constructor(
-    private readonly backend: NamespaceBackend,
+    private readonly backend: NamespaceClient,
     initial: NamespaceRow[],
   ) {
     this.namespaces = initial;
@@ -103,7 +103,7 @@ export class NamespaceIndex {
         [`name must be ${NAME_MAX} characters or fewer`]: `Namespace name must be ${NAME_MAX} characters or fewer.`,
       };
       this.error =
-        error instanceof BackendError
+        error instanceof ClientError
           ? (compatible[error.message] ?? error.message)
           : "Failed to create namespace";
       return false;

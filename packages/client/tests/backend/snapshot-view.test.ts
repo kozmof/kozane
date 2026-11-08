@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { BackendSignals } from "../../src/backend/signals.js";
+import { ClientSignals } from "../../src/backend/signals.js";
 import { startSnapshotView } from "../../src/backend/snapshot-view.js";
 import type { SnapshotData, SnapshotResult } from "../../src/backend/contract.js";
 const data: SnapshotData = {
@@ -17,7 +17,7 @@ const data: SnapshotData = {
 };
 afterEach(() => vi.useRealTimers());
 function fixture() {
-  const signals = new BackendSignals({ status: "ready" });
+  const signals = new ClientSignals({ status: "ready" });
   const snapshot = vi
     .fn<() => Promise<SnapshotResult>>()
     .mockResolvedValue({ status: "changed", validator: "one", data });

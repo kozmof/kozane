@@ -1,13 +1,13 @@
 import type { PollLifecycle } from "./workspace-poller.js";
-import type { BackendDataset, KozaneBackend } from "./contract.js";
-export type DatasetBackend = Pick<
-  KozaneBackend,
+import type { ClientDataset, KozaneClient } from "./contract.js";
+export type DatasetClient = Pick<
+  KozaneClient,
   "version" | "state" | "subscribe" | "subscribeState"
 >;
 /** Subscribe before reading, and retain applied data until a current read succeeds. */
 export function startDatasetView<T>(options: {
-  backend: DatasetBackend;
-  dataset: BackendDataset;
+  backend: DatasetClient;
+  dataset: ClientDataset;
   /** Internal readers can guard incremental results before their promise settles. */
   read: (isCurrent: () => boolean) => Promise<T>;
   apply: (value: T) => void;

@@ -6,6 +6,8 @@ Before starting, publish and verify the intended package versions through the [l
 
 The shared restoration harness and compatibility corpus remain reusable test infrastructure in this repository. The pre-extraction performance baseline is commit `226facea14e7a9323e4fd6fd1c8d5f4daed76d06`. Keep P4 and acceptance task identifiers stable when transferring this document to the demo repository.
 
+The future `WorkerClient` belongs to `@kozane/client`. Dedicated and Service Worker runtimes may become `@kozane/web-worker` and `@kozane/service-worker` when implemented. The initial demo uses a dedicated worker. Keep the protocol independent of views and keep Service Worker restart handling separate. These packages are planned, not available dependencies.
+
 ## Phase 4 — Demo implementation
 
 ### Repository, sample and navigation
@@ -19,10 +21,10 @@ The shared restoration harness and compatibility corpus remain reusable test inf
 - [ ] P4-07 Implement query-based opaque namespace selection, empty/sole/default/ambiguous-default states and explicit missing destinations. Use fragments for content-bearing filters.
 - [ ] P4-08 Add the sandbox banner, install link, recovery indicator, retry/reload controls and capability-based feature visibility.
 
-### Local backend and lifecycle
+### Worker client and lifecycle
 
-- [ ] P4-09 Implement `LocalBackend` with shared services and whole-operation serialization for reads, writes, exports and resets. Do not reacquire the outer queue from SQL callbacks or transaction helpers.
-- [ ] P4-10 Export and implement `DemoBackend`, immutable recovery status, immediate subscriptions and synchronous idempotent disposal.
+- [ ] P4-09 Implement `WorkerClient` with an injected dedicated-worker transport backed by shared services and whole-operation serialization for reads, writes, exports and resets. Do not reacquire the outer queue from SQL callbacks or transaction helpers.
+- [ ] P4-10 Export and implement `DemoClient`, immutable recovery status, immediate subscriptions and synchronous idempotent disposal.
 - [ ] P4-11 Implement worker/request IDs, internal error envelopes and classification validation. Start 30-second active-time RPC deadlines at dispatch, never during queue waiting.
 - [ ] P4-12 Implement worker/rollback failure invalidation, rejection of pending and dependent operations, safe diagnostics and suppression of late publications/saves. Never replay unknown-outcome mutations.
 - [ ] P4-13 Implement explicit retry with new attempts and generations, preserving the saved copy and restoration/start-over intent according to the recovery decision contract.

@@ -1,5 +1,5 @@
 import { createViewFixture } from "./view-fixture.js";
-import { backendContractCases, type BackendContractFactory } from "@kozane/client/testing";
+import { clientContractCases, type ClientContractFactory } from "@kozane/client/testing";
 import {
   EditorDocument,
   EditorSurface,
@@ -17,9 +17,9 @@ import { render } from "svelte/server";
 import type { ComponentProps } from "svelte";
 import { ValidationError } from "@kozane/core";
 import {
-  StaticBackend,
-  HttpBackend,
-  BackendError,
+  StaticClient,
+  HttpClient,
+  ClientError,
   createDemoNavigation,
   DEFAULT_UI_CONFIG,
   validateUiOverrides,
@@ -76,7 +76,7 @@ const surfaceProps: ComponentProps<typeof EditorSurface> = {
 const surface = render(EditorSurface, { props: surfaceProps });
 assert(surface.body.includes("Packed editor 日本語"), "Editor SSR");
 const namespaces = [{ id: "packed", name: "Packed workspace", isDefault: true }];
-const backend = new StaticBackend({ namespaces });
+const backend = new StaticClient({ namespaces });
 const namespaceProps: ComponentProps<typeof NamespacesView> = {
   backend,
   initialNamespaces: namespaces,
@@ -94,7 +94,7 @@ assert(viewFixtureHtml.board.includes("Packed board 日本語"), "Board SSR");
 assert(viewFixtureHtml.tags.includes("Packed board 日本語"), "Tags SSR");
 assert(viewFixtureHtml.map.includes("General"), "Map SSR");
 export const styleFixtureHtml = `<section id="packed-editor">${surface.body}</section><section id="packed-namespaces">${namespaceHtml}</section>`;
-const http = new HttpBackend({
+const http = new HttpClient({
   capabilities: {
     writable: true,
     persistent: true,
@@ -122,7 +122,7 @@ try {
   failure = error;
 }
 assert(
-  failure instanceof BackendError &&
+  failure instanceof ClientError &&
     failure.code === "validation" &&
     failure.message === coreError.message,
   "Client must recognize a validation error created by the public core instance",
@@ -131,8 +131,8 @@ console.log(
   "Packed client public entries, editor/namespace SSR and core validation identity passed.",
 );
 
-function register(factory: BackendContractFactory) {
-  for (const test of backendContractCases(factory)) {
+function register(factory: ClientContractFactory) {
+  for (const test of clientContractCases(factory)) {
     const run: () => Promise<void> = test.run;
     assert(
       typeof run === "function" && typeof test.name === "string",

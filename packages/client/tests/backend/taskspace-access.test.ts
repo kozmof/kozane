@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpBackend } from "../../src/backend/http-backend.js";
+import { HttpClient } from "../../src/backend/http-client.js";
 import { staticEditorContext } from "../../../kozane/src/test-utils/editor-context.js";
 
 const taskspace = { id: "t1", path: "notes" };
@@ -21,7 +21,7 @@ describe("taskspace file availability", () => {
     "resolves HTTP policy without requests (%s, %s, %s)",
     (writable, externalWrites, path, expected) => {
       const fetcher = vi.fn<typeof fetch>();
-      const backend = new HttpBackend({
+      const backend = new HttpClient({
         fetcher,
         capabilities: { ...capabilities, writable, externalWrites },
       });
@@ -31,7 +31,7 @@ describe("taskspace file availability", () => {
   );
 
   it("offers no file API when taskspaces are disabled", () => {
-    const backend = new HttpBackend({ capabilities: { ...capabilities, taskspaces: false } });
+    const backend = new HttpClient({ capabilities: { ...capabilities, taskspaces: false } });
     expect(backend.taskspaces).toBeUndefined();
   });
 

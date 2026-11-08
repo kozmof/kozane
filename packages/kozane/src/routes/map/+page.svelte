@@ -5,17 +5,17 @@
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { createNodeNavigation, type NavigationAdapter } from "@kozane/client";
-  import { StaticBackend } from "@kozane/client";
-  import { HttpBackend } from "@kozane/client";
+  import { StaticClient } from "@kozane/client";
+  import { HttpClient } from "@kozane/client";
   import { browserPollLifecycle } from "@kozane/client/host";
   import { normalizeTag } from "$lib/tag";
   import { MapView } from "@kozane/client/map";
 
   let { data, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
-  const httpBackend = untrack(() => data.backendCapabilities
-    ? new HttpBackend({ base, fetcher: fetch, capabilities: data.backendCapabilities, pollingInitialDelayMs: 1000 })
+  const httpClient = untrack(() => data.clientCapabilities
+    ? new HttpClient({ base, fetcher: fetch, capabilities: data.clientCapabilities, pollingInitialDelayMs: 1000 })
     : undefined);
-  const backend = $derived(data.staticBackendData ? new StaticBackend(data.staticBackendData) : httpBackend);
+  const backend = $derived(data.staticClientData ? new StaticClient(data.staticClientData) : httpClient);
   const lifecycle = browserPollLifecycle();
   const selection = $derived.by(() => {
     const filters = browser ? navigation.readFilters(page.url) : { namespaceId: null, tag: null, day: null };
@@ -24,7 +24,7 @@
 </script>
 
 <MapView
-  lifetimeNotice={data.backendLifetimeNotice}
+  lifetimeNotice={data.clientLifetimeNotice}
   {data}
   {selection}
   {navigation}

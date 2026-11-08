@@ -1,7 +1,7 @@
 export * from "./contract.js";
-export { HttpBackend } from "./http-backend.js";
+export { HttpClient } from "./http-client.js";
 export type { PollLifecycle } from "./workspace-poller.js";
-export { StaticBackend, type StaticBackendData, type StaticNamespace } from "./static-backend.js";
+export { StaticClient, type StaticClientData, type StaticNamespace } from "./static-client.js";
 export * from "../navigation.js";
 export * from "../preferences.js";
 

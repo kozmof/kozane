@@ -1,6 +1,6 @@
 import type { NamespaceState } from "../namespace-state.svelte.js";
-import type { KozaneBackend } from "../../backend/contract.js";
-import { BackendError } from "../../backend/contract.js";
+import type { KozaneClient } from "../../backend/contract.js";
+import { ClientError } from "../../backend/contract.js";
 import { readCard, readWarp, readScopeArea } from "../../backend/decoders/snapshot-reader.js";
 import { readPlacements } from "../../backend/decoders/placements.js";
 import type { BoardRect } from "../../constants/index.js";
@@ -9,9 +9,9 @@ import type { CardPositionPatch } from "./namespace-page.js";
 import type { CardWithGlue } from "@kozane/core";
 
 /** Optimistic UI persistence through transport-free resource methods. */
-export function createBackendBoardPersistence(
+export function createClientBoardPersistence(
   s: NamespaceState,
-  backend: Pick<KozaneBackend, "cards" | "warps" | "scopes">,
+  backend: Pick<KozaneClient, "cards" | "warps" | "scopes">,
 ) {
   const placements = (cards: CardWithGlue[], value: unknown) => {
     const changes = new Map((readPlacements(value) ?? []).map((row) => [row.cardId, row]));
@@ -109,7 +109,7 @@ export function createBackendBoardPersistence(
           s.scopeRels = [...s.scopeRels, { scopeId, cardId: created.id }];
       } catch (error) {
         s.setError(
-          error instanceof BackendError
+          error instanceof ClientError
             ? error.message
             : id
               ? "Failed to save card"

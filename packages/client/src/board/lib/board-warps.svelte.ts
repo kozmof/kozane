@@ -1,8 +1,8 @@
 import { withoutWarp, type WarpListEntry } from "../../warp-list.js";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
-import type { KozaneBackend } from "../../backend/contract.js";
-import { BackendError } from "../../backend/contract.js";
+import type { KozaneClient } from "../../backend/contract.js";
+import { ClientError } from "../../backend/contract.js";
 import { parseWarpEntries } from "../../backend/decoders/warp-directory.js";
 import { ARROW_DIRECTIONS, warpInDirection } from "./namespace-page.js";
 import type { NavigationAdapter } from "../../navigation.js";
@@ -20,8 +20,8 @@ type BoardWarpsHost = {
   navigation: () => NavigationAdapter;
   navigate: (href: string) => Promise<void>;
   backend: {
-    warpDirectory: Pick<KozaneBackend["warpDirectory"], "get">;
-    warps: Pick<KozaneBackend["warps"], "remove">;
+    warpDirectory: Pick<KozaneClient["warpDirectory"], "get">;
+    warps: Pick<KozaneClient["warps"], "remove">;
   };
   /** A static export has no endpoints, so it neither refreshes nor deletes. */
   readonly: boolean;
@@ -113,7 +113,7 @@ export class BoardWarps {
         await backend.warps.remove(entry.namespaceId, entry.id);
       } catch (error) {
         this.directory = previous;
-        s.setError(error instanceof BackendError ? error.message : "Failed to remove warp");
+        s.setError(error instanceof ClientError ? error.message : "Failed to remove warp");
       }
     });
   }

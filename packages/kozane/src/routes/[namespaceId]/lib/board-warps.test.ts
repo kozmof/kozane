@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { BoardWarps } from "../../../../../client/src/board/lib/board-warps.svelte.js";
 import { NamespaceState } from "../../../../../client/src/board/namespace-state.svelte.js";
 import { data } from "../page.fixtures.js";
-import { BackendError } from "../../../../../client/src/backend/contract.js";
+import { ClientError } from "../../../../../client/src/backend/contract.js";
 import { createDemoNavigation } from "../../../../../client/src/navigation.js";
 
 function setup(readonly = false) {
@@ -61,7 +61,7 @@ it("tracks cross-namespace removal and restores rejected optimistic changes", as
   expect(s.mutations.idle).toBe(false);
   expect(warps.directory).not.toContainEqual(entry);
   expect(backend.warps.remove).toHaveBeenCalledWith(entry.namespaceId, entry.id);
-  reject(new BackendError("conflict", "Warp changed"));
+  reject(new ClientError("conflict", "Warp changed"));
   await pending;
   expect(warps.directory).toEqual(data.warpDirectory);
   expect(s.lastError).toBe("Warp changed");

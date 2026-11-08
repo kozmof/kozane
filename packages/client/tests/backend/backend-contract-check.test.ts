@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { matrixOperations } from "../../../../scripts/backend-contract-matrix.mjs";
+import { matrixOperations } from "../../../../scripts/client-contract-matrix.mjs";
 
 it("reads the same operations before and after Markdown table alignment", () => {
   const compact = [

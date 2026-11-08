@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { HttpBackend } from "../../../../../../client/src/backend/http-backend.js";
+import { HttpClient } from "../../../../../../client/src/backend/http-client.js";
 import { NamespaceState } from "../../../../../../client/src/board/namespace-state.svelte.js";
-import { createBackendScopeActions } from "../../../../../../client/src/board/lib/actions/backend-scope-actions.js";
+import { createClientScopeActions } from "../../../../../../client/src/board/lib/actions/backend-scope-actions.js";
 const capabilities = {
   writable: true,
   persistent: true,
@@ -15,8 +15,8 @@ function setup(fetcher: typeof fetch) {
   state.taskspaces = [
     { id: "t1", name: "draft", scopeId: "s1", path: "tasks/draft", pathKind: "workspace_relative" },
   ];
-  const backend = new HttpBackend({ capabilities, fetcher });
-  return { state, actions: createBackendScopeActions(state, backend) };
+  const backend = new HttpClient({ capabilities, fetcher });
+  return { state, actions: createClientScopeActions(state, backend) };
 }
 describe("scope actions used by the file browser", () => {
   it("answers a backend network reason instead of throwing", async () => {

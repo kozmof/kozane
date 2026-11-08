@@ -1,8 +1,8 @@
 import type { PollLifecycle } from "./workspace-poller.js";
-import { BackendError } from "./contract.js";
-import type { KozaneBackend, SnapshotData } from "./contract.js";
-export type SnapshotBackend = Pick<
-  KozaneBackend,
+import { ClientError } from "./contract.js";
+import type { KozaneClient, SnapshotData } from "./contract.js";
+export type SnapshotClient = Pick<
+  KozaneClient,
   "version" | "state" | "subscribe" | "subscribeState" | "snapshot"
 >;
 export interface ViewActivity {
@@ -17,7 +17,7 @@ export interface SnapshotViewStatus {
 }
 /** Subscribe before reading, and apply only results still belonging to this active view. */
 export function startSnapshotView(options: {
-  backend: SnapshotBackend;
+  backend: SnapshotClient;
   initialDataApplied?: boolean;
   /** Revalidate a trusted seed without discarding its current-generation status. */
   refreshInitially?: boolean;
@@ -90,10 +90,10 @@ export function startSnapshotView(options: {
         return;
       }
       if (result.status === "unchanged" && validator === undefined)
-        throw new BackendError("unavailable", "Snapshot validation requires current data");
+        throw new ClientError("unavailable", "Snapshot validation requires current data");
       if (result.status === "changed") {
         if (result.data.namespace.id !== namespaceId)
-          throw new BackendError("unavailable", "Snapshot belongs to another namespace");
+          throw new ClientError("unavailable", "Snapshot belongs to another namespace");
         options.apply(result.data);
       }
       validated = { namespaceId, generation };

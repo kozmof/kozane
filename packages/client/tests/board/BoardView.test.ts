@@ -1,10 +1,10 @@
-import { BackendError } from "../../src/backend/contract.js";
-import { BackendSignals } from "../../src/backend/signals.js";
-import type { KozaneBackend, SnapshotResult } from "../../src/backend/contract.js";
+import { ClientError } from "../../src/backend/contract.js";
+import { ClientSignals } from "../../src/backend/signals.js";
+import type { KozaneClient, SnapshotResult } from "../../src/backend/contract.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { BoardView } from "../../src/ui.js";
-import { HttpBackend, StaticBackend } from "../../src/backend/index.js";
+import { HttpClient, StaticClient } from "../../src/backend/index.js";
 import { boardViewProps } from "../../../kozane/src/test-utils/board-view-props.js";
 const capabilities = {
   writable: true,
@@ -41,8 +41,8 @@ it("isolates pending mutations and navigation guards when the backend changes", 
   const secondFetch = vi
     .fn<typeof fetch>()
     .mockResolvedValue(Response.json({ message: "New backend refusal" }, { status: 400 }));
-  const first = new HttpBackend({ capabilities, fetcher: firstFetch });
-  const second = new HttpBackend({ capabilities, fetcher: secondFetch });
+  const first = new HttpClient({ capabilities, fetcher: firstFetch });
+  const second = new HttpClient({ capabilities, fetcher: secondFetch });
   const release = vi.fn();
   const beforeNavigate = vi.fn(() => release);
   const host = {
@@ -85,7 +85,7 @@ it("reuses the view for namespace navigation on the same backend", async () => {
     partitions: props.data.partitions.map((row) => ({ ...row, namespaceId: "next" })),
     layers: props.data.layers.map((row) => ({ ...row, namespaceId: "next" })),
   };
-  const backend = new StaticBackend({
+  const backend = new StaticClient({
     namespaces: [props.data.namespace, next.namespace],
     snapshots: [props.data, next],
   });
@@ -103,7 +103,7 @@ it("reuses the view for namespace navigation on the same backend", async () => {
 
 it("handles a new card arrival on an already-mounted board", async () => {
   const props = boardViewProps();
-  const backend = new HttpBackend({ capabilities, fetcher: vi.fn() });
+  const backend = new HttpClient({ capabilities, fetcher: vi.fn() });
   const replace = vi.fn();
   const host = {
     ...props,
@@ -130,9 +130,9 @@ it("handles a new card arrival on an already-mounted board", async () => {
 
 function recoveringHost() {
   const props = boardViewProps();
-  const signals = new BackendSignals({ status: "ready" });
-  const snapshot = vi.fn<KozaneBackend["snapshot"]>();
-  const create = vi.fn<KozaneBackend["cards"]["create"]>();
+  const signals = new ClientSignals({ status: "ready" });
+  const snapshot = vi.fn<KozaneClient["snapshot"]>();
+  const create = vi.fn<KozaneClient["cards"]["create"]>();
   const backend = new Proxy(props.backend, {
     get(target, key) {
       if (key === "capabilities") return capabilities;
@@ -227,7 +227,7 @@ it("keeps a late mutation failure out of the replacement generation", async () =
   await waitFor(() => expect(screen.getByRole("textbox", { name: "Write a card" })).toBeEnabled());
   const input = screen.getByRole("textbox", { name: "Write a card" });
   await fireEvent.input(input, { target: { value: "New generation draft" } });
-  fail(new BackendError("validation", "Old generation failure"));
+  fail(new ClientError("validation", "Old generation failure"));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(screen.queryByText("Old generation failure")).not.toBeInTheDocument();
   expect(input).toHaveValue("New generation draft");
@@ -237,7 +237,7 @@ it("keeps a late mutation failure out of the replacement generation", async () =
 it("keeps board drafts editable while failed snapshot reads are retried", async () => {
   const f = recoveringHost();
   f.snapshot
-    .mockRejectedValueOnce(new BackendError("network", "offline"))
+    .mockRejectedValueOnce(new ClientError("network", "offline"))
     .mockResolvedValue({ status: "changed", validator: "recovered", data: f.props.data });
   render(BoardView, { props: f.props });
   const input = screen.getByRole("textbox", { name: "Write a card" });
@@ -263,7 +263,7 @@ it("keeps editing available until polling recovery clears its transient notice",
   await fireEvent.input(input, { target: { value: "Still editable" } });
   f.signals.transition({
     status: "ready",
-    refreshError: new BackendError("unavailable", "Metadata unavailable"),
+    refreshError: new ClientError("unavailable", "Metadata unavailable"),
   });
   expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
   expect(input).toBeEnabled();

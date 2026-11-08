@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { tagDataset } from "./tags.fixtures.js";
-import { HttpBackend } from "../../src/backend/http-backend.js";
+import { HttpClient } from "../../src/backend/http-client.js";
 const capabilities = {
   writable: true,
   persistent: true,
@@ -15,7 +15,7 @@ it("routes opaque card IDs and publishes current stamps after successful mutatio
         headers: { "content-type": "application/json" },
       }),
   );
-  const backend = new HttpBackend({ fetcher, base: "/base", capabilities });
+  const backend = new HttpClient({ fetcher, base: "/base", capabilities });
   const observed = vi.fn();
   backend.subscribe((event) => {
     expect(backend.version.revision).toBe(event.revision);
@@ -35,7 +35,7 @@ it("publishes nothing on rejected mutations and enforces read-only capabilities"
         headers: { "content-type": "application/json" },
       }),
   );
-  const backend = new HttpBackend({ fetcher, capabilities });
+  const backend = new HttpClient({ fetcher, capabilities });
   const listener = vi.fn();
   backend.subscribe(listener);
   await expect(
@@ -51,7 +51,7 @@ it("publishes nothing on rejected mutations and enforces read-only capabilities"
     code: "validation",
   });
   expect(listener).not.toHaveBeenCalled();
-  const readonly = new HttpBackend({ fetcher, capabilities: { ...capabilities, writable: false } });
+  const readonly = new HttpClient({ fetcher, capabilities: { ...capabilities, writable: false } });
   await expect(readonly.namespaces.create({ name: "new" })).rejects.toMatchObject({
     code: "read_only",
   });
@@ -78,7 +78,7 @@ it("binds snapshot validators and translates ETag/304 without exposing HTTP", as
       new Response(JSON.stringify(snapshotData), { headers: { etag: '"one"' } }),
     )
     .mockResolvedValueOnce(new Response(null, { status: 304, headers: { etag: '"one"' } }));
-  const backend = new HttpBackend({ fetcher, capabilities });
+  const backend = new HttpClient({ fetcher, capabilities });
   const first = await backend.snapshot("ns");
   expect(first.status).toBe("changed");
   expect(first.validator).not.toBe('"one"');
@@ -96,11 +96,11 @@ it("does not reuse a validator across instances or namespaces and never hides a 
         })
       : new Response(JSON.stringify(snapshotData), { headers: { etag: '"one"' } }),
   );
-  const backend = new HttpBackend({ fetcher, capabilities });
+  const backend = new HttpClient({ fetcher, capabilities });
   const first = await backend.snapshot("ns");
   expect((await backend.snapshot("other", { validator: first.validator })).status).toBe("changed");
   expect(new Headers(fetcher.mock.calls[1][1].headers).has("if-none-match")).toBe(false);
-  const another = new HttpBackend({ fetcher, capabilities });
+  const another = new HttpClient({ fetcher, capabilities });
   expect((await another.snapshot("ns", { validator: first.validator })).status).toBe("changed");
   expect(new Headers(fetcher.mock.calls[2][1].headers).has("if-none-match")).toBe(false);
   fetcher.mockResolvedValueOnce(
@@ -115,7 +115,7 @@ it("does not reuse a validator across instances or namespaces and never hides a 
 });
 it("rejects malformed snapshot data before publishing a validator", async () => {
   const fetcher = vi.fn().mockResolvedValue(new Response('{"namespace":{"id":"ns"}}'));
-  await expect(new HttpBackend({ fetcher, capabilities }).snapshot("ns")).rejects.toMatchObject({
+  await expect(new HttpClient({ fetcher, capabilities }).snapshot("ns")).rejects.toMatchObject({
     code: "unavailable",
   });
 });
@@ -141,7 +141,7 @@ it("routes structure membership area and inventory operations to retained endpoi
               : { ok: true },
     ),
   );
-  const backend = new HttpBackend({ fetcher, capabilities });
+  const backend = new HttpClient({ fetcher, capabilities });
   await backend.glues.create("ns", { cardIds: ["a", "b"] });
   await backend.layers.reorder("ns", { layerIds: ["layer"] });
   await backend.partitions.rename("ns", "part", { name: "Name" });
@@ -188,7 +188,7 @@ it("routes workspace view reads without dispatching content-bearing tag filters"
         ),
       ),
   );
-  const backend = new HttpBackend({ fetcher, capabilities });
+  const backend = new HttpClient({ fetcher, capabilities });
   const changed = vi.fn();
   backend.subscribe(changed);
   await backend.tags.get("opaque /ns");
@@ -207,7 +207,7 @@ it("owns workspace polling without a mounted board and cleans up on final unsubs
   try {
     const stop = vi.fn();
     const fetcher = vi.fn().mockImplementation(async () => new Response('{"token":"baseline"}'));
-    const backend = new HttpBackend({
+    const backend = new HttpClient({
       fetcher,
       capabilities: { ...capabilities, externalWrites: true },
       lifecycle: { visible: () => true, listen: () => stop },

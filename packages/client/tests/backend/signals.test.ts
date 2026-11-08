@@ -1,8 +1,8 @@
 import { expect, it, vi } from "vitest";
-import { BackendSignals } from "../../src/backend/signals.js";
-import { BackendError } from "../../src/backend/contract.js";
+import { ClientSignals } from "../../src/backend/signals.js";
+import { ClientError } from "../../src/backend/contract.js";
 it("delivers lifecycle state immediately and independently from data", () => {
-  const signals = new BackendSignals({ status: "initializing" });
+  const signals = new ClientSignals({ status: "initializing" });
   const state = vi.fn(),
     data = vi.fn();
   const unsubscribe = signals.subscribeState(state);
@@ -10,7 +10,7 @@ it("delivers lifecycle state immediately and independently from data", () => {
   expect(state).toHaveBeenCalledWith({ status: "initializing" });
   signals.transition({
     status: "unavailable",
-    error: new BackendError("unavailable", "Worker failed"),
+    error: new ClientError("unavailable", "Worker failed"),
     recovery: "retry",
   });
   expect(state).toHaveBeenCalledTimes(2);
@@ -20,7 +20,7 @@ it("delivers lifecycle state immediately and independently from data", () => {
   expect(state).toHaveBeenCalledTimes(2);
 });
 it("updates immutable stamps before notifying and reserves no public reset generation", () => {
-  const signals = new BackendSignals({ status: "ready" });
+  const signals = new ClientSignals({ status: "ready" });
   const old = signals.version;
   signals.subscribe((event) => {
     expect(signals.version).toEqual({ generation: event.generation, revision: event.revision });
@@ -33,10 +33,10 @@ it("updates immutable stamps before notifying and reserves no public reset gener
   expect(signals.version).toEqual({ generation: 1, revision: 0 });
 });
 it("rejects empty targets before changing stamps and stops publications after disposal", () => {
-  const signals = new BackendSignals({ status: "ready" });
+  const signals = new ClientSignals({ status: "ready" });
   const listener = vi.fn();
   signals.subscribe(listener);
-  expect(() => signals.publish(["snapshot"], [])).toThrow(BackendError);
+  expect(() => signals.publish(["snapshot"], [])).toThrow(ClientError);
   expect(signals.version.revision).toBe(0);
   signals.dispose();
   signals.dispose();
@@ -47,7 +47,7 @@ it("rejects empty targets before changing stamps and stops publications after di
 it("isolates listener failures from later subscribers and committed publications", () => {
   const onError = vi.fn(),
     later = vi.fn();
-  const signals = new BackendSignals({ status: "ready" }, onError);
+  const signals = new ClientSignals({ status: "ready" }, onError);
   signals.subscribe(() => {
     throw new Error("subscriber");
   });
@@ -59,7 +59,7 @@ it("isolates listener failures from later subscribers and committed publications
 });
 
 it("copies and freezes namespace-scoped targets independently of caller-owned arrays", () => {
-  const signals = new BackendSignals({ status: "ready" });
+  const signals = new ClientSignals({ status: "ready" });
   const datasets = ["snapshot", "tags"] as ("snapshot" | "tags")[];
   const namespaces = ["one"];
   const events: unknown[] = [];

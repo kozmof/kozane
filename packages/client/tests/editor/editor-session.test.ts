@@ -857,8 +857,8 @@ describe("EditorSession", () => {
 });
 
 it("reads static backend files and skip messages and retains edits after a rejected save", async () => {
-  const { StaticBackend } = await import("../../src/backend/static-backend.js");
-  const backend = new StaticBackend({
+  const { StaticClient } = await import("../../src/backend/static-client.js");
+  const backend = new StaticClient({
     namespaces: [{ id: "p-1", name: "One", isDefault: true }],
     snapshots: [
       {

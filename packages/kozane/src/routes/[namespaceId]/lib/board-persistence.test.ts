@@ -1,42 +1,42 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { CardWithGlue, ScopeArea, Warp } from "$lib/types";
 import {
-  BackendError,
-  type KozaneBackend,
+  ClientError,
+  type KozaneClient,
   type CardCreateResult,
 } from "../../../../../client/src/backend/contract.js";
 import { NamespaceState } from "../../../../../client/src/board/namespace-state.svelte.js";
-import { createBackendBoardPersistence } from "../../../../../client/src/board/lib/board-backend-persistence.js";
+import { createClientBoardPersistence } from "../../../../../client/src/board/lib/board-backend-persistence.js";
 
 const backend = {
   cards: {
-    create: vi.fn<KozaneBackend["cards"]["create"]>(),
-    update: vi.fn<KozaneBackend["cards"]["update"]>(),
-    updatePositions: vi.fn<KozaneBackend["cards"]["updatePositions"]>(),
-    remove: vi.fn<KozaneBackend["cards"]["remove"]>(),
-    removeOne: vi.fn<KozaneBackend["cards"]["removeOne"]>(),
-    move: vi.fn<KozaneBackend["cards"]["move"]>(),
-    setLayer: vi.fn<KozaneBackend["cards"]["setLayer"]>(),
-    setPartition: vi.fn<KozaneBackend["cards"]["setPartition"]>(),
-    setStacking: vi.fn<KozaneBackend["cards"]["setStacking"]>(),
-    squash: vi.fn<KozaneBackend["cards"]["squash"]>(),
+    create: vi.fn<KozaneClient["cards"]["create"]>(),
+    update: vi.fn<KozaneClient["cards"]["update"]>(),
+    updatePositions: vi.fn<KozaneClient["cards"]["updatePositions"]>(),
+    remove: vi.fn<KozaneClient["cards"]["remove"]>(),
+    removeOne: vi.fn<KozaneClient["cards"]["removeOne"]>(),
+    move: vi.fn<KozaneClient["cards"]["move"]>(),
+    setLayer: vi.fn<KozaneClient["cards"]["setLayer"]>(),
+    setPartition: vi.fn<KozaneClient["cards"]["setPartition"]>(),
+    setStacking: vi.fn<KozaneClient["cards"]["setStacking"]>(),
+    squash: vi.fn<KozaneClient["cards"]["squash"]>(),
   },
   warps: {
-    create: vi.fn<KozaneBackend["warps"]["create"]>(),
-    update: vi.fn<KozaneBackend["warps"]["update"]>(),
-    remove: vi.fn<KozaneBackend["warps"]["remove"]>(),
+    create: vi.fn<KozaneClient["warps"]["create"]>(),
+    update: vi.fn<KozaneClient["warps"]["update"]>(),
+    remove: vi.fn<KozaneClient["warps"]["remove"]>(),
   },
   scopes: {
-    create: vi.fn<KozaneBackend["scopes"]["create"]>(),
-    rename: vi.fn<KozaneBackend["scopes"]["rename"]>(),
-    remove: vi.fn<KozaneBackend["scopes"]["remove"]>(),
-    addMembers: vi.fn<KozaneBackend["scopes"]["addMembers"]>(),
-    removeMembers: vi.fn<KozaneBackend["scopes"]["removeMembers"]>(),
-    createArea: vi.fn<KozaneBackend["scopes"]["createArea"]>(),
-    updateArea: vi.fn<KozaneBackend["scopes"]["updateArea"]>(),
-    removeArea: vi.fn<KozaneBackend["scopes"]["removeArea"]>(),
+    create: vi.fn<KozaneClient["scopes"]["create"]>(),
+    rename: vi.fn<KozaneClient["scopes"]["rename"]>(),
+    remove: vi.fn<KozaneClient["scopes"]["remove"]>(),
+    addMembers: vi.fn<KozaneClient["scopes"]["addMembers"]>(),
+    removeMembers: vi.fn<KozaneClient["scopes"]["removeMembers"]>(),
+    createArea: vi.fn<KozaneClient["scopes"]["createArea"]>(),
+    updateArea: vi.fn<KozaneClient["scopes"]["updateArea"]>(),
+    removeArea: vi.fn<KozaneClient["scopes"]["removeArea"]>(),
   },
-} satisfies Parameters<typeof createBackendBoardPersistence>[1];
+} satisfies Parameters<typeof createClientBoardPersistence>[1];
 function card(id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue {
   return {
     id,
@@ -56,7 +56,7 @@ function card(id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue {
 function creationResult(value: CardWithGlue): CardCreateResult {
   return { ...value, taskspaceId: null, glueId: null, width: null, placements: [] };
 }
-const refused = new BackendError("validation", "Refused");
+const refused = new ClientError("validation", "Refused");
 const succeeded = { ok: true as const, stacking: [] };
 function state(): NamespaceState {
   const s = new NamespaceState();
@@ -64,11 +64,11 @@ function state(): NamespaceState {
   return s;
 }
 function persistence(s: NamespaceState) {
-  return createBackendBoardPersistence(s, backend);
+  return createClientBoardPersistence(s, backend);
 }
 beforeEach(() => vi.resetAllMocks());
 
-describe("createBackendBoardPersistence", () => {
+describe("createClientBoardPersistence", () => {
   it("answers whether positions and widths were saved", async () => {
     const s = state();
     const persist = persistence(s);
@@ -172,7 +172,7 @@ describe("createBackendBoardPersistence", () => {
       const s = state();
       s.cards = [card("c1")];
       s.selection.composerCard = s.cards[0];
-      backend.cards.update.mockRejectedValueOnce(new BackendError("validation", "Too long"));
+      backend.cards.update.mockRejectedValueOnce(new ClientError("validation", "Too long"));
       await persistence(s).submitComposer("c1", "x", "p1", () => ({ posX: 0, posY: 0 }));
       expect(s.lastError).toBe("Too long");
       expect(s.cards[0].content).toBe("c1");
@@ -224,7 +224,7 @@ describe("createBackendBoardPersistence", () => {
     it("holds mutation activity until the save and local reconciliation finish", async () => {
       const s = state();
       s.cards = [card("c1")];
-      let finish!: (value: Awaited<ReturnType<KozaneBackend["cards"]["update"]>>) => void;
+      let finish!: (value: Awaited<ReturnType<KozaneClient["cards"]["update"]>>) => void;
       backend.cards.update.mockReturnValueOnce(
         new Promise((resolve) => {
           finish = resolve;

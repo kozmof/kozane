@@ -1,9 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { BackendSignals } from "../../src/backend/signals.js";
+import { ClientSignals } from "../../src/backend/signals.js";
 import { startDatasetView } from "../../src/backend/dataset-view.js";
 afterEach(() => vi.useRealTimers());
 function fixture() {
-  const signals = new BackendSignals({ status: "ready" });
+  const signals = new ClientSignals({ status: "ready" });
   const backend = {
     get version() {
       return signals.version;

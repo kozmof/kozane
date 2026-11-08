@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
-  StaticBackend,
-  HttpBackend,
+  StaticClient,
+  HttpClient,
   DEFAULT_UI_CONFIG,
   parseUiOverrides,
   validateUiOverrides,
@@ -19,7 +19,7 @@ import {
   MAP_DEFAULT_VIEWPORT,
   TAG_HITS_SHOWN_MAX,
 } from "@kozane/client";
-import { backendContractCases, runBackendContract } from "@kozane/client/testing";
+import { clientContractCases, runClientContract } from "@kozane/client/testing";
 import * as database from "@kozane/core/database";
 import * as services from "@kozane/core/services";
 import * as schema from "@kozane/core/schema";
@@ -72,8 +72,8 @@ for (const kind of ["static", "http"]) {
   const create = () => ({
     backend:
       kind === "static"
-        ? new StaticBackend({ namespaces, snapshots: [snapshot] })
-        : new HttpBackend({
+        ? new StaticClient({ namespaces, snapshots: [snapshot] })
+        : new HttpClient({
             capabilities: {
               writable: false,
               persistent: true,
@@ -98,20 +98,20 @@ for (const kind of ["static", "http"]) {
     },
   });
   const before = cleanups;
-  const cases = backendContractCases(create);
-  const passed = await runBackendContract(create);
+  const cases = clientContractCases(create);
+  const passed = await runClientContract(create);
   assert.equal(passed.length, cases.length);
   assert.equal(cleanups - before, cases.length);
   assert.ok(passed.includes("read-only cards.create"));
 }
-const writable = await runBackendContract(
+const writable = await runClientContract(
   () =>
     createServiceContractFixture({
       database,
       services,
       schema,
       migrate: applyMigrations,
-      HttpBackend,
+      HttpClient,
       domainErrorCode,
     }),
   { mode: "writable" },

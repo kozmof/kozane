@@ -1,8 +1,4 @@
-import {
-  HttpBackend,
-  StaticBackend,
-  type SnapshotData,
-} from "../../../client/src/backend/index.js";
+import { HttpClient, StaticClient, type SnapshotData } from "../../../client/src/backend/index.js";
 import type { TaskspaceFileTree } from "../lib/types.js";
 import type { EditorSessionContext } from "../../../client/src/editor/index.js";
 
@@ -12,7 +8,7 @@ export function httpEditorContext(
 ): EditorSessionContext {
   return {
     namespaceId,
-    backend: new HttpBackend({
+    backend: new HttpClient({
       fetcher,
       capabilities: {
         writable: true,
@@ -49,7 +45,7 @@ export function staticEditorContext(
   };
   return {
     namespaceId,
-    backend: new StaticBackend({
+    backend: new StaticClient({
       namespaces: [{ id: namespaceId, name: "Board", isDefault: true }],
       snapshots: [snapshot],
       files,

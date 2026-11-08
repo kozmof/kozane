@@ -17,7 +17,7 @@ export function verificationPlan(directory) {
       "check:app-imports",
       "check:client-browser",
       "check:core-browser",
-      "check:backend-contract",
+      "check:client-contract",
       "lint",
       "fmt:check",
       "test:coverage:source",

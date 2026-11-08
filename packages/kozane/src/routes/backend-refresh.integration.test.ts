@@ -14,7 +14,7 @@ import { workspaceServiceContext } from "../lib/server/service-context.js";
 import { workspaceChangeToken } from "../lib/server/workspace-change-token.js";
 import { _resetSnapshotEtagsForTest } from "../lib/server/snapshot-etag.js";
 import {
-  HttpBackend,
+  HttpClient,
   type SnapshotData,
   type TagsResult,
   type MapResult,
@@ -91,7 +91,7 @@ it("refreshes real HTTP views after external CLI commits and token-stable file c
   let fixedToken: string | undefined;
   let answerBaseline!: () => void;
   let baselineCaptured = false;
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     capabilities: {
       writable: true,
       persistent: true,

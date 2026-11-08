@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpBackend, type TaskspacesApi } from "../../src/backend/index.js";
+import { HttpClient, type TaskspacesApi } from "../../src/backend/index.js";
 const ns = "n /";
 const id = "t /";
 const prefix = "/n%20%2F/api/taskspaces/t%20%2F";
@@ -87,7 +87,7 @@ const capabilities = {
 describe.each(Object.entries(cases))("taskspaces.%s", (name, operation) => {
   it("routes and decodes the complete result", async () => {
     const fetcher = vi.fn(async () => Response.json(operation.result));
-    const backend = new HttpBackend({ capabilities, fetcher });
+    const backend = new HttpClient({ capabilities, fetcher });
     const listener = vi.fn();
     const release = backend.subscribe(listener);
     expect(await operation.invoke(backend.taskspaces!)).toEqual(operation.result);
@@ -100,7 +100,7 @@ describe.each(Object.entries(cases))("taskspaces.%s", (name, operation) => {
   });
   it("rejects malformed data without replay, retaining committed invalidations", async () => {
     const fetcher = vi.fn(async () => Response.json({}));
-    const backend = new HttpBackend({ capabilities, fetcher });
+    const backend = new HttpClient({ capabilities, fetcher });
     const listener = vi.fn();
     const release = backend.subscribe(listener);
     await expect(operation.invoke(backend.taskspaces!)).rejects.toMatchObject({
@@ -115,7 +115,7 @@ describe.each(Object.entries(cases))("taskspaces.%s", (name, operation) => {
     const fetcher = vi.fn(async () =>
       Response.json({ message: "Changed on disk" }, { status: 409 }),
     );
-    const backend = new HttpBackend({ capabilities, fetcher });
+    const backend = new HttpClient({ capabilities, fetcher });
     const listener = vi.fn();
     const release = backend.subscribe(listener);
     await expect(operation.invoke(backend.taskspaces!)).rejects.toMatchObject({
@@ -128,7 +128,7 @@ describe.each(Object.entries(cases))("taskspaces.%s", (name, operation) => {
   });
 });
 it("rejects a renamed record with the wrong identity after publishing its committed change", async () => {
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     capabilities,
     fetcher: async () =>
       Response.json({ id: "other", name: "Notes", path: null, pathKind: "absolute" }),
@@ -144,7 +144,7 @@ it("forwards cancellation and rejects malformed committed JSON without retry", a
     .fn()
     .mockResolvedValueOnce(Response.json(file))
     .mockResolvedValueOnce(new Response("invalid JSON"));
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   await backend.taskspaces!.readFile(ns, id, "notes.md", { signal: controller.signal });
   expect(fetcher.mock.calls[0][1].signal).toBe(controller.signal);
   await expect(backend.taskspaces!.saveFile(ns, id, file)).rejects.toMatchObject({

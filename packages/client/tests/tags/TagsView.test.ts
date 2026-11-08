@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/svelte";
 import { TagsView } from "../../src/ui.js";
-import { HttpBackend, StaticBackend } from "../../src/backend/index.js";
+import { HttpClient, StaticClient } from "../../src/backend/index.js";
 import { tagDataset } from "../backend/tags.fixtures.js";
 import { tagsView } from "../../src/backend/views/tags.js";
 import { createDemoNavigation } from "../../src/navigation.js";
@@ -30,7 +30,7 @@ it("renders refreshed card labels and partition metadata together", async () => 
   fresh.cardPartitions[0].partitionId = "b2";
   fresh.index.cardData.new = { namespaceId: "p1", partitionId: "b2", updatedDay: "2026-09-06" };
   fresh.partitions = { b2: { name: "New partition", dot: "#123456" } };
-  const backend = new StaticBackend({ namespaces: fresh.namespaces, tags: fresh });
+  const backend = new StaticClient({ namespaces: fresh.namespaces, tags: fresh });
   render(TagsView, { props: { ...props, backend } });
   await waitFor(() => expect(screen.getByText("Fresh content")).toBeInTheDocument());
   expect(screen.getByText("New partition")).toBeInTheDocument();
@@ -52,7 +52,7 @@ it("clears an old selection's error while the new selection loads", async () => 
           finish = resolve;
         }),
     );
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   const view = render(TagsView, { props: { ...props, backend } });
   await waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent("Could not refresh tags"),
@@ -73,13 +73,13 @@ it("ignores an old backend reply after replacement with the same seed and select
         finish = resolve;
       }),
   );
-  const first = new HttpBackend({ capabilities, fetcher });
+  const first = new HttpClient({ capabilities, fetcher });
   const view = render(TagsView, { props: { ...props, backend: first } });
   await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
   const next = tagDataset([hit("next", "perf", "New backend result")]);
   await view.rerender({
     ...props,
-    backend: new StaticBackend({ namespaces: next.namespaces, tags: next }),
+    backend: new StaticClient({ namespaces: next.namespaces, tags: next }),
   });
   await waitFor(() => expect(screen.getByText("New backend result")).toBeInTheDocument());
   finish(Response.json(tagDataset([hit("late", "perf", "Late reply")])));
@@ -92,7 +92,7 @@ it("uses the host lifecycle without timers and releases it on unmount", async ()
   vi.useFakeTimers();
   const release = vi.fn();
   const listen = vi.fn(() => release);
-  const backend = new StaticBackend({ namespaces: seed.namespaces, tags: seed });
+  const backend = new StaticClient({ namespaces: seed.namespaces, tags: seed });
   const view = render(TagsView, { props: { ...props, backend, lifecycle: { listen } } });
   await vi.advanceTimersByTimeAsync(0);
   expect(listen).toHaveBeenCalledOnce();

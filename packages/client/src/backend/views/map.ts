@@ -1,5 +1,5 @@
 import type { TreemapSnapshot, TreemapPartition } from "@kozane/core";
-import { BackendError } from "../contract.js";
+import { ClientError } from "../contract.js";
 import { normalizeTag } from "../../tag/index.js";
 
 /** Partition identity, size, and board colour used by the map. */
@@ -32,9 +32,9 @@ export function mapView(
   const tag = selection.tag ? normalizeTag(selection.tag) : null;
   const { namespaces } = snapshot;
   if (requestedDay && !validActivityDay(requestedDay))
-    throw new BackendError("validation", "Invalid activity day");
+    throw new ClientError("validation", "Invalid activity day");
   if (requestedNamespace && !namespaces.some(({ id }) => id === requestedNamespace))
-    throw new BackendError("not_found", "Namespace not found");
+    throw new ClientError("not_found", "Namespace not found");
   const drawn = requestedNamespace
     ? namespaces.filter(({ id }) => id === requestedNamespace)
     : namespaces;

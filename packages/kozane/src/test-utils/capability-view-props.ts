@@ -1,12 +1,12 @@
-import { HttpBackend, type BackendCapabilities } from "../../../client/src/index.js";
+import { HttpClient, type ClientCapabilities } from "../../../client/src/index.js";
 import { boardViewProps } from "./board-view-props.js";
 
 /** Same serializable capabilities and seed on the server and hydration paths. */
-export function capabilityViewProps(capabilities: BackendCapabilities, lifetimeNotice?: string) {
+export function capabilityViewProps(capabilities: ClientCapabilities, lifetimeNotice?: string) {
   const seed = boardViewProps();
   const calls: string[] = [];
   const rows = [seed.data.namespace];
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     capabilities,
     pollingInitialDelayMs: 1000,
     fetcher: async (url) => {

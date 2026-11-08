@@ -1,8 +1,8 @@
-import { BackendSignals } from "../../src/backend/signals.js";
+import { ClientSignals } from "../../src/backend/signals.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { NamespacesView } from "../../src/ui.js";
-import { HttpBackend, StaticBackend } from "../../src/backend/index.js";
+import { HttpClient, StaticClient } from "../../src/backend/index.js";
 import { createDemoNavigation } from "../../src/navigation.js";
 const navigation = createDemoNavigation({ base: "/demo" });
 const capabilities = {
@@ -19,7 +19,7 @@ afterEach(() => vi.unstubAllGlobals());
 it("renders a read-only index with supplied navigation and generic empty guidance", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
-  const backend = new StaticBackend({ namespaces: rows });
+  const backend = new StaticClient({ namespaces: rows });
   const view = render(NamespacesView, { props: { ...props, backend } });
   expect(screen.getByRole("link", { name: /Research/ })).toHaveAttribute(
     "href",
@@ -29,7 +29,7 @@ it("renders a read-only index with supplied navigation and generic empty guidanc
   await view.rerender({
     ...props,
     initialNamespaces: [],
-    backend: new StaticBackend({ namespaces: [] }),
+    backend: new StaticClient({ namespaces: [] }),
   });
   expect(screen.getByText("No namespaces yet.")).toBeInTheDocument();
   expect(screen.queryByText(/kozane namespace/)).not.toBeInTheDocument();
@@ -37,7 +37,7 @@ it("renders a read-only index with supplied navigation and generic empty guidanc
 });
 
 it("keeps progressive form attributes and app-supplied errors", () => {
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     capabilities,
     fetcher: vi.fn().mockResolvedValue(Response.json(rows)),
   });
@@ -65,7 +65,7 @@ it("disposes the old backend subscription and rejects late rows after replacemen
         finish = resolve;
       }),
   );
-  const first = new HttpBackend({ capabilities, fetcher });
+  const first = new HttpClient({ capabilities, fetcher });
   const subscribe = first.subscribe.bind(first);
   const stopped = vi.fn();
   vi.spyOn(first, "subscribe").mockImplementation((listener) => {
@@ -81,7 +81,7 @@ it("disposes the old backend subscription and rejects late rows after replacemen
   await view.rerender({
     ...props,
     initialNamespaces: nextRows,
-    backend: new StaticBackend({ namespaces: nextRows }),
+    backend: new StaticClient({ namespaces: nextRows }),
   });
   expect(stopped).toHaveBeenCalledOnce();
   finish(Response.json([{ id: "stale", name: "Old reply", isDefault: false }]));
@@ -93,7 +93,7 @@ it("disposes the old backend subscription and rejects late rows after replacemen
 
 it("does not clear a new backend's draft when an old creation finishes", async () => {
   let finish!: (value: Response) => void;
-  const first = new HttpBackend({
+  const first = new HttpClient({
     capabilities,
     fetcher: vi.fn<typeof fetch>().mockImplementation(async (_url, options) =>
       options?.method === "POST"
@@ -108,7 +108,7 @@ it("does not clear a new backend's draft when an old creation finishes", async (
   await fireEvent.input(input, { target: { value: "Old draft" } });
   await fireEvent.submit(input.closest("form")!);
   await waitFor(() => expect(finish).toBeTypeOf("function"));
-  const second = new HttpBackend({
+  const second = new HttpClient({
     capabilities,
     fetcher: vi.fn().mockResolvedValue(Response.json(rows)),
   });
@@ -121,7 +121,7 @@ it("does not clear a new backend's draft when an old creation finishes", async (
 });
 
 it("retains the namespace draft while recovery blocks submission", async () => {
-  const signals = new BackendSignals({ status: "ready" });
+  const signals = new ClientSignals({ status: "ready" });
   let finish!: (value: Response) => void;
   const fetcher = vi
     .fn<typeof fetch>()
@@ -132,7 +132,7 @@ it("retains the namespace draft while recovery blocks submission", async () => {
           finish = resolve;
         }),
     );
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   vi.spyOn(backend, "state", "get").mockImplementation(() => signals.state);
   vi.spyOn(backend, "version", "get").mockImplementation(() => signals.version);
   vi.spyOn(backend, "subscribe").mockImplementation(signals.subscribe.bind(signals));
@@ -159,7 +159,7 @@ it("retains namespace links and retries a failed metadata refresh", async () => 
     .fn()
     .mockRejectedValueOnce(new Error("offline"))
     .mockImplementation(async () => Response.json([{ ...rows[0], name: "Recovered namespace" }]));
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   render(NamespacesView, { props: { ...props, backend } });
   expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Research/ })).toBeInTheDocument();

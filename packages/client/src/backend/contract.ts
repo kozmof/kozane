@@ -14,7 +14,7 @@ import type {
 } from "./resources.js";
 export * from "./resources.js";
 import type { NamespaceDataSnapshot } from "@kozane/core";
-export type BackendErrorCode =
+export type ClientErrorCode =
   | "validation"
   | "not_found"
   | "conflict"
@@ -25,11 +25,11 @@ export type BackendErrorCode =
   | "rate_limited"
   | "unavailable"
   | "network";
-export class BackendError extends Error {
-  override readonly name = "BackendError";
+export class ClientError extends Error {
+  override readonly name = "ClientError";
   readonly retryAfterMs?: number;
   constructor(
-    readonly code: BackendErrorCode,
+    readonly code: ClientErrorCode,
     message: string,
     options: ErrorOptions & { retryAfterMs?: number } = {},
   ) {
@@ -38,32 +38,32 @@ export class BackendError extends Error {
     Object.freeze(this);
   }
 }
-export interface BackendCapabilities {
+export interface ClientCapabilities {
   readonly writable: boolean;
   readonly taskspaces: boolean;
   readonly auth: boolean;
   readonly persistent: boolean;
   readonly externalWrites: boolean;
 }
-export type BackendState =
+export type ClientState =
   | { readonly status: "initializing" | "recovering" }
   | {
       readonly status: "ready";
       /** A retryable external-refresh failure. Data and write readiness remain intact. */
-      readonly refreshError?: BackendError;
+      readonly refreshError?: ClientError;
     }
   | {
       readonly status: "unavailable";
-      readonly error: BackendError;
+      readonly error: ClientError;
       readonly recovery: "retry" | "reload";
     };
-export interface BackendVersion {
+export interface ClientVersion {
   readonly generation: number;
   readonly revision: number;
 }
-export type BackendDataset = "snapshot" | "tags" | "map" | "namespaces" | "warpDirectory";
-export interface BackendInvalidation extends BackendVersion {
-  readonly datasets: readonly BackendDataset[];
+export type ClientDataset = "snapshot" | "tags" | "map" | "namespaces" | "warpDirectory";
+export interface ClientInvalidation extends ClientVersion {
+  readonly datasets: readonly ClientDataset[];
   readonly namespaceIds?: readonly string[];
 }
 export type SnapshotData = NamespaceDataSnapshot;
@@ -77,13 +77,13 @@ export interface SnapshotReadOptions {
 /** Shared data and lifecycle surface implemented by every deployment adapter.
  * See operation-matrix.md for behavior and verification coverage.
  */
-export interface KozaneBackend {
+export interface KozaneClient {
   readonly kind: "http" | "static" | "local";
-  readonly capabilities: BackendCapabilities;
-  readonly version: BackendVersion;
-  readonly state: BackendState;
-  subscribe(listener: (event: BackendInvalidation) => void): () => void;
-  subscribeState(listener: (state: BackendState) => void): () => void;
+  readonly capabilities: ClientCapabilities;
+  readonly version: ClientVersion;
+  readonly state: ClientState;
+  subscribe(listener: (event: ClientInvalidation) => void): () => void;
+  subscribeState(listener: (state: ClientState) => void): () => void;
   snapshot(namespaceId: string, options?: SnapshotReadOptions): Promise<SnapshotResult>;
   readonly namespaces: NamespacesApi;
   readonly cards: CardsApi;

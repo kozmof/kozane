@@ -1,5 +1,5 @@
 import {
-  StaticBackend,
+  StaticClient,
   createDemoNavigation,
   createMemoryPreferences,
   type SnapshotData,
@@ -54,7 +54,7 @@ export function createViewFixture(
     excerpt: "Packed board 日本語 :release",
   };
   const navigation = createDemoNavigation({ base: "/packed" });
-  const backend = new StaticBackend({
+  const backend = new StaticClient({
     namespaces,
     snapshots: [snapshot],
     warpDirectories: { packed: [] },

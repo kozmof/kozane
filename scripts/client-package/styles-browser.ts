@@ -2,7 +2,7 @@ import { verifyCoreIdentity } from "./verify-core-identity.mjs";
 import "@kozane/client/styles.css";
 import { hydrate, tick } from "svelte";
 import { EditorDocument, EditorSurface, NamespacesView } from "@kozane/client/ui";
-import { StaticBackend, createDemoNavigation } from "@kozane/client";
+import { StaticClient, createDemoNavigation } from "@kozane/client";
 const doc = new EditorDocument("Packed editor 日本語");
 const namespaces = [{ id: "packed", name: "Packed workspace", isDefault: true }];
 hydrate(EditorSurface, {
@@ -12,7 +12,7 @@ hydrate(EditorSurface, {
 hydrate(NamespacesView, {
   target: document.getElementById("packed-namespaces")!,
   props: {
-    backend: new StaticBackend({ namespaces }),
+    backend: new StaticClient({ namespaces }),
     initialNamespaces: namespaces,
     navigation: createDemoNavigation({ base: "/packed" }),
   },

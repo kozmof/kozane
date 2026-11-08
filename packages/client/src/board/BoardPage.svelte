@@ -1,8 +1,8 @@
 <script lang="ts">
   import { startDatasetView } from "../backend/dataset-view.js";
-  import { BackendError } from "../backend/contract.js";
+  import { ClientError } from "../backend/contract.js";
   import RefreshNotice from "../RefreshNotice.svelte";
-  import BackendNotice from "../BackendNotice.svelte";
+  import ClientNotice from "../ClientNotice.svelte";
   import { onMount, onDestroy, tick, untrack } from "svelte";
   import type { BoardViewProps } from "./types.js";
   import { css } from "../styles/css.js";
@@ -11,7 +11,7 @@
   } from "../navigation.js";
   import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
   import { boardKeyBindings } from "./lib/board-bindings.js";
-  import { createBackendBoardPersistence } from "./lib/board-backend-persistence.js";
+  import { createClientBoardPersistence } from "./lib/board-backend-persistence.js";
   import KozaneCanvas from "./components/KozaneCanvas.svelte";
   import { NamespaceState } from "./namespace-state.svelte.js";
   import { createNamespaceActions } from "./namespace-actions.svelte.js";
@@ -21,7 +21,7 @@
   import BoardComposer from "./components/BoardComposer.svelte";
   import WarpPalette from "./components/WarpPalette.svelte";
   import InventoryDock from "./components/InventoryDock.svelte";
-  import { createBackendInventoryActions } from "./lib/backend-inventory-actions.js";
+  import { createClientInventoryActions } from "./lib/backend-inventory-actions.js";
   import type { InventoryDrag } from "./lib/inventory-drop.js";
   import { arrivalWarp, clearArrivalParams, readArrival } from "./lib/board-arrival.js";
   import { createBoardFiles } from "./lib/board-files.js";
@@ -49,7 +49,7 @@
   const readonly = $derived(!backend.capabilities.writable);
   let snapshotStatus = $state.raw<SnapshotViewStatus>(untrack(() => ({ current: initialDataApplied && backend.state.status === "ready", namespaceId: data.namespace.id, generation: backend.version.generation })));
   const editingBlocked = $derived(!readonly && (!snapshotStatus.current || snapshotStatus.namespaceId !== data.namespace.id || snapshotStatus.generation !== backend.version.generation));
-  const mutationBackend = untrack(() => bindViewWrites(backend, () => !editingBlocked));
+  const mutationClient = untrack(() => bindViewWrites(backend, () => !editingBlocked));
   let refreshAttempt = $state(0);
   let refreshFailed = $state(false);
   let filesRefreshFailed = $state(false);
@@ -99,7 +99,7 @@
     {
       s,
       readonly: untrack(() => readonly),
-      backend: mutationBackend,
+      backend: mutationClient,
       navigation: () => navigation,
       navigate: (href) => routing.navigate(href),
       removeWarp: (warpId) => actions.handleRemoveWarp(warpId),
@@ -272,13 +272,13 @@
   });
 
   // ── Domain action handlers ────────────────────────────────────
-  const actions = createNamespaceActions(s, mutationBackend);
+  const actions = createNamespaceActions(s, mutationClient);
 
   // Persist optimistic canvas and composer edits. Return success so callers can roll back
   // failed saves.
-  const persistence = createBackendBoardPersistence(s, mutationBackend);
+  const persistence = createClientBoardPersistence(s, mutationClient);
 
-  const inventoryActions = createBackendInventoryActions(s, mutationBackend);
+  const inventoryActions = createClientInventoryActions(s, mutationClient);
 
   /** The drag the canvas reports, for slot highlighting and the preview of a stored card. */
   let inventoryDrag = $state<InventoryDrag>({
@@ -324,7 +324,7 @@
         backend: current, dataset: "snapshot", retryIntervalMs: interval, lifecycle: wake, isHidden: hidden,
         read: async (isCurrent) => {
           const ok = await tree.refreshWatched(context, () => active && current.version.generation === generation && isCurrent());
-          if (!ok) throw new BackendError("unavailable", "Could not refresh files");
+          if (!ok) throw new ClientError("unavailable", "Could not refresh files");
         },
         apply: () => { if (attempt === refreshAttempt) filesRefreshFailed = false; },
         error: () => { if (attempt === refreshAttempt) filesRefreshFailed = true; },
@@ -427,7 +427,7 @@
 </svelte:head>
 
 <svelte:window onkeydown={handleKeydown} />
-<BackendNotice capabilities={backend.capabilities} {lifetimeNotice} floating />
+<ClientNotice capabilities={backend.capabilities} {lifetimeNotice} floating />
 <RefreshNotice {backend} failed={refreshFailed || filesRefreshFailed} message={filesRefreshFailed ? "Could not refresh files. Showing the last listings." : "Could not refresh the board. Showing the last board."} retry={() => refreshAttempt++} floating />
 
 {#if editingBlocked}

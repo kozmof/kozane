@@ -1,4 +1,4 @@
-import type { KozaneBackend, MutationOptions } from "./contract.js";
+import type { KozaneClient, MutationOptions } from "./contract.js";
 export type { MutationOptions } from "./contract.js";
 import type { TaskspaceLifecycleApi } from "./contract.js";
 import { WorkspacePoller, browserPollLifecycle, type PollLifecycle } from "./workspace-poller.js";
@@ -42,23 +42,23 @@ import { readMapSnapshot } from "./decoders/map.js";
 import { SnapshotValidators } from "./snapshot-validators.js";
 import { readNamespaceSnapshot } from "./decoders/snapshot-reader.js";
 import type { SnapshotResult } from "./contract.js";
-import { BackendError, type BackendCapabilities, type BackendDataset } from "./contract.js";
-import { BackendSignals } from "./signals.js";
+import { ClientError, type ClientCapabilities, type ClientDataset } from "./contract.js";
+import { ClientSignals } from "./signals.js";
 import { HttpTransport, type HttpTransportOptions } from "./http-transport.js";
 
-const ALL: readonly BackendDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
+const ALL: readonly ClientDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 
 /** HTTP implementation of the shared backend data and lifecycle contract. */
-export class HttpBackend implements KozaneBackend {
+export class HttpClient implements KozaneClient {
   readonly kind = "http" as const;
-  readonly capabilities: BackendCapabilities;
-  private readonly signals = new BackendSignals({ status: "ready" });
+  readonly capabilities: ClientCapabilities;
+  private readonly signals = new ClientSignals({ status: "ready" });
   private readonly transport: HttpTransport;
   private readonly poller?: WorkspacePoller;
   constructor(
     options: HttpTransportOptions & {
       base?: string;
-      capabilities: BackendCapabilities;
+      capabilities: ClientCapabilities;
       lifecycle?: PollLifecycle;
       pollingInitialDelayMs?: number;
     },
@@ -73,7 +73,7 @@ export class HttpBackend implements KozaneBackend {
         token: async () => {
           const value = await this.read<{ token?: unknown }>("/api/changes");
           if (typeof value.token !== "string" || !value.token)
-            throw new BackendError("unavailable", "Invalid change token");
+            throw new ClientError("unavailable", "Invalid change token");
           return value.token;
         },
         changed: () => this.invalidateAll(),
@@ -81,9 +81,9 @@ export class HttpBackend implements KozaneBackend {
           this.signals.transition({
             status: "ready",
             refreshError:
-              cause instanceof BackendError
+              cause instanceof ClientError
                 ? cause
-                : new BackendError("unavailable", "Could not check workspace changes"),
+                : new ClientError("unavailable", "Could not check workspace changes"),
           }),
         succeeded: () => {
           if (this.state.status === "ready" && this.state.refreshError)
@@ -100,7 +100,7 @@ export class HttpBackend implements KozaneBackend {
   get state() {
     return this.signals.state;
   }
-  subscribe: BackendSignals["subscribe"] = (listener) => {
+  subscribe: ClientSignals["subscribe"] = (listener) => {
     const unsubscribe = this.signals.subscribe(listener);
     const release = this.poller?.retain();
     return () => {
@@ -108,7 +108,7 @@ export class HttpBackend implements KozaneBackend {
       release?.();
     };
   };
-  subscribeState: BackendSignals["subscribeState"] = (listener) =>
+  subscribeState: ClientSignals["subscribeState"] = (listener) =>
     this.signals.subscribeState(listener);
   private ns(namespaceId: string, path: string) {
     return `/${encodeURIComponent(namespaceId)}/api${path}`;
@@ -121,7 +121,7 @@ export class HttpBackend implements KozaneBackend {
     try {
       return (await response.json()) as T;
     } catch (cause) {
-      throw new BackendError("unavailable", "Invalid backend response", { cause });
+      throw new ClientError("unavailable", "Invalid backend response", { cause });
     }
   }
   private async write<T>(
@@ -131,14 +131,14 @@ export class HttpBackend implements KozaneBackend {
     options?: MutationOptions,
   ): Promise<T> {
     if (!this.capabilities.writable)
-      throw new BackendError("read_only", "This backend is read-only");
+      throw new ClientError("read_only", "This backend is read-only");
     const response = await this.transport.request(path, method, input, options);
     // The HTTP mutation committed even if its response body cannot be decoded.
     this.invalidateAll();
     try {
       return (await response.json()) as T;
     } catch (cause) {
-      throw new BackendError("unavailable", "Invalid backend response", { cause });
+      throw new ClientError("unavailable", "Invalid backend response", { cause });
     }
   }
   private invalidateAll(): void {
@@ -153,7 +153,7 @@ export class HttpBackend implements KozaneBackend {
     message = "Invalid taskspace response",
   ): T {
     const result = decode(value);
-    if (result === null) throw new BackendError("unavailable", message);
+    if (result === null) throw new ClientError("unavailable", message);
     return result;
   }
   private async readTaskspace<T>(
@@ -181,13 +181,13 @@ export class HttpBackend implements KozaneBackend {
     options?: MutationOptions,
   ): Promise<T> {
     if (!this.capabilities.writable)
-      throw new BackendError("read_only", "This backend is read-only");
+      throw new ClientError("read_only", "This backend is read-only");
     let prepared = input;
     if (input !== undefined) {
       try {
         prepared = prepareInput(input);
       } catch (error) {
-        if (error instanceof ValidationError) throw new BackendError("validation", error.message);
+        if (error instanceof ValidationError) throw new ClientError("validation", error.message);
         throw error;
       }
     }
@@ -197,10 +197,10 @@ export class HttpBackend implements KozaneBackend {
       "Invalid mutation response",
     );
   }
-  readonly namespaces: KozaneBackend["namespaces"] = {
+  readonly namespaces: KozaneClient["namespaces"] = {
     list: async () => {
       const result = readNamespaceList(await this.read<unknown>("/api/namespaces"));
-      if (!result) throw new BackendError("unavailable", "Invalid namespace list");
+      if (!result) throw new ClientError("unavailable", "Invalid namespace list");
       return result;
     },
     get: async (namespaceId: string) => {
@@ -208,13 +208,13 @@ export class HttpBackend implements KozaneBackend {
         await this.read<unknown>(`/api/namespaces/${encodeURIComponent(namespaceId)}`),
       );
       if (!result || result.id !== namespaceId)
-        throw new BackendError("unavailable", "Invalid namespace metadata");
+        throw new ClientError("unavailable", "Invalid namespace metadata");
       return result;
     },
     create: (input: { name: string }) =>
       this.writeDomain("/api/namespaces", "POST", input, readNamespaceCreated),
   };
-  readonly cards: KozaneBackend["cards"] = {
+  readonly cards: KozaneClient["cards"] = {
     create: (ns, input, options) =>
       this.writeDomain(this.ns(ns, "/cards"), "POST", input, readCardCreated, options),
     update: (ns, id, input, options) =>
@@ -248,14 +248,14 @@ export class HttpBackend implements KozaneBackend {
         readCardSquashed(value, ns),
       ),
   };
-  readonly glues: KozaneBackend["glues"] = {
+  readonly glues: KozaneClient["glues"] = {
     create: (ns, input, options) =>
       this.writeDomain(this.ns(ns, "/glues"), "POST", input, readGlueCreated, options),
     remove: (ns, input, options) =>
       this.writeDomain(this.ns(ns, "/glues"), "DELETE", input, readGlueRemoved, options),
   };
 
-  readonly layers: KozaneBackend["layers"] = {
+  readonly layers: KozaneClient["layers"] = {
     create: (ns: string, input, options?: MutationOptions) =>
       this.writeDomain(this.ns(ns, "/layers"), "POST", input, readLayerCreated, options),
     rename: (ns: string, id: string, input, options?: MutationOptions) =>
@@ -278,7 +278,7 @@ export class HttpBackend implements KozaneBackend {
       this.writeDomain(this.ns(ns, "/layers"), "PATCH", input, readMutationOk, options),
   };
 
-  readonly partitions: KozaneBackend["partitions"] = {
+  readonly partitions: KozaneClient["partitions"] = {
     create: (ns: string, input, options?: MutationOptions) =>
       this.writeDomain(this.ns(ns, "/partitions"), "POST", input, readCreatedId, options),
     rename: (ns: string, id: string, input, options?: MutationOptions) =>
@@ -299,7 +299,7 @@ export class HttpBackend implements KozaneBackend {
       ),
   };
 
-  readonly scopes: KozaneBackend["scopes"] = {
+  readonly scopes: KozaneClient["scopes"] = {
     create: (ns: string, input, options?: MutationOptions) =>
       this.writeDomain(this.ns(ns, "/scopes"), "POST", input, readCreatedId, options),
     rename: (ns: string, id: string, input, options?: MutationOptions) =>
@@ -360,7 +360,7 @@ export class HttpBackend implements KozaneBackend {
       ),
   };
 
-  readonly warps: KozaneBackend["warps"] = {
+  readonly warps: KozaneClient["warps"] = {
     create: (ns: string, input, options?: MutationOptions) =>
       this.writeDomain(
         this.ns(ns, "/warps"),
@@ -387,7 +387,7 @@ export class HttpBackend implements KozaneBackend {
       ),
   };
 
-  readonly inventories: KozaneBackend["inventories"] = {
+  readonly inventories: KozaneClient["inventories"] = {
     create: (ns: string, input, options?: MutationOptions) =>
       this.writeDomain(
         this.ns(ns, "/inventories"),
@@ -454,18 +454,18 @@ export class HttpBackend implements KozaneBackend {
         !etag ||
         (response.headers.has("etag") && response.headers.get("etag") !== etag)
       )
-        throw new BackendError("unavailable", "Invalid conditional snapshot response");
+        throw new ClientError("unavailable", "Invalid conditional snapshot response");
       return { status: "unchanged", validator: options.validator };
     }
     let raw: unknown;
     try {
       raw = await response.json();
     } catch (cause) {
-      throw new BackendError("unavailable", "Invalid snapshot response", { cause });
+      throw new ClientError("unavailable", "Invalid snapshot response", { cause });
     }
     const data = readNamespaceSnapshot(raw);
     if (!data || data.namespace.id !== namespaceId)
-      throw new BackendError("unavailable", "Invalid snapshot response");
+      throw new ClientError("unavailable", "Invalid snapshot response");
     const currentEtag = response.headers.get("etag");
     return this.validators.result(
       namespaceId,
@@ -476,7 +476,7 @@ export class HttpBackend implements KozaneBackend {
     );
   }
 
-  readonly tags: KozaneBackend["tags"] = {
+  readonly tags: KozaneClient["tags"] = {
     get: async (namespaceId?: string) => {
       const result = readTagsViewData(
         await this.read<unknown>(
@@ -485,23 +485,23 @@ export class HttpBackend implements KozaneBackend {
           { cache: "no-store" },
         ),
       );
-      if (!result) throw new BackendError("unavailable", "Invalid tags dataset");
+      if (!result) throw new ClientError("unavailable", "Invalid tags dataset");
       return result;
     },
   };
-  readonly map: KozaneBackend["map"] = {
+  readonly map: KozaneClient["map"] = {
     get: async () => {
       const result = readMapSnapshot(await this.read<unknown>("/api/map", { cache: "no-store" }));
-      if (!result) throw new BackendError("unavailable", "Invalid map dataset");
+      if (!result) throw new ClientError("unavailable", "Invalid map dataset");
       return result;
     },
   };
-  readonly warpDirectory: KozaneBackend["warpDirectory"] = {
+  readonly warpDirectory: KozaneClient["warpDirectory"] = {
     get: async (namespaceId: string) => {
       const result = parseWarpEntries(
         await this.read<unknown>(this.ns(namespaceId, "/warp-directory")),
       );
-      if (!result) throw new BackendError("unavailable", "Invalid warp directory");
+      if (!result) throw new ClientError("unavailable", "Invalid warp directory");
       return result;
     },
   };
@@ -561,7 +561,7 @@ export class HttpBackend implements KozaneBackend {
         input,
         readTaskspaceRenamed,
       );
-      if (result.id !== id) throw new BackendError("unavailable", "Invalid taskspace response");
+      if (result.id !== id) throw new ClientError("unavailable", "Invalid taskspace response");
       return result;
     },
     remove: (ns, id) =>

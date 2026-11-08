@@ -3,9 +3,9 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  StaticBackend,
-  type StaticBackendData,
-} from "../../../../client/src/backend/static-backend.js";
+  StaticClient,
+  type StaticClientData,
+} from "../../../../client/src/backend/static-client.js";
 const roots: string[] = [];
 afterEach(async () => {
   vi.unstubAllEnvs();
@@ -67,24 +67,24 @@ it.each([false, true])(
     });
     const { load } = await import("./+page.server.js");
     const data = (await load({ locals: { db }, params: { namespaceId } } as never)) as {
-      staticBackendData: StaticBackendData;
-      backendCapabilities?: unknown;
+      staticClientData: StaticClientData;
+      clientCapabilities?: unknown;
     };
-    expect(data.backendCapabilities).toBeUndefined();
-    expect(JSON.stringify(data.staticBackendData)).not.toContain(root);
-    expect(JSON.stringify(data.staticBackendData)).not.toContain("Unlinked private");
-    expect(data.staticBackendData.files?.[unlinked]).toBeUndefined();
-    const backend = new StaticBackend(data.staticBackendData);
+    expect(data.clientCapabilities).toBeUndefined();
+    expect(JSON.stringify(data.staticClientData)).not.toContain(root);
+    expect(JSON.stringify(data.staticClientData)).not.toContain("Unlinked private");
+    expect(data.staticClientData.files?.[unlinked]).toBeUndefined();
+    const backend = new StaticClient(data.staticClientData);
     expect(backend.capabilities.writable).toBe(false);
     if (includeFiles) {
-      expect(Object.keys(data.staticBackendData.files ?? {})).toEqual([scoped]);
+      expect(Object.keys(data.staticClientData.files ?? {})).toEqual([scoped]);
       expect(await backend.taskspaces!.readFile(namespaceId, scoped, "notes.md")).toMatchObject({
         content: "scoped content",
         signature: null,
       });
     } else {
-      expect(data.staticBackendData.files).toBeUndefined();
-      expect(data.staticBackendData.snapshots?.[0].scopes).toEqual([]);
+      expect(data.staticClientData.files).toBeUndefined();
+      expect(data.staticClientData.snapshots?.[0].scopes).toEqual([]);
       expect(backend.taskspaces).toBeUndefined();
     }
   },

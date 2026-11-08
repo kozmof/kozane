@@ -2,63 +2,63 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createNamespaceActions } from "../../../../client/src/board/namespace-actions.svelte.js";
 import { NamespaceState } from "../../../../client/src/board/namespace-state.svelte.js";
 import type { CardWithGlue } from "$lib/types";
-import { BackendError, type KozaneBackend } from "../../../../client/src/backend/contract.js";
+import { ClientError, type KozaneClient } from "../../../../client/src/backend/contract.js";
 
 const backend = {
   cards: {
-    create: vi.fn<KozaneBackend["cards"]["create"]>(),
-    update: vi.fn<KozaneBackend["cards"]["update"]>(),
-    updatePositions: vi.fn<KozaneBackend["cards"]["updatePositions"]>(),
-    remove: vi.fn<KozaneBackend["cards"]["remove"]>(),
-    removeOne: vi.fn<KozaneBackend["cards"]["removeOne"]>(),
-    move: vi.fn<KozaneBackend["cards"]["move"]>(),
-    setLayer: vi.fn<KozaneBackend["cards"]["setLayer"]>(),
-    setPartition: vi.fn<KozaneBackend["cards"]["setPartition"]>(),
-    setStacking: vi.fn<KozaneBackend["cards"]["setStacking"]>(),
-    squash: vi.fn<KozaneBackend["cards"]["squash"]>(),
+    create: vi.fn<KozaneClient["cards"]["create"]>(),
+    update: vi.fn<KozaneClient["cards"]["update"]>(),
+    updatePositions: vi.fn<KozaneClient["cards"]["updatePositions"]>(),
+    remove: vi.fn<KozaneClient["cards"]["remove"]>(),
+    removeOne: vi.fn<KozaneClient["cards"]["removeOne"]>(),
+    move: vi.fn<KozaneClient["cards"]["move"]>(),
+    setLayer: vi.fn<KozaneClient["cards"]["setLayer"]>(),
+    setPartition: vi.fn<KozaneClient["cards"]["setPartition"]>(),
+    setStacking: vi.fn<KozaneClient["cards"]["setStacking"]>(),
+    squash: vi.fn<KozaneClient["cards"]["squash"]>(),
   },
   glues: {
-    create: vi.fn<KozaneBackend["glues"]["create"]>(),
-    remove: vi.fn<KozaneBackend["glues"]["remove"]>(),
+    create: vi.fn<KozaneClient["glues"]["create"]>(),
+    remove: vi.fn<KozaneClient["glues"]["remove"]>(),
   },
   layers: {
-    create: vi.fn<KozaneBackend["layers"]["create"]>(),
-    rename: vi.fn<KozaneBackend["layers"]["rename"]>(),
-    remove: vi.fn<KozaneBackend["layers"]["remove"]>(),
-    reorder: vi.fn<KozaneBackend["layers"]["reorder"]>(),
+    create: vi.fn<KozaneClient["layers"]["create"]>(),
+    rename: vi.fn<KozaneClient["layers"]["rename"]>(),
+    remove: vi.fn<KozaneClient["layers"]["remove"]>(),
+    reorder: vi.fn<KozaneClient["layers"]["reorder"]>(),
   },
   partitions: {
-    create: vi.fn<KozaneBackend["partitions"]["create"]>(),
-    rename: vi.fn<KozaneBackend["partitions"]["rename"]>(),
-    remove: vi.fn<KozaneBackend["partitions"]["remove"]>(),
+    create: vi.fn<KozaneClient["partitions"]["create"]>(),
+    rename: vi.fn<KozaneClient["partitions"]["rename"]>(),
+    remove: vi.fn<KozaneClient["partitions"]["remove"]>(),
   },
   warps: {
-    create: vi.fn<KozaneBackend["warps"]["create"]>(),
-    update: vi.fn<KozaneBackend["warps"]["update"]>(),
-    remove: vi.fn<KozaneBackend["warps"]["remove"]>(),
+    create: vi.fn<KozaneClient["warps"]["create"]>(),
+    update: vi.fn<KozaneClient["warps"]["update"]>(),
+    remove: vi.fn<KozaneClient["warps"]["remove"]>(),
   },
   scopes: {
-    create: vi.fn<KozaneBackend["scopes"]["create"]>(),
-    rename: vi.fn<KozaneBackend["scopes"]["rename"]>(),
-    remove: vi.fn<KozaneBackend["scopes"]["remove"]>(),
-    addMembers: vi.fn<KozaneBackend["scopes"]["addMembers"]>(),
-    removeMembers: vi.fn<KozaneBackend["scopes"]["removeMembers"]>(),
-    createArea: vi.fn<KozaneBackend["scopes"]["createArea"]>(),
-    updateArea: vi.fn<KozaneBackend["scopes"]["updateArea"]>(),
-    removeArea: vi.fn<KozaneBackend["scopes"]["removeArea"]>(),
+    create: vi.fn<KozaneClient["scopes"]["create"]>(),
+    rename: vi.fn<KozaneClient["scopes"]["rename"]>(),
+    remove: vi.fn<KozaneClient["scopes"]["remove"]>(),
+    addMembers: vi.fn<KozaneClient["scopes"]["addMembers"]>(),
+    removeMembers: vi.fn<KozaneClient["scopes"]["removeMembers"]>(),
+    createArea: vi.fn<KozaneClient["scopes"]["createArea"]>(),
+    updateArea: vi.fn<KozaneClient["scopes"]["updateArea"]>(),
+    removeArea: vi.fn<KozaneClient["scopes"]["removeArea"]>(),
   },
   taskspaces: {
-    access: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["access"]>(),
-    create: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["create"]>(),
-    rename: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["rename"]>(),
-    remove: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["remove"]>(),
-    createFile: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["createFile"]>(),
-    readFile: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["readFile"]>(),
-    saveFile: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["saveFile"]>(),
-    list: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["list"]>(),
-    createDirectory: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["createDirectory"]>(),
-    renameEntry: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["renameEntry"]>(),
-    removeEntry: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["removeEntry"]>(),
+    access: vi.fn<NonNullable<KozaneClient["taskspaces"]>["access"]>(),
+    create: vi.fn<NonNullable<KozaneClient["taskspaces"]>["create"]>(),
+    rename: vi.fn<NonNullable<KozaneClient["taskspaces"]>["rename"]>(),
+    remove: vi.fn<NonNullable<KozaneClient["taskspaces"]>["remove"]>(),
+    createFile: vi.fn<NonNullable<KozaneClient["taskspaces"]>["createFile"]>(),
+    readFile: vi.fn<NonNullable<KozaneClient["taskspaces"]>["readFile"]>(),
+    saveFile: vi.fn<NonNullable<KozaneClient["taskspaces"]>["saveFile"]>(),
+    list: vi.fn<NonNullable<KozaneClient["taskspaces"]>["list"]>(),
+    createDirectory: vi.fn<NonNullable<KozaneClient["taskspaces"]>["createDirectory"]>(),
+    renameEntry: vi.fn<NonNullable<KozaneClient["taskspaces"]>["renameEntry"]>(),
+    removeEntry: vi.fn<NonNullable<KozaneClient["taskspaces"]>["removeEntry"]>(),
   },
 } satisfies Parameters<typeof createNamespaceActions>[1];
 function actionsFor(state: NamespaceState) {
@@ -82,7 +82,7 @@ function card(id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue {
   };
 }
 
-const refused = new BackendError("validation", "Refused");
+const refused = new ClientError("validation", "Refused");
 const succeeded = { ok: true as const, stacking: [] };
 
 function stateWith(cards: CardWithGlue[]): NamespaceState {
@@ -230,7 +230,7 @@ describe("handleLinkScope", () => {
     state.selection.selectedCards = new Set(["card-1"]);
     const actions = actionsFor(state);
     backend.scopes.addMembers.mockRejectedValue(refused);
-    backend.scopes.addMembers.mockRejectedValue(new BackendError("validation", "Scope not found"));
+    backend.scopes.addMembers.mockRejectedValue(new ClientError("validation", "Scope not found"));
 
     expect(await actions.handleLinkScope("s1")).toBe(false);
     expect(state.lastError).toBe("Scope not found");
@@ -269,7 +269,7 @@ describe("createTaskspace", () => {
     const actions = actionsFor(state);
     backend.taskspaces.create.mockRejectedValue(refused);
     backend.taskspaces.create.mockRejectedValue(
-      new BackendError("conflict", "Taskspace directory already exists"),
+      new ClientError("conflict", "Taskspace directory already exists"),
     );
 
     expect(await actions.createTaskspace("s1", "notes")).toEqual({
@@ -349,7 +349,7 @@ describe("handleCreateScopeWithFile", () => {
     const actions = actionsFor(state);
     backend.scopes.create.mockRejectedValue(refused);
     backend.scopes.create.mockRejectedValue(
-      new BackendError("conflict", 'A scope named "work" already exists'),
+      new ClientError("conflict", 'A scope named "work" already exists'),
     );
 
     expect(await actions.handleCreateScopeWithFile(names)).toBeNull();
@@ -366,7 +366,7 @@ describe("handleCreateScopeWithFile", () => {
     backend.taskspaces.create.mockRejectedValue(refused);
     backend.scopes.remove.mockResolvedValue({ ok: true });
     backend.taskspaces.create.mockRejectedValue(
-      new BackendError("conflict", "Taskspace directory already exists"),
+      new ClientError("conflict", "Taskspace directory already exists"),
     );
 
     expect(await actions.handleCreateScopeWithFile(names)).toBeNull();
@@ -381,9 +381,9 @@ describe("handleCreateScopeWithFile", () => {
     const state = stateWith([card("card-1")]);
     backend.scopes.create.mockResolvedValue({ id: "s1" });
     backend.taskspaces.create.mockRejectedValue(
-      new BackendError("conflict", "Taskspace directory already exists"),
+      new ClientError("conflict", "Taskspace directory already exists"),
     );
-    backend.scopes.remove.mockRejectedValue(new BackendError("unavailable", "Cleanup failed"));
+    backend.scopes.remove.mockRejectedValue(new ClientError("unavailable", "Cleanup failed"));
     expect(await actionsFor(state).handleCreateScopeWithFile(names)).toBeNull();
     expect(state.scopes).toEqual([{ id: "s1", name: "work" }]);
     expect(state.taskspaces).toEqual([]);
@@ -396,7 +396,7 @@ describe("handleCreateScopeWithFile", () => {
     const actions = actionsFor(state);
     backend.taskspaces.createFile.mockRejectedValue(refused);
     backend.taskspaces.createFile.mockRejectedValue(
-      new BackendError("conflict", "File already exists"),
+      new ClientError("conflict", "File already exists"),
     );
 
     expect(await actions.handleCreateScopeWithFile(names)).toBeNull();
@@ -411,7 +411,7 @@ describe("handleCreateScopeWithFile", () => {
     const state = succeedingState();
     const actions = actionsFor(state);
     backend.scopes.addMembers.mockRejectedValue(refused);
-    backend.scopes.addMembers.mockRejectedValue(new BackendError("validation", "Scope not found"));
+    backend.scopes.addMembers.mockRejectedValue(new ClientError("validation", "Scope not found"));
 
     expect(await actions.handleCreateScopeWithFile(names)).not.toBeNull();
     expect(state.lastError).toBe("Scope not found");

@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { NamespaceState } from "../../../../../client/src/board/namespace-state.svelte.js";
-import { HttpBackend } from "../../../../../client/src/backend/http-backend.js";
-import { createBackendInventoryActions } from "../../../../../client/src/board/lib/backend-inventory-actions.js";
+import { HttpClient } from "../../../../../client/src/backend/http-client.js";
+import { createClientInventoryActions } from "../../../../../client/src/board/lib/backend-inventory-actions.js";
 import { data } from "../page.fixtures.js";
 const capabilities = {
   writable: true,
@@ -21,7 +21,7 @@ it("restores an optimistic stow after a backend refusal and holds activity until
         finish = resolve;
       }),
   );
-  const actions = createBackendInventoryActions(state, new HttpBackend({ fetcher, capabilities }));
+  const actions = createClientInventoryActions(state, new HttpClient({ fetcher, capabilities }));
   const pending = actions.stow([id], "bag", 0);
   expect(state.cards[0].inventory?.id).toBe("bag");
   expect(state.mutations.idle).toBe(false);
@@ -51,7 +51,7 @@ it("uses backend-assigned slots and clears glue after a successful stow", async 
         }),
       ),
   );
-  await createBackendInventoryActions(state, new HttpBackend({ fetcher, capabilities })).stow(
+  await createClientInventoryActions(state, new HttpClient({ fetcher, capabilities })).stow(
     [id],
     "bag",
     null,

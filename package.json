@@ -46,7 +46,7 @@
     "publish:npm": "pnpm release:publish",
     "check:client-browser": "node scripts/check-client-browser.mjs",
     "check:core-browser": "node scripts/check-core-browser.mjs",
-    "check:backend-contract": "node scripts/check-backend-contract.mjs",
+    "check:client-contract": "node scripts/check-client-contract.mjs",
     "smoke:ssg": "node scripts/smoke-ssg.mjs",
     "build:core": "pnpm --filter @kozane/core build",
     "check:core-package": "node scripts/check-core-package.mjs",

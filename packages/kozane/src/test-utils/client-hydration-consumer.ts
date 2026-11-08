@@ -1,10 +1,10 @@
-import type { BackendCapabilities } from "../../../client/src/index.js";
+import type { ClientCapabilities } from "../../../client/src/index.js";
 import { hydrate, tick, unmount } from "svelte";
 import { BoardView, NamespacesView } from "../../../client/src/ui.js";
 import { capabilityViewProps } from "./capability-view-props.js";
 
 export async function hydrateCapabilityViews(
-  capabilities: BackendCapabilities,
+  capabilities: ClientCapabilities,
   lifetimeNotice?: string,
 ) {
   const props = capabilityViewProps(capabilities, lifetimeNotice);

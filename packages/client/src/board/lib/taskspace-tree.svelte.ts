@@ -1,5 +1,5 @@
-import type { KozaneBackend } from "../../backend/contract.js";
-import { BackendError } from "../../backend/contract.js";
+import type { KozaneClient } from "../../backend/contract.js";
+import { ClientError } from "../../backend/contract.js";
 import type { TaskspaceEntry, TaskspaceTruncation } from "@kozane/core";
 import { entryNameIssue } from "@kozane/core";
 /** What is known about one directory of one taskspace. */
@@ -33,13 +33,13 @@ export type TaskspaceCreated = {
 };
 
 export type TaskspaceTreeContext = {
-  backend: Pick<KozaneBackend, "taskspaces">;
+  backend: Pick<KozaneClient, "taskspaces">;
   namespaceId: string;
 };
 
 function taskspaceApi(ctx: TaskspaceTreeContext) {
   const api = ctx.backend.taskspaces;
-  if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
+  if (!api) throw new ClientError("unavailable", "Taskspaces are not available");
   return api;
 }
 
@@ -271,7 +271,7 @@ export class TaskspaceTreeState {
       });
       next = typeof body?.path === "string" ? body.path : siblingPath(path, trimmed);
     } catch (error) {
-      return { error: error instanceof BackendError ? error.message : "Failed to rename" };
+      return { error: error instanceof ClientError ? error.message : "Failed to rename" };
     }
 
     const to = nodeKey(taskspaceId, next);
@@ -342,7 +342,7 @@ export class TaskspaceTreeState {
     try {
       await taskspaceApi(ctx).removeEntry(ctx.namespaceId, taskspaceId, path);
     } catch (error) {
-      return { error: error instanceof BackendError ? error.message : "Failed to delete" };
+      return { error: error instanceof ClientError ? error.message : "Failed to delete" };
     }
 
     this.rekeySubtree(taskspaceId, path, () => null);
@@ -370,7 +370,7 @@ export class TaskspaceTreeState {
         { path },
       );
     } catch (error) {
-      return { error: error instanceof BackendError ? error.message : `Failed to create ${what}` };
+      return { error: error instanceof ClientError ? error.message : `Failed to create ${what}` };
     }
     return { taskspaceId: target.taskspaceId, kind: target.kind, path };
   }
@@ -421,7 +421,7 @@ export class TaskspaceTreeState {
       this.nodes[key] = {
         ...(this.nodes[key] ?? EMPTY_NODE),
         loading: false,
-        error: error instanceof BackendError ? error.message : "Failed to list files",
+        error: error instanceof ClientError ? error.message : "Failed to list files",
       };
     }
   }

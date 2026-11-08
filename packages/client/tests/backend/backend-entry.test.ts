@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
 import {
-  BackendError,
-  HttpBackend,
-  StaticBackend,
-  type KozaneBackend,
+  ClientError,
+  HttpClient,
+  StaticClient,
+  type KozaneClient,
   type SnapshotData,
   type CardCreateInput,
   type MutationOptions,
@@ -43,11 +43,11 @@ const listing = {
   entries: [{ name: "notes.md", kind: "file", size: 5, modifiedAt: null }],
   truncated: false,
 };
-const adapters: [string, () => KozaneBackend][] = [
+const adapters: [string, () => KozaneClient][] = [
   [
     "static",
     () =>
-      new StaticBackend({
+      new StaticClient({
         namespaces: [namespace],
         snapshots: [data],
         tags,
@@ -68,7 +68,7 @@ const adapters: [string, () => KozaneBackend][] = [
   [
     "http",
     () =>
-      new HttpBackend({
+      new HttpClient({
         capabilities: {
           writable: false,
           persistent: true,
@@ -100,7 +100,7 @@ const adapters: [string, () => KozaneBackend][] = [
 it.each(adapters)(
   "supports an implementation-independent consumer through the entry module (%s)",
   async (_name, create) => {
-    const backend: KozaneBackend = create();
+    const backend: KozaneClient = create();
     const observed: string[] = [];
     const release = backend.subscribeState((state) => observed.push(state.status));
     expect(observed).toEqual(["ready"]);
@@ -123,7 +123,7 @@ it.each(adapters)(
     await expect(backend.namespaces.create({ name: "Unsent namespace" })).rejects.toMatchObject({
       code: "read_only",
     });
-    await expect(backend.snapshot("missing")).rejects.toBeInstanceOf(BackendError);
+    await expect(backend.snapshot("missing")).rejects.toBeInstanceOf(ClientError);
     expect(backend.version).toEqual(version);
     expect(changes).toEqual([]);
     expect(await backend.tags.get()).toEqual(tags);

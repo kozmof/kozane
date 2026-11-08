@@ -1,9 +1,9 @@
-import type { BackendCapabilities } from "@kozane/client";
+import type { ClientCapabilities } from "@kozane/client";
 import { getDBURL, getWorkspaceRoot } from "../../db/internal/config.js";
 import { isMemoryDbUrl } from "../db-url.js";
 import { readApiKeyResult } from "./api-key.js";
 /** Resolve before SSR so hydration uses the same editing and lifetime policy. */
-export function httpBackendCapabilities(): BackendCapabilities {
+export function httpClientCapabilities(): ClientCapabilities {
   const root = getWorkspaceRoot();
   const auth = root ? readApiKeyResult(root) : null;
   return Object.freeze({

@@ -1,8 +1,8 @@
 import { expect, it, vi } from "vitest";
 import { bindViewWrites } from "../../../src/board/lib/view-writes.js";
-import { BackendSignals } from "../../../src/backend/signals.js";
-import { StaticBackend } from "../../../src/backend/static-backend.js";
-import { HttpBackend } from "../../../src/backend/http-backend.js";
+import { ClientSignals } from "../../../src/backend/signals.js";
+import { StaticClient } from "../../../src/backend/static-client.js";
+import { HttpClient } from "../../../src/backend/http-client.js";
 const capabilities = {
   writable: true,
   persistent: true,
@@ -14,7 +14,7 @@ it("checks every mutation dispatch, including methods captured before recovery",
   const fetcher = vi
     .fn<typeof fetch>()
     .mockImplementation(async () => Response.json({ id: "n", name: "Notes", isDefault: false }));
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   let ready = true;
   const view = bindViewWrites(backend, () => ready);
   const create = view.namespaces.create;
@@ -28,8 +28,8 @@ it("checks every mutation dispatch, including methods captured before recovery",
 });
 it("rejects a late continuation after generation replacement without dispatch", async () => {
   const fetcher = vi.fn<typeof fetch>();
-  const backend = new HttpBackend({ capabilities, fetcher });
-  const signals = new BackendSignals({ status: "ready" });
+  const backend = new HttpClient({ capabilities, fetcher });
+  const signals = new ClientSignals({ status: "ready" });
   vi.spyOn(backend, "version", "get").mockImplementation(() => signals.version);
   const view = bindViewWrites(backend, () => true);
   const update = view.cards.update;
@@ -41,7 +41,7 @@ it("rejects a late continuation after generation replacement without dispatch", 
 });
 it("leaves read methods and adapter lifecycle methods available while writes are paused", async () => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json([]));
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   const view = bindViewWrites(backend, () => false);
   expect(await view.namespaces.list()).toEqual([]);
   expect(view.state).toBe(backend.state);
@@ -50,7 +50,7 @@ it("leaves read methods and adapter lifecycle methods available while writes are
   expect(view.taskspaces).toBeUndefined();
 });
 it("supports frozen adapters and keeps read-only error precedence", async () => {
-  const backend = Object.freeze(new StaticBackend({ namespaces: [] }));
+  const backend = Object.freeze(new StaticClient({ namespaces: [] }));
   const view = bindViewWrites(backend, () => false);
   expect(await view.namespaces.list()).toEqual([]);
   await expect(view.namespaces.create({ name: "Notes" })).rejects.toMatchObject({

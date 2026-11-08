@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { StaticBackend, type StaticBackendData } from "../../src/backend/static-backend.js";
+import { StaticClient, type StaticClientData } from "../../src/backend/static-client.js";
 import type { SnapshotData } from "../../src/backend/contract.js";
 import type { TaskspaceFileTree } from "../../../kozane/src/lib/types.js";
 import { tagDataset } from "./tags.fixtures.js";
@@ -30,7 +30,7 @@ const files: TaskspaceFileTree = {
     ],
   },
 };
-function fixture(): StaticBackendData {
+function fixture(): StaticClientData {
   const namespaces = [
     { id: "p1", name: "One", isDefault: true },
     { id: "p2", name: "Two", isDefault: false },
@@ -105,7 +105,7 @@ it("starts ready with immutable capabilities and stamps without polling or stora
   });
   Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get: storage });
   try {
-    const backend = new StaticBackend(fixture());
+    const backend = new StaticClient(fixture());
     expect(backend.capabilities).toEqual({
       writable: false,
       persistent: true,
@@ -144,7 +144,7 @@ it("starts ready with immutable capabilities and stamps without polling or stora
   }
 });
 it("binds conditional snapshots to the backend and namespace and handles eviction and missing namespaces", async () => {
-  const backend = new StaticBackend(fixture(), { validatorCapacity: 1 });
+  const backend = new StaticClient(fixture(), { validatorCapacity: 1 });
   const first = await backend.snapshot("p1");
   expect(first.status).toBe("changed");
   expect(await backend.snapshot("p1", { validator: first.validator })).toEqual({
@@ -154,7 +154,7 @@ it("binds conditional snapshots to the backend and namespace and handles evictio
   expect((await backend.snapshot("p2", { validator: first.validator })).status).toBe("changed");
   expect((await backend.snapshot("p1", { validator: first.validator })).status).toBe("changed");
   expect(
-    (await new StaticBackend(fixture()).snapshot("p1", { validator: first.validator })).status,
+    (await new StaticClient(fixture()).snapshot("p1", { validator: first.validator })).status,
   ).toBe("changed");
   await expect(backend.snapshot("missing", { validator: first.validator })).rejects.toMatchObject({
     code: "not_found",
@@ -162,7 +162,7 @@ it("binds conditional snapshots to the backend and namespace and handles evictio
 });
 it("defensively copies inputs and read results without changing the snapshot validator", async () => {
   const input = fixture();
-  const backend = new StaticBackend(input);
+  const backend = new StaticClient(input);
   input.namespaces[0].name = "changed source";
   const rows = await backend.namespaces.list();
   expect(rows[0].name).toBe("One");
@@ -189,7 +189,7 @@ it("defensively copies inputs and read results without changing the snapshot val
   expect(await backend.warpDirectory.get("p1")).toHaveLength(1);
 });
 it("filters static tag hits, labels and warnings by namespace while retaining unplaced files", async () => {
-  const backend = new StaticBackend(fixture());
+  const backend = new StaticClient(fixture());
   const one = await backend.tags.get("p1");
   expect(one.index.hits.map((hit) => hit.excerpt)).toEqual(["one", "t1", "unplaced"]);
   expect(Object.keys(one.index.taskspaces)).toEqual(["t1", "unplaced"]);
@@ -205,7 +205,7 @@ it("filters static tag hits, labels and warnings by namespace while retaining un
   await expect(backend.tags.get("missing")).rejects.toMatchObject({ code: "not_found" });
 });
 it("retains directory truncation, skipped-file explanations and namespace visibility", async () => {
-  const backend = new StaticBackend(fixture());
+  const backend = new StaticClient(fixture());
   const api = backend.taskspaces!;
   expect(await api.readFile("p1", "t1", "hello.md")).toEqual({
     path: "hello.md",
@@ -226,12 +226,12 @@ it("retains directory truncation, skipped-file explanations and namespace visibi
   await expect(api.readFile("p1", "t1", "../hello.md")).rejects.toMatchObject({
     code: "not_found",
   });
-  const without = new StaticBackend({ namespaces: fixture().namespaces });
+  const without = new StaticClient({ namespaces: fixture().namespaces });
   expect(without.capabilities.taskspaces).toBe(false);
   expect(without.taskspaces).toBeUndefined();
 });
 it("rejects every exposed mutation with read_only and publishes no invalidation", async () => {
-  const backend = new StaticBackend(fixture());
+  const backend = new StaticClient(fixture());
   const observed = vi.fn();
   backend.subscribe(observed);
   const stamp = backend.version;
@@ -254,20 +254,20 @@ it("rejects every exposed mutation with read_only and publishes no invalidation"
   expect(observed).not.toHaveBeenCalled();
 });
 it("reports omitted datasets separately from missing namespaces and rejects malformed exports", async () => {
-  const backend = new StaticBackend({ namespaces: fixture().namespaces });
+  const backend = new StaticClient({ namespaces: fixture().namespaces });
   await expect(backend.snapshot("p1")).rejects.toMatchObject({ code: "unavailable" });
   await expect(backend.tags.get()).rejects.toMatchObject({ code: "unavailable" });
   await expect(backend.map.get()).rejects.toMatchObject({ code: "unavailable" });
   await expect(backend.warpDirectory.get("p1")).rejects.toMatchObject({ code: "unavailable" });
   await expect(backend.namespaces.get("missing")).rejects.toMatchObject({ code: "not_found" });
-  expect(() => new StaticBackend({ ...fixture(), snapshots: [snapshot("missing")] })).toThrow(
+  expect(() => new StaticClient({ ...fixture(), snapshots: [snapshot("missing")] })).toThrow(
     "Invalid static export data",
   );
   const cycle: TaskspaceFileTree = {
     root: { kind: "directory", name: "root", children: [], truncated: null },
   };
   cycle.root.children.push(cycle.root);
-  expect(() => new StaticBackend({ ...fixture(), files: { t1: cycle } })).toThrow(
+  expect(() => new StaticClient({ ...fixture(), files: { t1: cycle } })).toThrow(
     "Invalid static export data",
   );
 });
@@ -277,7 +277,7 @@ it("does not read inherited dictionary properties as opaque resource IDs", async
   data.taskspaces = [
     { id: "constructor", name: "Notes", scopeId: null, path: null, pathKind: "workspace_relative" },
   ];
-  const backend = new StaticBackend({
+  const backend = new StaticClient({
     namespaces: [{ id: "__proto__", name: "One", isDefault: true }],
     snapshots: [data],
     warpDirectories: {},

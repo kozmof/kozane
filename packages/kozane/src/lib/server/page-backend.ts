@@ -1,21 +1,21 @@
-import type { BackendCapabilities } from "@kozane/client";
-import type { StaticBackendData } from "@kozane/client";
-import { httpBackendCapabilities } from "./backend-capabilities.js";
+import type { ClientCapabilities } from "@kozane/client";
+import type { StaticClientData } from "@kozane/client";
+import { httpClientCapabilities } from "./backend-capabilities.js";
 /** Optional fields retain compatibility with page data from older exports. */
-export interface PageBackendData {
-  backendCapabilities?: BackendCapabilities;
-  backendLifetimeNotice?: string;
-  staticBackendData?: StaticBackendData;
+export interface PageClientData {
+  clientCapabilities?: ClientCapabilities;
+  clientLifetimeNotice?: string;
+  staticClientData?: StaticClientData;
 }
 /** Select transport metadata only after loaders apply their export privacy gates. */
-export function pageBackendData(prerender: boolean, embedded: StaticBackendData): PageBackendData {
-  if (prerender) return { staticBackendData: embedded };
-  const backendCapabilities = httpBackendCapabilities();
+export function pageClientData(prerender: boolean, embedded: StaticClientData): PageClientData {
+  if (prerender) return { staticClientData: embedded };
+  const clientCapabilities = httpClientCapabilities();
   return {
-    backendCapabilities,
-    ...(!backendCapabilities.persistent
+    clientCapabilities,
+    ...(!clientCapabilities.persistent
       ? {
-          backendLifetimeNotice:
+          clientLifetimeNotice:
             "Database changes last for this server process and are lost when it stops.",
         }
       : {}),

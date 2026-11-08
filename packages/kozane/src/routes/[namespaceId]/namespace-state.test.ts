@@ -1,5 +1,5 @@
-import { HttpBackend } from "../../../../client/src/backend/http-backend.js";
-import { createBackendBoardPersistence } from "../../../../client/src/board/lib/board-backend-persistence.js";
+import { HttpClient } from "../../../../client/src/backend/http-client.js";
+import { createClientBoardPersistence } from "../../../../client/src/board/lib/board-backend-persistence.js";
 import { createMemoryPreferences } from "../../../../client/src/preferences.js";
 import { describe, it, expect, beforeEach } from "vitest";
 import {
@@ -364,7 +364,7 @@ describe("the snapshot prune helpers", () => {
 
 describe("backend mutation activity", () => {
   function persistence(s: NamespaceState, fetcher: typeof fetch) {
-    const backend = new HttpBackend({
+    const backend = new HttpClient({
       fetcher,
       capabilities: {
         writable: true,
@@ -374,7 +374,7 @@ describe("backend mutation activity", () => {
         auth: false,
       },
     });
-    return { backend, persist: createBackendBoardPersistence(s, backend) };
+    return { backend, persist: createClientBoardPersistence(s, backend) };
   }
   /** A response whose body arrives only when `finish` is called. */
   function slowResponse(text: string) {

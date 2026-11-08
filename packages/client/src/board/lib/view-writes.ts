@@ -1,7 +1,7 @@
-import { BackendError, type KozaneBackend } from "../../backend/contract.js";
+import { ClientError, type KozaneClient } from "../../backend/contract.js";
 
 /** Bind UI mutation chains to one generation and check readiness at every dispatch. */
-export function bindViewWrites(backend: KozaneBackend, canWrite: () => boolean): KozaneBackend {
+export function bindViewWrites(backend: KozaneClient, canWrite: () => boolean): KozaneClient {
   const generation = backend.version.generation;
   const resources = new Set([
     "cards",
@@ -15,7 +15,7 @@ export function bindViewWrites(backend: KozaneBackend, canWrite: () => boolean):
     "taskspaces",
   ]);
   const wrapped = new Map<PropertyKey, object>();
-  return new Proxy(Object.create(null) as KozaneBackend, {
+  return new Proxy(Object.create(null) as KozaneClient, {
     get(_target, key) {
       const resource = Reflect.get(backend, key, backend);
       if (typeof key !== "string" || !resources.has(key) || !resource)
@@ -41,9 +41,7 @@ export function bindViewWrites(backend: KozaneBackend, canWrite: () => boolean):
                     backend.state.status !== "ready" ||
                     !canWrite())
                 ) {
-                  return Promise.reject(
-                    new BackendError("unavailable", "The backend is not ready"),
-                  );
+                  return Promise.reject(new ClientError("unavailable", "The backend is not ready"));
                 }
                 return call.apply(resource, args);
               };

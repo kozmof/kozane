@@ -1,9 +1,9 @@
-import type { KozaneBackend, MutationOptions as SaveOptions } from "../backend/contract.js";
-import { BackendError } from "../backend/contract.js";
+import type { KozaneClient, MutationOptions as SaveOptions } from "../backend/contract.js";
+import { ClientError } from "../backend/contract.js";
 import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
 export type EditorSessionContext = {
-  backend: Pick<KozaneBackend, "taskspaces">;
+  backend: Pick<KozaneClient, "taskspaces">;
   namespaceId: string;
   /** Checked immediately before each save dispatch, including queued flushes. */
   canWrite?: () => boolean;
@@ -131,7 +131,7 @@ export class EditorSession {
     const current = () => !opening.aborted;
     try {
       const api = ctx.backend.taskspaces;
-      if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
+      if (!api) throw new ClientError("unavailable", "Taskspaces are not available");
       const body = await api.readFile(ctx.namespaceId, ref.taskspaceId, ref.path, {
         signal: opening,
       });
@@ -139,7 +139,7 @@ export class EditorSession {
       this.#adopt(typeof body?.content === "string" ? body.content : "", body?.signature ?? null);
     } catch (error) {
       if (current())
-        this.error = error instanceof BackendError ? error.message : "Failed to open file";
+        this.error = error instanceof ClientError ? error.message : "Failed to open file";
     } finally {
       if (current()) this.loading = false;
     }
@@ -231,9 +231,9 @@ export class EditorSession {
 
     try {
       if (ctx.canWrite && !ctx.canWrite())
-        throw new BackendError("unavailable", "The backend is not ready");
+        throw new ClientError("unavailable", "The backend is not ready");
       const api = ctx.backend.taskspaces;
-      if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
+      if (!api) throw new ClientError("unavailable", "Taskspaces are not available");
       const body = await api.saveFile(
         ctx.namespaceId,
         ref.taskspaceId,
@@ -248,8 +248,8 @@ export class EditorSession {
       return true;
     } catch (error) {
       if (this.doc === doc) {
-        this.conflict = error instanceof BackendError && error.code === "conflict";
-        this.error = error instanceof BackendError ? error.message : "Failed to save file";
+        this.conflict = error instanceof ClientError && error.code === "conflict";
+        this.error = error instanceof ClientError ? error.message : "Failed to save file";
       }
       return false;
     } finally {

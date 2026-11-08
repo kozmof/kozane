@@ -8,7 +8,7 @@ import {
   type TagNode,
 } from "../../tag/index.js";
 import { TAG_HITS_SHOWN_MAX } from "../../constants/index.js";
-import { BackendError } from "../contract.js";
+import { ClientError } from "../contract.js";
 
 /**
  * Static exports embed gathered hits for browser-side filtering. Live pages filter on the
@@ -56,7 +56,7 @@ export function tagsView(
   const { namespaceId: requestedNamespace, staticExport = false } = selection;
   const tag = selection.tag ? normalizeTag(selection.tag) : null;
   if (requestedNamespace && !namespaces.some(({ id }) => id === requestedNamespace))
-    throw new BackendError("not_found", "Namespace not found");
+    throw new ClientError("not_found", "Namespace not found");
   const { hits, cardTotal, fileTotal } = selectTagHits(index.hits, tag, staticExport);
   const shownCardIds = new Set(
     hits.flatMap((hit) => (hit.source.kind === "card" ? [hit.source.cardId] : [])),

@@ -2,7 +2,7 @@
 
 Shared Kozane views for Svelte applications.
 
-The root exports backend contracts, adapters, UI configuration and gesture defaults.
+The root exports client contracts, adapters, UI configuration and gesture defaults.
 Import shared views from `./ui` or
 the `./board`, `./tags`, `./map` and `./editor` entries. It ships Svelte source and
 declarations built with `@sveltejs/package`. Core types and validation use the public
@@ -19,7 +19,7 @@ views and CLI output. Map display bounds and tag display caps use the same expor
 
 Prepare and verify candidate packages through the [local release flow](../../docs/releases.md).
 
-Views, backend adapters, contracts and rendering helpers live in `packages/client/src`. Tests and fixtures live in `packages/client/tests` and are not published. Source imports public core entries and relative client modules, with no application imports or workspace aliases.
+Views, client adapters, contracts and rendering helpers live in `packages/client/src`. Tests and fixtures live in `packages/client/tests` and are not published. Source imports public core entries and relative client modules, with no application imports or workspace aliases.
 
 Run `pnpm build:client` from the repository root to build core before client. The client build generates Panda assets and runs `svelte-package --input src --output dist` directly. It does not rewrite application code, import paths or type declarations. Public entry files in `src` match the package export map. TypeScript checks `src/**/*` without emitting files beside inputs.
 
@@ -27,7 +27,7 @@ The client owns the shared Panda theme and base stylesheet. The Node app uses th
 
 Run `pnpm check:client-package` to pack both packages and install them outside the
 workspace using a frozen offline dependency graph. The check audits runtime and
-declaration imports, type-checks all 55 backend methods and the public UI entries, server-renders board, tags, map, editor and namespace
+declaration imports, type-checks all 55 client methods and the public UI entries, server-renders board, tags, map, editor and namespace
 views, verifies core validation-error identity and compiles the full browser entry.
 `pnpm verify` includes this combined core/client artifact check.
 
@@ -62,16 +62,16 @@ Four additional browser cases hydrate the views, check editor input/undo and ver
 that SvelteKit handles shared navigation links without reloading the document.
 The fixture treats tag/day fragments as filters when checking prerendered links.
 
-## Backend contract checks
+## Client contract checks
 
 Import the framework-independent suite from `@kozane/client/testing`. The root and
 testing entries run directly under Node without compiling Svelte. Register the cases
-with your test runner or call `runBackendContract` to run them serially.
+with your test runner or call `runClientContract` to run them serially.
 
 ```ts
-import { backendContractCases } from "@kozane/client/testing";
+import { clientContractCases } from "@kozane/client/testing";
 
-for (const test of backendContractCases(createFixture, { mode: "read-only" })) {
+for (const test of clientContractCases(createFixture, { mode: "read-only" })) {
   it(test.name, test.run);
 }
 ```
@@ -121,3 +121,24 @@ for the common base rules. Other consumers should import `@kozane/client/styles.
 Source unit tests use `vitest.source.config.ts`. Run `pnpm test:packages` for the separate
 installed-package project, which resolves public exports from candidate archives without
 source aliases.
+
+## Client names and future workers
+
+The client API replaces the earlier backend names. Update imports and type annotations together.
+
+| Earlier name           | Current name          |
+| ---------------------- | --------------------- |
+| `KozaneBackend`        | `KozaneClient`        |
+| `HttpBackend`          | `HttpClient`          |
+| `StaticBackend`        | `StaticClient`        |
+| `BackendError`         | `ClientError`         |
+| `BackendState`         | `ClientState`         |
+| `BackendCapabilities`  | `ClientCapabilities`  |
+| `backendContractCases` | `clientContractCases` |
+| `runBackendContract`   | `runClientContract`   |
+
+Views use the `KozaneClient` contract. Import `HttpClient` for the local server connection or `StaticClient` for embedded read-only data. Public lifecycle and error types use the same naming, including `ClientState`, `ClientCapabilities` and `ClientError`. The testing entry exports `clientContractCases` and `runClientContract`.
+
+A future `WorkerClient` will use an injected message transport. Planned runtime packages are `@kozane/web-worker` for a dedicated worker and `@kozane/service-worker` for a Service Worker. Neither package nor `WorkerClient` is implemented yet. Keep request handling independent of Svelte and let each transport own its lifecycle. Service Worker support requires explicit restart and reconnection handling.
+
+See the [worker package design](../../docs/web-demo-specification.md#future-worker-packages) for the protocol boundaries and the separate focus-sharing contract.

@@ -1,15 +1,15 @@
 import { prepareInput } from "@kozane/core/services";
 import { ValidationError } from "@kozane/core";
-import { BackendError, type BackendErrorCode } from "./contract.js";
+import { ClientError, type ClientErrorCode } from "./contract.js";
 
-const DOMAIN_CODES = new Set<BackendErrorCode>([
+const DOMAIN_CODES = new Set<ClientErrorCode>([
   "validation",
   "not_found",
   "conflict",
   "limit",
   "unavailable",
 ]);
-const FALLBACK: Record<number, BackendErrorCode> = {
+const FALLBACK: Record<number, ClientErrorCode> = {
   400: "validation",
   401: "unauthenticated",
   403: "forbidden",
@@ -18,7 +18,7 @@ const FALLBACK: Record<number, BackendErrorCode> = {
   413: "limit",
   429: "rate_limited",
 };
-const MESSAGES: Record<BackendErrorCode, string> = {
+const MESSAGES: Record<ClientErrorCode, string> = {
   validation: "The request was not accepted",
   not_found: "The requested record was not found",
   conflict: "The request conflicts with current data",
@@ -87,13 +87,13 @@ export class HttpTransport {
       try {
         body = JSON.stringify(prepareInput(input));
       } catch (error) {
-        if (error instanceof ValidationError) throw new BackendError("validation", error.message);
+        if (error instanceof ValidationError) throw new ClientError("validation", error.message);
         throw error;
       }
     }
     const remaining = this.retryAfterMs;
     if (remaining > 0)
-      throw new BackendError("rate_limited", MESSAGES.rate_limited, { retryAfterMs: remaining });
+      throw new ClientError("rate_limited", MESSAGES.rate_limited, { retryAfterMs: remaining });
     const headers = new Headers(options.headers);
     if (body !== undefined) headers.set("content-type", "application/json");
     let response: Response;
@@ -110,11 +110,11 @@ export class HttpTransport {
           new TextEncoder().encode(body).byteLength <= KEEPALIVE_BYTES_MAX,
       });
     } catch (cause) {
-      throw new BackendError("network", MESSAGES.network, { cause });
+      throw new ClientError("network", MESSAGES.network, { cause });
     }
     if (response.ok || (options.allowNotModified && response.status === 304)) return response;
     const authoritative = FALLBACK[response.status];
-    const header = response.headers.get("X-Kozane-Error-Code") as BackendErrorCode | null;
+    const header = response.headers.get("X-Kozane-Error-Code") as ClientErrorCode | null;
     const code = [401, 403, 429].includes(response.status)
       ? authoritative
       : header && DOMAIN_CODES.has(header)
@@ -145,6 +145,6 @@ export class HttpTransport {
         /* Keep the safe status message. */
       }
     }
-    throw new BackendError(code, message, { retryAfterMs });
+    throw new ClientError(code, message, { retryAfterMs });
   }
 }

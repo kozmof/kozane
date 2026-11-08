@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css, cx } from "./styles/css.js";
-  import type { BackendCapabilities } from "./backend/contract.js";
-  let { capabilities, lifetimeNotice, floating = false }: { capabilities: Pick<BackendCapabilities, "writable">; lifetimeNotice?: string; floating?: boolean } = $props();
+  import type { ClientCapabilities } from "./backend/contract.js";
+  let { capabilities, lifetimeNotice, floating = false }: { capabilities: Pick<ClientCapabilities, "writable">; lifetimeNotice?: string; floating?: boolean } = $props();
 </script>
 
 {#if !capabilities.writable || lifetimeNotice}

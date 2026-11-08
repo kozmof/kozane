@@ -1,4 +1,4 @@
-import type { StaticBackendData } from "../../../../client/src/backend/static-backend.js";
+import type { StaticClientData } from "../../../../client/src/backend/static-client.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -176,7 +176,7 @@ describe("as a static export", () => {
     return (await load({ locals: { db }, url: new URL("http://localhost/tags") } as never)) as {
       taskspaces: Record<string, { name: string; namespaceId: string | null }>;
       hits: unknown[];
-      staticBackendData?: StaticBackendData;
+      staticClientData?: StaticClientData;
     };
   }
 
@@ -190,10 +190,10 @@ describe("as a static export", () => {
 
     const data = await loadUnderSsg(db);
     expect(data.taskspaces).toEqual({});
-    expect(data.staticBackendData?.tags?.index.taskspaces).toEqual({});
-    expect(
-      data.staticBackendData?.tags?.index.hits.every((hit) => hit.source.kind === "card"),
-    ).toBe(true);
+    expect(data.staticClientData?.tags?.index.taskspaces).toEqual({});
+    expect(data.staticClientData?.tags?.index.hits.every((hit) => hit.source.kind === "card")).toBe(
+      true,
+    );
   });
 
   it("exports scoped file tags while excluding unscoped metadata and contents", async () => {
@@ -223,13 +223,13 @@ describe("as a static export", () => {
     });
 
     expect(data.taskspaces[taskspaceId]).toEqual({ name: "client-work", namespaceId });
-    expect(data.staticBackendData?.tags?.index.taskspaces[taskspaceId]).toEqual({
+    expect(data.staticClientData?.tags?.index.taskspaces[taskspaceId]).toEqual({
       name: "client-work",
       namespaceId,
     });
     expect(Object.keys(data.taskspaces)).toEqual([taskspaceId]);
     expect(
-      data.staticBackendData?.tags?.index.hits.some(
+      data.staticClientData?.tags?.index.hits.some(
         (hit) => hit.source.kind === "file" && hit.tag === "perf",
       ),
     ).toBe(true);

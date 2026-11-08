@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { NamespaceState } from "../../../../../../client/src/board/namespace-state.svelte.js";
-import { HttpBackend } from "../../../../../../client/src/backend/http-backend.js";
-import { createBackendCardActions } from "../../../../../../client/src/board/lib/actions/backend-card-actions.js";
+import { HttpClient } from "../../../../../../client/src/backend/http-client.js";
+import { createClientCardActions } from "../../../../../../client/src/board/lib/actions/backend-card-actions.js";
 import { data } from "../../page.fixtures.js";
 const capabilities = {
   writable: true,
@@ -21,7 +21,7 @@ it("keeps mutation activity open and restores optimistic deletion after backend 
         finish = resolve;
       }),
   );
-  const actions = createBackendCardActions(state, new HttpBackend({ fetcher, capabilities }));
+  const actions = createClientCardActions(state, new HttpClient({ fetcher, capabilities }));
   const pending = actions.handleDeleteSelected([original.id]);
   expect(state.mutations.idle).toBe(false);
   expect(state.cards.some((card) => card.id === original.id)).toBe(false);
@@ -43,7 +43,7 @@ it("applies successful glue results through typed backend operations", async () 
   const fetcher = vi
     .fn()
     .mockImplementation(async () => new Response('{"glueId":"joined","clearedCardIds":[]}'));
-  const actions = createBackendCardActions(state, new HttpBackend({ fetcher, capabilities }));
+  const actions = createClientCardActions(state, new HttpClient({ fetcher, capabilities }));
   await actions.handleGlueSelected(ids);
   expect(
     state.cards.filter((card) => ids.includes(card.id)).every((card) => card.glueId === "joined"),

@@ -1,9 +1,9 @@
 import { ValidationError } from "@kozane/core";
-import { BackendError, HttpBackend } from "@kozane/client";
+import { ClientError, HttpClient } from "@kozane/client";
 /** Execute in both Node and the production browser, using only public package entries. */
 export async function verifyCoreIdentity() {
   const coreError = new ValidationError("Application core runtime identity");
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     capabilities: {
       writable: true,
       persistent: false,
@@ -27,7 +27,7 @@ export async function verifyCoreIdentity() {
     await backend.cards.update("n", "c", input);
   } catch (error) {
     if (
-      error instanceof BackendError &&
+      error instanceof ClientError &&
       error.code === "validation" &&
       error.message === coreError.message
     )

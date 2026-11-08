@@ -4,14 +4,14 @@ import { inventoryResults } from "../../../kozane/src/test-utils/inventory-resul
 import { geometryResults } from "../../../kozane/src/test-utils/geometry-results.js";
 import { structureResults } from "../../../kozane/src/test-utils/structure-results.js";
 import {
-  HttpBackend,
-  StaticBackend,
-  type BackendInvalidation,
-  type KozaneBackend,
+  HttpClient,
+  StaticClient,
+  type ClientInvalidation,
+  type KozaneClient,
 } from "../../src/backend/index.js";
 
 import {
-  backendMutationCases as cases,
+  clientMutationCases as cases,
   type MutationName,
   type MutationCase,
 } from "../../src/backend/testing/mutations.js";
@@ -40,9 +40,9 @@ describe.each(entries)("%s mutation contract", (_name, operation) => {
           respond = resolve;
         }),
     );
-    const backend = new HttpBackend({ capabilities, fetcher });
+    const backend = new HttpClient({ capabilities, fetcher });
     const prior = backend.version;
-    const events: BackendInvalidation[] = [];
+    const events: ClientInvalidation[] = [];
     const unsubscribe = backend.subscribe((event) => {
       expect(backend.version).toEqual({ generation: event.generation, revision: event.revision });
       events.push(event);
@@ -73,8 +73,8 @@ describe.each(entries)("%s mutation contract", (_name, operation) => {
           headers: { "X-Kozane-Error-Code": "conflict", "content-type": "application/json" },
         }),
     );
-    const backend = new HttpBackend({ capabilities, fetcher });
-    const events: BackendInvalidation[] = [];
+    const backend = new HttpClient({ capabilities, fetcher });
+    const events: ClientInvalidation[] = [];
     const unsubscribe = backend.subscribe((event) => events.push(event));
     await expect(operation.call(backend)).rejects.toMatchObject({
       code: "conflict",
@@ -88,11 +88,11 @@ describe.each(entries)("%s mutation contract", (_name, operation) => {
 
   it.each(["http", "static"])("rejects read-only %s calls without effects", async (kind) => {
     const fetcher = vi.fn();
-    const backend: KozaneBackend =
+    const backend: KozaneClient =
       kind === "http"
-        ? new HttpBackend({ capabilities: { ...capabilities, writable: false }, fetcher })
-        : new StaticBackend({ namespaces: [] });
-    const events: BackendInvalidation[] = [];
+        ? new HttpClient({ capabilities: { ...capabilities, writable: false }, fetcher })
+        : new StaticClient({ namespaces: [] });
+    const events: ClientInvalidation[] = [];
     const unsubscribe = backend.subscribe((event) => events.push(event));
     await expect(operation.call(backend)).rejects.toMatchObject({ code: "read_only" });
     expect(fetcher).not.toHaveBeenCalled();

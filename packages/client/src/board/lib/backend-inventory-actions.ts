@@ -1,9 +1,9 @@
-import type { KozaneBackend } from "../../backend/contract.js";
-import { BackendError } from "../../backend/contract.js";
+import type { KozaneClient } from "../../backend/contract.js";
+import { ClientError } from "../../backend/contract.js";
 import { readInventory } from "../../backend/decoders/snapshot-reader.js";
 import { readPlacements } from "../../backend/decoders/placements.js";
-function backendFailureMessage(error: unknown, fallback: string) {
-  return error instanceof BackendError ? error.message : fallback;
+function clientFailureMessage(error: unknown, fallback: string) {
+  return error instanceof ClientError ? error.message : fallback;
 }
 async function attempt<T>(
   work: () => Promise<T>,
@@ -53,9 +53,9 @@ function placed(cards: CardWithGlue[], placements: InventoryPlacement[]): CardWi
  * failure, the way a card drag does. The slots a stow shows straight away come from the same
  * {@link planStow} the server runs, and the server's answer replaces them.
  */
-export function createBackendInventoryActions(
+export function createClientInventoryActions(
   state: NamespaceState,
-  backend: Pick<KozaneBackend, "inventories">,
+  backend: Pick<KozaneClient, "inventories">,
 ) {
   function track<Args extends unknown[], R>(work: (...args: Args) => Promise<R>) {
     return (...args: Args) => state.mutations.track(() => work(...args));
@@ -68,7 +68,7 @@ export function createBackendInventoryActions(
       state.setError(
         res.ok
           ? "Failed to add inventory"
-          : backendFailureMessage(res.error, "Failed to add inventory"),
+          : clientFailureMessage(res.error, "Failed to add inventory"),
       );
       return;
     }
@@ -108,7 +108,7 @@ export function createBackendInventoryActions(
     state.inventories = state.inventories.map((i) =>
       i.id === inventoryId && i.name === name ? { ...i, name: before.name } : i,
     );
-    state.setError(backendFailureMessage(res.error, "Failed to rename inventory"));
+    state.setError(clientFailureMessage(res.error, "Failed to rename inventory"));
   }
   /** Deletes an inventory. Its cards return to the canvas where they were before. */
   async function remove(inventoryId: string): Promise<void> {
@@ -135,7 +135,7 @@ export function createBackendInventoryActions(
       ];
     if (wasOpen) state.openInventoryIds = new Set([...state.openInventoryIds, inventoryId]);
     state.cards = restored(state.cards, previous);
-    state.setError(backendFailureMessage(res.error, "Failed to remove inventory"));
+    state.setError(clientFailureMessage(res.error, "Failed to remove inventory"));
   }
   /**
    * Puts cards into an inventory, on `slot` or in the first free slots. A stored card leaves
@@ -165,9 +165,7 @@ export function createBackendInventoryActions(
     if (!placements) {
       state.cards = restored(state.cards, previous);
       state.setError(
-        res.ok
-          ? "Failed to store cards"
-          : backendFailureMessage(res.error, "Failed to store cards"),
+        res.ok ? "Failed to store cards" : clientFailureMessage(res.error, "Failed to store cards"),
       );
       return;
     }
@@ -205,7 +203,7 @@ export function createBackendInventoryActions(
       return true;
     }
     state.cards = restored(state.cards, previous);
-    state.setError(backendFailureMessage(res.error, "Failed to take card out"));
+    state.setError(clientFailureMessage(res.error, "Failed to take card out"));
     return false;
   }
   return {
@@ -218,4 +216,4 @@ export function createBackendInventoryActions(
     take: track(take),
   };
 }
-export type InventoryActions = ReturnType<typeof createBackendInventoryActions>;
+export type InventoryActions = ReturnType<typeof createClientInventoryActions>;

@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { matrixOperations } from "./backend-contract-matrix.mjs";
+import { matrixOperations } from "./client-contract-matrix.mjs";
 
 const root = new URL("../", import.meta.url);
 function source(path) {
@@ -22,8 +22,8 @@ for (const file of declarations) {
   }
 }
 const expected = new Set();
-const backend = interfaces.get("KozaneBackend");
-if (!backend) throw new Error("KozaneBackend interface is missing");
+const backend = interfaces.get("KozaneClient");
+if (!backend) throw new Error("KozaneClient interface is missing");
 for (const member of backend.members) {
   const name = member.name?.getText().replace(/^['"]|['"]$/g, "");
   if (ts.isMethodSignature(member)) expected.add(name);
@@ -75,5 +75,5 @@ for (const method of expected)
   if (!calls.has(method)) problems.push(`Consumer fixture does not call ${method}`);
 if (problems.length) throw new Error(problems.join("\n"));
 console.log(
-  `Backend contract coverage passed for ${expected.size} methods, matrix rows and consumer calls.`,
+  `Client contract coverage passed for ${expected.size} methods, matrix rows and consumer calls.`,
 );

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpBackend, type KozaneBackend } from "../../src/backend/index.js";
+import { HttpClient, type KozaneClient } from "../../src/backend/index.js";
 import { inventoryResults } from "../../../kozane/src/test-utils/inventory-results.js";
 const capabilities = {
   writable: true,
@@ -10,17 +10,17 @@ const capabilities = {
 };
 const ns = "n /";
 const calls = {
-  "inventories.create": (b: KozaneBackend) => b.inventories.create(ns, { posX: 1, posY: 2 }),
-  "inventories.update": (b: KozaneBackend) => b.inventories.update(ns, "i", { name: "Tray" }),
-  "inventories.remove": (b: KozaneBackend) => b.inventories.remove(ns, "i"),
-  "inventories.stow": (b: KozaneBackend) => b.inventories.stow(ns, "i", { cardIds: ["c"] }),
-  "inventories.take": (b: KozaneBackend) => b.inventories.take(ns, { cards: [{ cardId: "c" }] }),
-} satisfies Record<keyof typeof inventoryResults, (b: KozaneBackend) => Promise<unknown>>;
+  "inventories.create": (b: KozaneClient) => b.inventories.create(ns, { posX: 1, posY: 2 }),
+  "inventories.update": (b: KozaneClient) => b.inventories.update(ns, "i", { name: "Tray" }),
+  "inventories.remove": (b: KozaneClient) => b.inventories.remove(ns, "i"),
+  "inventories.stow": (b: KozaneClient) => b.inventories.stow(ns, "i", { cardIds: ["c"] }),
+  "inventories.take": (b: KozaneClient) => b.inventories.take(ns, { cards: [{ cardId: "c" }] }),
+} satisfies Record<keyof typeof inventoryResults, (b: KozaneClient) => Promise<unknown>>;
 describe.each(Object.entries(calls))("%s response", (name, call) => {
   it("decodes complete results and publishes exactly one committed invalidation", async () => {
     const value = inventoryResults[name as keyof typeof inventoryResults];
     const fetcher = vi.fn(async () => Response.json(value));
-    const backend = new HttpBackend({ capabilities, fetcher });
+    const backend = new HttpClient({ capabilities, fetcher });
     const observed = vi.fn();
     const release = backend.subscribe(observed);
     expect(await call(backend)).toEqual(value);
@@ -31,7 +31,7 @@ describe.each(Object.entries(calls))("%s response", (name, call) => {
   });
   it("rejects malformed committed data after invalidating, without replay", async () => {
     const fetcher = vi.fn(async () => Response.json({}));
-    const backend = new HttpBackend({ capabilities, fetcher });
+    const backend = new HttpClient({ capabilities, fetcher });
     await expect(call(backend)).rejects.toMatchObject({ code: "unavailable" });
     expect(backend.version.revision).toBe(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -45,7 +45,7 @@ it("checks take results against the prepared request rather than caller edits du
         finish = resolve;
       }),
   );
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   const input = { cards: [{ cardId: "c", posX: 900, posY: -10 }] };
   const pending = backend.inventories.take(ns, input);
   input.cards[0].cardId = "other";
@@ -62,9 +62,9 @@ it("rejects accessors without invoking them or dispatching, retaining read-only 
     cards: { cardId: string }[];
   };
   const fetcher = vi.fn();
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   await expect(backend.inventories.take(ns, input)).rejects.toMatchObject({ code: "validation" });
-  const readonly = new HttpBackend({ capabilities: { ...capabilities, writable: false }, fetcher });
+  const readonly = new HttpClient({ capabilities: { ...capabilities, writable: false }, fetcher });
   await expect(readonly.inventories.take(ns, input)).rejects.toMatchObject({ code: "read_only" });
   expect(getter).not.toHaveBeenCalled();
   expect(fetcher).not.toHaveBeenCalled();
@@ -78,7 +78,7 @@ it.each([
   ],
   ["inventories.take", { cards: [{ cardId: "other" }] }],
 ] as const)("rejects incomplete or mismatched %s results", async (name, value) => {
-  const backend = new HttpBackend({ capabilities, fetcher: async () => Response.json(value) });
+  const backend = new HttpClient({ capabilities, fetcher: async () => Response.json(value) });
   await expect(calls[name](backend)).rejects.toMatchObject({ code: "unavailable" });
   expect(backend.version.revision).toBe(1);
 });

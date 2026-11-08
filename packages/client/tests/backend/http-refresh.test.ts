@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { HttpBackend } from "../../src/backend/http-backend.js";
+import { HttpClient } from "../../src/backend/http-client.js";
 import { startDatasetView } from "../../src/backend/dataset-view.js";
 import { tagDataset } from "./tags.fixtures.js";
 
@@ -15,7 +15,7 @@ it("shares polling throttle with subscribed reads without replaying rejected wri
       return new Response('{"message":"Wait"}', { status: 429, headers: { "retry-after": "2" } });
     return Response.json(path === "/api/changes" ? { token: "baseline" } : tagDataset());
   });
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     fetcher,
     pollingInitialDelayMs: 60000,
     monotonicNow: () => now,
@@ -79,7 +79,7 @@ it("publishes all workspace datasets when polling recovers without a token chang
     .mockResolvedValueOnce(Response.json({ message: "Metadata unavailable" }, { status: 503 }))
     .mockImplementation(async () => Response.json({ token: "stable" }));
   const stop = vi.fn();
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     fetcher,
     capabilities: {
       writable: true,
@@ -128,7 +128,7 @@ it("retries transient polling failures on renewed subscriptions without shorteni
       Response.json({ message: "Wait" }, { status: 429, headers: { "retry-after": "2" } }),
     )
     .mockImplementation(async () => Response.json({ token: "recovered" }));
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     fetcher,
     monotonicNow: () => now,
     capabilities: {
@@ -186,7 +186,7 @@ it("expires HTTP validators when workspace changes or committed writes require a
   const conditional: boolean[] = [];
   let token = "baseline",
     wake = () => {};
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     capabilities: {
       writable: true,
       persistent: true,

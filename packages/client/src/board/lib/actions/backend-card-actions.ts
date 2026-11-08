@@ -1,5 +1,5 @@
 function failureMessage(error: unknown, fallback: string) {
-  return error instanceof BackendError ? error.message : fallback;
+  return error instanceof ClientError ? error.message : fallback;
 }
 async function attempt<T>(
   work: () => Promise<T>,
@@ -18,8 +18,8 @@ function readCards(value: unknown) {
     ? cards
     : undefined;
 }
-import type { KozaneBackend } from "../../../backend/contract.js";
-import { BackendError } from "../../../backend/contract.js";
+import type { KozaneClient } from "../../../backend/contract.js";
+import { ClientError } from "../../../backend/contract.js";
 import { readCard, readInventory } from "../../../backend/decoders/snapshot-reader.js";
 import { readArray } from "../../../backend/decoders/response.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
@@ -34,9 +34,9 @@ import {
   withStacking,
 } from "./shared.js";
 /** Card actions: partition and layer moves, glue, stacking, delete, squash, and namespace moves. */
-export function createBackendCardActions(
+export function createClientCardActions(
   state: NamespaceState,
-  backend: Pick<KozaneBackend, "cards" | "glues">,
+  backend: Pick<KozaneClient, "cards" | "glues">,
 ) {
   function track<Args extends unknown[], R>(work: (...args: Args) => Promise<R>) {
     return (...args: Args) => state.mutations.track(() => work(...args));

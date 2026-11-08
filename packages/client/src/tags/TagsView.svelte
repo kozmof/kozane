@@ -1,8 +1,8 @@
 <script lang="ts">
   import RefreshNotice from "../RefreshNotice.svelte";
-  import BackendNotice from "../BackendNotice.svelte";
+  import ClientNotice from "../ClientNotice.svelte";
   import type { NavigationAdapter } from "../navigation.js";
-  import type { KozaneBackend } from "../backend/contract.js";
+  import type { KozaneClient } from "../backend/contract.js";
   import type { PollLifecycle } from "../backend/workspace-poller.js";
   import type { TagsPageData, TagsSelection } from "./types.js";
   import { untrack } from "svelte";
@@ -36,7 +36,7 @@
     data: TagsPageData;
     selection: TagsSelection;
     navigation: NavigationAdapter;
-    backend?: KozaneBackend;
+    backend?: KozaneClient;
     lifetimeNotice?: string;
     retryIntervalMs?: number | false;
     lifecycle?: Pick<PollLifecycle, "listen">;
@@ -235,7 +235,7 @@
   </ul>
 {/snippet}
 
-{#if backend}<BackendNotice capabilities={backend.capabilities} {lifetimeNotice} floating />{/if}
+{#if backend}<ClientNotice capabilities={backend.capabilities} {lifetimeNotice} floating />{/if}
 
 <main
   class={css({

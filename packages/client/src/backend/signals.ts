@@ -1,38 +1,38 @@
 import {
-  BackendError,
-  type BackendDataset,
-  type BackendInvalidation,
-  type BackendState,
-  type BackendVersion,
+  ClientError,
+  type ClientDataset,
+  type ClientInvalidation,
+  type ClientState,
+  type ClientVersion,
 } from "./contract.js";
 
 /** Backend-owned lifecycle and committed-data publications. */
-export class BackendSignals {
-  private currentVersion: BackendVersion = Object.freeze({ generation: 0, revision: 0 });
-  private currentState: BackendState;
-  private readonly dataListeners = new Set<(event: BackendInvalidation) => void>();
-  private readonly stateListeners = new Set<(state: BackendState) => void>();
+export class ClientSignals {
+  private currentVersion: ClientVersion = Object.freeze({ generation: 0, revision: 0 });
+  private currentState: ClientState;
+  private readonly dataListeners = new Set<(event: ClientInvalidation) => void>();
+  private readonly stateListeners = new Set<(state: ClientState) => void>();
   private disposed = false;
   constructor(
-    state: BackendState,
+    state: ClientState,
     private readonly listenerError: (error: unknown) => void = () => {},
   ) {
     this.currentState = Object.freeze({ ...state });
   }
-  get version(): BackendVersion {
+  get version(): ClientVersion {
     return this.currentVersion;
   }
-  get state(): BackendState {
+  get state(): ClientState {
     return this.currentState;
   }
-  subscribe(listener: (event: BackendInvalidation) => void): () => void {
+  subscribe(listener: (event: ClientInvalidation) => void): () => void {
     if (this.disposed) return () => {};
     this.dataListeners.add(listener);
     return () => {
       this.dataListeners.delete(listener);
     };
   }
-  subscribeState(listener: (state: BackendState) => void): () => void {
+  subscribeState(listener: (state: ClientState) => void): () => void {
     if (this.disposed) return () => {};
     this.stateListeners.add(listener);
     try {
@@ -44,26 +44,26 @@ export class BackendSignals {
       this.stateListeners.delete(listener);
     };
   }
-  transition(state: BackendState): void {
+  transition(state: ClientState): void {
     this.assertActive();
     this.currentState = Object.freeze({ ...state });
     this.notify(this.stateListeners, this.currentState);
   }
   /** Call only after a successful committed write or an observed external change. */
   publish(
-    datasets: readonly BackendDataset[],
+    datasets: readonly ClientDataset[],
     namespaceIds?: readonly string[],
     reset = false,
-  ): BackendInvalidation {
+  ): ClientInvalidation {
     this.assertActive();
     if (datasets.length === 0 || namespaceIds?.length === 0)
-      throw new BackendError("validation", "Invalidation targets must not be empty");
+      throw new ClientError("validation", "Invalidation targets must not be empty");
     this.currentVersion = Object.freeze(
       reset
         ? { generation: this.version.generation + 1, revision: 0 }
         : { generation: this.version.generation, revision: this.version.revision + 1 },
     );
-    const event: BackendInvalidation = Object.freeze({
+    const event: ClientInvalidation = Object.freeze({
       ...this.version,
       datasets: Object.freeze([...new Set(datasets)]),
       ...(namespaceIds ? { namespaceIds: Object.freeze([...new Set(namespaceIds)]) } : {}),
@@ -77,7 +77,7 @@ export class BackendSignals {
     this.stateListeners.clear();
   }
   private assertActive() {
-    if (this.disposed) throw new BackendError("unavailable", "Backend is disposed");
+    if (this.disposed) throw new ClientError("unavailable", "Backend is disposed");
   }
   private notify<T>(listeners: Set<(event: T) => void>, event: T) {
     for (const listener of [...listeners]) {

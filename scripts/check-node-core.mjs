@@ -30,7 +30,7 @@ if (!process.execArgv.includes(flag)) {
   assert.equal(await import(clientCoreUrl), core);
   assert.equal(client.CARD_WIDTH_RANGE, core.CARD_WIDTH_RANGE);
   const identityError = new core.ValidationError("Node core/client identity");
-  const backend = new client.HttpBackend({
+  const backend = new client.HttpClient({
     capabilities: {
       writable: true,
       persistent: false,
@@ -56,7 +56,7 @@ if (!process.execArgv.includes(flag)) {
       ),
     ),
     (error) =>
-      error instanceof client.BackendError &&
+      error instanceof client.ClientError &&
       error.code === "validation" &&
       error.message === identityError.message,
   );

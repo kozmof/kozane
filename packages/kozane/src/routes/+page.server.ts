@@ -5,7 +5,7 @@ import { ValidationError } from "../services/errors.js";
 import { workspaceServiceContext } from "$lib/server/service-context";
 import { getWorkspaceName, getWorkspaceRoot } from "../db/internal/config.js";
 import { NAME_MAX } from "$lib/constants";
-import { pageBackendData } from "$lib/server/page-backend.js";
+import { pageClientData } from "$lib/server/page-backend.js";
 import { isSsgBuild } from "$lib/server/ssg";
 
 // Prerender static exports and omit the machine-specific workspace path from published data.
@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   const namespaces = await namespacesService.list(locals.db, workspaceServiceContext());
   return {
     namespaces,
-    ...pageBackendData(prerender, { namespaces }),
+    ...pageClientData(prerender, { namespaces }),
     workspaceRoot: readonly ? null : getWorkspaceRoot(),
     workspaceName: getWorkspaceName(),
     readonly,

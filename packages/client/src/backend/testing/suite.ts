@@ -1,34 +1,34 @@
 import {
-  BackendError,
-  type BackendInvalidation,
-  type BackendState,
-  type KozaneBackend,
-  type BackendDataset,
+  ClientError,
+  type ClientInvalidation,
+  type ClientState,
+  type KozaneClient,
+  type ClientDataset,
 } from "../contract.js";
 import { readNamespaceSnapshot } from "../decoders/snapshot-reader.js";
 import { readTagsViewData } from "../decoders/tags.js";
 import { readMapSnapshot } from "../decoders/map.js";
 import { parseWarpEntries } from "../decoders/warp-directory.js";
-import { backendMutationCases } from "./mutations.js";
-export interface BackendContractFixture {
-  backend: KozaneBackend;
+import { clientMutationCases } from "./mutations.js";
+export interface ClientContractFixture {
+  backend: KozaneClient;
   namespaceId: string;
   missingNamespaceId?: string;
-  unavailableDatasets?: readonly Extract<BackendDataset, "tags" | "map" | "warpDirectory">[];
+  unavailableDatasets?: readonly Extract<ClientDataset, "tags" | "map" | "warpDirectory">[];
   cleanup?(): void | Promise<void>;
 }
-export type BackendContractFactory = () => BackendContractFixture | Promise<BackendContractFixture>;
-export interface BackendContractOptions {
+export type ClientContractFactory = () => ClientContractFixture | Promise<ClientContractFixture>;
+export interface ClientContractOptions {
   mode?: "read-only" | "writable";
   initialContent?: string;
   updatedContent?: string;
 }
-export interface BackendContractCase {
+export interface ClientContractCase {
   readonly name: string;
   run(): Promise<void>;
 }
-export class BackendContractFailure extends Error {
-  override readonly name = "BackendContractFailure";
+export class ClientContractFailure extends Error {
+  override readonly name = "ClientContractFailure";
   constructor(
     readonly caseName: string,
     cause: unknown,
@@ -49,15 +49,15 @@ async function rejection(operation: () => Promise<unknown>, code: string) {
   } catch (error) {
     rejected = true;
     check(
-      error instanceof BackendError && error.code === code,
-      `Expected BackendError(${code}); received ${error instanceof Error ? error.name + ": " + error.message : String(error)}`,
+      error instanceof ClientError && error.code === code,
+      `Expected ClientError(${code}); received ${error instanceof Error ? error.name + ": " + error.message : String(error)}`,
     );
   }
   check(rejected, `Expected ${code} rejection`);
 }
-async function readOnly(fixture: BackendContractFixture, operation: () => Promise<void>) {
+async function readOnly(fixture: ClientContractFixture, operation: () => Promise<void>) {
   const before = { ...fixture.backend.version };
-  const events: BackendInvalidation[] = [];
+  const events: ClientInvalidation[] = [];
   const release = fixture.backend.subscribe((event) => events.push(event));
   try {
     await operation();
@@ -72,26 +72,26 @@ async function readOnly(fixture: BackendContractFixture, operation: () => Promis
   }
 }
 /** Register each returned case with any test runner. Every run owns a fresh fixture. */
-export function backendContractCases(
-  create: BackendContractFactory,
-  options: BackendContractOptions = {},
-): readonly BackendContractCase[] {
+export function clientContractCases(
+  create: ClientContractFactory,
+  options: ClientContractOptions = {},
+): readonly ClientContractCase[] {
   check(
     options.mode === undefined || options.mode === "read-only" || options.mode === "writable",
     "Unknown backend contract mode",
   );
   const writable = options.mode === "writable";
-  const cases: BackendContractCase[] = [];
-  const add = (name: string, operation: (fixture: BackendContractFixture) => Promise<void>) => {
+  const cases: ClientContractCase[] = [];
+  const add = (name: string, operation: (fixture: ClientContractFixture) => Promise<void>) => {
     cases.push(
       Object.freeze({
         name,
         async run() {
-          let fixture: BackendContractFixture;
+          let fixture: ClientContractFixture;
           try {
             fixture = await create();
           } catch (error) {
-            throw new BackendContractFailure(name, error);
+            throw new ClientContractFailure(name, error);
           }
           let failure: unknown;
           let failed = false;
@@ -117,13 +117,13 @@ export function backendContractCases(
               : error;
             failed = true;
           }
-          if (failed) throw new BackendContractFailure(name, failure);
+          if (failed) throw new ClientContractFailure(name, failure);
         },
       }),
     );
   };
   add("state subscriptions are immediate", async ({ backend }) => {
-    const states: BackendState[] = [];
+    const states: ClientState[] = [];
     const release = backend.subscribeState((state) => states.push(state));
     try {
       check(
@@ -214,7 +214,7 @@ export function backendContractCases(
     );
   });
   if (!writable) {
-    for (const [name, mutation] of Object.entries(backendMutationCases))
+    for (const [name, mutation] of Object.entries(clientMutationCases))
       add(`read-only ${name}`, async (fixture) =>
         readOnly(fixture, () => rejection(() => mutation.call(fixture.backend), "read_only")),
       );
@@ -237,7 +237,7 @@ export function backendContractCases(
       const ns = await backend.namespaces.create({ name: "Contract cards" });
       const seed = await backend.snapshot(ns.id);
       check(seed.status === "changed", "Created namespace is unreadable");
-      const events: BackendInvalidation[] = [];
+      const events: ClientInvalidation[] = [];
       const before = backend.version;
       const release = backend.subscribe((event) => {
         check(
@@ -311,12 +311,12 @@ export function backendContractCases(
   return Object.freeze(cases);
 }
 /** Execute serially, stopping at the first failed case after its fixture cleanup. */
-export async function runBackendContract(
-  create: BackendContractFactory,
-  options?: BackendContractOptions,
+export async function runClientContract(
+  create: ClientContractFactory,
+  options?: ClientContractOptions,
 ): Promise<readonly string[]> {
   const passed: string[] = [];
-  for (const test of backendContractCases(create, options)) {
+  for (const test of clientContractCases(create, options)) {
     await test.run();
     passed.push(test.name);
   }

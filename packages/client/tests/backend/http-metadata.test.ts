@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { HttpBackend } from "../../src/backend/http-backend.js";
+import { HttpClient } from "../../src/backend/http-client.js";
 const capabilities = {
   writable: true,
   persistent: true,
@@ -27,7 +27,7 @@ it("validates namespace and warp reads without invalidating data", async () => {
         : namespace;
     return Response.json(value);
   });
-  const backend = new HttpBackend({ capabilities, fetcher });
+  const backend = new HttpClient({ capabilities, fetcher });
   const listener = vi.fn();
   const unsubscribe = backend.subscribe(listener);
   expect(await backend.namespaces.list()).toEqual([namespace]);
@@ -47,7 +47,7 @@ it.each([
   ["get", { ...namespace, id: "wrong" }],
   ["warpDirectory", [{ id: "w" }]],
 ] as const)("rejects malformed %s responses at the backend boundary", async (operation, value) => {
-  const backend = new HttpBackend({ capabilities, fetcher: async () => Response.json(value) });
+  const backend = new HttpClient({ capabilities, fetcher: async () => Response.json(value) });
   const listener = vi.fn();
   const unsubscribe = backend.subscribe(listener);
   const result =

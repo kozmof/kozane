@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { HttpBackend } from "../../src/backend/http-backend.js";
+import { HttpClient } from "../../src/backend/http-client.js";
 import { EditorSession } from "../../src/editor/editor-session.svelte.js";
 it("forwards read cancellation and preserves signatures and dirty text on backend conflicts", async () => {
   const fetcher = vi
@@ -13,7 +13,7 @@ it("forwards read cancellation and preserves signatures and dirty text on backen
         headers: { "content-type": "application/json" },
       }),
     );
-  const backend = new HttpBackend({
+  const backend = new HttpClient({
     fetcher,
     capabilities: {
       writable: true,

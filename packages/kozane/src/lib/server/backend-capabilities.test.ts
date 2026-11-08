@@ -6,7 +6,7 @@ const config = vi.hoisted(() => ({
 const readApiKeyResult = vi.hoisted(() => vi.fn());
 vi.mock("../../db/internal/config.js", () => config);
 vi.mock("./api-key.js", () => ({ readApiKeyResult }));
-import { httpBackendCapabilities } from "./backend-capabilities.js";
+import { httpClientCapabilities } from "./backend-capabilities.js";
 beforeEach(() => {
   vi.stubEnv("KOZANE_READONLY", "0");
   vi.stubEnv("KOZANE_MEMORY_MODE", "0");
@@ -28,7 +28,7 @@ it.each([
     config.getDBURL.mockReturnValue(url);
     vi.stubEnv("KOZANE_MEMORY_MODE", memory);
     vi.stubEnv("KOZANE_READONLY", readonly);
-    const capabilities = httpBackendCapabilities();
+    const capabilities = httpClientCapabilities();
     expect(capabilities).toEqual({
       writable,
       persistent,
@@ -45,7 +45,7 @@ it("publishes only authentication availability, never credentials", () => {
     ok: true,
     key: { apiKey: "private-fixture-value", createdAt: "2026-11-06T00:00:00Z" },
   });
-  const capabilities = httpBackendCapabilities();
+  const capabilities = httpClientCapabilities();
   expect(capabilities.auth).toBe(true);
   expect(JSON.stringify(capabilities)).not.toContain("private");
   expect(readApiKeyResult).toHaveBeenCalledWith("/private/workspace");
@@ -53,5 +53,5 @@ it("publishes only authentication availability, never credentials", () => {
 it("does not advertise authentication when key resolution fails", () => {
   config.getWorkspaceRoot.mockReturnValue("/private/workspace");
   readApiKeyResult.mockReturnValue({ ok: false, message: "unreadable" });
-  expect(httpBackendCapabilities().auth).toBe(false);
+  expect(httpClientCapabilities().auth).toBe(false);
 });

@@ -1,5 +1,5 @@
 import {
-  StaticBackend,
+  StaticClient,
   createDemoNavigation,
   type PollLifecycle,
 } from "../../../client/src/index.js";
@@ -32,7 +32,7 @@ export function boardViewProps(): BoardViewProps {
   };
   return {
     data,
-    backend: new StaticBackend({
+    backend: new StaticClient({
       namespaces: [data.namespace],
       snapshots: [data],
       warpDirectories: { board: [] },

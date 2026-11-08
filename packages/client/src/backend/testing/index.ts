@@ -1,10 +1,10 @@
 export {
-  backendContractCases,
-  runBackendContract,
-  BackendContractFailure,
-  type BackendContractCase,
-  type BackendContractFactory,
-  type BackendContractFixture,
-  type BackendContractOptions,
+  clientContractCases,
+  runClientContract,
+  ClientContractFailure,
+  type ClientContractCase,
+  type ClientContractFactory,
+  type ClientContractFixture,
+  type ClientContractOptions,
 } from "./suite.js";
-export { backendMutationCases, type MutationName, type MutationCase } from "./mutations.js";
+export { clientMutationCases, type MutationName, type MutationCase } from "./mutations.js";

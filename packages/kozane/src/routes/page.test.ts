@@ -39,7 +39,7 @@ function liveWorkspace() {
         workspaceRoot: null,
         workspaceName: "Notes",
         readonly: false,
-        backendCapabilities: capabilities,
+        clientCapabilities: capabilities,
       },
       form: null,
     } as never,
@@ -129,7 +129,7 @@ it("reads namespace metadata through the static export backend and hides creatio
     props: {
       data: {
         namespaces: [],
-        staticBackendData: { namespaces },
+        staticClientData: { namespaces },
         workspaceRoot: null,
         workspaceName: "Export",
         readonly: true,

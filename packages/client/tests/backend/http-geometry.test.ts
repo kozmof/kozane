@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpBackend, type KozaneBackend } from "../../src/backend/index.js";
+import { HttpClient, type KozaneClient } from "../../src/backend/index.js";
 import { geometryResults } from "../../../kozane/src/test-utils/geometry-results.js";
 const capabilities = {
   writable: true,
@@ -11,23 +11,23 @@ const capabilities = {
 const ns = "n /";
 const rect = { posX: 1, posY: 2, width: 100, height: 100 };
 const calls = {
-  "scopes.create": (b: KozaneBackend) => b.scopes.create(ns, { name: "Scope" }),
-  "scopes.rename": (b: KozaneBackend) => b.scopes.rename(ns, "s", { name: "Scope" }),
-  "scopes.remove": (b: KozaneBackend) => b.scopes.remove(ns, "s"),
-  "scopes.addMembers": (b: KozaneBackend) => b.scopes.addMembers(ns, "s", { cardIds: ["c"] }),
-  "scopes.removeMembers": (b: KozaneBackend) => b.scopes.removeMembers(ns, "s", { cardIds: ["c"] }),
-  "scopes.createArea": (b: KozaneBackend) => b.scopes.createArea(ns, "s", rect),
-  "scopes.updateArea": (b: KozaneBackend) => b.scopes.updateArea(ns, "s", "a", rect),
-  "scopes.removeArea": (b: KozaneBackend) => b.scopes.removeArea(ns, "s", "a"),
-  "warps.create": (b: KozaneBackend) => b.warps.create(ns, { posX: 1, posY: 2 }),
-  "warps.update": (b: KozaneBackend) => b.warps.update(ns, "w", { posX: 3, posY: 4 }),
-  "warps.remove": (b: KozaneBackend) => b.warps.remove(ns, "w"),
-} satisfies Record<keyof typeof geometryResults, (b: KozaneBackend) => Promise<unknown>>;
+  "scopes.create": (b: KozaneClient) => b.scopes.create(ns, { name: "Scope" }),
+  "scopes.rename": (b: KozaneClient) => b.scopes.rename(ns, "s", { name: "Scope" }),
+  "scopes.remove": (b: KozaneClient) => b.scopes.remove(ns, "s"),
+  "scopes.addMembers": (b: KozaneClient) => b.scopes.addMembers(ns, "s", { cardIds: ["c"] }),
+  "scopes.removeMembers": (b: KozaneClient) => b.scopes.removeMembers(ns, "s", { cardIds: ["c"] }),
+  "scopes.createArea": (b: KozaneClient) => b.scopes.createArea(ns, "s", rect),
+  "scopes.updateArea": (b: KozaneClient) => b.scopes.updateArea(ns, "s", "a", rect),
+  "scopes.removeArea": (b: KozaneClient) => b.scopes.removeArea(ns, "s", "a"),
+  "warps.create": (b: KozaneClient) => b.warps.create(ns, { posX: 1, posY: 2 }),
+  "warps.update": (b: KozaneClient) => b.warps.update(ns, "w", { posX: 3, posY: 4 }),
+  "warps.remove": (b: KozaneClient) => b.warps.remove(ns, "w"),
+} satisfies Record<keyof typeof geometryResults, (b: KozaneClient) => Promise<unknown>>;
 describe.each(Object.entries(calls))("%s response", (name, call) => {
   it("returns complete decoded results and one committed invalidation", async () => {
     const value = geometryResults[name as keyof typeof geometryResults];
     const fetcher = vi.fn(async () => Response.json(value));
-    const backend = new HttpBackend({ capabilities, fetcher });
+    const backend = new HttpClient({ capabilities, fetcher });
     const observed = vi.fn();
     const release = backend.subscribe(observed);
     expect(await call(backend)).toEqual(value);
@@ -38,7 +38,7 @@ describe.each(Object.entries(calls))("%s response", (name, call) => {
   });
   it("rejects malformed committed results after invalidating without replay", async () => {
     const fetcher = vi.fn(async () => Response.json({ ok: false }));
-    const backend = new HttpBackend({ capabilities, fetcher });
+    const backend = new HttpClient({ capabilities, fetcher });
     const observed = vi.fn();
     const release = backend.subscribe(observed);
     await expect(call(backend)).rejects.toMatchObject({ code: "unavailable" });
@@ -59,7 +59,7 @@ it.each([
   "rejects mismatched %s identities while preserving its committed revision",
   async (name, value) => {
     const fetcher = vi.fn(async () => Response.json(value));
-    const backend = new HttpBackend({ capabilities, fetcher });
+    const backend = new HttpClient({ capabilities, fetcher });
     await expect(calls[name](backend)).rejects.toMatchObject({ code: "unavailable" });
     expect(backend.version.revision).toBe(1);
     expect(fetcher).toHaveBeenCalledTimes(1);

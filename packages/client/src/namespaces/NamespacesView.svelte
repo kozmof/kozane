@@ -1,8 +1,8 @@
 <script lang="ts">
   import RefreshNotice from "../RefreshNotice.svelte";
-  import BackendNotice from "../BackendNotice.svelte";
+  import ClientNotice from "../ClientNotice.svelte";
   import type { NavigationAdapter } from "../navigation.js";
-  import type { KozaneBackend, NamespaceGetResult } from "../backend/contract.js";
+  import type { KozaneClient, NamespaceGetResult } from "../backend/contract.js";
   import type { Snippet } from "svelte";
   import { untrack } from "svelte";
   import { NamespaceIndex } from "../backend/namespace-index.svelte.js";
@@ -10,7 +10,7 @@
   import NavIcon from "../components/NavIcon.svelte";
 
   let { backend, initialNamespaces, navigation, workspaceName = null, workspaceLabel = "Kozane", formError = null, lifetimeNotice, createAction, emptyState, retryIntervalMs = 1000 }: {
-    backend: KozaneBackend;
+    backend: KozaneClient;
     initialNamespaces: NamespaceGetResult[];
     navigation: NavigationAdapter;
     workspaceName?: string | null;
@@ -89,7 +89,7 @@
     </nav>
   </div>
 
-  <BackendNotice capabilities={backend.capabilities} {lifetimeNotice} />
+  <ClientNotice capabilities={backend.capabilities} {lifetimeNotice} />
   <RefreshNotice {backend} failed={index.refreshError !== null} message="Could not refresh namespaces. Showing the last results." retry={() => refreshAttempt++} />
 
   {#if index.namespaces.length === 0}

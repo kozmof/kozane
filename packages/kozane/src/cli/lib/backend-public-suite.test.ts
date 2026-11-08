@@ -1,10 +1,10 @@
 import { expect, it } from "vitest";
-import { StaticBackend } from "../../../../client/src/backend/static-backend.js";
-import { HttpBackend } from "../../../../client/src/backend/http-backend.js";
+import { StaticClient } from "../../../../client/src/backend/static-client.js";
+import { HttpClient } from "../../../../client/src/backend/http-client.js";
 import {
-  backendContractCases,
-  runBackendContract,
-  BackendContractFailure,
+  clientContractCases,
+  runClientContract,
+  ClientContractFailure,
 } from "../../../../client/src/backend/testing/index.js";
 import * as database from "../../db/database";
 import * as services from "../../services/index";
@@ -13,7 +13,7 @@ import { applyMigrations } from "@kozane/core/migrations";
 import { domainErrorCode } from "../../services/error-code";
 import { createServiceContractFixture } from "../../../../../scripts/client-package/testing-http-fixture.mjs";
 function fixture() {
-  const backend = new StaticBackend({
+  const backend = new StaticClient({
     namespaces: [{ id: "ns", name: "Fixture", isDefault: true }],
     snapshots: [
       {
@@ -49,23 +49,23 @@ it("runs the read-only catalog with one fresh fixture and cleanup per case", asy
       },
     };
   };
-  const cases = backendContractCases(create);
+  const cases = clientContractCases(create);
   expect(created).toBe(0);
-  const passed = await runBackendContract(create);
+  const passed = await runClientContract(create);
   expect(passed.length).toBe(cases.length);
   expect(created).toBe(cases.length);
   expect(cleaned).toBe(cases.length);
   expect(passed).toContain("read-only namespaces.create");
 });
 it("runs writable cases against real native SQLite services through HTTP", async () => {
-  const cases = await runBackendContract(
+  const cases = await runClientContract(
     () =>
       createServiceContractFixture({
         database,
         services,
         schema,
         migrate: applyMigrations,
-        HttpBackend,
+        HttpClient,
         domainErrorCode,
       }),
     { mode: "writable" },
@@ -74,18 +74,18 @@ it("runs writable cases against real native SQLite services through HTTP", async
   expect(cases).toContain("invalid card creation leaves version unchanged");
 });
 it("annotates factory failures with the case name", async () => {
-  const test = backendContractCases(async () => {
+  const test = clientContractCases(async () => {
     throw new Error("Cannot initialize");
   })[0];
   await expect(test.run()).rejects.toMatchObject({
-    name: "BackendContractFailure",
+    name: "ClientContractFailure",
     caseName: test.name,
     cause: { message: "Cannot initialize" },
   });
 });
 it("cleans up failed cases and preserves a simultaneous cleanup failure", async () => {
   let cleaned = false;
-  const test = backendContractCases(
+  const test = clientContractCases(
     () => ({
       ...fixture(),
       cleanup: () => {
@@ -99,14 +99,14 @@ it("cleans up failed cases and preserves a simultaneous cleanup failure", async 
     await test.run();
     throw new Error("Expected contract failure");
   } catch (error) {
-    expect(error).toBeInstanceOf(BackendContractFailure);
-    expect((error as BackendContractFailure).cause).toBeInstanceOf(AggregateError);
+    expect(error).toBeInstanceOf(ClientContractFailure);
+    expect((error as ClientContractFailure).cause).toBeInstanceOf(AggregateError);
   }
   expect(cleaned).toBe(true);
 });
 it("detects a backend that ignores conditional snapshot validators", async () => {
   let cleaned = false;
-  const test = backendContractCases(() => {
+  const test = clientContractCases(() => {
     const base = fixture();
     const backend = new Proxy(base.backend, {
       get(target, key, receiver) {
@@ -127,7 +127,7 @@ it("detects a backend that ignores conditional snapshot validators", async () =>
 });
 it("reports a failed dataset read and still cleans up", async () => {
   let cleaned = false;
-  const test = backendContractCases(() => {
+  const test = clientContractCases(() => {
     const base = fixture();
     return {
       ...base,
@@ -137,6 +137,6 @@ it("reports a failed dataset read and still cleans up", async () => {
       },
     };
   }).find((test) => test.name === "tags reads obey availability")!;
-  await expect(test.run()).rejects.toBeInstanceOf(BackendContractFailure);
+  await expect(test.run()).rejects.toBeInstanceOf(ClientContractFailure);
   expect(cleaned).toBe(true);
 });
