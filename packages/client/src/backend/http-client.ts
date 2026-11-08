@@ -1,3 +1,4 @@
+import { createClientFeatures, type ClientFeatures } from "./capabilities.js";
 import type {
   KozaneClient,
   ManagedClient,
@@ -32,7 +33,10 @@ export class HttpClient implements ManagedClient {
   private disposed = false;
   private readonly lifetime = new AbortController();
   readonly kind = "http" as const;
-  readonly capabilities: ClientCapabilities;
+  private readonly features: ClientFeatures;
+  get capabilities(): ClientCapabilities {
+    return this.features.capabilities;
+  }
   private readonly signals = new ClientSignals({ status: "ready" });
   private readonly transport: HttpTransport;
   private readonly poller?: WorkspacePoller;
@@ -53,7 +57,10 @@ export class HttpClient implements ManagedClient {
       pollingInitialDelayMs?: number;
     },
   ) {
-    this.capabilities = Object.freeze({ ...options.capabilities });
+    this.features = createClientFeatures(
+      options.capabilities,
+      options.capabilities.taskspaces ? this.taskspaceApi : undefined,
+    );
     this.transport = new HttpTransport((path) => `${options.base ?? ""}${path}`, options);
     if (this.capabilities.externalWrites)
       this.poller = new WorkspacePoller({
@@ -287,6 +294,6 @@ export class HttpClient implements ManagedClient {
   readonly warpDirectory: KozaneClient["warpDirectory"] = createWarpDirectory(this.resourceContext);
   private readonly taskspaceApi: TaskspaceLifecycleApi = createTaskspaces(this.resourceContext);
   get taskspaces(): TaskspaceLifecycleApi | undefined {
-    return this.capabilities.taskspaces ? this.taskspaceApi : undefined;
+    return this.features.taskspaces;
   }
 }

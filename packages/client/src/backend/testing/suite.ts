@@ -1,3 +1,4 @@
+import { assertTaskspaceSupport } from "../capabilities.js";
 import {
   ClientError,
   type ClientInvalidation,
@@ -104,6 +105,7 @@ export function clientContractCases(
               fixture.backend.state.status === "ready",
               "Fixture must be ready before a case starts",
             );
+            assertTaskspaceSupport(fixture.backend);
             await operation(fixture);
           } catch (error) {
             failed = true;
@@ -208,10 +210,7 @@ export function clientContractCases(
     );
   }
   add("taskspace capability agrees with API availability", async ({ backend }) => {
-    check(
-      backend.capabilities.taskspaces === (backend.taskspaces !== undefined),
-      "Taskspace capability/API mismatch",
-    );
+    assertTaskspaceSupport(backend);
   });
   if (!writable) {
     for (const [name, mutation] of Object.entries(clientMutationCases))

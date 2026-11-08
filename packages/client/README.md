@@ -177,3 +177,13 @@ The host entry uses explicit exports. Its `ActivityGuard` and `BoardPoint` inter
 `HttpClient` owns transport, lifetime, snapshot validators and invalidation. Resource modules under `src/backend/http` wire namespace, card, collection, dataset and taskspace operations through that shared context. They do not create connections or own subscriptions.
 
 The client prepares mutation inputs once through the public core helper before dispatch and response validation. Transport encodes the prepared copy and handles HTTP status, authentication, throttling, cancellation and keepalive. Services still validate inputs at their own boundary. Production views use this client rather than separate route-local request helpers.
+
+## Board coordination
+
+Each mounted board creates a private controller. It coordinates snapshots, editing, navigation, files and keyboard actions for that view. The component renders the controller's state and supplies canvas and composer actions through small interfaces. Leaving the board releases its effects and disables pending actions. The host continues to own the shared client.
+
+## Taskspace availability
+
+Use `createClientFeatures(capabilities, taskspaces)` when constructing a client. It derives the taskspace capability from the attached API and freezes the feature pair. Omit the API to disable taskspaces. An attached API must implement every taskspace method, including explicit rejections for unsupported writes.
+
+Both built-in clients use this constructor. Every shared contract case checks that the taskspace flag agrees with API availability and that the API has all required methods. Custom clients remain responsible for operation results and access permissions.

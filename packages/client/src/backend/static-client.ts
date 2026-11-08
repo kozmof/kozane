@@ -1,3 +1,4 @@
+import { createClientFeatures, type ClientFeatures } from "./capabilities.js";
 import type { KozaneClient, ManagedClient } from "./contract.js";
 import type { TagsViewData } from "@kozane/core";
 import type { TreemapSnapshot } from "@kozane/core";
@@ -54,7 +55,10 @@ function invalid(): never {
 /** Read embedded export data without live endpoints, polling, or writable storage. */
 export class StaticClient implements ManagedClient {
   readonly kind = "static" as const;
-  readonly capabilities: ClientCapabilities;
+  private readonly features: ClientFeatures;
+  get capabilities(): ClientCapabilities {
+    return this.features.capabilities;
+  }
   private disposed = false;
   private readonly signals = new ClientSignals({ status: "ready" });
   get state(): ClientState {
@@ -121,13 +125,15 @@ export class StaticClient implements ManagedClient {
       if (!this.metadata.has(namespaceId) || !parseWarpEntries(entries)) invalid();
     }
     for (const tree of Object.values(this.data.files ?? {})) if (!isStaticFileTree(tree)) invalid();
-    this.capabilities = Object.freeze({
-      writable: false,
-      persistent: true,
-      taskspaces: this.data.files !== undefined,
-      externalWrites: false,
-      auth: false,
-    });
+    this.features = createClientFeatures(
+      {
+        writable: false,
+        persistent: true,
+        externalWrites: false,
+        auth: false,
+      },
+      this.data.files !== undefined ? this.fileApi : undefined,
+    );
   }
 
   subscribe(_listener: (event: ClientInvalidation) => void): () => void {
@@ -334,6 +340,6 @@ export class StaticClient implements ManagedClient {
     },
   });
   get taskspaces(): TaskspaceLifecycleApi | undefined {
-    return this.capabilities.taskspaces ? this.fileApi : undefined;
+    return this.features.taskspaces;
   }
 }

@@ -32,3 +32,5 @@ export type {
   NamespacesViewClient,
   BoardViewClient,
 } from "./view-clients.js";
+
+export { createClientFeatures, type ClientFeatures } from "./capabilities.js";
