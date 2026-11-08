@@ -32,7 +32,7 @@ export function boardViewProps(): BoardViewProps {
   };
   return {
     data,
-    backend: new StaticClient({
+    client: new StaticClient({
       namespaces: [data.namespace],
       snapshots: [data],
       warpDirectories: { board: [] },

@@ -4,10 +4,10 @@ import { onMount, onDestroy, tick, untrack } from "svelte";
 import { type BoardArrivalParameter } from "../navigation.js";
 import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
 import { boardKeyBindings } from "./lib/board-bindings.js";
-import { createClientBoardPersistence } from "./lib/board-backend-persistence.js";
+import { createClientBoardPersistence } from "./lib/board-client-persistence.js";
 import { NamespaceState } from "./namespace-state.svelte.js";
 import { createNamespaceActions } from "./namespace-actions.svelte.js";
-import { createClientInventoryActions } from "./lib/backend-inventory-actions.js";
+import { createClientInventoryActions } from "./lib/client-inventory-actions.js";
 import type { InventoryDrag } from "./lib/inventory-drop.js";
 import { arrivalWarp, clearArrivalParams, readArrival } from "./lib/board-arrival.js";
 import { createBoardFiles } from "./lib/board-files.js";
@@ -47,28 +47,28 @@ export function createBoardController(options: BoardControllerOptions) {
   // Use the same namespace-loading path as later navigation so layer restoration and other
   // initialization stay consistent.
   untrack(() => s.resetFromData(options.data));
-  const readonly = $derived(!options.backend.capabilities.writable);
+  const readonly = $derived(!options.client.capabilities.writable);
   let snapshotStatus = $state.raw<SnapshotViewStatus>(
     untrack(() => ({
-      current: options.initialDataApplied && options.backend.state.status === "ready",
+      current: options.initialDataApplied && options.client.state.status === "ready",
       namespaceId: options.data.namespace.id,
-      generation: options.backend.version.generation,
+      generation: options.client.version.generation,
     })),
   );
   const editingBlocked = $derived(
     !readonly &&
       (!snapshotStatus.current ||
         snapshotStatus.namespaceId !== options.data.namespace.id ||
-        snapshotStatus.generation !== options.backend.version.generation),
+        snapshotStatus.generation !== options.client.version.generation),
   );
   const mutationClient = untrack(() =>
-    bindViewWrites(options.backend, () => active && !editingBlocked),
+    bindViewWrites(options.client, () => active && !editingBlocked),
   );
   let refreshAttempt = $state(0);
   let refreshFailed = $state(false);
   let filesRefreshFailed = $state(false);
-  let appliedGeneration = untrack(() => options.backend.version.generation);
-  let editorGeneration = $state(untrack(() => options.backend.version.generation));
+  let appliedGeneration = untrack(() => options.client.version.generation);
+  let editorGeneration = $state(untrack(() => options.client.version.generation));
   $effect(() => {
     const generation = snapshotStatus.generation;
     if (generation === editorGeneration) return;
@@ -117,7 +117,7 @@ export function createBoardController(options: BoardControllerOptions) {
     {
       s,
       readonly: untrack(() => readonly),
-      backend: mutationClient,
+      client: mutationClient,
       navigation: () => options.navigation,
       navigate: (href) => options.routing.navigate(href),
       removeWarp: (warpId) => actions.handleRemoveWarp(warpId),
@@ -197,7 +197,7 @@ export function createBoardController(options: BoardControllerOptions) {
     const { card, file, inventory, handled } = readArrival(
       options.navigation.readBoard(url),
       s,
-      (taskspace) => options.backend.taskspaces?.access(s.namespaceId, taskspace).read ?? false,
+      (taskspace) => options.client.taskspaces?.access(s.namespaceId, taskspace).read ?? false,
     );
     if (file) {
       const { taskspace, path } = file;
@@ -263,7 +263,7 @@ export function createBoardController(options: BoardControllerOptions) {
   });
   // Keep live subscriptions stable and read each static export namespace once.
   $effect(() => {
-    const current = options.backend;
+    const current = options.client;
     const namespaceId = options.data.namespace.id;
     const applied = options.initialDataApplied;
     const attempt = refreshAttempt;
@@ -272,7 +272,7 @@ export function createBoardController(options: BoardControllerOptions) {
     const hidden = options.isHidden;
     return untrack(() =>
       startSnapshotView({
-        backend: current,
+        client: current,
         initialDataApplied: applied,
         refreshInitially: attempt > 0,
         retryIntervalMs: interval,
@@ -329,11 +329,11 @@ export function createBoardController(options: BoardControllerOptions) {
   }
   const editorContext = $derived({
     canWrite: () => active && !readonly && !editingBlocked,
-    backend: options.backend,
+    client: options.client,
     namespaceId: s.namespaceId,
   });
   $effect(() => {
-    const current = options.backend,
+    const current = options.client,
       tree = s.taskspaceTree,
       context = editorContext;
     const attempt = refreshAttempt,

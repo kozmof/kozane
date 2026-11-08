@@ -184,7 +184,7 @@
       }
     },
     {
-      // Board action composition and mutations depend on injected backend resources.
+      // Board action composition and mutations depend on injected client resources.
       "files": ["packages/kozane/src/routes/*/namespace-actions.svelte.ts", "packages/kozane/src/routes/*/lib/actions/*.ts", "packages/kozane/src/routes/*/lib/*persistence*.ts", "packages/kozane/src/routes/*/lib/*inventory-actions.ts", "packages/kozane/src/routes/*/lib/editor/*.ts", "packages/kozane/src/routes/*/lib/taskspace-tree.svelte.ts"],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {

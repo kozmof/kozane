@@ -45,11 +45,11 @@
    * Interactions navigate or change the view without writing workspace data.
    */
 
-  let { data, selection, navigation, backend, lifetimeNotice, retryIntervalMs, lifecycle, isHidden = () => false }: {
+  let { data, selection, navigation, client, lifetimeNotice, retryIntervalMs, lifecycle, isHidden = () => false }: {
     data: MapPageData;
     selection: MapSelection;
     navigation: NavigationAdapter;
-    backend?: MapViewClient;
+    client?: MapViewClient;
     lifetimeNotice?: string;
     retryIntervalMs?: number | false;
     lifecycle?: Pick<PollLifecycle, "listen">;
@@ -58,7 +58,7 @@
   const selectedTag = $derived(selection.tag ? normalizeTag(selection.tag) : null);
   const selectedNamespaceId = $derived(selection.namespaceId);
   const selectedDay = $derived(selection.day);
-  const source = $derived({ data, backend, namespaceId: selectedNamespaceId, tag: selectedTag, day: selectedDay });
+  const source = $derived({ data, client, namespaceId: selectedNamespaceId, tag: selectedTag, day: selectedDay });
   let refreshed = $state.raw<{ source: typeof source; value: MapViewData } | null>(null);
   let refreshAttempt = $state(0);
   let failedSource = $state.raw<typeof source | null>(null);
@@ -67,13 +67,13 @@
   $effect(() => {
     const currentSource = source;
     const attempt = refreshAttempt;
-    const current = currentSource.backend;
+    const current = currentSource.client;
     const interval = retryIntervalMs;
     const wake = lifecycle;
     const hidden = isHidden;
     if (!current) return;
     return untrack(() => startDatasetView({
-      backend: current,
+      client: current,
       retryIntervalMs: interval,
       lifecycle: wake,
       dataset: "map",
@@ -267,8 +267,8 @@
 </svelte:head>
 
 <!-- Fill the fixed-height viewport with the map and overlay controls. Hide page overflow so panning is the single way to move the map and graph coordinates remain aligned. -->
-{#if backend}<ClientNotice capabilities={backend.capabilities} {lifetimeNotice} floating />{/if}
-<RefreshNotice {backend} failed={refreshFailed} message="Could not refresh map. Showing the last map." retry={() => refreshAttempt++} floating />
+{#if client}<ClientNotice capabilities={client.capabilities} {lifetimeNotice} floating />{/if}
+<RefreshNotice {client} failed={refreshFailed} message="Could not refresh map. Showing the last map." retry={() => refreshAttempt++} floating />
 
 <main
   class={css({

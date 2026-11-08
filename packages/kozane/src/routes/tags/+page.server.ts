@@ -7,7 +7,7 @@ import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
 import { normalizeTag } from "$lib/tag";
 import { selectTagHits, tagsView } from "@kozane/client";
-import { pageClientData } from "$lib/server/page-backend.js";
+import { pageClientData } from "$lib/server/page-client.js";
 import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 
 // Prerender one workspace-wide tag index. Namespace filtering uses query parameters at

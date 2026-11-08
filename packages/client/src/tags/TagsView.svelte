@@ -32,11 +32,11 @@
   import TagResults from "./TagResults.svelte";
   import { activeRowClass, countClass, noteClass, rowClass } from "./styles.js";
 
-  let { data, selection, navigation, backend, lifetimeNotice, retryIntervalMs, lifecycle, isHidden = () => false }: {
+  let { data, selection, navigation, client, lifetimeNotice, retryIntervalMs, lifecycle, isHidden = () => false }: {
     data: TagsPageData;
     selection: TagsSelection;
     navigation: NavigationAdapter;
-    backend?: TagsViewClient;
+    client?: TagsViewClient;
     lifetimeNotice?: string;
     retryIntervalMs?: number | false;
     lifecycle?: Pick<PollLifecycle, "listen">;
@@ -44,7 +44,7 @@
   } = $props();
   const selectedTag = $derived(selection.tag ? normalizeTag(selection.tag) : null);
   const selectedNamespaceId = $derived(selection.namespaceId);
-  const source = $derived({ data, backend, tag: selectedTag, namespaceId: selectedNamespaceId });
+  const source = $derived({ data, client, tag: selectedTag, namespaceId: selectedNamespaceId });
   let refreshAttempt = $state(0);
   let failedSource = $state.raw<typeof source | null>(null);
   const refreshFailed = $derived(failedSource === source);
@@ -53,13 +53,13 @@
   $effect(() => {
     const currentSource = source;
     const attempt = refreshAttempt;
-    const current = currentSource.backend;
+    const current = currentSource.client;
     const interval = retryIntervalMs;
     const wake = lifecycle;
     const hidden = isHidden;
     if (!current) return;
     return untrack(() => startDatasetView({
-      backend: current,
+      client: current,
       retryIntervalMs: interval,
       lifecycle: wake,
       dataset: "tags",
@@ -235,7 +235,7 @@
   </ul>
 {/snippet}
 
-{#if backend}<ClientNotice capabilities={backend.capabilities} {lifetimeNotice} floating />{/if}
+{#if client}<ClientNotice capabilities={client.capabilities} {lifetimeNotice} floating />{/if}
 
 <main
   class={css({
@@ -308,7 +308,7 @@
     </nav>
   </header>
 
-  <RefreshNotice {backend} failed={refreshFailed} message="Could not refresh tags. Showing the last results." retry={() => refreshAttempt++} />
+  <RefreshNotice {client} failed={refreshFailed} message="Could not refresh tags. Showing the last results." retry={() => refreshAttempt++} />
 
   {#if tree.length !== 0}
     <div

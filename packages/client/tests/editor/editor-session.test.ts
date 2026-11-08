@@ -108,7 +108,7 @@ describe("EditorSession", () => {
     }) as unknown as typeof fetch;
     const s = new EditorSession();
     await s.open(httpEditorContext(fetcher), REF);
-    expect(s.error).toBe("Unable to reach the backend");
+    expect(s.error).toBe("Unable to reach the server");
   });
 
   it("starts clean and goes dirty on the first edit", async () => {
@@ -856,9 +856,9 @@ describe("EditorSession", () => {
   });
 });
 
-it("reads static backend files and skip messages and retains edits after a rejected save", async () => {
+it("reads static client files and skip messages and retains edits after a rejected save", async () => {
   const { StaticClient } = await import("../../src/client/static-client.js");
-  const backend = new StaticClient({
+  const client = new StaticClient({
     namespaces: [{ id: "p-1", name: "One", isDefault: true }],
     snapshots: [
       {
@@ -899,7 +899,7 @@ it("reads static backend files and skip messages and retains edits after a rejec
   });
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
-  const ctx = { namespaceId: "p-1", backend };
+  const ctx = { namespaceId: "p-1", client };
   const session = new EditorSession();
   try {
     await session.open(ctx, REF);
@@ -907,7 +907,7 @@ it("reads static backend files and skip messages and retains edits after a rejec
     session.doc!.insert({ line: 0, column: 0 }, "x");
     await session.save(ctx);
     expect(session.dirty).toBe(true);
-    expect(session.error).toBe("This backend is read-only");
+    expect(session.error).toBe("This client is read-only");
     await session.open(ctx, { ...REF, path: "skipped.md" });
     expect(session.error).toBe("This file could not be read when the export was built.");
     expect(fetcher).not.toHaveBeenCalled();

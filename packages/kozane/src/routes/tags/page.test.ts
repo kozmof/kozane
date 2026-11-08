@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
-import { tagDataset } from "../../../../client/tests/backend/tags.fixtures.js";
+import { tagDataset } from "../../../../client/tests/client/tags.fixtures.js";
 import TagsPage from "./+page.svelte";
 import { buildTagTree } from "$lib/tag";
 import type { TagHit } from "$lib/types";
@@ -262,7 +262,7 @@ describe("tag index page", () => {
   });
 });
 
-describe("backend tags refresh", () => {
+describe("client tags refresh", () => {
   afterEach(() => vi.unstubAllGlobals());
   const capabilities = {
     writable: true,
@@ -317,7 +317,7 @@ describe("backend tags refresh", () => {
     await waitFor(() => expect(screen.getByText("Recovered content")).toBeInTheDocument());
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
-  it("keeps static exports on embedded results without backend requests", () => {
+  it("keeps static exports on embedded results without client requests", () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
     draw([cardHit("c1", "perf", "Exported content")]);
@@ -365,7 +365,7 @@ it("uses injected demo routes and fragment filters for tags and board links", as
   }
 });
 
-it("reads static tag data through the backend while retaining tag result selection", async () => {
+it("reads static tag data through the client while retaining tag result selection", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
   try {

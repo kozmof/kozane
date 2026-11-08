@@ -620,9 +620,9 @@ describe("zooming into something too small to read", () => {
   });
 });
 
-describe("backend map data", () => {
+describe("client map data", () => {
   afterEach(() => vi.unstubAllGlobals());
-  it("refreshes through the backend while retaining filters and zoom", async () => {
+  it("refreshes through the client while retaining filters and zoom", async () => {
     let finish!: (value: Response) => void;
     const fetcher = vi.fn(
       () =>
@@ -700,7 +700,7 @@ it("uses injected demo routes for map filters, partitions and workspace navigati
   }
 });
 
-it("projects static backend data for the selected namespace without HTTP", async () => {
+it("projects static client data for the selected namespace without HTTP", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
   try {

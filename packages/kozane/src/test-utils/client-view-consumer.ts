@@ -17,7 +17,7 @@ import {
   BoardView,
 } from "../../../client/src/ui.js";
 
-import { tagDataset } from "../../../client/tests/backend/tags.fixtures.js";
+import { tagDataset } from "../../../client/tests/client/tags.fixtures.js";
 import { tagsView } from "../../../client/src/client/views/tags.js";
 import { boardViewProps } from "./board-view-props.js";
 import { boardCanvasProps } from "./board-canvas-props.js";
@@ -61,7 +61,7 @@ export async function renderViews() {
   });
   const namespaces = render(NamespacesView, {
     props: {
-      backend: new StaticClient({ namespaces: [{ id: "n", name: "Research", isDefault: true }] }),
+      client: new StaticClient({ namespaces: [{ id: "n", name: "Research", isDefault: true }] }),
       initialNamespaces: [{ id: "n", name: "Research", isDefault: true }],
       navigation: createDemoNavigation({ base: "/demo" }),
       workspaceLabel: "Standalone workspace",
@@ -77,7 +77,7 @@ export async function renderViews() {
       data: tagsView(tagData, selection),
       selection,
       navigation: createDemoNavigation({ base: "/demo" }),
-      backend: new StaticClient({ namespaces: tagData.namespaces, tags: tagData }),
+      client: new StaticClient({ namespaces: tagData.namespaces, tags: tagData }),
       retryIntervalMs: false,
     },
   });
@@ -88,7 +88,7 @@ export async function renderViews() {
       data: mapView(mapData, { ...mapSelection, zoomStep: 0.05 }),
       selection: mapSelection,
       navigation: createDemoNavigation({ base: "/demo" }),
-      backend: new StaticClient({ namespaces: mapData.namespaces, map: mapData }),
+      client: new StaticClient({ namespaces: mapData.namespaces, map: mapData }),
       retryIntervalMs: false,
     },
   });

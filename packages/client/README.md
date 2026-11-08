@@ -76,7 +76,7 @@ for (const test of clientContractCases(createFixture, { mode: "read-only" })) {
 }
 ```
 
-Provide `createFixture` with a ready backend, an existing `namespaceId` and optional
+Provide `createFixture` with a ready client, an existing `namespaceId` and optional
 `cleanup`. Each case requests a fresh fixture and always attempts cleanup. Disable
 background polling and external writers while a case runs. Declare unavailable tags,
 map or warp-directory datasets through `unavailableDatasets`.
@@ -123,19 +123,6 @@ installed-package project, which resolves public exports from candidate archives
 source aliases.
 
 ## Client names and future workers
-
-The client API replaces the earlier backend names. Update imports and type annotations together.
-
-| Earlier name           | Current name          |
-| ---------------------- | --------------------- |
-| `KozaneBackend`        | `KozaneClient`        |
-| `HttpBackend`          | `HttpClient`          |
-| `StaticBackend`        | `StaticClient`        |
-| `BackendError`         | `ClientError`         |
-| `BackendState`         | `ClientState`         |
-| `BackendCapabilities`  | `ClientCapabilities`  |
-| `backendContractCases` | `clientContractCases` |
-| `runBackendContract`   | `runClientContract`   |
 
 Views use the `KozaneClient` contract. Import `HttpClient` for the local server connection or `StaticClient` for embedded read-only data. Public lifecycle and error types use the same naming, including `ClientState`, `ClientCapabilities` and `ClientError`. The testing entry exports `clientContractCases` and `runClientContract`.
 

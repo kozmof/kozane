@@ -8,7 +8,7 @@ export function httpEditorContext(
 ): EditorSessionContext {
   return {
     namespaceId,
-    backend: new HttpClient({
+    client: new HttpClient({
       fetcher,
       capabilities: {
         writable: true,
@@ -45,7 +45,7 @@ export function staticEditorContext(
   };
   return {
     namespaceId,
-    backend: new StaticClient({
+    client: new StaticClient({
       namespaces: [{ id: namespaceId, name: "Board", isDefault: true }],
       snapshots: [snapshot],
       files,

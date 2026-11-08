@@ -19,8 +19,8 @@ afterEach(() => vi.unstubAllGlobals());
 it("renders a read-only index with supplied navigation and generic empty guidance", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
-  const backend = new StaticClient({ namespaces: rows });
-  const view = render(NamespacesView, { props: { ...props, backend } });
+  const client = new StaticClient({ namespaces: rows });
+  const view = render(NamespacesView, { props: { ...props, client } });
   expect(screen.getByRole("link", { name: /Research/ })).toHaveAttribute(
     "href",
     "/demo/board/?namespaceId=one",
@@ -29,7 +29,7 @@ it("renders a read-only index with supplied navigation and generic empty guidanc
   await view.rerender({
     ...props,
     initialNamespaces: [],
-    backend: new StaticClient({ namespaces: [] }),
+    client: new StaticClient({ namespaces: [] }),
   });
   expect(screen.getByText("No namespaces yet.")).toBeInTheDocument();
   expect(screen.queryByText(/kozane namespace/)).not.toBeInTheDocument();
@@ -37,14 +37,14 @@ it("renders a read-only index with supplied navigation and generic empty guidanc
 });
 
 it("keeps progressive form attributes and app-supplied errors", () => {
-  const backend = new HttpClient({
+  const client = new HttpClient({
     capabilities,
     fetcher: vi.fn().mockResolvedValue(Response.json(rows)),
   });
   render(NamespacesView, {
     props: {
       ...props,
-      backend,
+      client,
       createAction: "/namespace-create",
       formError: "Choose another name",
       workspaceLabel: "My workspace",
@@ -57,7 +57,7 @@ it("keeps progressive form attributes and app-supplied errors", () => {
   expect(screen.getByRole("alert")).toHaveTextContent("Choose another name");
 });
 
-it("disposes the old backend subscription and rejects late rows after replacement", async () => {
+it("disposes the old client subscription and rejects late rows after replacement", async () => {
   let finish!: (value: Response) => void;
   const fetcher = vi.fn<typeof fetch>().mockImplementation(
     () =>
@@ -75,23 +75,23 @@ it("disposes the old backend subscription and rejects late rows after replacemen
       stopped();
     };
   });
-  const view = render(NamespacesView, { props: { ...props, backend: first } });
+  const view = render(NamespacesView, { props: { ...props, client: first } });
   await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
-  const nextRows = [{ id: "next", name: "New backend", isDefault: false }];
+  const nextRows = [{ id: "next", name: "New client", isDefault: false }];
   await view.rerender({
     ...props,
     initialNamespaces: nextRows,
-    backend: new StaticClient({ namespaces: nextRows }),
+    client: new StaticClient({ namespaces: nextRows }),
   });
   expect(stopped).toHaveBeenCalledOnce();
   finish(Response.json([{ id: "stale", name: "Old reply", isDefault: false }]));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(screen.getByRole("link", { name: "New backend" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "New client" })).toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Old reply" })).not.toBeInTheDocument();
   view.unmount();
 });
 
-it("does not clear a new backend's draft when an old creation finishes", async () => {
+it("does not clear a new client's draft when an old creation finishes", async () => {
   let finish!: (value: Response) => void;
   const first = new HttpClient({
     capabilities,
@@ -103,7 +103,7 @@ it("does not clear a new backend's draft when an old creation finishes", async (
         : Response.json(rows),
     ),
   });
-  const view = render(NamespacesView, { props: { ...props, backend: first } });
+  const view = render(NamespacesView, { props: { ...props, client: first } });
   const input = screen.getByRole("textbox", { name: "New namespace name" });
   await fireEvent.input(input, { target: { value: "Old draft" } });
   await fireEvent.submit(input.closest("form")!);
@@ -112,7 +112,7 @@ it("does not clear a new backend's draft when an old creation finishes", async (
     capabilities,
     fetcher: vi.fn().mockResolvedValue(Response.json(rows)),
   });
-  await view.rerender({ ...props, backend: second });
+  await view.rerender({ ...props, client: second });
   await fireEvent.input(input, { target: { value: "New draft" } });
   finish(Response.json({ id: "created", name: "Old draft", isDefault: false }));
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -132,12 +132,12 @@ it("retains the namespace draft while recovery blocks submission", async () => {
           finish = resolve;
         }),
     );
-  const backend = new HttpClient({ capabilities, fetcher });
-  vi.spyOn(backend, "state", "get").mockImplementation(() => signals.state);
-  vi.spyOn(backend, "version", "get").mockImplementation(() => signals.version);
-  vi.spyOn(backend, "subscribe").mockImplementation(signals.subscribe.bind(signals));
-  vi.spyOn(backend, "subscribeState").mockImplementation(signals.subscribeState.bind(signals));
-  render(NamespacesView, { props: { ...props, backend } });
+  const client = new HttpClient({ capabilities, fetcher });
+  vi.spyOn(client, "state", "get").mockImplementation(() => signals.state);
+  vi.spyOn(client, "version", "get").mockImplementation(() => signals.version);
+  vi.spyOn(client, "subscribe").mockImplementation(signals.subscribe.bind(signals));
+  vi.spyOn(client, "subscribeState").mockImplementation(signals.subscribeState.bind(signals));
+  render(NamespacesView, { props: { ...props, client } });
   await new Promise((resolve) => setTimeout(resolve, 0));
   const input = screen.getByRole("textbox", { name: "New namespace name" });
   await fireEvent.input(input, { target: { value: "Retained name" } });
@@ -159,8 +159,8 @@ it("retains namespace links and retries a failed metadata refresh", async () => 
     .fn()
     .mockRejectedValueOnce(new Error("offline"))
     .mockImplementation(async () => Response.json([{ ...rows[0], name: "Recovered namespace" }]));
-  const backend = new HttpClient({ capabilities, fetcher });
-  render(NamespacesView, { props: { ...props, backend } });
+  const client = new HttpClient({ capabilities, fetcher });
+  render(NamespacesView, { props: { ...props, client } });
   expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Research/ })).toBeInTheDocument();
   await fireEvent.click(screen.getByRole("button", { name: "Retry" }));

@@ -42,7 +42,7 @@ export class ScopeAreaBrowser {
       area,
       taskspaces: taskspacesForScope(this.#source.taskspaces(), area.scopeId, (taskspace) => {
         const ctx = this.#source.context();
-        return ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).browse ?? false;
+        return ctx.client.taskspaces?.access(ctx.namespaceId, taskspace).browse ?? false;
       }),
     })),
   );

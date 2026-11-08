@@ -13,7 +13,7 @@ export type BoardPageData = SnapshotData & {
 };
 export interface BoardViewProps {
   data: BoardPageData;
-  backend: BoardViewClient;
+  client: BoardViewClient;
   navigation: NavigationAdapter;
   routing: NavigationDriver;
   preferences: PreferenceStorage;
@@ -21,7 +21,7 @@ export interface BoardViewProps {
   lifetimeNotice?: string;
   /** Read the current route reactively and during cleanup, or return null without a route. */
   readRouteUrl?: () => URL | null;
-  /** Trust the seed only when it was validated for the current backend generation. */
+  /** Trust the seed only when it was validated for the current client generation. */
   initialDataApplied?: boolean;
   retryIntervalMs?: number | false;
   lifecycle?: Pick<PollLifecycle, "listen">;

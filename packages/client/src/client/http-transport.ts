@@ -21,12 +21,12 @@ const MESSAGES: Record<ClientErrorCode, string> = {
   not_found: "The requested record was not found",
   conflict: "The request conflicts with current data",
   limit: "The request exceeds a limit",
-  read_only: "This backend is read-only",
+  read_only: "This client is read-only",
   unauthenticated: "Authentication is required",
   forbidden: "Permission denied",
   rate_limited: "Too many requests. Try again later",
-  unavailable: "The backend is unavailable",
-  network: "Unable to reach the backend",
+  unavailable: "The client is unavailable",
+  network: "Unable to reach the server",
 };
 export const KEEPALIVE_BYTES_MAX = 60 * 1024;
 export function retryAfterMilliseconds(value: string | null, wallTime: number): number {
@@ -53,7 +53,7 @@ export interface HttpTransportOptions {
   monotonicNow?: () => number;
   wallNow?: () => number;
 }
-/** Internal HTTP details stay behind the backend API. Rejected mutations are never retained. */
+/** Internal HTTP details stay behind the client API. Rejected mutations are never retained. */
 export class HttpTransport {
   private readonly fetcher: typeof fetch;
   private readonly now: () => number;

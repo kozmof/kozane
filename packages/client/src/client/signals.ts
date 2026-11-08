@@ -6,7 +6,7 @@ import {
   type ClientVersion,
 } from "./contract.js";
 
-/** Backend-owned lifecycle and committed-data publications. */
+/** Client-owned lifecycle and committed-data publications. */
 export class ClientSignals {
   private currentVersion: ClientVersion = Object.freeze({ generation: 0, revision: 0 });
   private currentState: ClientState;
@@ -84,7 +84,7 @@ export class ClientSignals {
     }
   }
   private assertActive() {
-    if (this.disposed) throw new ClientError("unavailable", "Backend is disposed");
+    if (this.disposed) throw new ClientError("unavailable", "Client is disposed");
   }
   private notify<T>(listeners: Set<(event: T) => void>, event: T) {
     for (const listener of [...listeners]) {

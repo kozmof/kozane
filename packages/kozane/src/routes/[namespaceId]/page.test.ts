@@ -710,7 +710,7 @@ it("reads export snapshots through StaticClient and refreshes it on namespace na
   expect(fetcher).not.toHaveBeenCalled();
 });
 
-it("opens scoped export files through the static backend while keeping the editor read-only", async () => {
+it("opens scoped export files through the static client while keeping the editor read-only", async () => {
   const { page } = await import("$app/state");
   const previous = page.url;
   page.url = new URL("http://localhost/namespace-1?taskspace=t1&path=notes.md") as typeof page.url;
@@ -746,7 +746,7 @@ it("opens scoped export files through the static backend while keeping the edito
           staticClientData: {
             namespaces: [data.namespace],
             snapshots: [snapshot],
-            files: { t1: tree("Backend file") },
+            files: { t1: tree("Client file") },
             warpDirectories: { [data.namespace.id]: [] },
           },
         },
@@ -754,7 +754,7 @@ it("opens scoped export files through the static backend while keeping the edito
         form: null,
       },
     });
-    await waitFor(() => expect(screen.getByRole("dialog")).toHaveTextContent("Backend file"));
+    await waitFor(() => expect(screen.getByRole("dialog")).toHaveTextContent("Client file"));
     expect(screen.getByRole("dialog")).not.toHaveTextContent("SSR file");
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
     expect(fetcher).not.toHaveBeenCalled();

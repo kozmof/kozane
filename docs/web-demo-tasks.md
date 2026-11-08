@@ -16,7 +16,7 @@ The future `WorkerClient` belongs to `@kozane/client`. Dedicated and Service Wor
 - [ ] P4-02 Author release sample content in the demo repository and build it through public migrations and services only.
 - [ ] P4-03 Finalize the sample as a standalone rollback-journal database. Checkpoint/truncate WAL, verify no busy or pending frames, switch to DELETE mode and close all connections before hashing.
 - [ ] P4-04 Validate the finalized bytes through the production browser loader, including full database checks and the required sample namespace/snapshot. Generate the preview from that same artifact.
-- [ ] P4-05 Create one browser-root backend, worker and operation queue retained across internal navigation and BFCache. Never share mutable state between prerender requests.
+- [ ] P4-05 Create one browser-root client, worker and operation queue retained across internal navigation and BFCache. Never share mutable state between prerender requests.
 - [ ] P4-06 Prerender `/`, `/board/`, `/namespaces/`, `/tags/` and `/map/` with directory-style URLs. Preserve query/fragment values through root and slashless redirects.
 - [ ] P4-07 Implement query-based opaque namespace selection, empty/sole/default/ambiguous-default states and explicit missing destinations. Use fragments for content-bearing filters.
 - [ ] P4-08 Add the sandbox banner, install link, recovery indicator, retry/reload controls and capability-based feature visibility.
@@ -68,8 +68,8 @@ The future `WorkerClient` belongs to `@kozane/client`. Dedicated and Service Wor
 
 Run every case in the specification's [demo acceptance checks](web-demo-specification.md#demo-acceptance-checks). The groups below organize execution and evidence; they do not replace individual cases.
 
-- [ ] A-01 Run the shared writable-backend contract suite against HTTP and local backends with equivalent default and non-default contexts. Cover input preparation, errors, namespace creation, transactions and rollback.
-- [ ] A-02 Run conditional snapshot cases across HTTP, local and static backends, including cross-instance/namespace validators, reset, replacement and eviction.
+- [ ] A-01 Run the shared writable-client contract suite against HTTP and local clients with equivalent default and non-default contexts. Cover input preparation, errors, namespace creation, transactions and rollback.
+- [ ] A-02 Run conditional snapshot cases across HTTP, local and static clients, including cross-instance/namespace validators, reset, replacement and eviction.
 - [ ] A-03 Verify active-view refresh, immutable version stamps, cross-namespace mutations, external-process changes, initial poll races, filesystem enrichment and cleanup without a mounted board.
 - [ ] A-04 Verify authentication, permissions, malformed error bodies, all Retry-After cases and shared throttling across direct calls and automatic refresh work without mutation replay.
 - [ ] A-05 Verify worker termination, rollback errors, lost/late replies, decoding errors, dispatch deadlines, long healthy queue waits, disposal and explicit recovery with no stale publication.

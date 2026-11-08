@@ -45,7 +45,7 @@ function liveWorkspace() {
     } as never,
   });
 }
-it("creates through the backend and displays the committed namespace list", async () => {
+it("creates through the client and displays the committed namespace list", async () => {
   let created = false;
   const row = { id: "new", name: "Research", isDefault: false };
   const fetcher = vi.fn(async (_url: unknown, options?: RequestInit) => {
@@ -69,7 +69,7 @@ it("creates through the backend and displays the committed namespace list", asyn
     '{"name":"Research"}',
   );
 });
-it("keeps the entered name and presents backend validation errors", async () => {
+it("keeps the entered name and presents client validation errors", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (_url: unknown, options?: RequestInit) =>
@@ -91,7 +91,7 @@ it("keeps the entered name and presents backend validation errors", async () => 
   expect(input).toHaveValue("  ");
   expect(screen.getByRole("button", { name: "Create namespace" })).toBeEnabled();
 });
-it("keeps static namespace pages free of backend requests and creation controls", () => {
+it("keeps static namespace pages free of client requests and creation controls", () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
   renderWorkspace("Export");
@@ -121,7 +121,7 @@ it("uses supplied navigation for namespace discovery and workspace views", async
   expect(screen.getByRole("link", { name: "Map" })).toHaveAttribute("href", "/demo/map/");
 });
 
-it("reads namespace metadata through the static export backend and hides creation", async () => {
+it("reads namespace metadata through the static export client and hides creation", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
   const namespaces = [{ id: "embedded", name: "Embedded namespace", isDefault: true }];

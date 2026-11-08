@@ -37,7 +37,7 @@ export function boardCanvasProps(): BoardCanvasProps {
     taskspaces: [],
   };
   state.resetFromData(snapshot);
-  const backend = new StaticClient({
+  const client = new StaticClient({
     namespaces: [{ id: "board", name: "Board", isDefault: true }],
   });
   const navigation = createDemoNavigation({ base: "/demo" });
@@ -60,7 +60,7 @@ export function boardCanvasProps(): BoardCanvasProps {
     activeScopeId: null,
     taskspaces: [],
     taskspaceTree: state.taskspaceTree,
-    treeContext: { backend, namespaceId: "board" },
+    treeContext: { client, namespaceId: "board" },
     pendingScopeAreaRect: null,
     onRemoveScopeArea: () => {},
     onPersistScopeArea: async () => false,

@@ -29,19 +29,19 @@ export class NamespaceIndex {
   #sequence = 0;
 
   constructor(
-    private readonly backend: NamespaceClient,
+    private readonly client: NamespaceClient,
     initial: NamespaceRow[],
   ) {
     this.namespaces = initial;
-    this.#generation = backend.version.generation;
-    this.current = backend.state.status === "ready";
+    this.#generation = client.version.generation;
+    this.current = client.state.status === "ready";
   }
 
   start(options: { retryIntervalMs?: number | false } = {}): () => void {
     if (this.#active) throw new Error("Namespace index is already active");
     this.#active = true;
     this.#dirty = true;
-    const unsubscribe = this.backend.subscribe((event) => {
+    const unsubscribe = this.client.subscribe((event) => {
       const replaced = event.generation !== this.#generation;
       if (replaced) {
         this.#generation = event.generation;
@@ -53,7 +53,7 @@ export class NamespaceIndex {
       }
       if (replaced || event.datasets.includes("namespaces")) this.#invalidate();
     });
-    const unsubscribeState = this.backend.subscribeState((state) => {
+    const unsubscribeState = this.client.subscribeState((state) => {
       if (state.status !== "ready") {
         this.current = false;
         this.#sequence++;
@@ -82,24 +82,24 @@ export class NamespaceIndex {
   }
 
   async create(name: string): Promise<boolean> {
-    if (this.submitting || !this.current || this.backend.state.status !== "ready") return false;
+    if (this.submitting || !this.current || this.client.state.status !== "ready") return false;
     const creation = ++this.#creation;
-    const generation = this.backend.version.generation;
+    const generation = this.client.version.generation;
     this.submitting = true;
     this.error = null;
     try {
-      await this.backend.namespaces.create({ name: name.trim() });
+      await this.client.namespaces.create({ name: name.trim() });
       return (
         creation === this.#creation &&
-        generation === this.backend.version.generation &&
+        generation === this.client.version.generation &&
         this.current &&
-        this.backend.state.status === "ready"
+        this.client.state.status === "ready"
       );
     } catch (error) {
       if (
         creation !== this.#creation ||
-        generation !== this.backend.version.generation ||
-        this.backend.state.status !== "ready"
+        generation !== this.client.version.generation ||
+        this.client.state.status !== "ready"
       )
         return false;
       const compatible: Record<string, string> = {
@@ -124,21 +124,21 @@ export class NamespaceIndex {
   }
 
   async #refresh(): Promise<void> {
-    if (!this.#active || this.#running || !this.#dirty || this.backend.state.status !== "ready")
+    if (!this.#active || this.#running || !this.#dirty || this.client.state.status !== "ready")
       return;
     this.#running = true;
     this.#dirty = false;
     const controller = new AbortController();
     this.#pending = controller;
     const sequence = this.#sequence;
-    const generation = this.backend.version.generation;
+    const generation = this.client.version.generation;
     try {
-      const result = rows(await this.backend.namespaces.list({ signal: controller.signal }));
+      const result = rows(await this.client.namespaces.list({ signal: controller.signal }));
       if (!this.#active || controller.signal.aborted) return;
       if (
         sequence !== this.#sequence ||
-        generation !== this.backend.version.generation ||
-        this.backend.state.status !== "ready"
+        generation !== this.client.version.generation ||
+        this.client.state.status !== "ready"
       ) {
         this.#dirty = true;
         return;
@@ -152,8 +152,8 @@ export class NamespaceIndex {
         this.#dirty = true;
         if (
           sequence === this.#sequence &&
-          generation === this.backend.version.generation &&
-          this.backend.state.status === "ready"
+          generation === this.client.version.generation &&
+          this.client.state.status === "ready"
         )
           this.refreshError = "Could not refresh namespaces";
       }

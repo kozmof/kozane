@@ -12,7 +12,7 @@ hydrate(EditorSurface, {
 hydrate(NamespacesView, {
   target: document.getElementById("packed-namespaces")!,
   props: {
-    backend: new StaticClient({ namespaces }),
+    client: new StaticClient({ namespaces }),
     initialNamespaces: namespaces,
     navigation: createDemoNavigation({ base: "/packed" }),
   },

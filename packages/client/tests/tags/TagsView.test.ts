@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/svelte";
 import { TagsView } from "../../src/ui.js";
 import { HttpClient, StaticClient } from "../../src/client/index.js";
-import { tagDataset } from "../backend/tags.fixtures.js";
+import { tagDataset } from "../client/tags.fixtures.js";
 import { tagsView } from "../../src/client/views/tags.js";
 import { createDemoNavigation } from "../../src/navigation.js";
 import type { TagHit } from "../../../kozane/src/lib/types.js";
@@ -30,8 +30,8 @@ it("renders refreshed card labels and partition metadata together", async () => 
   fresh.cardPartitions[0].partitionId = "b2";
   fresh.index.cardData.new = { namespaceId: "p1", partitionId: "b2", updatedDay: "2026-09-06" };
   fresh.partitions = { b2: { name: "New partition", dot: "#123456" } };
-  const backend = new StaticClient({ namespaces: fresh.namespaces, tags: fresh });
-  render(TagsView, { props: { ...props, backend } });
+  const client = new StaticClient({ namespaces: fresh.namespaces, tags: fresh });
+  render(TagsView, { props: { ...props, client } });
   await waitFor(() => expect(screen.getByText("Fresh content")).toBeInTheDocument());
   expect(screen.getByText("New partition")).toBeInTheDocument();
   expect(screen.getByText("Fresh content").closest("a")).toHaveAttribute(
@@ -52,12 +52,12 @@ it("clears an old selection's error while the new selection loads", async () => 
           finish = resolve;
         }),
     );
-  const backend = new HttpClient({ capabilities, fetcher });
-  const view = render(TagsView, { props: { ...props, backend } });
+  const client = new HttpClient({ capabilities, fetcher });
+  const view = render(TagsView, { props: { ...props, client } });
   await waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent("Could not refresh tags"),
   );
-  await view.rerender({ ...props, backend, selection: { ...selection, tag: "docs" } });
+  await view.rerender({ ...props, client, selection: { ...selection, tag: "docs" } });
   await waitFor(() => expect(finish).toBeTypeOf("function"));
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
   expect(screen.getByText("Seed docs")).toBeInTheDocument();
@@ -65,7 +65,7 @@ it("clears an old selection's error while the new selection loads", async () => 
   await waitFor(() => expect(screen.getByText("Fresh docs")).toBeInTheDocument());
 });
 
-it("ignores an old backend reply after replacement with the same seed and selection", async () => {
+it("ignores an old client reply after replacement with the same seed and selection", async () => {
   let finish!: (value: Response) => void;
   const fetcher = vi.fn<typeof fetch>().mockImplementation(
     () =>
@@ -74,26 +74,26 @@ it("ignores an old backend reply after replacement with the same seed and select
       }),
   );
   const first = new HttpClient({ capabilities, fetcher });
-  const view = render(TagsView, { props: { ...props, backend: first } });
+  const view = render(TagsView, { props: { ...props, client: first } });
   await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
-  const next = tagDataset([hit("next", "perf", "New backend result")]);
+  const next = tagDataset([hit("next", "perf", "New client result")]);
   await view.rerender({
     ...props,
-    backend: new StaticClient({ namespaces: next.namespaces, tags: next }),
+    client: new StaticClient({ namespaces: next.namespaces, tags: next }),
   });
-  await waitFor(() => expect(screen.getByText("New backend result")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText("New client result")).toBeInTheDocument());
   finish(Response.json(tagDataset([hit("late", "perf", "Late reply")])));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(screen.queryByText("Late reply")).not.toBeInTheDocument();
-  expect(screen.getByText("New backend result")).toBeInTheDocument();
+  expect(screen.getByText("New client result")).toBeInTheDocument();
 });
 
 it("uses the host lifecycle without timers and releases it on unmount", async () => {
   vi.useFakeTimers();
   const release = vi.fn();
   const listen = vi.fn(() => release);
-  const backend = new StaticClient({ namespaces: seed.namespaces, tags: seed });
-  const view = render(TagsView, { props: { ...props, backend, lifecycle: { listen } } });
+  const client = new StaticClient({ namespaces: seed.namespaces, tags: seed });
+  const view = render(TagsView, { props: { ...props, client, lifecycle: { listen } } });
   await vi.advanceTimersByTimeAsync(0);
   expect(listen).toHaveBeenCalledOnce();
   expect(vi.getTimerCount()).toBe(0);

@@ -5,7 +5,7 @@ import { ValidationError } from "../services/errors.js";
 import { workspaceServiceContext } from "$lib/server/service-context";
 import { getWorkspaceName, getWorkspaceRoot } from "../db/internal/config.js";
 import { NAME_MAX } from "$lib/constants";
-import { pageClientData } from "$lib/server/page-backend.js";
+import { pageClientData } from "$lib/server/page-client.js";
 import { isSsgBuild } from "$lib/server/ssg";
 
 // Prerender static exports and omit the machine-specific workspace path from published data.

@@ -106,12 +106,12 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
   copyFileSync(new URL("consumer.ts", import.meta.url), source);
   const inputs = join(consumer, "client-resource-inputs.ts");
   const resourceFixture = readFileSync(
-    new URL("../../packages/kozane/src/test-utils/backend-inputs.typecheck.ts", import.meta.url),
+    new URL("../../packages/kozane/src/test-utils/client-inputs.typecheck.ts", import.meta.url),
     "utf8",
   );
-  const backendSource = "../../../client/src/client/index.js";
-  assert.equal(resourceFixture.split(backendSource).length - 1, 2);
-  writeFileSync(inputs, resourceFixture.replaceAll(backendSource, "@kozane/client"));
+  const clientSource = "../../../client/src/client/index.js";
+  assert.equal(resourceFixture.split(clientSource).length - 1, 2);
+  writeFileSync(inputs, resourceFixture.replaceAll(clientSource, "@kozane/client"));
   run(
     process.execPath,
     [

@@ -3,16 +3,16 @@ import { ClientError, type KozaneClient } from "../../client/contract.js";
 
 /** Bind UI mutation chains to one generation and check readiness at every dispatch. */
 export function bindViewWrites<T extends Pick<KozaneClient, "version" | "state" | "capabilities">>(
-  backend: T,
+  client: T,
   canWrite: () => boolean,
 ): T {
-  const generation = backend.version.generation;
+  const generation = client.version.generation;
   const wrapped = new Map<PropertyKey, object>();
   return new Proxy(Object.create(null) as T, {
     get(_target, key) {
-      const resource = Reflect.get(backend, key, backend);
+      const resource = Reflect.get(client, key, client);
       if (typeof key !== "string" || !Object.hasOwn(operationKinds, key) || !resource)
-        return typeof resource === "function" ? resource.bind(backend) : resource;
+        return typeof resource === "function" ? resource.bind(client) : resource;
       let api = wrapped.get(key);
       if (!api) {
         // Use a separate target because adapter API objects can be frozen.
@@ -27,12 +27,12 @@ export function bindViewWrites<T extends Pick<KozaneClient, "version" | "state" 
                 return call.bind(resource);
               return (...args: unknown[]) => {
                 if (
-                  backend.capabilities.writable &&
-                  (backend.version.generation !== generation ||
-                    backend.state.status !== "ready" ||
+                  client.capabilities.writable &&
+                  (client.version.generation !== generation ||
+                    client.state.status !== "ready" ||
                     !canWrite())
                 ) {
-                  return Promise.reject(new ClientError("unavailable", "The backend is not ready"));
+                  return Promise.reject(new ClientError("unavailable", "The client is not ready"));
                 }
                 return call.apply(resource, args);
               };

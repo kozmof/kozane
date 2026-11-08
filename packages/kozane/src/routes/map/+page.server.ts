@@ -4,7 +4,7 @@ import { getDBURL, getWorkspaceRoot, getWorkspaceUiConfig } from "$db/internal/c
 import { normalizeTag } from "$lib/tag";
 import { loadTreemapSnapshot } from "$lib/server/treemap-snapshot";
 import { mapView, validActivityDay } from "@kozane/client";
-import { pageClientData } from "$lib/server/page-backend.js";
+import { pageClientData } from "$lib/server/page-client.js";
 export type { MapPartition, MapScope, MapSpoke } from "@kozane/client";
 import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 

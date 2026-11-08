@@ -54,7 +54,7 @@ export function createViewFixture(
     excerpt: "Packed board 日本語 :release",
   };
   const navigation = createDemoNavigation({ base: "/packed" });
-  const backend = new StaticClient({
+  const client = new StaticClient({
     namespaces,
     snapshots: [snapshot],
     warpDirectories: { packed: [] },
@@ -66,7 +66,7 @@ export function createViewFixture(
       otherNamespaces: [],
       uiConfig: DEFAULT_UI_CONFIG,
     },
-    backend,
+    client,
     navigation,
     routing,
     preferences: createMemoryPreferences(),
@@ -125,7 +125,7 @@ export function createViewFixture(
   };
   return {
     board,
-    namespaces: { backend, initialNamespaces: namespaces, navigation },
+    namespaces: { client, initialNamespaces: namespaces, navigation },
     tags: { data: tags, selection: { namespaceId: "packed", tag: "release" }, navigation },
     map: { data: map, selection: { namespaceId: "packed", tag: null, day: null }, navigation },
   };

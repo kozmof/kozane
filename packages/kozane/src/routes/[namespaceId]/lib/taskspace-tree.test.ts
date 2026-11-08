@@ -186,7 +186,7 @@ describe("TaskspaceTreeState", () => {
 
     await tree.toggle(context(fetcher as never), TS, "");
 
-    expect(tree.node(TS, "").error).toBe("Unable to reach the backend");
+    expect(tree.node(TS, "").error).toBe("Unable to reach the server");
   });
 
   it("forgets taskspaces that are gone and keeps the ones that are not", async () => {
@@ -286,7 +286,7 @@ describe("TaskspaceTreeState", () => {
       expect(tree.node(TS, "src").entries?.map(({ name }) => name)).toEqual(["app.ts"]);
     });
 
-    it("reports a taskspace absent from the static backend without HTTP", async () => {
+    it("reports a taskspace absent from the static client without HTTP", async () => {
       const { fetcher, ctx } = staticContext({
         "other-taskspace": { root: { kind: "directory", name: "", children: [], truncated: null } },
       });
@@ -428,7 +428,7 @@ describe("TaskspaceTreeState creation", () => {
     tree.beginCreate(TS, "", "file");
 
     expect(await tree.submitCreate(context(fetcher as never), "notes.md")).toBeNull();
-    expect(tree.createError).toBe("Unable to reach the backend");
+    expect(tree.createError).toBe("Unable to reach the server");
     expect(tree.createBusy).toBe(false);
   });
 
@@ -632,8 +632,8 @@ describe("TaskspaceTreeState rename and remove while listings are in flight", ()
   });
 });
 
-describe("taskspace backend tree integration", () => {
-  it("uses the backend for listing and mutations and refreshes the parent", async () => {
+describe("taskspace client tree integration", () => {
+  it("uses the client for listing and mutations and refreshes the parent", async () => {
     const { HttpClient } = await import("../../../../../client/src/client/http-client.js");
     const fetcher = vi.fn(async (_url: unknown, options?: RequestInit) =>
       jsonResponse(
@@ -644,7 +644,7 @@ describe("taskspace backend tree integration", () => {
             : listing(["renamed"]),
       ),
     );
-    const backend = new HttpClient({
+    const client = new HttpClient({
       base: "/demo",
       fetcher: fetcher as typeof fetch,
       capabilities: {
@@ -656,7 +656,7 @@ describe("taskspace backend tree integration", () => {
       },
     });
     const legacy = vi.fn();
-    const ctx = { namespaceId: "namespace-1", fetcher: legacy as typeof fetch, backend };
+    const ctx = { namespaceId: "namespace-1", fetcher: legacy as typeof fetch, client };
     const tree = new TaskspaceTreeState();
     await tree.toggle(ctx, TS, "");
     expect(tree.node(TS, "").entries?.[0].name).toBe("renamed");
@@ -687,7 +687,7 @@ describe("taskspace backend tree integration", () => {
     const ctx = {
       namespaceId: "namespace-1",
       fetcher: fetcher as typeof fetch,
-      backend: { taskspaces: undefined },
+      client: { taskspaces: undefined },
     };
     const tree = new TaskspaceTreeState();
     await tree.toggle(ctx, TS, "");
@@ -699,9 +699,9 @@ describe("taskspace backend tree integration", () => {
   });
 });
 
-it("keeps static backend directory truncation reasons without falling back to HTTP", async () => {
+it("keeps static client directory truncation reasons without falling back to HTTP", async () => {
   const { StaticClient } = await import("../../../../../client/src/client/static-client.js");
-  const backend = new StaticClient({
+  const client = new StaticClient({
     namespaces: [{ id: "namespace-1", name: "One", isDefault: true }],
     snapshots: [
       {
@@ -733,7 +733,7 @@ it("keeps static backend directory truncation reasons without falling back to HT
   });
   const fetcher = vi.fn();
   const tree = new TaskspaceTreeState();
-  await tree.toggle({ namespaceId: "namespace-1", backend }, TS, "");
+  await tree.toggle({ namespaceId: "namespace-1", client }, TS, "");
   expect(tree.node(TS, "").truncated).toBe("depth");
   expect(tree.node(TS, "").entries?.[0].name).toBe("hello.md");
   expect(fetcher).not.toHaveBeenCalled();

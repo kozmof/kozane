@@ -70,7 +70,7 @@ const snapshot = {
 let cleanups = 0;
 for (const kind of ["static", "http"]) {
   const create = () => ({
-    backend:
+    client:
       kind === "static"
         ? new StaticClient({ namespaces, snapshots: [snapshot] })
         : new HttpClient({

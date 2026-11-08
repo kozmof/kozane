@@ -6,7 +6,7 @@ type DatasetOptions = Parameters<typeof startDatasetView>[0];
 /** Own cancellation and discard results from obsolete generations. */
 export function startBoardFileRefresh(options: {
   context: EditorSessionContext;
-  client: DatasetOptions["backend"];
+  client: DatasetOptions["client"];
   tree: NamespaceState["taskspaceTree"];
   retryIntervalMs: DatasetOptions["retryIntervalMs"];
   lifecycle: DatasetOptions["lifecycle"];
@@ -18,7 +18,7 @@ export function startBoardFileRefresh(options: {
   let active = true;
   const generation = client.version.generation;
   const stop = startDatasetView({
-    backend: client,
+    client: client,
     dataset: "snapshot",
     retryIntervalMs: options.retryIntervalMs,
     lifecycle: options.lifecycle,

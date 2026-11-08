@@ -14,7 +14,7 @@ export interface SnapshotViewStatus {
 }
 /** Subscribe before reading, and apply only results still belonging to this active view. */
 export function startSnapshotView(options: {
-  backend: SnapshotClient;
+  client: SnapshotClient;
   initialDataApplied?: boolean;
   /** Revalidate a trusted seed without discarding its current-generation status. */
   refreshInitially?: boolean;
@@ -29,26 +29,26 @@ export function startSnapshotView(options: {
   refreshed?: () => void;
   status?: (status: SnapshotViewStatus) => void;
 }): () => void {
-  const { backend } = options;
+  const { client } = options;
   let disposed = false,
     running = false,
     dirty = !options.initialDataApplied || options.refreshInitially === true,
     sequence = 0;
   let currentNamespace = options.namespaceId();
   let applied: { namespaceId: string; generation: number; validator: string } | undefined;
-  let generationSeen = backend.version.generation;
+  let generationSeen = client.version.generation;
   let validated =
-    options.initialDataApplied && backend.state.status === "ready"
+    options.initialDataApplied && client.state.status === "ready"
       ? { namespaceId: currentNamespace, generation: generationSeen }
       : undefined;
   const report = () =>
     options.status?.({
       current:
         validated?.namespaceId === options.namespaceId() &&
-        validated?.generation === backend.version.generation &&
-        backend.state.status === "ready",
+        validated?.generation === client.version.generation &&
+        client.state.status === "ready",
       namespaceId: options.namespaceId(),
-      generation: backend.version.generation,
+      generation: client.version.generation,
     });
   let pending: AbortController | undefined;
   const refresh = async () => {
@@ -57,7 +57,7 @@ export function startSnapshotView(options: {
       running ||
       !dirty ||
       options.isHidden() ||
-      backend.state.status !== "ready" ||
+      client.state.status !== "ready" ||
       options.activities.some((activity) => !activity.idle)
     )
       return;
@@ -66,7 +66,7 @@ export function startSnapshotView(options: {
     const controller = new AbortController();
     pending = controller;
     const namespaceId = options.namespaceId(),
-      generation = backend.version.generation,
+      generation = client.version.generation,
       request = sequence;
     const activityVersions = options.activities.map((activity) => activity.version);
     try {
@@ -74,13 +74,13 @@ export function startSnapshotView(options: {
         applied?.namespaceId === namespaceId && applied.generation === generation
           ? applied.validator
           : undefined;
-      const result = await backend.snapshot(namespaceId, { validator, signal: controller.signal });
+      const result = await client.snapshot(namespaceId, { validator, signal: controller.signal });
       if (disposed || controller.signal.aborted) return;
       if (
         sequence !== request ||
         options.namespaceId() !== namespaceId ||
-        backend.version.generation !== generation ||
-        backend.state.status !== "ready" ||
+        client.version.generation !== generation ||
+        client.state.status !== "ready" ||
         options.isHidden() ||
         !options.activities.every((activity, index) =>
           activity.unchangedSince(activityVersions[index]),
@@ -106,8 +106,8 @@ export function startSnapshotView(options: {
         if (
           sequence === request &&
           options.namespaceId() === namespaceId &&
-          backend.version.generation === generation &&
-          backend.state.status === "ready" &&
+          client.version.generation === generation &&
+          client.state.status === "ready" &&
           !options.isHidden() &&
           options.activities.every((activity, index) =>
             activity.unchangedSince(activityVersions[index]),
@@ -128,9 +128,9 @@ export function startSnapshotView(options: {
     void refresh();
   };
   report();
-  const unsubscribe = backend.subscribe((event) => {
-    if (generationSeen !== backend.version.generation) {
-      generationSeen = backend.version.generation;
+  const unsubscribe = client.subscribe((event) => {
+    if (generationSeen !== client.version.generation) {
+      generationSeen = client.version.generation;
       validated = undefined;
       applied = undefined;
       report();
@@ -143,7 +143,7 @@ export function startSnapshotView(options: {
     )
       invalidate();
   });
-  const unsubscribeState = backend.subscribeState((state) => {
+  const unsubscribeState = client.subscribeState((state) => {
     if (state.status !== "ready") {
       validated = undefined;
       applied = undefined;

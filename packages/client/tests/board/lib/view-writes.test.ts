@@ -14,9 +14,9 @@ it("checks every mutation dispatch, including methods captured before recovery",
   const fetcher = vi
     .fn<typeof fetch>()
     .mockImplementation(async () => Response.json({ id: "n", name: "Notes", isDefault: false }));
-  const backend = new HttpClient({ capabilities, fetcher });
+  const client = new HttpClient({ capabilities, fetcher });
   let ready = true;
-  const view = bindViewWrites(backend, () => ready);
+  const view = bindViewWrites(client, () => ready);
   const create = view.namespaces.create;
   await create({ name: "Notes" });
   ready = false;
@@ -28,10 +28,10 @@ it("checks every mutation dispatch, including methods captured before recovery",
 });
 it("rejects a late continuation after generation replacement without dispatch", async () => {
   const fetcher = vi.fn<typeof fetch>();
-  const backend = new HttpClient({ capabilities, fetcher });
+  const client = new HttpClient({ capabilities, fetcher });
   const signals = new ClientSignals({ status: "ready" });
-  vi.spyOn(backend, "version", "get").mockImplementation(() => signals.version);
-  const view = bindViewWrites(backend, () => true);
+  vi.spyOn(client, "version", "get").mockImplementation(() => signals.version);
+  const view = bindViewWrites(client, () => true);
   const update = view.cards.update;
   signals.publish(["snapshot"], undefined, true);
   await expect(update("n", "c", { content: "Old intent" })).rejects.toMatchObject({
@@ -41,17 +41,17 @@ it("rejects a late continuation after generation replacement without dispatch", 
 });
 it("leaves read methods and adapter lifecycle methods available while writes are paused", async () => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json([]));
-  const backend = new HttpClient({ capabilities, fetcher });
-  const view = bindViewWrites(backend, () => false);
+  const client = new HttpClient({ capabilities, fetcher });
+  const view = bindViewWrites(client, () => false);
   expect(await view.namespaces.list()).toEqual([]);
-  expect(view.state).toBe(backend.state);
+  expect(view.state).toBe(client.state);
   const stop = view.subscribeState(() => {});
   stop();
   expect(view.taskspaces).toBeUndefined();
 });
 it("supports frozen adapters and keeps read-only error precedence", async () => {
-  const backend = Object.freeze(new StaticClient({ namespaces: [] }));
-  const view = bindViewWrites(backend, () => false);
+  const client = Object.freeze(new StaticClient({ namespaces: [] }));
+  const view = bindViewWrites(client, () => false);
   expect(await view.namespaces.list()).toEqual([]);
   await expect(view.namespaces.create({ name: "Notes" })).rejects.toMatchObject({
     code: "read_only",

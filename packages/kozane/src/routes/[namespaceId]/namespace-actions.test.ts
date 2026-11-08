@@ -4,7 +4,7 @@ import { NamespaceState } from "../../../../client/src/board/namespace-state.sve
 import type { CardWithGlue } from "$lib/types";
 import { ClientError, type KozaneClient } from "../../../../client/src/client/contract.js";
 
-const backend = {
+const client = {
   cards: {
     create: vi.fn<KozaneClient["cards"]["create"]>(),
     update: vi.fn<KozaneClient["cards"]["update"]>(),
@@ -62,7 +62,7 @@ const backend = {
   },
 } satisfies Parameters<typeof createNamespaceActions>[1];
 function actionsFor(state: NamespaceState) {
-  return createNamespaceActions(state, backend);
+  return createNamespaceActions(state, client);
 }
 
 function card(id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue {
@@ -109,7 +109,7 @@ describe("optimistic rollback", () => {
   it("restores only the field it changed, on the card it changed", async () => {
     const state = stateWith([card("card-1"), card("card-2")]);
     const actions = actionsFor(state);
-    backend.cards.setPartition.mockRejectedValue(refused);
+    client.cards.setPartition.mockRejectedValue(refused);
 
     await actions.handleSelectionPartitionChange(["card-1"], "b2");
 
@@ -123,8 +123,8 @@ describe("optimistic rollback", () => {
     const actions = actionsFor(state);
 
     const partitionCall = deferred<{ ok: true }>();
-    backend.cards.setPartition.mockReturnValue(partitionCall.promise);
-    backend.cards.setLayer.mockResolvedValue(succeeded);
+    client.cards.setPartition.mockReturnValue(partitionCall.promise);
+    client.cards.setLayer.mockResolvedValue(succeeded);
 
     // Starts, and parks before its failure lands.
     const partitionChange = actions.handleSelectionPartitionChange(["card-1"], "b2");
@@ -143,8 +143,8 @@ describe("optimistic rollback", () => {
     const actions = actionsFor(state);
 
     const deleteCall = deferred<{ ok: true }>();
-    backend.cards.remove.mockReturnValue(deleteCall.promise);
-    backend.cards.setLayer.mockResolvedValue(succeeded);
+    client.cards.remove.mockReturnValue(deleteCall.promise);
+    client.cards.setLayer.mockResolvedValue(succeeded);
 
     const deletion = actions.handleDeleteSelected(["card-1"]);
     expect(state.cards.map((c) => c.id)).toEqual(["card-2"]);
@@ -163,7 +163,7 @@ describe("optimistic rollback", () => {
     const state = stateWith([card("card-1")]);
     const actions = actionsFor(state);
     const deleteCall = deferred<{ ok: true }>();
-    backend.cards.remove.mockReturnValue(deleteCall.promise);
+    client.cards.remove.mockReturnValue(deleteCall.promise);
 
     const deletion = actions.handleDeleteSelected(["card-1"]);
     // A snapshot poll landing between the removal and the failure brings it back.
@@ -181,7 +181,7 @@ describe("optimistic rollback", () => {
     state.selection.primarySelectedId = "card-1";
     const actions = actionsFor(state);
     const deleteCall = deferred<{ ok: true }>();
-    backend.cards.remove.mockReturnValue(deleteCall.promise);
+    client.cards.remove.mockReturnValue(deleteCall.promise);
 
     const deletion = actions.handleDeleteSelected(["card-1"]);
     state.selection.primarySelectedId = "card-2";
@@ -198,7 +198,7 @@ describe("handleLinkScope", () => {
     const state = stateWith([card("card-1"), card("card-2")]);
     state.selection.selectedCards = new Set(["card-1", "card-2"]);
     const actions = actionsFor(state);
-    backend.scopes.addMembers.mockResolvedValue({ ok: true });
+    client.scopes.addMembers.mockResolvedValue({ ok: true });
 
     expect(await actions.handleLinkScope("s1")).toBe(true);
 
@@ -215,7 +215,7 @@ describe("handleLinkScope", () => {
     state.selection.selectedCards = new Set(["card-1", "card-2"]);
     state.scopeRels = [{ scopeId: "s1", cardId: "card-1" }];
     const actions = actionsFor(state);
-    backend.scopes.addMembers.mockResolvedValue({ ok: true });
+    client.scopes.addMembers.mockResolvedValue({ ok: true });
 
     await actions.handleLinkScope("s1");
 
@@ -229,8 +229,8 @@ describe("handleLinkScope", () => {
     const state = stateWith([card("card-1")]);
     state.selection.selectedCards = new Set(["card-1"]);
     const actions = actionsFor(state);
-    backend.scopes.addMembers.mockRejectedValue(refused);
-    backend.scopes.addMembers.mockRejectedValue(new ClientError("validation", "Scope not found"));
+    client.scopes.addMembers.mockRejectedValue(refused);
+    client.scopes.addMembers.mockRejectedValue(new ClientError("validation", "Scope not found"));
 
     expect(await actions.handleLinkScope("s1")).toBe(false);
     expect(state.lastError).toBe("Scope not found");
@@ -240,7 +240,7 @@ describe("handleLinkScope", () => {
   it("does nothing with an empty selection", async () => {
     const actions = actionsFor(stateWith([]));
     expect(await actions.handleLinkScope("s1")).toBe(false);
-    expect(backend.scopes.addMembers).not.toHaveBeenCalled();
+    expect(client.scopes.addMembers).not.toHaveBeenCalled();
   });
 });
 
@@ -248,14 +248,14 @@ describe("createTaskspace", () => {
   it("adds the new taskspace to the scope it was made in", async () => {
     const state = stateWith([]);
     const actions = actionsFor(state);
-    backend.taskspaces.create.mockResolvedValue({
+    client.taskspaces.create.mockResolvedValue({
       id: "t1",
       path: "notes",
       pathKind: "workspace_relative",
     });
 
     expect(await actions.createTaskspace("s1", "  notes ")).toEqual({ id: "t1" });
-    expect(backend.taskspaces.create).toHaveBeenCalledWith("namespace-1", {
+    expect(client.taskspaces.create).toHaveBeenCalledWith("namespace-1", {
       name: "notes",
       scopeId: "s1",
     });
@@ -267,8 +267,8 @@ describe("createTaskspace", () => {
   it("returns the server's reason instead of raising the banner", async () => {
     const state = stateWith([]);
     const actions = actionsFor(state);
-    backend.taskspaces.create.mockRejectedValue(refused);
-    backend.taskspaces.create.mockRejectedValue(
+    client.taskspaces.create.mockRejectedValue(refused);
+    client.taskspaces.create.mockRejectedValue(
       new ClientError("conflict", "Taskspace directory already exists"),
     );
 
@@ -284,7 +284,7 @@ describe("createTaskspace", () => {
     expect(await actions.createTaskspace("s1", "  ")).toEqual({
       error: "Taskspace name is required",
     });
-    expect(backend.taskspaces.create).not.toHaveBeenCalled();
+    expect(client.taskspaces.create).not.toHaveBeenCalled();
   });
 });
 
@@ -294,18 +294,18 @@ describe("handleCreateScopeWithFile", () => {
   function succeedingState() {
     const state = stateWith([card("card-1")]);
     state.selection.selectedCards = new Set(["card-1"]);
-    backend.scopes.create.mockResolvedValue({ id: "s1" });
-    backend.taskspaces.create.mockResolvedValue({
+    client.scopes.create.mockResolvedValue({ id: "s1" });
+    client.taskspaces.create.mockResolvedValue({
       id: "t1",
       path: "notes",
       pathKind: "workspace_relative",
     });
-    backend.taskspaces.createFile.mockResolvedValue({
+    client.taskspaces.createFile.mockResolvedValue({
       path: "plan.md",
       content: "",
       signature: "signature",
     });
-    backend.scopes.addMembers.mockResolvedValue({ ok: true });
+    client.scopes.addMembers.mockResolvedValue({ ok: true });
     return state;
   }
 
@@ -331,11 +331,11 @@ describe("handleCreateScopeWithFile", () => {
     const state = succeedingState();
     const actions = actionsFor(state);
     const order: string[] = [];
-    backend.taskspaces.createFile.mockImplementation(async () => {
+    client.taskspaces.createFile.mockImplementation(async () => {
       order.push("file");
       return { path: "plan.md", content: "", signature: "signature" };
     });
-    backend.scopes.addMembers.mockImplementation(async () => {
+    client.scopes.addMembers.mockImplementation(async () => {
       order.push("link");
       return { ok: true };
     });
@@ -347,43 +347,43 @@ describe("handleCreateScopeWithFile", () => {
   it("surfaces why a scope name was refused rather than a fixed message", async () => {
     const state = stateWith([card("card-1")]);
     const actions = actionsFor(state);
-    backend.scopes.create.mockRejectedValue(refused);
-    backend.scopes.create.mockRejectedValue(
+    client.scopes.create.mockRejectedValue(refused);
+    client.scopes.create.mockRejectedValue(
       new ClientError("conflict", 'A scope named "work" already exists'),
     );
 
     expect(await actions.handleCreateScopeWithFile(names)).toBeNull();
     expect(state.lastError).toBe('A scope named "work" already exists');
     expect(state.scopes).toEqual([]);
-    expect(backend.taskspaces.create).not.toHaveBeenCalled();
+    expect(client.taskspaces.create).not.toHaveBeenCalled();
   });
 
   it("takes the new scope back down when the taskspace cannot be made", async () => {
     const state = stateWith([card("card-1")]);
     state.selection.selectedCards = new Set(["card-1"]);
     const actions = actionsFor(state);
-    backend.scopes.create.mockResolvedValue({ id: "s1" });
-    backend.taskspaces.create.mockRejectedValue(refused);
-    backend.scopes.remove.mockResolvedValue({ ok: true });
-    backend.taskspaces.create.mockRejectedValue(
+    client.scopes.create.mockResolvedValue({ id: "s1" });
+    client.taskspaces.create.mockRejectedValue(refused);
+    client.scopes.remove.mockResolvedValue({ ok: true });
+    client.taskspaces.create.mockRejectedValue(
       new ClientError("conflict", "Taskspace directory already exists"),
     );
 
     expect(await actions.handleCreateScopeWithFile(names)).toBeNull();
 
-    expect(backend.scopes.remove).toHaveBeenCalledWith("namespace-1", "s1");
+    expect(client.scopes.remove).toHaveBeenCalledWith("namespace-1", "s1");
     expect(state.scopes).toEqual([]);
     expect(state.lastError).toBe("Taskspace directory already exists");
-    expect(backend.taskspaces.createFile).not.toHaveBeenCalled();
+    expect(client.taskspaces.createFile).not.toHaveBeenCalled();
   });
 
   it("retains the new scope when failed taskspace creation cannot be cleaned up", async () => {
     const state = stateWith([card("card-1")]);
-    backend.scopes.create.mockResolvedValue({ id: "s1" });
-    backend.taskspaces.create.mockRejectedValue(
+    client.scopes.create.mockResolvedValue({ id: "s1" });
+    client.taskspaces.create.mockRejectedValue(
       new ClientError("conflict", "Taskspace directory already exists"),
     );
-    backend.scopes.remove.mockRejectedValue(new ClientError("unavailable", "Cleanup failed"));
+    client.scopes.remove.mockRejectedValue(new ClientError("unavailable", "Cleanup failed"));
     expect(await actionsFor(state).handleCreateScopeWithFile(names)).toBeNull();
     expect(state.scopes).toEqual([{ id: "s1", name: "work" }]);
     expect(state.taskspaces).toEqual([]);
@@ -394,8 +394,8 @@ describe("handleCreateScopeWithFile", () => {
   it("keeps the scope and taskspace when only the file fails", async () => {
     const state = succeedingState();
     const actions = actionsFor(state);
-    backend.taskspaces.createFile.mockRejectedValue(refused);
-    backend.taskspaces.createFile.mockRejectedValue(
+    client.taskspaces.createFile.mockRejectedValue(refused);
+    client.taskspaces.createFile.mockRejectedValue(
       new ClientError("conflict", "File already exists"),
     );
 
@@ -404,14 +404,14 @@ describe("handleCreateScopeWithFile", () => {
     expect(state.lastError).toBe("File already exists");
     expect(state.scopes).toHaveLength(1);
     expect(state.taskspaces).toHaveLength(1);
-    expect(backend.scopes.remove).not.toHaveBeenCalled();
+    expect(client.scopes.remove).not.toHaveBeenCalled();
   });
 
   it("still opens the file when only the link fails", async () => {
     const state = succeedingState();
     const actions = actionsFor(state);
-    backend.scopes.addMembers.mockRejectedValue(refused);
-    backend.scopes.addMembers.mockRejectedValue(new ClientError("validation", "Scope not found"));
+    client.scopes.addMembers.mockRejectedValue(refused);
+    client.scopes.addMembers.mockRejectedValue(new ClientError("validation", "Scope not found"));
 
     expect(await actions.handleCreateScopeWithFile(names)).not.toBeNull();
     expect(state.lastError).toBe("Scope not found");
@@ -421,7 +421,7 @@ describe("handleCreateScopeWithFile", () => {
     const actions = actionsFor(stateWith([]));
 
     expect(await actions.handleCreateScopeWithFile({ ...names, file: "  " })).toBeNull();
-    expect(backend.scopes.create).not.toHaveBeenCalled();
+    expect(client.scopes.create).not.toHaveBeenCalled();
   });
 
   it("trims the names it sends", async () => {
@@ -434,12 +434,12 @@ describe("handleCreateScopeWithFile", () => {
       file: " plan.md ",
     });
 
-    expect(backend.scopes.create).toHaveBeenCalledWith("namespace-1", { name: "work" });
-    expect(backend.taskspaces.create).toHaveBeenCalledWith("namespace-1", {
+    expect(client.scopes.create).toHaveBeenCalledWith("namespace-1", { name: "work" });
+    expect(client.taskspaces.create).toHaveBeenCalledWith("namespace-1", {
       name: "notes",
       scopeId: "s1",
     });
-    expect(backend.taskspaces.createFile).toHaveBeenCalledWith("namespace-1", "t1", {
+    expect(client.taskspaces.createFile).toHaveBeenCalledWith("namespace-1", "t1", {
       path: "plan.md",
     });
   });

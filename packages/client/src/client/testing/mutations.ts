@@ -9,7 +9,7 @@ export type MutationName =
     }[keyof MutationResource]
   | "namespaces.create";
 export interface MutationCase {
-  call: (backend: KozaneClient) => Promise<unknown>;
+  call: (client: KozaneClient) => Promise<unknown>;
   method: string;
   path: string;
   body?: unknown;

@@ -2,12 +2,12 @@
   import { untrack } from "svelte";
   import BoardPage from "./BoardPage.svelte";
   import type { BoardViewProps } from "./types.js";
-  let { backend, initialDataApplied = false, ...props }: BoardViewProps = $props();
-  const initialGeneration = untrack(() => backend.version.generation);
+  let { client, initialDataApplied = false, ...props }: BoardViewProps = $props();
+  const initialGeneration = untrack(() => client.version.generation);
   let generation = $state(initialGeneration);
-  $effect(() => backend.subscribe(event => { generation = event.generation; }));
+  $effect(() => client.subscribe(event => { generation = event.generation; }));
 </script>
 
 {#key generation}
-  <BoardPage {backend} {...props} initialDataApplied={initialDataApplied && generation === initialGeneration} />
+  <BoardPage {client} {...props} initialDataApplied={initialDataApplied && generation === initialGeneration} />
 {/key}

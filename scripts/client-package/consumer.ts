@@ -76,9 +76,9 @@ const surfaceProps: ComponentProps<typeof EditorSurface> = {
 const surface = render(EditorSurface, { props: surfaceProps });
 assert(surface.body.includes("Packed editor 日本語"), "Editor SSR");
 const namespaces = [{ id: "packed", name: "Packed workspace", isDefault: true }];
-const backend = new StaticClient({ namespaces });
+const client = new StaticClient({ namespaces });
 const namespaceProps: ComponentProps<typeof NamespacesView> = {
-  backend,
+  client,
   initialNamespaces: namespaces,
   navigation: createDemoNavigation({ base: "/packed" }),
 };
@@ -158,10 +158,10 @@ function publicViewContracts(
   owned: import("@kozane/client").ManagedClient,
   signal: AbortSignal,
 ) {
-  const tagsProps: Pick<ComponentProps<typeof PublicTags>, "backend"> = { backend: tags };
-  const mapProps: Pick<ComponentProps<typeof PublicMap>, "backend"> = { backend: map };
-  const indexProps: Pick<ComponentProps<typeof NamespacesView>, "backend"> = {
-    backend: namespaces,
+  const tagsProps: Pick<ComponentProps<typeof PublicTags>, "client"> = { client: tags };
+  const mapProps: Pick<ComponentProps<typeof PublicMap>, "client"> = { client: map };
+  const indexProps: Pick<ComponentProps<typeof NamespacesView>, "client"> = {
+    client: namespaces,
   };
   void tagsProps;
   void mapProps;

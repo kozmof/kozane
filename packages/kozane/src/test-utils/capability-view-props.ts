@@ -6,7 +6,7 @@ export function capabilityViewProps(capabilities: ClientCapabilities, lifetimeNo
   const seed = boardViewProps();
   const calls: string[] = [];
   const rows = [seed.data.namespace];
-  const backend = new HttpClient({
+  const client = new HttpClient({
     capabilities,
     pollingInitialDelayMs: 1000,
     fetcher: async (url) => {
@@ -20,9 +20,9 @@ export function capabilityViewProps(capabilities: ClientCapabilities, lifetimeNo
     },
   });
   return {
-    board: { ...seed, backend, lifetimeNotice, initialDataApplied: true },
+    board: { ...seed, client, lifetimeNotice, initialDataApplied: true },
     index: {
-      backend,
+      client,
       lifetimeNotice,
       initialNamespaces: rows,
       navigation: seed.navigation,

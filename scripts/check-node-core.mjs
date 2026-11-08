@@ -30,7 +30,7 @@ if (!process.execArgv.includes(flag)) {
   assert.equal(await import(clientCoreUrl), core);
   assert.equal(client.CARD_WIDTH_RANGE, core.CARD_WIDTH_RANGE);
   const identityError = new core.ValidationError("Node core/client identity");
-  const backend = new client.HttpClient({
+  const httpClient = new client.HttpClient({
     capabilities: {
       writable: true,
       persistent: false,
@@ -43,7 +43,7 @@ if (!process.execArgv.includes(flag)) {
     },
   });
   await assert.rejects(
-    backend.cards.update(
+    httpClient.cards.update(
       "n",
       "c",
       new Proxy(

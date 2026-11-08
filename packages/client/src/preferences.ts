@@ -33,7 +33,7 @@ export function createSessionPreferences(
   });
 }
 
-/** Keep demo preferences in memory for one active backend generation. Never access storage. */
+/** Keep demo preferences in memory for one active client generation. Never access storage. */
 export function createMemoryPreferences(generation: () => number = () => 0): PreferenceStorage {
   let current: number | undefined;
   const layers = new Map<string, string>();

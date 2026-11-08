@@ -18,7 +18,7 @@
   import { createBoardController } from "./board-controller.svelte.js";
   let {
     data,
-    backend,
+    client,
     lifetimeNotice,
     navigation,
     routing,
@@ -35,8 +35,8 @@
     get data() {
       return data;
     },
-    get backend() {
-      return backend;
+    get client() {
+      return client;
     },
     get navigation() {
       return navigation;
@@ -90,8 +90,8 @@
 </svelte:head>
 
 <svelte:window onkeydown={handleKeydown} />
-<ClientNotice capabilities={backend.capabilities} {lifetimeNotice} floating />
-<RefreshNotice {backend} failed={board.refreshFailed || board.filesRefreshFailed} message={board.filesRefreshFailed ? "Could not refresh files. Showing the last listings." : "Could not refresh the board. Showing the last board."} retry={board.retry} floating />
+<ClientNotice capabilities={client.capabilities} {lifetimeNotice} floating />
+<RefreshNotice {client} failed={board.refreshFailed || board.filesRefreshFailed} message={board.filesRefreshFailed ? "Could not refresh files. Showing the last listings." : "Could not refresh the board. Showing the last board."} retry={board.retry} floating />
 
 {#if board.editingBlocked}
   <p role="status" class={css({ position: "fixed", top: "12px", left: "50%", zIndex: 1000, padding: "8px 12px", backgroundColor: "ink.white", color: "ink.black", fontSize: "12px" })}>Board editing is paused while current data loads.</p>
@@ -131,7 +131,7 @@
       taskspaces={s.taskspaces}
       taskspaceTree={s.taskspaceTree}
       treeContext={board.editorContext}
-      onOpenFile={s.taskspaces.some(taskspace => backend.taskspaces?.access(s.namespaceId, taskspace).read) ? files.openFromFrame : undefined}
+      onOpenFile={s.taskspaces.some(taskspace => client.taskspaces?.access(s.namespaceId, taskspace).read) ? files.openFromFrame : undefined}
       onCreateTaskspace={board.readonly ? undefined : actions.createTaskspace}
       bind:pendingScopeAreaRect={frame.rect}
       onPersistScopeArea={persistence.persistScopeArea}
