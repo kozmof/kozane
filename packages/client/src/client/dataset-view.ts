@@ -73,7 +73,15 @@ export function startDatasetView<T>(options: {
           backend.state.status === "ready" &&
           !options.isHidden()
         )
-          options.error?.(error);
+          try {
+            options.error?.(error);
+          } catch (failure) {
+            try {
+              options.callbackError?.(failure);
+            } catch {
+              /* Diagnostics must not interrupt retries. */
+            }
+          }
       }
     } finally {
       if (pending === controller) pending = undefined;

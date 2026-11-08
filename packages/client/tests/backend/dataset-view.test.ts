@@ -220,3 +220,27 @@ it("aborts obsolete reads on invalidation, generation change and view cleanup", 
   expect(f.apply).not.toHaveBeenCalled();
   expect(error).not.toHaveBeenCalled();
 });
+
+it("keeps retrying when error reporting and diagnostics both throw", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const failure = new Error("read failed");
+  const callbackFailure = new Error("report failed");
+  f.read.mockRejectedValueOnce(failure);
+  const callbackError = vi.fn(() => {
+    throw new Error("diagnostics failed");
+  });
+  const stop = startDatasetView({
+    ...f,
+    dataset: "map",
+    isHidden: () => false,
+    error: () => {
+      throw callbackFailure;
+    },
+    callbackError,
+  });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(callbackError).toHaveBeenCalledWith(callbackFailure);
+  expect(f.apply).toHaveBeenCalledExactlyOnceWith("current");
+  stop();
+});

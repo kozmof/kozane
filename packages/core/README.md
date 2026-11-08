@@ -173,3 +173,24 @@ Run `pnpm check:core-package` for every adapter change. Its isolated libsql and
 sqlite-wasm consumers exercise migrations, committed writes and rollback through
 public exports. Add host-specific failure injection checks for commit and rollback.
 See [verification guidance](../../docs/verification.md) for checks by change type.
+
+## Choosing an API boundary
+
+Use the root entry for domain data and helpers, and resource services for validated
+application writes. Use `composeWrite` when several service operations must commit
+together. Keep imports on the five public entry points listed above; internal paths
+can change between releases.
+
+Database adapters are trusted infrastructure. Handle validation checks the required
+reader methods at registration and transaction dispatch. Type brands distinguish
+handles during compilation; raw SQL reader methods still execute trusted SQL.
+Hosts must enforce read-only access through their driver or connection configuration.
+Adapter hooks must await commit or rollback and cleanup before settling, serialize
+shared connections, and never automatically retry callbacks with external effects.
+
+Before releasing changes to these boundaries, run `pnpm check:core-package` and
+`pnpm test:client-package` from the repository root. These checks exercise installed
+package entry points and adapter behavior. Review exported declarations for API
+changes and record intentional changes in a changeset. Preserve existing entry
+points when adding APIs; removing or changing an export requires a compatibility
+review.

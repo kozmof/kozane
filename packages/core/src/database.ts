@@ -35,10 +35,21 @@ export interface DatabaseAdapterHooks {
   /** Prepare outside the batch, then atomically execute with foreign keys disabled. */
   migrate?(prepare: MigrationPreparation): Promise<void>;
 }
+function assertHandle(handle: DatabaseHandle): void {
+  if (
+    !handle ||
+    ["select", "selectDistinct", "all", "get", "values"].some(
+      (method) => typeof Reflect.get(handle, method) !== "function",
+    ) ||
+    !handle.query
+  )
+    throw new TypeError("Invalid database adapter handle");
+}
 const adapters = new WeakMap<DB, DatabaseAdapterHooks>();
 
 /** Driver hooks own transaction start, commit and rollback. */
 export function createDatabaseAdapter(handle: DatabaseHandle, hooks: DatabaseAdapterHooks): DB {
+  assertHandle(handle);
   if (
     typeof hooks?.write !== "function" ||
     typeof hooks?.read !== "function" ||
@@ -58,10 +69,14 @@ function adapter(db: DB): DatabaseAdapterHooks {
   return hooks;
 }
 export function withTx<T>(db: DB, operation: (tx: Tx) => Promise<T>): Promise<T> {
-  return adapter(db).write((handle) => operation(handle as Tx));
+  return adapter(db).write((handle) => {
+    assertHandle(handle);
+    return operation(handle as Tx);
+  });
 }
 export function withReadTx<T>(db: DB, operation: (tx: ReadTx) => Promise<T>): Promise<T> {
   return adapter(db).read((handle) => {
+    assertHandle(handle);
     // Expose only reader methods. Raw SQL remains a trusted escape hatch.
     const reader = Object.freeze({
       select: handle.select.bind(handle),
