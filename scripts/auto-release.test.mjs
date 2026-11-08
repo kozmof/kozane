@@ -42,3 +42,33 @@ test("rejects dirty checkouts and unexpected arguments before release commands",
     assert.deepEqual(f.calls, []);
   }
 });
+
+test("logs in after preparation when npm authentication is missing", () => {
+  const f = fixture();
+  let attempts = 0;
+  const originalOutput = f.output;
+  f.output = (command, args) => {
+    if (command !== "npm") return originalOutput(command, args);
+    if (++attempts === 1) throw new Error("not logged in");
+    return "publisher";
+  };
+  autoRelease(f);
+  assert.deepEqual(f.calls[1], ["login", "--registry=https://registry.npmjs.org/"]);
+  assert.equal(f.calls[2][1], "publish");
+  assert.equal(attempts, 2);
+});
+
+test("never publishes when npm login fails", () => {
+  const f = fixture(true);
+  const originalOutput = f.output;
+  f.output = (command, args) => {
+    if (command === "npm") throw new Error("not logged in");
+    return originalOutput(command, args);
+  };
+  f.run = (_, args) => {
+    f.calls.push(args);
+    throw new Error("login failed");
+  };
+  assert.throws(() => autoRelease(f), /login failed/);
+  assert.deepEqual(f.calls, [["login", "--registry=https://registry.npmjs.org/"]]);
+});

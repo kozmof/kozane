@@ -3,8 +3,7 @@ import { checkCoreRuntime } from "./package-check/runtime.mjs";
 import { checkCoreBrowser } from "./package-check/browser.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 const argumentsList = process.argv.slice(2);
 const corpusScenarios =
@@ -20,7 +19,11 @@ assert.ok(["wasm", "libsql"].includes(corpusDriver), "Unsupported corpus produce
 const repository = resolve(import.meta.dirname, "..");
 const { checkCorpusRetention } = await import("./compatibility/retention.mjs");
 checkCorpusRetention(repository);
-const temporary = mkdtempSync(join(tmpdir(), "kozane-core-package-"));
+// Native driver libraries must load from an executable filesystem. Tool sandboxes
+// can force os.tmpdir() onto a restricted mount even when TMPDIR is supplied.
+const temporaryRoot = join(repository, "tmp", "package-checks");
+mkdirSync(temporaryRoot, { recursive: true });
+const temporary = mkdtempSync(join(temporaryRoot, "kozane-core-package-"));
 function run(command, args, cwd = repository, options = {}) {
   try {
     return execFileSync(command, args, {

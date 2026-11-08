@@ -16,6 +16,13 @@ export function autoRelease({ root, args = [], run, output, exists = existsSync 
   const script = join(root, "scripts", "local-release.mjs");
   if (!exists(join(directory, "release.json")))
     run(process.execPath, [script, "prepare", directory]);
+  const registry = "--registry=https://registry.npmjs.org/";
+  try {
+    output("npm", ["whoami", registry]);
+  } catch {
+    run("npm", ["login", registry]);
+    output("npm", ["whoami", registry]);
+  }
   run(process.execPath, [script, "publish", directory]);
 }
 

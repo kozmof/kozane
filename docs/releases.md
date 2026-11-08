@@ -12,13 +12,13 @@ Run `pnpm release:status` to review the plan. Run `pnpm release:version` to upda
 
 ## Release with one command
 
-After finalizing versions, committing changes and completing the authentication and tool setup below, run:
+After finalizing versions, committing changes and completing the tool setup below, run the release command.
 
 ```sh
 pnpm release:auto
 ```
 
-This prepares and publishes core, client and kozane in dependency order, then verifies their registry installations. It uses the versions already committed in the package manifests. It does not bump versions or create commits. npm authentication and 2FA prompts still apply.
+This prepares and publishes core, client and kozane in dependency order, then verifies their registry installations. It uses the versions already committed in the package manifests. It does not bump versions or create commits. After preparation, the command checks npm authentication with `npm whoami`. If that check fails, it runs `npm login --registry=https://registry.npmjs.org/` and verifies the account before publishing. Existing authentication is reused. npm 2FA prompts still apply.
 
 If a prepared release already exists for the current commit, the command reuses it. Rerun the command after a partial publication to resume with the same archives. The publisher validates the manifest and archive hashes and skips published versions only when their bytes match. Preparation failures stop publication.
 
@@ -35,6 +35,8 @@ pnpm release:local
 This runs release metadata and versioning regressions, verification and coverage, production dependency auditing, local/global archive installation and HTTP smoke, and the app, restoration and public-client browser suites. It builds once and packs all three packages once with lifecycle rebuilds disabled. Verification, installed-package tests, browser fixtures, installation smoke and npm dry-run publication consume those same archives. It writes a release manifest containing their versions, SHA-256 hashes and source commit under `tmp/releases/<commit>/`. An optional directory argument chooses another destination.
 
 Database driver parity checks are optional and are not part of release preparation. Run `pnpm test:db-wasm` or `pnpm test:db-browser` separately when needed.
+
+Installed core package checks stage their consumers under the ignored `tmp/package-checks/` directory. This keeps native driver libraries off restricted system temporary mounts, even when the tool sandbox resets `TMPDIR`. Temporary consumers are removed after checks.
 
 Preparation does not publish. It rejects uncommitted source changes and writes the manifest only after every check passes. Keep the prepared directory until publication is verified. Use the full commit hash and archive hashes when recording release evidence.
 
