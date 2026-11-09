@@ -53,7 +53,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const target = `${candidate.name}@${candidate.version}`;
     const published = await waitForRegistryPackage(target, {
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-      lookup: () => JSON.parse(execFileSync("npm", ["view", target, "--json", "--registry=https://registry.npmjs.org/", "--prefer-online", "--fetch-retries=0"], {
+      lookup: () => JSON.parse(execFileSync("npm", ["view", target, "--json", "--registry=https://registry.npmjs.org/", "--prefer-online", "--fetch-retries=0", "--safe-chain-skip-minimum-package-age=true"], {
         encoding: "utf8",
         timeout: 60_000,
       })),

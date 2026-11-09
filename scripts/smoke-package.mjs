@@ -18,7 +18,9 @@ if (
 const registry = options.includes("--registry");
 if (registry && artifactsOption)
   throw new Error("Registry and prepared archives are separate smoke sources");
-const registryOptions = registry ? ["--registry=https://registry.npmjs.org/"] : [];
+const registryOptions = registry
+  ? ["--registry=https://registry.npmjs.org/", "--safe-chain-skip-minimum-package-age=true", `--before=${new Date().toISOString()}`]
+  : [];
 const installOnly = options.includes("--install-only");
 
 const sourceRoot = resolve(import.meta.dirname, "..");
