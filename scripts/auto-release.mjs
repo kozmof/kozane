@@ -42,6 +42,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     root,
     args: process.argv.slice(2),
     run: (command, args) => execFileSync(command, args, { cwd: root, stdio: "inherit", env }),
-    output: (command, args) => execFileSync(command, args, { cwd: root, encoding: "utf8", env }).trim(),
+    output: (command, args) =>
+      execFileSync(command, args, { cwd: root, encoding: "utf8", env }).trim(),
   });
 }
