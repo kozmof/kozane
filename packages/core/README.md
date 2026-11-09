@@ -1,12 +1,12 @@
 # @kozane/core
 
-Kozane core provides the data model and application rules shared by Kozane hosts.
-Use it to read and change Kozane data from Node or a browser while keeping the same
-validation, placement rules, and database schema.
+Kozane core provides shared rules for reading and changing Kozane data.
+Use it in Node or a browser to apply the same validation, placement rules,
+and database schema.
 
 Core owns domain types, errors, services, and schema migrations. Your host supplies
 the database driver, transaction handling, filesystem access, and presentation.
-This lets each host choose its environment without implementing the domain rules again.
+Each host can choose its environment and reuse the same domain rules.
 
 ## What core is for
 
@@ -21,7 +21,7 @@ runtime dependencies. Database drivers belong to the host.
 
 ## Where to start
 
-For an application integration, follow this flow.
+To connect your application to core, follow these steps.
 
 1. Create a Drizzle database handle using the exported schema and your chosen driver.
 2. Register the handle with `createDatabaseAdapter` and supply read and write transaction hooks.
@@ -114,7 +114,7 @@ begins. Restore foreign keys after commit or rollback. Resolve only after commit
 cleanup. Keep preparation and the batch exclusive to that migration operation, and
 preserve statement boundaries and bound arguments.
 
-Without this hook, application rejects before preparation. Failures propagate without
+Without this hook, migration application rejects before preparation. Failures propagate without
 automatic retries or history repair. Preparation creates the history table outside
 the atomic batch, so a failure may leave an empty table. Schema changes and history
 inserts within the batch roll back together. Inspect failures before explicitly retrying.

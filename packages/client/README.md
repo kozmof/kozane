@@ -1,11 +1,11 @@
 # @kozane/client
 
-Kozane client provides shared views for Svelte applications. Use it to display and
-edit boards, browse tags and maps, and work with files through a shared client contract.
+Kozane client provides Svelte views for boards, tags, maps, and files.
+Use a shared client to connect these views to your data.
 
-The package connects views to data through `KozaneClient`. Your host owns the
+The package connects views to data through `KozaneClient`. Your application owns the
 connection, navigation, and workspace lifetime. Views borrow the client and manage
-their own reads and subscriptions. Core supplies shared domain types and validation.
+their own reads and subscriptions. `@kozane/core` supplies shared types and validation.
 
 ## What the package provides
 
@@ -64,7 +64,7 @@ work without browser globals. Map bounds and tag display caps use shared constan
 
 ## Client ownership
 
-Create one owned client for the active workspace in the host's root layout. Share it across board, tags, map and namespace navigation. During SSR, create an owner for each render request. Keep mutable clients out of module-level singletons. Static clients receive only the data allowed for the current exported page.
+Create one owned client for the active workspace in the host's root layout. Share it across board, tags, map and namespace navigation. During server-side rendering (SSR), create an owner for each render request. Keep mutable clients out of module-level singletons. Static clients receive only the data allowed for the current exported page.
 
 `ManagedClient` extends `KozaneClient` with synchronous, idempotent `dispose()`. The host owns disposal. Views borrow clients and release only their own subscriptions and reads. Leaving a view also disables its undispatched UI actions without closing the shared connection. The Node host retains its HTTP subscription for the root layout lifetime, so route changes share polling and transport state. A capability change replaces the client and closes the previous one. Reusing a client on another board page requires a fresh snapshot before editing, since navigation may restore an older server seed.
 
@@ -76,7 +76,7 @@ Preserve the owner when `pagehide.persisted` is true. Dispose it when the root l
 
 Pass `ReadOptions` with an `AbortSignal` to namespace list/get, tags, map, warp-directory and taskspace file/directory reads. Snapshot reads accept the same signal through `SnapshotReadOptions`. Pre-cancelled reads perform no HTTP request or static lookup. Cancellation rejects with the signal's original reason and does not become a network failure. Injected fetch implementations must honor the supplied signal.
 
-Views cancel obsolete reads on invalidation, generation changes and cleanup. They retain generation and sequence checks to discard late results from readers that cannot stop immediately. Read cancellation publishes no invalidation. Mutation options support keepalive and do not expose read cancellation.
+Views cancel obsolete reads on invalidation, generation changes and cleanup. They retain generation and sequence checks to discard late results from readers that cannot stop immediately. Read cancellation publishes no invalidation. Mutation options support `keepalive` and do not expose read cancellation.
 
 ## View interfaces
 
@@ -155,18 +155,27 @@ The packed client development dependency must match its exact core peer.
 
 ## Develop and verify the package
 
-Run commands from the repository root. Source unit tests use
-`vitest.source.config.ts`. Run `pnpm test:packages` for the installed-package project,
-which resolves public exports from candidate archives without source aliases.
+Run commands from the repository root.
+
+| Task                                                       | Command                     |
+| ---------------------------------------------------------- | --------------------------- |
+| Build core and client                                      | `pnpm build:client`         |
+| Test installed packages through public exports             | `pnpm test:packages`        |
+| Verify the installed client package and core compatibility | `pnpm check:client-package` |
+| Verify client views and styles in Chromium                 | `pnpm test:client-package`  |
+| Run repository verification, including package checks      | `pnpm verify`               |
+
+Source unit tests use `vitest.source.config.ts`. The installed-package project
+resolves public exports from candidate archives without source aliases.
 
 Views, client adapters, contracts and rendering helpers live in `packages/client/src`. Tests and fixtures live in `packages/client/tests` and are not published. Source imports public core entries and relative client modules, with no application imports or workspace aliases.
 
-Run `pnpm build:client` from the repository root to build core before client. The client build generates Panda assets and runs `svelte-package --input src --output dist` directly. It does not rewrite application code, import paths or type declarations. Public entry files in `src` match the package export map. TypeScript checks `src/**/*` without emitting files beside inputs.
+The client build runs after core. It generates Panda assets and runs `svelte-package --input src --output dist` directly. It does not rewrite application code, import paths or type declarations. Public entry files in `src` match the package export map. TypeScript checks `src/**/*` without emitting files beside inputs.
 
 The client owns the shared Panda theme and base stylesheet. The Node app uses those same inputs. Typed CSS helpers use generated runtime assets copied unchanged into the ignored `src/styles/generated` directory. Panda's authoring augmentation and its barrel stay outside the published declarations. Consumers need the public stylesheet, not Panda or code generation. Generated assets, temporary output and `dist` are ignored.
 
-Run `pnpm check:client-package` to pack both packages and install them outside the
-workspace using a frozen offline dependency graph. The check audits runtime and
+`pnpm check:client-package` packs both packages and installs them outside the
+workspace using a frozen offline dependency graph. It audits runtime and
 declaration imports, type-checks all 55 client methods and the public UI entries, server-renders board, tags, map, editor and namespace
 views, verifies core validation-error identity and compiles the full browser entry.
 `pnpm verify` includes this combined core/client artifact check.
@@ -196,7 +205,7 @@ The fixture treats tag/day fragments as filters when checking prerendered links.
 
 ## Future worker clients
 
-Worker clients are planned and are not implemented. The proposed `WorkerClient`
+Worker clients are not implemented. The proposed `WorkerClient`
 uses an injected message transport. Planned runtime packages are `@kozane/web-worker`
 and `@kozane/service-worker`. Each transport owns its lifecycle and keeps request
 handling independent of Svelte. Service Worker support requires explicit restart and
