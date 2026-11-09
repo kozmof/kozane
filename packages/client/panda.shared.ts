@@ -33,7 +33,7 @@ export default defineConfig({
             placeholder: { value: "#b4b4b4" },
             icon: { value: "#c9c9c9" },
             iconDim: { value: "#8d8d8d" },
-            card: { value: "#e2e2e2" },
+            card: { value: "#e0e0e0" },
             grid: { value: "#dcdcdc" },
             scroll: { value: "#a8a8a8" },
             disabled: { value: "#dfdfdf" },
