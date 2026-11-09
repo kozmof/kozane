@@ -252,7 +252,7 @@
 
 <svelte:window onkeydown={handleSelectionShortcut} />
 
-<div class={css({ backgroundColor: "ink.light", borderRadius: "0px", border: "1px solid token(colors.neutral.border)", padding: "10px 16px 14px", flexShrink: "0" })}>
+<div class={css({ backgroundColor: "ink.light", borderRadius: "0px", border: "1px solid color-mix(in srgb, token(colors.neutral.border) 97%, black)", padding: "10px 16px 14px", flexShrink: "0" })}>
   <!-- Partition selector and mode hint. -->
   <div class={css({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" })}>
     <PartitionDropdown
