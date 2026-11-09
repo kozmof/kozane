@@ -46,10 +46,6 @@ For a narrower installation check during development, run `pnpm smoke:package:in
 
 ## Authenticate and publish
 
-Confirm that kozmof owns the kozane npm organization and that publishing requires 2FA. If the scope is unavailable, apply the specification's fallback package names throughout the repository before preparing the release. Log in locally with `npm login --registry=https://registry.npmjs.org/` and check the account with `npm whoami`.
-
-Publish the prepared directory explicitly.
-
 ```sh
 pnpm release:publish tmp/releases/<commit>
 ```

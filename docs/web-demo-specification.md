@@ -358,14 +358,6 @@ Demo sample content lives only in `kozane-demo`. Neither `kozane` nor the `@koza
 - Server rendering: runtime entry points and shared components must be safe to import and render during Node SSR and prerendering. Access browser globals, initialize workers and start subscriptions or polling only during browser lifecycle initialization. Shared views accept typed initial data and readiness state as props, so server rendering can show loader-provided data, the demo sample preview or a loading state without constructing a browser client. Hydration starts from the same props and attaches the root browser client before refreshing live data. The demo recovery-preview rules still apply. Keep mutations disabled until client readiness and the initial live snapshot or valid namespace-selection state are established. Verify server rendering, prerendering and hydration through public exports.
 - `@kozane/core` uses semver strictly. Any change to a service signature or result type is a major bump while at 1.x; during 0.x, a minor bump.
 
-### npm scope and publishing
-
-- Create a free npm organization named `kozane`, owned by the `kozmof` account, with 2FA required for publishing. Fallback if the name is taken: `@kozmof/kozane-core` and `@kozmof/kozane-client`.
-- Each scoped package sets `"publishConfig": { "access": "public" }`, since scoped packages default to private.
-- Versioning uses Changesets. Per the user's local-release requirement, `pnpm release:local` validates the source and prepares checksummed archives. `pnpm release:publish <directory>` publishes those exact archives in dependency order from a clean checkout at the recorded commit.
-- Releases run locally with npm account authentication and 2FA. There is no CI/CD publication workflow or mandatory CI-generated npm provenance. Registry verification accepts absent provenance for local publications and validates registry provenance metadata when present. This policy supersedes the original GitHub Actions release requirement.
-- End users and demo visitors need no npm account.
-
 ## Web demo (kozane-demo)
 
 The demo is a static site on GitHub Pages that runs the real Kozane board on `WorkerClient`. Visitors can try the board features listed below. Editing and internal navigation keep user content on the device. Deliberately opening a link from card content follows the external-navigation rule below.
