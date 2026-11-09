@@ -33,18 +33,31 @@ export function validateRegistryPackage(candidate, published, { requireProvenanc
   return attestations.href;
 }
 
+export async function waitForRegistryPackage(target, { lookup, sleep, attempts = 31 }) {
+  for (let attempt = 1; ; attempt++) {
+    try { return lookup(); } catch (error) {
+      let code;
+      try { code = JSON.parse(error.stdout).error?.code; } catch {}
+      if (code !== "E404" || attempt >= attempts) throw error;
+      console.log(target + " is still processing on npm; retrying in 10 seconds (" + attempt + "/" + attempts + ").");
+      await sleep(10_000);
+    }
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   for (const directory of ["core", "client", "kozane"]) {
     const candidate = JSON.parse(
       readFileSync(new URL(`../packages/${directory}/package.json`, import.meta.url), "utf8"),
     );
     const target = `${candidate.name}@${candidate.version}`;
-    const published = JSON.parse(
-      execFileSync("npm", ["view", target, "--json", "--registry=https://registry.npmjs.org/"], {
+    const published = await waitForRegistryPackage(target, {
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      lookup: () => JSON.parse(execFileSync("npm", ["view", target, "--json", "--registry=https://registry.npmjs.org/", "--prefer-online", "--fetch-retries=0"], {
         encoding: "utf8",
         timeout: 60_000,
-      }),
-    );
+      })),
+    });
     const attestations = validateRegistryPackage(candidate, published);
     console.log(
       `${target} has the expected registry metadata and provenance metadata: ${attestations ?? "not supplied by local publication"}`,
