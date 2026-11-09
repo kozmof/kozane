@@ -29,8 +29,15 @@ function run(command, args, cwd = repository, options = {}) {
     return execFileSync(command, args, {
       cwd,
       encoding: "utf8",
-      env: process.env,
       ...options,
+      // Bound native pools so SvelteKit can create workers under thread quotas.
+      env: {
+        ...process.env,
+        RAYON_NUM_THREADS: "1",
+        TOKIO_WORKER_THREADS: "1",
+        UV_THREADPOOL_SIZE: "1",
+        ...options.env,
+      },
       maxBuffer: 8 * 1024 * 1024,
     });
   } catch (cause) {
