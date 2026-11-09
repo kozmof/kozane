@@ -130,5 +130,7 @@ if (mode === "prepare") {
     ]);
   }
   console.log("Publication commands completed. npm may take time to make new versions available.");
-  console.log("Verify the release once the packages are available:\n  pnpm release:verify:registry");
+  console.log(
+    "Verify the release once the packages are available:\n  pnpm release:verify:registry",
+  );
 }
