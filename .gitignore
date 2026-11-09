@@ -70,3 +70,6 @@ test-results/
 
 /packages/client/src/styles/generated/
 /packages/client/.svelte-kit/
+
+# Generated from the project README during the CLI package build.
+/packages/kozane/README.md
