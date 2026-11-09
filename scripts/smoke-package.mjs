@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const options = process.argv.slice(2);
@@ -23,7 +22,11 @@ const registryOptions = registry ? ["--registry=https://registry.npmjs.org/"] : 
 const installOnly = options.includes("--install-only");
 
 const sourceRoot = resolve(import.meta.dirname, "..");
-const staging = mkdtempSync(join(tmpdir(), "kozane-package-smoke-"));
+// Execute installed bin links and native libraries on the workspace filesystem.
+// System temporary directories may be mounted with noexec.
+const temporaryRoot = join(sourceRoot, "tmp", "package-checks");
+mkdirSync(temporaryRoot, { recursive: true });
+const staging = mkdtempSync(join(temporaryRoot, "kozane-package-smoke-"));
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
