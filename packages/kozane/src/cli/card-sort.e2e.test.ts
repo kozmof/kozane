@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { writeFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
@@ -38,11 +38,19 @@ function tempWorkspace(): string {
 }
 
 function runCli(cwd: string, ...args: string[]): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, ["--import", tsxLoader, cliEntry, ...args], {
+  const result = spawnSync(process.execPath, ["--import", tsxLoader, cliEntry, ...args], {
     cwd,
     encoding: "utf-8",
     env: { ...process.env, TMPDIR: tmpdir(), NO_COLOR: "1" },
   });
+  if (args[0] === "init" && result.status === 0) {
+    // These fixtures exercise database/layout checks, independent of local servers.
+    const path = join(cwd, ".kozane", "config.json");
+    const config = JSON.parse(readFileSync(path, "utf8"));
+    config.server = { ...config.server, port: 0 };
+    writeFileSync(path, JSON.stringify(config));
+  }
+  return result;
 }
 
 function cli(cwd: string, ...args: string[]): string {

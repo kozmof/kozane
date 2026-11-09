@@ -10,13 +10,21 @@ const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("ts
 const tempRoots: string[] = [];
 
 function runCli(cwd: string, ...args: string[]): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, ["--import", tsxLoader, cliEntry, ...args], {
+  const result = spawnSync(process.execPath, ["--import", tsxLoader, cliEntry, ...args], {
     cwd,
     encoding: "utf-8",
     env: { ...process.env, TMPDIR: tmpdir(), NO_COLOR: "1" },
     // `open` starts a server if it does not refuse, so never wait on it for long.
     timeout: 30_000,
   });
+  if (args[0] === "init" && result.status === 0) {
+    // Keep doctor independent of servers running on the default port.
+    const path = join(cwd, ".kozane", "config.json");
+    const config = JSON.parse(readFileSync(path, "utf8"));
+    config.server = { ...config.server, port: 0 };
+    writeFileSync(path, JSON.stringify(config));
+  }
+  return result;
 }
 
 function cli(cwd: string, ...args: string[]): string {
