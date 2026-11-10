@@ -101,25 +101,23 @@ describe("ScopeArea", () => {
  * from unresolved names.
  */
 describe("ScopeArea colours", () => {
-  function frameBody(container: HTMLElement): HTMLElement {
-    const found = container.querySelector<HTMLElement>("[data-scope-area-id='a1'] div");
-    if (!found) throw new Error("no frame body");
+  function frameOutline(container: HTMLElement): SVGPathElement {
+    const found = container.querySelector<SVGPathElement>("[data-scope-area-id='a1'] svg path");
+    if (!found) throw new Error("no frame outline");
     return found;
   }
 
   it("draws the frame in a defined colour when the scope is not focused", () => {
     const { container } = mount({ focused: false });
-    const body = frameBody(container);
+    const outline = frameOutline(container);
 
     // Keep the frame visible when its scope is not the active filter.
-    expect(body.style.border).toBe(`1px solid ${token.var("colors.neutral.secondary")}`);
-    expect(body.style.background).toContain(token.var("colors.neutral.secondary"));
+    expect(outline).toHaveAttribute("stroke", token.var("colors.neutral.secondary"));
+    expect(outline.getAttribute("fill")).toContain(token.var("colors.neutral.secondary"));
   });
 
   it("draws the frame in the selection accent when the scope is focused", () => {
     const { container } = mount({ focused: true });
-    expect(frameBody(container).style.border).toBe(
-      `1px solid ${token.var("colors.select.accent")}`,
-    );
+    expect(frameOutline(container)).toHaveAttribute("stroke", token.var("colors.select.accent"));
   });
 });
