@@ -68,7 +68,7 @@
     aria-hidden="true"
   >
     <path
-      d={`M 0 0 V ${-TAB_HEIGHT + 8} Q 0 ${-TAB_HEIGHT} 8 ${-TAB_HEIGHT} H ${Math.max(8, labelWidth - 6)} Q ${labelWidth + 2} ${-TAB_HEIGHT} ${labelWidth + 2} ${-TAB_HEIGHT + 8} V 0 H ${area.width - 8} Q ${area.width} 0 ${area.width} 8 V ${area.height - 8} Q ${area.width} ${area.height} ${area.width - 8} ${area.height} H 8 Q 0 ${area.height} 0 ${area.height - 8} Z`}
+      d={`M 0 0 V ${-TAB_HEIGHT + 8} Q 0 ${-TAB_HEIGHT} 8 ${-TAB_HEIGHT} H ${Math.max(8, labelWidth - 6)} Q ${labelWidth + 2} ${-TAB_HEIGHT} ${labelWidth + 2} ${-TAB_HEIGHT + 8} V -8 Q ${labelWidth + 2} 0 ${labelWidth + 10} 0 H ${area.width - 8} Q ${area.width} 0 ${area.width} 8 V ${area.height - 8} Q ${area.width} ${area.height} ${area.width - 8} ${area.height} H 8 Q 0 ${area.height} 0 ${area.height - 8} Z`}
       fill={`color-mix(in oklch, ${accent} ${focused ? 7 : 4}%, transparent)`}
       stroke={accent}
       stroke-width="1"
