@@ -38,6 +38,7 @@
 
   // Place the tab above the frame so it does not cover cards near the top-left corner.
   const TAB_HEIGHT = 22;
+  let labelWidth = $state(0);
 
   /**
    * Use the selection accent for the focused scope and gray otherwise. Resolve colors through
@@ -61,7 +62,8 @@
   style:pointer-events="none"
 >
   <div
-    class={css({ position: "absolute", inset: "0", borderRadius: "3px" })}
+    class={css({ position: "absolute", inset: "0", borderRadius: "0 8px 8px 8px" })}
+    style:clip-path={`polygon(0 1px, ${labelWidth}px 1px, ${labelWidth}px 0, 100% 0, 100% 100%, 0 100%)`}
     style:border="1px solid {accent}"
     style:background="color-mix(in oklch, {accent} {focused ? 7 : 4}%, transparent)"
     style:box-shadow={dragging || resizing
@@ -86,7 +88,7 @@
         alignItems: "center",
         maxWidth: "calc(100% - 20px)",
         padding: "0 8px",
-        borderRadius: "3px 3px 0 0",
+        borderRadius: "8px 8px 0 0",
         border: "1px solid",
         borderBottom: "none",
         fontSize: "11px",
@@ -95,15 +97,16 @@
         overflow: "hidden",
         textOverflow: "ellipsis",
       })}
+      bind:clientWidth={labelWidth}
       aria-label="Scope area {name}"
       aria-pressed={focused}
       style:left="0"
       style:top="0"
-      style:height="{TAB_HEIGHT}px"
+      style:height="{TAB_HEIGHT + 1}px"
       style:pointer-events="auto"
       style:cursor={dragging ? "grabbing" : draggable ? "grab" : "default"}
-      style:background={focused ? accent : "var(--colors-ink-light)"}
-      style:color={focused ? "var(--colors-ink-light)" : "var(--colors-neutral-secondary)"}
+      style:background="transparent"
+      style:color={accent}
       style:border-color={accent}
       onmousedown={(e) => {
         // `WarpMarker` does this for the same reason. The canvas underneath starts a pan on mousedown
@@ -158,10 +161,10 @@
 
   {#if draggable}
     <button
-      class={css({ position: "absolute", padding: "0", borderRadius: "0 0 3px 0" })}
+      class={css({ position: "absolute", padding: "0", borderRadius: "0 0 8px 0" })}
       aria-label="Resize scope area {name}"
-      style:right="-1px"
-      style:bottom="-1px"
+      style:right="0"
+      style:bottom="0"
       style:width="14px"
       style:height="14px"
       style:pointer-events="auto"
