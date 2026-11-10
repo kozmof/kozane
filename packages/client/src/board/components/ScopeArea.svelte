@@ -38,8 +38,6 @@
 
   // Place the tab above the frame so it does not cover cards near the top-left corner.
   const TAB_HEIGHT = 22;
-  // Extend the seam past the 1px border to avoid antialiasing at fractional zoom.
-  const LABEL_OVERLAP = 2;
   let labelWidth = $state(0);
 
   /**
@@ -63,15 +61,22 @@
   style:z-index="0"
   style:pointer-events="none"
 >
-  <div
-    class={css({ position: "absolute", inset: "0", borderRadius: "0 8px 8px 8px" })}
-    style:clip-path={`polygon(0 ${LABEL_OVERLAP}px, ${labelWidth + 2}px ${LABEL_OVERLAP}px, ${labelWidth + 2}px 0, 100% 0, 100% 100%, 0 100%)`}
-    style:border="1px solid {accent}"
-    style:background="color-mix(in oklch, {accent} {focused ? 7 : 4}%, transparent)"
-    style:box-shadow={dragging || resizing
-      ? `0 0 0 2px color-mix(in oklch, ${accent} 22%, transparent)`
-      : "none"}
-  ></div>
+  <svg
+    class={css({ position: "absolute", overflow: "visible" })}
+    width={area.width}
+    height={area.height}
+    aria-hidden="true"
+  >
+    <path
+      d={`M 0 0 V ${-TAB_HEIGHT + 8} Q 0 ${-TAB_HEIGHT} 8 ${-TAB_HEIGHT} H ${Math.max(8, labelWidth - 6)} Q ${labelWidth + 2} ${-TAB_HEIGHT} ${labelWidth + 2} ${-TAB_HEIGHT + 8} V 0 H ${area.width - 8} Q ${area.width} 0 ${area.width} 8 V ${area.height - 8} Q ${area.width} ${area.height} ${area.width - 8} ${area.height} H 8 Q 0 ${area.height} 0 ${area.height - 8} Z`}
+      fill={`color-mix(in oklch, ${accent} ${focused ? 7 : 4}%, transparent)`}
+      stroke={accent}
+      stroke-width="1"
+      style:filter={dragging || resizing
+        ? `drop-shadow(0 0 2px ${accent})`
+        : "none"}
+    />
+  </svg>
 
   <!-- Keep a continuous hover target from the name across to the remove button. -->
   <div
@@ -91,7 +96,7 @@
         maxWidth: "calc(100% - 20px)",
         padding: "0 8px",
         borderRadius: "8px 8px 0 0",
-        border: "1px solid",
+        border: "1px solid transparent",
         borderBottom: "none",
         fontSize: "11px",
         lineHeight: "1",
@@ -104,12 +109,11 @@
       aria-pressed={focused}
       style:left="0"
       style:top="0"
-      style:height="{TAB_HEIGHT + LABEL_OVERLAP}px"
+      style:height="{TAB_HEIGHT}px"
       style:pointer-events="auto"
       style:cursor={dragging ? "grabbing" : draggable ? "grab" : "default"}
-      style:background="color-mix(in oklch, {accent} {focused ? 7 : 4}%, transparent)"
+      style:background="transparent"
       style:color={accent}
-      style:border-color={accent}
       onmousedown={(e) => {
         // `WarpMarker` does this for the same reason. The canvas underneath starts a pan on mousedown
         // and a marquee on shift-mousedown, and a press on the tab means neither.
