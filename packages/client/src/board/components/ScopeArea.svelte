@@ -63,7 +63,7 @@
 >
   <div
     class={css({ position: "absolute", inset: "0", borderRadius: "0 8px 8px 8px" })}
-    style:clip-path={`polygon(0 1px, ${labelWidth}px 1px, ${labelWidth}px 0, 100% 0, 100% 100%, 0 100%)`}
+    style:clip-path={`polygon(0 1px, ${labelWidth + 2}px 1px, ${labelWidth + 2}px 0, 100% 0, 100% 100%, 0 100%)`}
     style:border="1px solid {accent}"
     style:background="color-mix(in oklch, {accent} {focused ? 7 : 4}%, transparent)"
     style:box-shadow={dragging || resizing
