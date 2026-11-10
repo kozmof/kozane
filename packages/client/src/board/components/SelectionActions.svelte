@@ -28,7 +28,7 @@
     onUnglueSelected?: (cardIds: string[]) => void;
     onUnglueOne?: (cardId: string) => void;
     onMoveToNamespace?: (cardIds: string[], targetNamespaceId: string) => void;
-    onOpenFilePalette?: () => void;
+    onOpenFileBrowser?: () => void;
     onDeleteSelected?: (cardIds: string[]) => void;
   };
 
@@ -50,7 +50,7 @@
     onUnglueSelected,
     onUnglueOne,
     onMoveToNamespace,
-    onOpenFilePalette,
+    onOpenFileBrowser,
     onDeleteSelected,
   }: Props = $props();
 </script>
@@ -206,19 +206,19 @@
     {/if}
   </div>
 {/if}
-<!-- Opens the file palette on this selection. -->
-{#if onOpenFilePalette}
+<!-- Opens the file browser on this selection. -->
+{#if onOpenFileBrowser}
   <button
     class={css({ position: "relative", width: "100%", minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
-    title="Edit a file"
-    aria-label={`Edit a file ${shortcuts.openFilePaletteShortcut}`}
-    onclick={onOpenFilePalette}
+    title="Open files"
+    aria-label={`Open files ${shortcuts.openFileBrowserShortcut}`}
+    onclick={onOpenFileBrowser}
   >
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0">
       <path d="M3 1.5h3.2l2.3 2.3v6.7H3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
       <path d="M6 1.7v2.4h2.4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
     </svg>
-    Edit a file{@render shortcutHint(shortcuts.openFilePaletteShortcut)}
+    Open files{@render shortcutHint(shortcuts.openFileBrowserShortcut)}
   </button>
 {/if}
 <!-- Delete action, always shown in selection mode -->

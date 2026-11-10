@@ -34,7 +34,7 @@
     /** Replaces the card with one card per segment of its text. */
     onSquashCard?: (cardId: string) => void;
     /** Opens the file palette on the selection. Absent where there is nothing to open. */
-    onOpenFilePalette?: () => void;
+    onOpenFileBrowser?: () => void;
     /**
      * Suspend composer shortcuts while an overlay owns the keyboard, including when focus is
      * outside the overlay's input.
@@ -68,7 +68,7 @@
     onSelectionLayerChange,
     onStackOrderChange,
     onResizeToggle,
-    onOpenFilePalette,
+    onOpenFileBrowser,
     suspendShortcuts = false,
     onSquashCard,
     resizingCardId = null,
@@ -214,8 +214,8 @@
       onResizeToggle?.(selectedCards[0].id);
     } else if (e.key === shortcuts.squashCardShortcut && squashableCard) {
       onSquashCard?.(squashableCard.id);
-    } else if (e.key === shortcuts.openFilePaletteShortcut && onOpenFilePalette) {
-      onOpenFilePalette();
+    } else if (e.key === shortcuts.openFileBrowserShortcut && onOpenFileBrowser) {
+      onOpenFileBrowser();
     } else if (e.key === shortcuts.deleteCardsShortcut) onDeleteSelected?.(ids);
     else handled = false;
 
@@ -309,7 +309,7 @@
       {onUnglueSelected}
       {onUnglueOne}
       {onMoveToNamespace}
-      {onOpenFilePalette}
+      {onOpenFileBrowser}
       {onDeleteSelected}
     />
   {:else}

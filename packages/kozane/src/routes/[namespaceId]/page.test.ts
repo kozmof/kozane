@@ -397,23 +397,23 @@ describe("Namespace page", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
   }
 
-  it("opens the file palette from the selection shortcut", async () => {
+  it("opens the file browser from the selection shortcut", async () => {
     vi.stubGlobal("fetch", vi.fn());
     await selectAlpha();
 
-    expect(screen.queryByRole("dialog", { name: "Edit a file" })).toBeNull();
-    await fireEvent.keyDown(window, { key: "e" });
+    expect(screen.queryByRole("dialog", { name: "Files" })).toBeNull();
+    await fireEvent.keyDown(window, { key: "o" });
 
-    expect(screen.getByRole("dialog", { name: "Edit a file" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Files" })).toBeInTheDocument();
   });
 
   it("opens it from the selection bar button too", async () => {
     vi.stubGlobal("fetch", vi.fn());
     await selectAlpha();
 
-    await fireEvent.click(screen.getByRole("button", { name: /Edit a file/ }));
+    await fireEvent.click(screen.getByRole("button", { name: /Open files/ }));
 
-    expect(screen.getByRole("dialog", { name: "Edit a file" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Files" })).toBeInTheDocument();
   });
 
   // The palette is the one overlay open while cards are selected, so the composer's own
@@ -423,12 +423,13 @@ describe("Namespace page", () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal("fetch", fetch);
     await selectAlpha();
-    await fireEvent.keyDown(window, { key: "e" });
+    await fireEvent.keyDown(window, { key: "o" });
+    fetch.mockClear();
 
     await fireEvent.keyDown(window, { key: "Delete" });
 
     expect(fetch).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog", { name: "Edit a file" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Files" })).toBeInTheDocument();
   });
 
   it("gives the palette no shortcut when nothing is selected", async () => {

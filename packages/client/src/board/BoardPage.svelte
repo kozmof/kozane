@@ -201,6 +201,9 @@
   {#if board.fileBrowserOpen}
     <FileBrowser
       scopes={s.scopes}
+      scopeRels={s.scopeRels}
+      selectedCards={s.selection.selectedCards}
+      onLinkScope={actions.handleLinkScope}
       taskspaces={s.taskspaces}
       tree={s.taskspaceTree}
       ctx={board.editorContext}
@@ -260,8 +263,8 @@
         otherNamespaces={data.otherNamespaces}
         onSubmit={handleComposerSubmit}
         onResizeToggle={handleResizeToggle}
-        onOpenFilePalette={() => (board.filePaletteOpen = true)}
-        filePaletteOpen={board.filePaletteOpen}
+        onOpenFileBrowser={() => (board.fileBrowserOpen = true)}
+        filePaletteOpen={board.filePaletteOpen || board.fileBrowserOpen}
         newCardTarget={view.receivingInventory && view.inventoryLabel(view.receivingInventory)}
         shortcuts={data.uiConfig}
       />

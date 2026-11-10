@@ -26,7 +26,7 @@
     otherNamespaces: ComposerProps["otherNamespaces"];
     onSubmit: ComposerProps["onSubmit"];
     onResizeToggle: ComposerProps["onResizeToggle"];
-    onOpenFilePalette: () => void;
+    onOpenFileBrowser: () => void;
     filePaletteOpen: boolean;
     newCardTarget: string | null;
     shortcuts: ComposerProps["shortcuts"];
@@ -45,7 +45,7 @@
     otherNamespaces,
     onSubmit,
     onResizeToggle,
-    onOpenFilePalette,
+    onOpenFileBrowser,
     filePaletteOpen,
     newCardTarget,
     shortcuts,
@@ -110,7 +110,7 @@
     onStackOrderChange={actions.handleStackOrderChange}
     {onResizeToggle}
     onSquashCard={actions.handleSquashCard}
-    {onOpenFilePalette}
+    {onOpenFileBrowser}
     suspendShortcuts={filePaletteOpen}
     resizingCardId={s.selection.resizingCardId}
     {newCardTarget}

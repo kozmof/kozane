@@ -1,6 +1,6 @@
 <script lang="ts">
   import { css, cx } from "../../styles/css.js";
-  import type { Scope, TaskspaceEntryKind, TaskspaceSummary } from "@kozane/core";
+  import type { ScopeRel, Scope, TaskspaceEntryKind, TaskspaceSummary } from "@kozane/core";
   import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
   import type { OpenFileRef } from "../../editor/index.js";
   import {
@@ -12,6 +12,7 @@
     type FileManagementActions,
     type ManagementMessage,
   } from "../lib/file-management.js";
+  import { countLinked, scopeLinkState } from "../lib/scope-link.js";
   import FileBrowserTree from "./FileBrowserTree.svelte";
   import InlineNameInput from "./InlineNameInput.svelte";
   import RowActionButtons from "./RowActionButtons.svelte";
@@ -19,6 +20,9 @@
 
   let {
     scopes,
+    scopeRels = [],
+    selectedCards = new Set<string>(),
+    onLinkScope,
     taskspaces,
     tree,
     ctx,
@@ -30,6 +34,9 @@
     onClose,
   }: {
     scopes: Scope[];
+    scopeRels?: ScopeRel[];
+    selectedCards?: Set<string>;
+    onLinkScope?: (scopeId: string) => void;
     taskspaces: TaskspaceSummary[];
     tree: TaskspaceTreeState;
     ctx: TaskspaceTreeContext;
@@ -500,6 +507,18 @@
                 >{scope.name}</button>
                 {#if !readonly}
                   <span class={actionsClass}>
+                    {#if selectedCards.size > 0 && onLinkScope}
+                      {@const link = scopeLinkState(scopeRels, scope.id, selectedCards)}
+                      {#if link === "all"}
+                        <span class={css({ fontSize: "12px", fontFamily: "inherit" })}>Linked</span>
+                      {:else}
+                        <button
+                          class={css({ color: "neutral.subtle", fontSize: "12px", fontFamily: "inherit" })}
+                          aria-label={"Link selected cards to " + scope.name}
+                          onclick={() => onLinkScope?.(scope.id)}
+                        >{link === "some" ? "Link " + (selectedCards.size - countLinked(scopeRels, scope.id, selectedCards)) + " more" : "Link"}</button>
+                      {/if}
+                    {/if}
                     <RowActionButtons
                       what={scope.name}
                       onRename={() => begin({ kind: "scope", id: scope.id })}

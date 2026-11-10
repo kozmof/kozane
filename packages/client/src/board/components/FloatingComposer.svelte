@@ -26,7 +26,7 @@
     onStackOrderChange?: (cardIds: string[], direction: "front" | "back") => void;
     onResizeToggle?: (cardId: string) => void;
     onSquashCard?: (cardId: string) => void;
-    onOpenFilePalette?: () => void;
+    onOpenFileBrowser?: () => void;
     suspendShortcuts?: boolean;
     resizingCardId?: string | null;
     newCardTarget?: string | null;
@@ -55,7 +55,7 @@
     onStackOrderChange,
     onResizeToggle,
     onSquashCard,
-    onOpenFilePalette,
+    onOpenFileBrowser,
     suspendShortcuts = false,
     resizingCardId = null,
     newCardTarget = null,
@@ -104,7 +104,7 @@
     {onStackOrderChange}
     {onResizeToggle}
     {onSquashCard}
-    {onOpenFilePalette}
+    {onOpenFileBrowser}
     {suspendShortcuts}
     {resizingCardId}
     {newCardTarget}

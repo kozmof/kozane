@@ -74,6 +74,13 @@ const column = (name: string) => within(screen.getByRole("region", { name }));
 afterEach(() => vi.restoreAllMocks());
 
 describe("FileBrowser", () => {
+  it("links selected cards to a scope", async () => {
+    const onLinkScope = vi.fn();
+    render(FileBrowser, { props: makeProps({ selectedCards: new Set(["c1"]), onLinkScope }) });
+    await fireEvent.click(screen.getByRole("button", { name: "Link selected cards to Writing" }));
+    expect(onLinkScope).toHaveBeenCalledWith("s1");
+  });
+
   it("shows scopes, the first scope's taskspaces, and that taskspace's files", async () => {
     render(FileBrowser, { props: makeProps() });
 
