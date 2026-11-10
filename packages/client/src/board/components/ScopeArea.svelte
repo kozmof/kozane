@@ -38,6 +38,8 @@
 
   // Place the tab above the frame so it does not cover cards near the top-left corner.
   const TAB_HEIGHT = 22;
+  // Extend the seam past the 1px border to avoid antialiasing at fractional zoom.
+  const LABEL_OVERLAP = 2;
   let labelWidth = $state(0);
 
   /**
@@ -63,7 +65,7 @@
 >
   <div
     class={css({ position: "absolute", inset: "0", borderRadius: "0 8px 8px 8px" })}
-    style:clip-path={`polygon(0 1px, ${labelWidth + 2}px 1px, ${labelWidth + 2}px 0, 100% 0, 100% 100%, 0 100%)`}
+    style:clip-path={`polygon(0 ${LABEL_OVERLAP}px, ${labelWidth + 2}px ${LABEL_OVERLAP}px, ${labelWidth + 2}px 0, 100% 0, 100% 100%, 0 100%)`}
     style:border="1px solid {accent}"
     style:background="color-mix(in oklch, {accent} {focused ? 7 : 4}%, transparent)"
     style:box-shadow={dragging || resizing
@@ -102,7 +104,7 @@
       aria-pressed={focused}
       style:left="0"
       style:top="0"
-      style:height="{TAB_HEIGHT + 1}px"
+      style:height="{TAB_HEIGHT + LABEL_OVERLAP}px"
       style:pointer-events="auto"
       style:cursor={dragging ? "grabbing" : draggable ? "grab" : "default"}
       style:background="color-mix(in oklch, {accent} {focused ? 7 : 4}%, transparent)"
