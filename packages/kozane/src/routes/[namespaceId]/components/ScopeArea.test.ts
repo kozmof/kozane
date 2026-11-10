@@ -112,8 +112,8 @@ describe("ScopeArea colours", () => {
     const body = frameBody(container);
 
     // Keep the frame visible when its scope is not the active filter.
-    expect(body.style.border).toBe(`1px solid ${token.var("colors.neutral.iconDim")}`);
-    expect(body.style.background).toContain(token.var("colors.neutral.iconDim"));
+    expect(body.style.border).toBe(`1px solid ${token.var("colors.neutral.secondary")}`);
+    expect(body.style.background).toContain(token.var("colors.neutral.secondary"));
   });
 
   it("draws the frame in the selection accent when the scope is focused", () => {
