@@ -38,7 +38,20 @@
 
   // Place the tab above the frame so it does not cover cards near the top-left corner.
   const TAB_HEIGHT = 22;
+  const CORNER_RADIUS = 4;
   let labelWidth = $state(0);
+  const tabRight = $derived(labelWidth + 2);
+  const outline = $derived([
+    `M 0 0 V ${-TAB_HEIGHT + CORNER_RADIUS}`,
+    `Q 0 ${-TAB_HEIGHT} ${CORNER_RADIUS} ${-TAB_HEIGHT}`,
+    `H ${Math.max(CORNER_RADIUS, tabRight - CORNER_RADIUS)}`,
+    `Q ${tabRight} ${-TAB_HEIGHT} ${tabRight} ${-TAB_HEIGHT + CORNER_RADIUS}`,
+    `V ${-CORNER_RADIUS} Q ${tabRight} 0 ${tabRight + CORNER_RADIUS} 0`,
+    `H ${area.width - CORNER_RADIUS} Q ${area.width} 0 ${area.width} ${CORNER_RADIUS}`,
+    `V ${area.height - CORNER_RADIUS}`,
+    `Q ${area.width} ${area.height} ${area.width - CORNER_RADIUS} ${area.height}`,
+    `H ${CORNER_RADIUS} Q 0 ${area.height} 0 ${area.height - CORNER_RADIUS} Z`,
+  ].join(" "));
 
   /**
    * Use the selection accent for the focused scope and gray otherwise. Resolve colors through
@@ -68,7 +81,7 @@
     aria-hidden="true"
   >
     <path
-      d={`M 0 0 V ${-TAB_HEIGHT + 8} Q 0 ${-TAB_HEIGHT} 8 ${-TAB_HEIGHT} H ${Math.max(8, labelWidth - 6)} Q ${labelWidth + 2} ${-TAB_HEIGHT} ${labelWidth + 2} ${-TAB_HEIGHT + 8} V -8 Q ${labelWidth + 2} 0 ${labelWidth + 10} 0 H ${area.width - 8} Q ${area.width} 0 ${area.width} 8 V ${area.height - 8} Q ${area.width} ${area.height} ${area.width - 8} ${area.height} H 8 Q 0 ${area.height} 0 ${area.height - 8} Z`}
+      d={outline}
       fill={`color-mix(in oklch, ${accent} ${focused ? 7 : 4}%, transparent)`}
       stroke={accent}
       stroke-width="1"
@@ -95,7 +108,6 @@
         alignItems: "center",
         maxWidth: "calc(100% - 20px)",
         padding: "0 8px",
-        borderRadius: "8px 8px 0 0",
         border: "1px solid transparent",
         borderBottom: "none",
         fontSize: "11px",
@@ -104,6 +116,7 @@
         overflow: "hidden",
         textOverflow: "ellipsis",
       })}
+      style:border-radius="{CORNER_RADIUS}px {CORNER_RADIUS}px 0 0"
       bind:clientWidth={labelWidth}
       aria-label="Scope area {name}"
       aria-pressed={focused}
@@ -167,8 +180,9 @@
 
   {#if draggable}
     <button
-      class={css({ position: "absolute", padding: "0", borderRadius: "0 0 8px 0" })}
+      class={css({ position: "absolute", padding: "0" })}
       aria-label="Resize scope area {name}"
+      style:border-radius="0 0 {CORNER_RADIUS}px 0"
       style:right="0"
       style:bottom="0"
       style:width="14px"
