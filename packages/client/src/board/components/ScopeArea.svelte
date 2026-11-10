@@ -105,7 +105,7 @@
       style:height="{TAB_HEIGHT + 1}px"
       style:pointer-events="auto"
       style:cursor={dragging ? "grabbing" : draggable ? "grab" : "default"}
-      style:background="transparent"
+      style:background="color-mix(in oklch, {accent} {focused ? 7 : 4}%, transparent)"
       style:color={accent}
       style:border-color={accent}
       onmousedown={(e) => {
