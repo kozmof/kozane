@@ -44,7 +44,7 @@
    * `token.var` so token names are checked and generated CSS variable names stay correct.
    */
   const accent = $derived(
-    focused ? token.var("colors.select.accent") : token.var("colors.neutral.iconDim"),
+    focused ? token.var("colors.select.accent") : token.var("colors.neutral.secondary"),
   );
 </script>
 
