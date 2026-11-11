@@ -167,10 +167,16 @@ export function domMeasurer(
     }
     let remaining = column;
     while (text) {
-      if (remaining <= text.length) { range.setEnd(text, remaining); break; }
+      if (remaining <= text.length) {
+        range.setEnd(text, remaining);
+        break;
+      }
       remaining -= text.length;
       const next = walker.nextNode() as Text | null;
-      if (!next) { range.setEnd(text, text.length); break; }
+      if (!next) {
+        range.setEnd(text, text.length);
+        break;
+      }
       text = next;
     }
     // Allow missing Range rectangle methods in jsdom, where real layout measurements are
@@ -202,7 +208,11 @@ export function domMeasurer(
    * Column in `found` nearest to `x`. On a wrapped row, stop before the last character,
    * because the column after it is drawn at the start of the next row.
    */
-  function nearestColumn(found: { node: HTMLElement; length: number }, x: number, wrapped: boolean) {
+  function nearestColumn(
+    found: { node: HTMLElement; length: number },
+    x: number,
+    wrapped: boolean,
+  ) {
     const limit = wrapped ? Math.max(0, found.length - 1) : found.length;
     return Math.min(limit, columnAtX(found, x));
   }

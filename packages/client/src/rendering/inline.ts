@@ -24,4 +24,6 @@ export function parseInline(source: string): InlineNode[] {
 }
 
 /** Editing projection preserves every character and direct text-node geometry. */
-export function renderSource(source: string): string { return source; }
+export function renderSource(source: string): string {
+  return source;
+}
