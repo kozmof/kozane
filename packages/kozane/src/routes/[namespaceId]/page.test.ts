@@ -629,7 +629,7 @@ it("uses supplied routes for board tag links and the namespace list", async () =
       navigation: createDemoNavigation({ base: "/demo" }),
     },
   });
-  expect(screen.getByRole("link", { name: ":private" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "private" })).toHaveAttribute(
     "href",
     "/demo/tags/?namespaceId=namespace-1#tag=private",
   );

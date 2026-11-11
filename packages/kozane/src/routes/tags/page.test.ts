@@ -94,7 +94,8 @@ describe("tag index page", () => {
 
     expect(screen.getAllByText("caching work")).toHaveLength(1);
     expect(hrefOf("caching work")).toBe("/p1?card=c1");
-    expect(screen.getByText(":perf :perf:cache")).toBeTruthy();
+    expect(screen.getByText("perf:cache", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("perf:cache").parentElement).toHaveTextContent("perf perf:cache");
   });
 
   it("links a file row to the board that draws its taskspace, on that file", () => {

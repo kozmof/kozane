@@ -216,7 +216,7 @@ describe("KozaneCard", () => {
         }),
       });
 
-      const link = screen.getByRole("link", { name: ":perf:cache" });
+      const link = screen.getByRole("link", { name: "perf:cache" });
       expect(link).toHaveAttribute("href", "/tags?tag=perf:cache");
     });
 
@@ -224,7 +224,7 @@ describe("KozaneCard", () => {
     it("marks a tag without linking it when there is nowhere to link to", () => {
       render(KozaneCard, { props: withContent("caching work :perf") });
 
-      expect(screen.getByText(":perf")).toBeInTheDocument();
+      expect(screen.getByText("perf")).toBeInTheDocument();
       expect(screen.queryByRole("link")).not.toBeInTheDocument();
     });
 
@@ -234,7 +234,7 @@ describe("KozaneCard", () => {
       });
 
       // Preserve the author's displayed text while linking through the normalized tag value.
-      expect(screen.getByRole("link", { name: ":Perf" })).toHaveAttribute("href", "/tags?tag=perf");
+      expect(screen.getByRole("link", { name: "Perf" })).toHaveAttribute("href", "/tags?tag=perf");
     });
 
     it("leaves a colon that is not a tag as prose", () => {
@@ -263,7 +263,7 @@ describe("KozaneCard", () => {
     });
 
     it.each([
-      { content: "about :perf", label: ":perf" },
+      { content: "about :perf", label: "perf" },
       { content: "visit https://example.com", label: "https://example.com" },
     ])(
       "lets a delegated router handle $label without card gestures",
