@@ -51,7 +51,7 @@
 {/snippet}
 
 <h2 class={css({ fontSize: "15px", fontFamily: "mono", marginBottom: "16px" })}>
-  '{selectedTag}
+  {selectedTag}
 </h2>
 
 {#if shownCount === 0}
