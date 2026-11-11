@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InlineContent from "../rendering/InlineContent.svelte";
   import type { Snippet } from "svelte";
   import { css } from "../styles/css.js";
   import { taggedWith, type TagHitOf, type TagHitRow, type TaskspaceHitGroup } from "../tag/index.js";
@@ -51,7 +52,7 @@
 {/snippet}
 
 <h2 class={css({ fontSize: "15px", fontFamily: "mono", marginBottom: "16px" })}>
-  {selectedTag}
+  <InlineContent source={":" + selectedTag} />
 </h2>
 
 {#if shownCount === 0}
@@ -81,7 +82,7 @@
       {@const partition = partitionId ? data.partitions[partitionId] : undefined}
       <li>
         {#snippet cardBody()}
-          <span class={excerptClass}>{hits[0].excerpt}</span>
+          <span class={excerptClass}><InlineContent source={hits[0].excerpt} /></span>
           <span
             class={css({
               display: "flex",
@@ -103,7 +104,7 @@
             {#if !selectedNamespaceId}
               <span>{namespaceName(data.cardNamespaces[cardId])}</span>
             {/if}
-            <span class={css({ fontFamily: "mono" })}>{taggedWith(hits).join(" ")}</span>
+            <span class={css({ fontFamily: "mono" })}><InlineContent source={taggedWith(hits).join(" ")} /></span>
           </span>
         {/snippet}
         {@render hitRow(cardHref(cardId), cardRowClass, cardBody)}
@@ -137,7 +138,7 @@
           >
             {source.path}:{source.line}
           </span>
-          <span class={excerptClass}>{hits[0].excerpt}</span>
+          <span class={excerptClass}><InlineContent source={hits[0].excerpt} /></span>
         {/snippet}
         {@render hitRow(fileHref(taskspaceId, source.path), fileRowClass, fileBody)}
       </li>

@@ -136,26 +136,46 @@ export function domMeasurer(
   rowElement: (line: number, index: number) => HTMLElement | null,
   layout: () => WrapLayout | undefined = () => undefined,
 ): LineMeasurer {
-  const textNodeOf = (line: number, index = 0): { node: Text; length: number } | null => {
+  const textNodeOf = (line: number, index = 0): { node: HTMLElement; length: number } | null => {
     const el = rowElement(line, index);
-    const node = el?.firstChild;
-    if (!node || node.nodeType !== Node.TEXT_NODE) return null;
-    const text = node as Text;
-    return { node: text, length: text.length };
+    if (!el) return null;
+    return { node: el, length: el.textContent?.length ?? 0 };
   };
 
   /**
    * Measure pixels from the text start to `column` using range width. This excludes element
    * padding and naturally returns zero at column 0.
    */
-  const widthTo = (node: Text, column: number): number => {
+  const widthTo = (node: HTMLElement, column: number): number => {
     if (column <= 0) return 0;
     const range = document.createRange();
-    range.setStart(node, 0);
-    range.setEnd(node, Math.min(column, node.length));
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let text = walker.nextNode() as Text | null;
+    if (!text) return 0;
+    range.setStart(text, 0);
+    // Range width omits the padding before a label at the start of a row.
+    let leadingInset = 0;
+    if (text.parentElement !== node) {
+      const origin = document.createRange();
+      origin.setStart(text, 0);
+      origin.collapse(true);
+      const rect = origin.getBoundingClientRect?.();
+      if (rect && Number.isFinite(rect.left)) {
+        const padding = Number.parseFloat(getComputedStyle(node).paddingLeft) || 0;
+        leadingInset = rect.left - node.getBoundingClientRect().left - padding;
+      }
+    }
+    let remaining = column;
+    while (text) {
+      if (remaining <= text.length) { range.setEnd(text, remaining); break; }
+      remaining -= text.length;
+      const next = walker.nextNode() as Text | null;
+      if (!next) { range.setEnd(text, text.length); break; }
+      text = next;
+    }
     // Allow missing Range rectangle methods in jsdom, where real layout measurements are
     // unavailable.
-    return range.getBoundingClientRect?.()?.width ?? 0;
+    return (range.getBoundingClientRect?.()?.width ?? 0) + leadingInset;
   };
 
   return {
@@ -182,12 +202,12 @@ export function domMeasurer(
    * Column in `found` nearest to `x`. On a wrapped row, stop before the last character,
    * because the column after it is drawn at the start of the next row.
    */
-  function nearestColumn(found: { node: Text; length: number }, x: number, wrapped: boolean) {
+  function nearestColumn(found: { node: HTMLElement; length: number }, x: number, wrapped: boolean) {
     const limit = wrapped ? Math.max(0, found.length - 1) : found.length;
     return Math.min(limit, columnAtX(found, x));
   }
 
-  function columnAtX(found: { node: Text; length: number }, x: number): number {
+  function columnAtX(found: { node: HTMLElement; length: number }, x: number): number {
     if (x <= 0) return 0;
 
     // Find the last column edge at or before x, then choose the nearer of that edge and the

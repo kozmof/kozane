@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css } from "../../styles/css.js";
   import type { CardWithGlue, PartitionWithColor } from "@kozane/core";
-  import { segmentText } from "../../text-segments.js";
+  import InlineContent from "../../rendering/InlineContent.svelte";
 
   interface Props {
     card: CardWithGlue;
@@ -111,27 +111,7 @@
     style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-neutral-placeholder)"}
   >
     {#if card.content}
-      {#each segmentText(card.content) as part}
-        {#if part.href}
-          <!-- Stop presses from starting a drag, but let clicks reach delegated routers. -->
-          <a
-            href={part.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            onmousedown={(e) => e.stopPropagation()}
-            class={css({ color: "select.accent", textDecoration: "underline" })}
-          >{part.text}</a>
-        {:else if part.tag && tagHref}
-          <!-- Card selection ignores links without blocking the host router. -->
-          <a
-            href={tagHref(part.tag)}
-            onmousedown={(e) => e.stopPropagation()}
-            class={css({ color: "ink.tag", textDecoration: "none", _hover: { textDecoration: "underline" } })}
-          >{part.text}</a>
-        {:else if part.tag}
-          <span class={css({ color: "ink.tag" })}>{part.text}</span>
-        {:else}{part.text}{/if}
-      {/each}
+      <InlineContent source={card.content} {tagHref} />
     {:else}Empty card…{/if}
   </div>
 

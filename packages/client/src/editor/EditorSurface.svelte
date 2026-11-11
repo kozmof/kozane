@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { renderSource, parseInline } from "../rendering/inline.js";
+  import InlineContent from "../rendering/InlineContent.svelte";
   import { css, cx } from "../styles/css.js";
   import type { Caret, EditorDocument } from "./document-store.svelte.js";
   import { orderCarets, sameCaret } from "./document-store.svelte.js";
@@ -484,7 +486,7 @@
           )}<span
             class={css({ textDecoration: "underline", textUnderlineOffset: "2px" })}
             data-preedit>{preedit}</span
-          >{row.text.slice(caret.column - row.start)}{:else}{row.text}{/if}</div>
+          >{row.text.slice(caret.column - row.start)}{:else if parseInline(row.text).some(node => node.kind === "tag")}<InlineContent source={row.text} mode="edit" />{:else}{renderSource(row.text)}{/if}</div>
     {/each}
 
     <!-- The cursor is a sibling of the text, never spliced into it, so drawing it cannot move
