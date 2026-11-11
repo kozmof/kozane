@@ -19,7 +19,9 @@ for (const view of ["board", "tags", "map"] as const) {
         page.getByRole("button", { name: "Card: Packed board 日本語 :release", exact: true }),
       ).toBeVisible();
     } else if (view === "tags") {
-      await expect(page.getByText("Packed board 日本語 :release", { exact: true })).toBeVisible();
+      const excerpt = page.getByText("Packed board 日本語 release", { exact: true });
+      await expect(excerpt).toBeVisible();
+      await expect(excerpt.getByText("release", { exact: true })).toBeVisible();
     } else {
       await expect(
         page.locator(
