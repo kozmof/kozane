@@ -80,12 +80,17 @@ describe("InventoryWindow renaming", () => {
 });
 
 it("renders labels in stored card content", () => {
-  mount({ cards: [{ id: "card-1", content: "Remember :ideas", inventory: { id: "inv-1", slot: 0 } }] });
+  mount({
+    cards: [{ id: "card-1", content: "Remember :ideas", inventory: { id: "inv-1", slot: 0 } }],
+  });
   expect(screen.getByText("ideas", { selector: "span" })).toBeInTheDocument();
   expect(screen.queryByText("Remember :ideas", { exact: true })).toBeNull();
 });
 
 it("links stored card labels to the tag page", () => {
-  mount({ tagHref: (tag: string) => `/tags?tag=${tag}`, cards: [{ id: "card-1", content: "Remember :ideas", inventory: { id: "inv-1", slot: 0 } }] });
+  mount({
+    tagHref: (tag: string) => `/tags?tag=${tag}`,
+    cards: [{ id: "card-1", content: "Remember :ideas", inventory: { id: "inv-1", slot: 0 } }],
+  });
   expect(screen.getByRole("link", { name: "ideas" })).toHaveAttribute("href", "/tags?tag=ideas");
 });
