@@ -3,6 +3,7 @@ import { startBoardFileRefresh } from "./lib/board-file-refresh.js";
 import { onMount, onDestroy, tick, untrack } from "svelte";
 import { type BoardArrivalParameter } from "../navigation.js";
 import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
+import { orderLayers } from "./lib/namespace-page.js";
 import { boardKeyBindings } from "./lib/board-bindings.js";
 import { createClientBoardPersistence } from "./lib/board-client-persistence.js";
 import { NamespaceState } from "./namespace-state.svelte.js";
@@ -406,6 +407,12 @@ export function createBoardController(options: BoardControllerOptions) {
       togglePanels: () => (sidebarsVisible = !sidebarsVisible),
       toggleWarps: () => (warps.visible = !warps.visible),
       openWarpPalette: () => warps.openPalette(),
+      moveCurrentLayer: (direction) => {
+        const layers = orderLayers(s.layers);
+        const index = layers.findIndex((layer) => layer.id === s.activeLayerId);
+        const next = layers[index + direction];
+        if (index >= 0 && next) s.activeLayerId = next.id;
+      },
       warpToward: (key) => warps.toward(key),
       setWarpHere: () => {
         // A warp you cannot see is a warp you cannot remove, so setting one reveals them.

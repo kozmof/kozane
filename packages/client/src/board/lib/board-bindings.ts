@@ -32,6 +32,7 @@ export type BoardCommands = {
   togglePanels: () => void;
   toggleWarps: () => void;
   openWarpPalette: () => void;
+  moveCurrentLayer: (direction: number) => void;
   /** Navigate in the arrow key's direction and return whether a warp was found. */
   warpToward: (key: string) => boolean;
   setWarpHere: () => void;
@@ -85,9 +86,15 @@ export function boardKeyBindings(shortcuts: BoardShortcuts, c: BoardCommands): K
       run: c.toggleWarps,
     },
     {
-      // Any arrow opens the same palette.
+      name: "move the current layer",
+      keys: ["ArrowUp", "ArrowDown"],
+      shift: true,
+      preventDefault: true,
+      run: (e) => c.moveCurrentLayer(e.key === "ArrowUp" ? 1 : -1),
+    },
+    {
       name: "open the warp palette",
-      keys: ARROW_KEYS,
+      keys: ["ArrowLeft", "ArrowRight"],
       shift: true,
       when: c.noSelection,
       preventDefault: true,

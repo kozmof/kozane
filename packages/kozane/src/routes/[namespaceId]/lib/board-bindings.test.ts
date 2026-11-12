@@ -29,6 +29,7 @@ function commands(overrides: Partial<BoardCommands> = {}): BoardCommands {
     togglePanels: vi.fn(),
     toggleWarps: vi.fn(),
     openWarpPalette: vi.fn(),
+    moveCurrentLayer: vi.fn(),
     warpToward: vi.fn(() => true),
     setWarpHere: vi.fn(),
     removeFocusedWarp: vi.fn(),
