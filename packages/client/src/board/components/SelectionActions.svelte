@@ -53,6 +53,17 @@
     onOpenFileBrowser,
     onDeleteSelected,
   }: Props = $props();
+
+  let moveMenu: HTMLDivElement | undefined = $state();
+
+  $effect(() => {
+    if (!showNamespacePicker) return;
+    function closeOutside(event: PointerEvent) {
+      if (!moveMenu?.contains(event.target as Node)) showNamespacePicker = false;
+    }
+    document.addEventListener("pointerdown", closeOutside, true);
+    return () => document.removeEventListener("pointerdown", closeOutside, true);
+  });
 </script>
 
 <!-- Show shortcut hints as visual labels within action buttons. Hide the hints from assistive technology because each button's accessible name already includes its shortcut. -->
@@ -173,9 +184,10 @@
 {/if}
 <!-- Move to namespace -->
 {#if otherNamespaces.length > 0}
-  <div class={css({ position: "relative" })}>
+  <div bind:this={moveMenu} class={css({ position: "relative" })}>
     <button
       class={css({ position: "relative", width: "100%", minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+      aria-expanded={showNamespacePicker}
       title="Move to namespace"
       aria-label={`Move to namespace ${shortcuts.moveCardsShortcut}`}
       onclick={() => (showNamespacePicker = !showNamespacePicker)}
