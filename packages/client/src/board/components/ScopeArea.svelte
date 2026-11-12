@@ -85,9 +85,6 @@
       fill={`color-mix(in oklch, ${accent} ${focused ? 7 : 4}%, transparent)`}
       stroke={accent}
       stroke-width="1"
-      style:filter={dragging || resizing
-        ? `drop-shadow(0 0 2px ${accent})`
-        : "none"}
     />
   </svg>
 
