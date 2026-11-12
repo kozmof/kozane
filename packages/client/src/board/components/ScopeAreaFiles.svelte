@@ -277,21 +277,21 @@
               <path
                 d="M4.6 8.5H2a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1.9"
                 stroke="currentColor"
-                stroke-width="0.6"
+                stroke-width="0.4"
                 stroke-linejoin="round"
                 stroke-linecap="round"
               />
-              <path d="M1 4.6h8" stroke="currentColor" stroke-width="0.6" />
+              <path d="M1 4.6h8" stroke="currentColor" stroke-width="0.4" />
               <path
                 d="M3.6 2.5V1.5h2.8v1"
                 stroke="currentColor"
-                stroke-width="0.6"
+                stroke-width="0.4"
                 stroke-linejoin="round"
               />
               <path
                 d="M7.2 6v3.2M5.6 7.6h3.2"
                 stroke="currentColor"
-                stroke-width="0.6"
+                stroke-width="0.4"
                 stroke-linecap="round"
               />
             </svg>

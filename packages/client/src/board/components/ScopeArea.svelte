@@ -83,7 +83,7 @@
     <path
       d={outline}
       fill={`color-mix(in oklch, ${accent} ${focused ? 7 : 4}%, transparent)`}
-      stroke={accent}
+      stroke={`color-mix(in oklch, ${accent} 70%, black)`}
       stroke-width="0.5"
     />
   </svg>

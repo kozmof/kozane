@@ -44,7 +44,7 @@
       onNavigate(cell.path);
     }}
   >
-    <FileGlyph kind={cell.kind === "up" ? "up" : "directory"} size={18} />
+    <FileGlyph kind={cell.kind === "up" ? "up" : "directory"} size={18} strokeWidth={0.4 * 18 / 10} />
     <span class={labelClass}>{label}</span>
   </button>
 {:else if openable && cell.kind === "entry"}
@@ -61,7 +61,7 @@
       onOpenFile?.(cell.path);
     }}
   >
-    <FileGlyph kind="file" size={18} />
+    <FileGlyph kind="file" size={18} strokeWidth={0.4 * 18 / 10} />
     <span class={labelClass}>{cell.entry.name}</span>
   </button>
 {:else if cell.kind === "entry"}
@@ -73,7 +73,7 @@
     style:min-height="{CELL_HEIGHT}px"
     title={cell.entry.kind === "symlink" ? "Symbolic link" : cell.entry.name}
   >
-    <FileGlyph kind={cell.entry.kind} size={18} />
+    <FileGlyph kind={cell.entry.kind} size={18} strokeWidth={0.4 * 18 / 10} />
     <span class={labelClass}>{cell.entry.name}</span>
   </div>
 {/if}

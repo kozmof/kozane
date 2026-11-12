@@ -8,15 +8,18 @@
   let {
     kind,
     size = 10,
+    strokeWidth = 1.1,
   }: {
     /** `"up"` is the step out of a directory, which is not an entry kind the server has. */
     kind: TaskspaceEntryKind | "up";
     size?: number;
+    /** Stroke thickness in displayed pixels. */
+    strokeWidth?: number;
   } = $props();
 
   // Every path below is drawn in a 10×10 box and scaled by the viewBox, so one stroke width
   // reads the same at any size the callers ask for.
-  const stroke = $derived(11 / size);
+  const stroke = $derived(strokeWidth * 10 / size);
 </script>
 
 <svg

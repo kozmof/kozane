@@ -52,7 +52,7 @@
         <path
           d="M5 2v6M2 5h6"
           stroke="currentColor"
-          stroke-width="0.6"
+          stroke-width="0.4"
           stroke-linecap="round"
         />
       </svg>
@@ -73,15 +73,15 @@
         <path
           d="M1 8.4V2.2h2.5l.9 1.1H8.2V5.4"
           stroke="currentColor"
-          stroke-width="0.6"
+          stroke-width="0.4"
           stroke-linejoin="round"
           stroke-linecap="round"
         />
-        <path d="M1 8.4h3.4" stroke="currentColor" stroke-width="0.6" stroke-linecap="round" />
+        <path d="M1 8.4h3.4" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" />
         <path
           d="M7.2 6v3.2M5.6 7.6h3.2"
           stroke="currentColor"
-          stroke-width="0.6"
+          stroke-width="0.4"
           stroke-linecap="round"
         />
       </svg>
