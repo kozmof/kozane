@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InlineContent from "../../rendering/InlineContent.svelte";
   import { tick } from "svelte";
   import { css } from "../../styles/css.js";
   import type { CardWithGlue, Inventory } from "@kozane/core";
@@ -15,6 +16,7 @@
     dropTarget,
     aimSpan = 1,
     fontFamily,
+    tagHref,
     readonly = false,
     onClose,
     onRemove,
@@ -36,6 +38,7 @@
     /** How many rows the dragged card covers, so the highlight shows all of its cells. */
     aimSpan?: number;
     fontFamily: string;
+    tagHref?: (tag: string) => string;
     readonly?: boolean;
     onClose: () => void;
     onRemove: () => void;
@@ -238,7 +241,7 @@
           e.preventDefault();
           onCardDblClick(card.id);
         }}
-      >{card.content || "Empty card…"}</div>
+      >{#if card.content}<InlineContent source={card.content} {tagHref} />{:else}Empty card…{/if}</div>
     {/each}
   </div>
 </section>

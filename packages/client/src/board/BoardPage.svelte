@@ -171,6 +171,7 @@
     />
 
     <InventoryDock
+      tagHref={(tag) => navigation.tags({ namespaceId: data.namespace.id, tag })}
       {s}
       {inventoryActions}
       inventoryLabel={view.inventoryLabel}

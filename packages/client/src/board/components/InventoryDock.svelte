@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InlineContent from "../../rendering/InlineContent.svelte";
   import { css } from "../../styles/css.js";
   import { cardSpan } from "@kozane/core";
   import { INVENTORY_CELL } from "../../constants/index.js";
@@ -23,6 +24,7 @@
     inventoryDrag: InventoryDrag;
     zoom: number;
     fontFamily: string;
+    tagHref?: (tag: string) => string;
     readonly: boolean;
     onCardMouseDown: (e: MouseEvent, cardId: string) => void;
     /** Width covered by the partition panel at the left, which the dock stays clear of. */
@@ -36,6 +38,7 @@
     inventoryDrag,
     zoom,
     fontFamily,
+    tagHref,
     readonly,
     onCardMouseDown,
     leftInset = 0,
@@ -91,6 +94,7 @@
         dropTarget={inventoryDrag.target}
         aimSpan={carriedSpan}
         {fontFamily}
+        {tagHref}
         {readonly}
         onClose={() => inventoryActions.toggle(inventory.id)}
         onRemove={() => void inventoryActions.remove(inventory.id)}
@@ -119,5 +123,5 @@
     style:font-size="{INVENTORY_CELL.fontSize}px"
     style:line-height={INVENTORY_CELL.lineHeight}
     style:font-family={fontFamily}
-  >{draggedStoredCard.content || "Empty card…"}</div>
+  >{#if draggedStoredCard.content}<InlineContent source={draggedStoredCard.content} {tagHref} />{:else}Empty card…{/if}</div>
 {/if}
