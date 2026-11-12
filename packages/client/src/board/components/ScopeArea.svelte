@@ -144,22 +144,23 @@
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          width: "16px",
+          width: "20px",
           border: "none",
-          background: "none",
+          background: "transparent",
+          borderRadius: "50%",
           cursor: "pointer",
-          fontSize: "12px",
+          fontSize: "16px",
           lineHeight: "1",
           opacity: "0",
-          transition: "opacity 0.12s, color 0.12s",
-          "&:hover, &:focus-visible": { opacity: "1", color: "state.error" },
+          transition: "opacity 0.12s, color 0.12s, background 0.12s",
+          "&:hover, &:focus-visible": { opacity: "1", color: "state.error", background: "neutral.bg" },
           "[data-scope-area-header]:hover &": { opacity: "0.7" },
         })}
         aria-label="Remove frame {name}"
         title="Remove this frame. The scope keeps its cards."
         style:right="0"
-        style:top="0"
-        style:height="{TAB_HEIGHT}px"
+        style:top="{(TAB_HEIGHT - 20) / 2}px"
+        style:height="20px"
         style:pointer-events="auto"
         style:color={focused ? accent : "var(--colors-neutral-secondary)"}
         onmousedown={(e) => {
