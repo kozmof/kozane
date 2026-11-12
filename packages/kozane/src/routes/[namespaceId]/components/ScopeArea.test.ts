@@ -107,17 +107,23 @@ describe("ScopeArea colours", () => {
     return found;
   }
 
-  it("draws the frame in a defined colour when the scope is not focused", () => {
+  it("darkens the neutral outline when the scope is not focused", () => {
     const { container } = mount({ focused: false });
     const outline = frameOutline(container);
 
     // Keep the frame visible when its scope is not the active filter.
-    expect(outline).toHaveAttribute("stroke", token.var("colors.neutral.secondary"));
+    expect(outline).toHaveAttribute(
+      "stroke",
+      `color-mix(in oklch, ${token.var("colors.neutral.secondary")} 70%, black)`,
+    );
     expect(outline.getAttribute("fill")).toContain(token.var("colors.neutral.secondary"));
   });
 
-  it("draws the frame in the selection accent when the scope is focused", () => {
+  it("darkens the selection accent outline when the scope is focused", () => {
     const { container } = mount({ focused: true });
-    expect(frameOutline(container)).toHaveAttribute("stroke", token.var("colors.select.accent"));
+    expect(frameOutline(container)).toHaveAttribute(
+      "stroke",
+      `color-mix(in oklch, ${token.var("colors.select.accent")} 70%, black)`,
+    );
   });
 });
