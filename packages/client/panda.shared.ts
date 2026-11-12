@@ -58,8 +58,8 @@ export default defineConfig({
           },
         },
         fonts: {
-          sans: { value: '"IBM Plex Sans", system-ui, sans-serif' },
-          mono: { value: '"IBM Plex Mono", monospace' },
+          sans: { value: 'system-ui, sans-serif' },
+          mono: { value: 'monospace' },
         },
       },
     },
