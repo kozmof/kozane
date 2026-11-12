@@ -58,8 +58,8 @@ export default defineConfig({
           },
         },
         fonts: {
-          sans: { value: 'system-ui, sans-serif' },
-          mono: { value: 'monospace' },
+          sans: { value: "system-ui, sans-serif" },
+          mono: { value: "monospace" },
         },
       },
     },
