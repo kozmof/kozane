@@ -1,6 +1,6 @@
 {
   "name": "@kozane/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Kozane database adapters, schema and domain services for Node and browsers.",
   "license": "MIT",
   "author": "Kozo Oeda",

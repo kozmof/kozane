@@ -16,10 +16,10 @@ importers:
         specifier: 3.0.3
         version: 3.0.3
       '@kozane/client':
-        specifier: workspace:0.1.3
+        specifier: workspace:0.1.4
         version: link:packages/client
       '@kozane/core':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:packages/core
       '@kozmof/reed':
         specifier: ^4.1.0
@@ -92,7 +92,7 @@ importers:
         version: 4.1.0
     devDependencies:
       '@kozane/core':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../core
       '@pandacss/dev':
         specifier: 1.12.1
@@ -119,10 +119,10 @@ importers:
   packages/kozane:
     dependencies:
       '@kozane/client':
-        specifier: workspace:0.1.3
+        specifier: workspace:0.1.4
         version: link:../client
       '@kozane/core':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../core
       '@kozmof/reed':
         specifier: ^4.1.0

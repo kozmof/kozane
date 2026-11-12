@@ -1,6 +1,6 @@
 {
   "name": "@kozane/client",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Shared Kozane board, tags, map and editor views for Svelte.",
   "license": "MIT",
   "author": "Kozo Oeda",
@@ -70,14 +70,14 @@
     "@kozmof/reed": "4.1.0"
   },
   "devDependencies": {
-    "@kozane/core": "workspace:0.1.0",
+    "@kozane/core": "workspace:0.1.1",
     "@pandacss/dev": "1.12.1",
     "@sveltejs/package": "3.0.1",
     "svelte": "5.57.2",
     "typescript": "6.0.3"
   },
   "peerDependencies": {
-    "@kozane/core": "0.1.0",
+    "@kozane/core": "0.1.1",
     "svelte": "^5.57.2"
   },
   "engines": {
