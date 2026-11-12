@@ -15,7 +15,7 @@ test("packed stylesheet survives production bundling and styles hydrated views w
   await expect(editor).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(editor).toHaveCSS("color", "rgb(28, 28, 28)");
   await expect(editor).toHaveCSS("font-size", "12.5px");
-  await expect(editor).toHaveCSS("font-family", /IBM Plex Mono/);
+  await expect(editor).toHaveCSS("font-family", "monospace");
   await expect(editor).toHaveCSS("box-sizing", "border-box");
   await expect(page.locator("body")).toHaveCSS("margin", "0px");
   expect(
