@@ -84,7 +84,7 @@
       d={outline}
       fill={`color-mix(in oklch, ${accent} ${focused ? 7 : 4}%, transparent)`}
       stroke={accent}
-      stroke-width="1"
+      stroke-width="0.5"
     />
   </svg>
 
