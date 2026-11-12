@@ -28,7 +28,7 @@ export default defineConfig({
             dim: { value: "#cccccc" },
             muted: { value: "#5a5a5a" },
             subtle: { value: "#646464" },
-            bg: { value: "#e2e2e2" },
+            bg: { value: "#e7e7e7" },
             faded: { value: "#b4b4b4" },
             placeholder: { value: "#b4b4b4" },
             icon: { value: "#c9c9c9" },
