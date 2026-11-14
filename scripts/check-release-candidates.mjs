@@ -27,7 +27,7 @@ try {
     for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
       for (const pkg of packages) {
         if (typeof value[section]?.[pkg.name] === "string") {
-          value[section][pkg.name] = value[section][pkg.name].replace(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?/g, "<version>");
+          value[section][pkg.name] = value[section][pkg.name].replace(/^(workspace:)?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/, "$1<version>");
         }
       }
     }
@@ -41,13 +41,22 @@ try {
       return true; // Added or removed manifests count as changes.
     }
   });
+  // Sources staged into published artifacts outside their package directories.
+  const sharedInputs = [
+    { prefix: "drizzle/", packages: ["@kozane/core", "kozane"] },
+    { exact: "README.md", packages: ["kozane"] },
+    { exact: "scripts/stage-package-readme.mjs", packages: ["kozane"] },
+    { exact: "scripts/stage-cli-migrations.mjs", packages: ["kozane"] },
+  ];
+  const sharedFor = (file, name) => sharedInputs.some((input) =>
+    input.packages.includes(name) && (input.exact === file || (input.prefix && file.startsWith(input.prefix))));
   const affected = new Map();
   for (const pkg of packages) {
-    const changed = relevantFiles.filter((file) => file.startsWith(pkg.path));
+    const changed = relevantFiles.filter((file) => file.startsWith(pkg.path) || sharedFor(file, pkg.name));
     if (!changed.length) continue;
     affected.set(pkg.name, [
       ...(affected.get(pkg.name) ?? []),
-      `${changed.length} changed file(s) in ${pkg.path}`,
+      `${changed.length} changed package or shared input file(s) for ${pkg.path}`,
     ]);
     for (const name of pkg.dependents) {
       affected.set(name, [...(affected.get(name) ?? []), `depends on changed ${pkg.name}`]);
@@ -60,7 +69,7 @@ try {
   for (const pkg of packages) {
     if (affected.has(pkg.name)) console.log(`  ${pkg.name}: ${affected.get(pkg.name).join("; ")}`);
   }
-  if (!affected.size) console.log("  No package-local changes.");
+  if (!affected.size) console.log("  No release candidates.");
   const shared = relevantFiles.filter((file) => !packages.some((pkg) => file.startsWith(pkg.path)));
   if (shared.length) {
     console.log("Shared/root changes requiring release review:");
