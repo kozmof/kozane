@@ -42,9 +42,14 @@
   async function closeRename(id: string, session: number, restoreFocus: boolean) {
     if (session !== renameSession || editingPartitionId !== id) return;
     const control = renameControl;
+    const ownerDocument = sidebarElement?.ownerDocument;
+    const editor = sidebarElement?.querySelector('input[aria-label="Partition name"]');
+    const ownedFocus = !!editor && ownerDocument?.activeElement === editor;
     editingPartitionId = null;
     await tick();
-    if (!restoreFocus || session !== renameSession || editingPartitionId !== null || !visible) return;
+    if (!restoreFocus || !ownedFocus || session !== renameSession || editingPartitionId !== null || !visible) return;
+    // Removing the input normally leaves focus on the body. Respect any new focus owner.
+    if (ownerDocument?.activeElement !== ownerDocument?.body) return;
     const button = Array.from(sidebarElement?.querySelectorAll<HTMLButtonElement>("button[data-partition-control]") ?? [])
       .find(element => element.dataset.partitionId === id && element.dataset.partitionControl === control);
     button?.focus();

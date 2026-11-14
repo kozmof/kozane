@@ -139,3 +139,25 @@ it("keeps focus on the destination when editing is cancelled by a click elsewher
   expect(screen.getByRole("button", { name: "All cards" })).toHaveFocus();
   expect(screen.queryByRole("textbox", { name: "Partition name" })).not.toBeInTheDocument();
 });
+it("does not steal focus when a pending save finishes after clicking elsewhere", async () => {
+  const user = userEvent.setup();
+  const options = props();
+  let finish!: (error: string | null) => void;
+  options.onRenamePartition.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(PartitionSidebar, { props: options });
+  await user.click(screen.getByRole("button", { name: "Rename General" }));
+  await user.type(screen.getByRole("textbox", { name: "Partition name" }), "Inbox{Enter}");
+  const destination = screen.getByRole("button", { name: "All cards" });
+  await user.click(destination);
+  expect(destination).toHaveFocus();
+  finish(null);
+  await waitFor(() =>
+    expect(screen.queryByRole("textbox", { name: "Partition name" })).not.toBeInTheDocument(),
+  );
+  expect(destination).toHaveFocus();
+});
