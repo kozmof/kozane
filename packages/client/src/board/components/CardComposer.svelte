@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack, tick } from "svelte";
+  import CardTypeDropdown from "./CardTypeDropdown.svelte";
   import PartitionDropdown from "./PartitionDropdown.svelte";
   import LayerDropdown from "./LayerDropdown.svelte";
   import SelectionActions from "./SelectionActions.svelte";
@@ -118,6 +119,30 @@
   const composerPartitionId = () =>
     editingCard?.partitionId ?? primaryCard?.partitionId ?? selectedCards[0]?.partitionId ?? defaultPartitionId;
 
+  let cardType = $state('text');
+  let imageError = $state('');
+  let uploading = $state(false);
+  let imageInput: HTMLInputElement;
+  async function uploadImage(file: File | undefined) {
+    if (!file || uploading) return;
+    const targetId = editingCard?.id ?? null;
+    const targetPartition = partitionId;
+    uploading = true;
+    imageError = '';
+    content = '';
+    try {
+      const form = new FormData();
+      form.set('image', file);
+      const response = await fetch('/api/images', { method: 'POST', body: form });
+      if (!response.ok) throw new Error('Choose a JPEG, PNG, or SVG image up to 10 MB.');
+      const result = await response.json();
+      content = 'kozane-image:' + result.url;
+      onSubmit(targetId, content, targetPartition);
+      content = '';
+      if (imageInput) imageInput.value = '';
+    } catch (err) { imageError = err instanceof Error ? err.message : 'Image upload failed'; }
+    finally { uploading = false; }
+  }
   let content = $state(untrack(() => editingCard?.content ?? ""));
   let partitionId = $state(untrack(composerPartitionId));
   let createPartitionId = $state(untrack(() => defaultPartitionId));
@@ -148,6 +173,7 @@
     const opening = loadedComposerContext === null;
     loadedComposerContext = context;
     content = editingCard?.content ?? "";
+    cardType = content.startsWith("kozane-image:") ? "image" : "text";
     partitionId = context === "create" ? createPartitionId : composerPartitionId();
     const shouldFocus = !opening && !suppressNextAutoFocus;
     suppressNextAutoFocus = false;
@@ -265,6 +291,9 @@
         if (mode === "selection") onSelectionPartitionChange?.(selectedCards.map((c) => c.id), id);
       }}
     />
+    {#if mode === "create"}
+      <CardTypeDropdown value={cardType} disabled={uploading} onChange={(value) => { cardType = value; content = ''; imageError = ''; }} />
+    {/if}
     {#if mode === "selection" && layerChoices.length > 1 && onSelectionLayerChange}
       <!-- Place the layer picker beside the partition picker because both move selected cards without changing their text. -->
       <LayerDropdown
@@ -313,6 +342,24 @@
       {onDeleteSelected}
     />
   {:else}
+    {#if cardType === 'image'}
+      <input bind:this={imageInput} type="file" accept=".jpg,.jpeg,.png,.svg" aria-label="Choose image" hidden onchange={(event) => uploadImage(event.currentTarget.files?.[0])} disabled={uploading} />
+
+      <div
+        role="region"
+        aria-label="Drop image here"
+        aria-busy={uploading}
+        class={css({ background: "ink.white", border: "1px dashed token(colors.neutral.border)", padding: "20px 10px", textAlign: "center", fontSize: "12px", color: "neutral.muted", marginBottom: "8px" })}
+        ondragover={(event) => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = uploading ? 'none' : 'copy'; }}
+        ondrop={(event) => { event.preventDefault(); uploadImage(event.dataTransfer?.files[0]); }}
+      >
+        <span role="status">{uploading ? 'Uploading…' : 'Drop a JPEG, PNG, or SVG here'}</span>
+        {#if imageError}<p role="alert">{imageError}</p>{/if}
+      </div>
+      <div class={css({ display: "flex", justifyContent: "flex-end" })}>
+      <button class={css({ padding: "3px 8px", border: "1px solid token(colors.neutral.border)", borderRadius: "2px", background: "transparent", fontFamily: "inherit", fontSize: "11px", cursor: "pointer", marginTop: "0" })} disabled={uploading} onclick={() => imageInput.click()}>Choose file</button>
+      </div>
+    {:else}
     <!-- Input row (create / edit) -->
     <div
       class={css({ display: "flex", alignItems: "center", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "0px", padding: "8px 10px", transition: "border-color 0.15s", marginBottom: "8px" })}
@@ -348,5 +395,6 @@
         </svg>
       </button>
     </div>
+    {/if}
   {/if}
 </div>
