@@ -170,7 +170,8 @@ export function validJpeg(bytes: Uint8Array): boolean {
       if (cursor === end) return false;
       while (cursor < end) {
         const info = data[cursor++];
-        if (info >> 4 > 1 || (info & 15) > 3 || cursor + 16 > end) return false;
+        const tableClass = info >>> 4;
+        if (tableClass > 1 || (info & 15) > 3 || cursor + 16 > end) return false;
         let symbols = 0,
           slots = 1;
         for (let i = 0; i < 16; i++) {

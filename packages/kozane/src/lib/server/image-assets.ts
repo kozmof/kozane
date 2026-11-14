@@ -80,7 +80,9 @@ function validSvg(source: string): boolean {
       const opening = /^([A-Za-z][\w:.-]*)([\s\S]*?)(\/?)$/.exec(token);
       if (!opening) return false;
       const attributeNames = new Set<string>();
-      for (const attribute of opening[2].matchAll(/\s+([A-Za-z_:][\w:.-]*)\s*=/g)) {
+      for (const attribute of opening[2].matchAll(
+        /\s+([A-Za-z_:][\w:.-]*)\s*=\s*(?:"[^"<>]*"|'[^'<>]*')/g,
+      )) {
         if (attributeNames.has(attribute[1])) return false;
         attributeNames.add(attribute[1]);
       }

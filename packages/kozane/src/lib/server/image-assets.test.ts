@@ -132,3 +132,18 @@ it("rejects malformed entities and duplicate SVG attributes", async () => {
     "svg",
   );
 });
+
+it("does not treat text inside quoted SVG values as attribute names", async () => {
+  for (const source of [
+    '<svg title=" width=example" width="100"/>',
+    "<svg title=' width=example' width='100'/>",
+    '<svg width="100" title=" width=example"/>',
+  ])
+    expect(await validateImage("drawing.svg", new TextEncoder().encode(source))).toBe("svg");
+  await expect(
+    validateImage(
+      "drawing.svg",
+      new TextEncoder().encode('<svg title=" width=example" width="100" width="200"/>'),
+    ),
+  ).rejects.toThrow();
+});
