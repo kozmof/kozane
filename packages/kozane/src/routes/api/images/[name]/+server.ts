@@ -1,8 +1,9 @@
+import type { RequestHandler } from "./$types";
 import { getWorkspaceRoot } from "../../../../db/internal/config.js";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { error } from "@sveltejs/kit";
-export async function GET({ params }) {
+export const GET: RequestHandler = async ({ params }) => {
   if (!/^[a-f0-9-]{36}\.(jpg|jpeg|png|svg)$/.test(params.name)) error(404);
   const root = getWorkspaceRoot();
   if (!root) error(500, "Workspace not found");
@@ -22,4 +23,4 @@ export async function GET({ params }) {
       "Cache-Control": "public, max-age=31536000, immutable",
     },
   });
-}
+};

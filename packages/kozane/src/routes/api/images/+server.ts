@@ -1,9 +1,10 @@
+import type { RequestHandler } from "./$types";
 import { getWorkspaceRoot } from "../../../db/internal/config.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { error, json } from "@sveltejs/kit";
-export async function POST({ request }) {
+export const POST: RequestHandler = async ({ request }) => {
   const form = await request.formData();
   const file = form.get("image");
   if (!(file instanceof File)) error(400, "Choose an image");
@@ -19,4 +20,4 @@ export async function POST({ request }) {
   const name = randomUUID() + "." + extension;
   await writeFile(resolve(directory, name), Buffer.from(await file.arrayBuffer()), { flag: "wx" });
   return json({ url: "/api/images/" + name });
-}
+};
