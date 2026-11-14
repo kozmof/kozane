@@ -1,6 +1,6 @@
 {
   "name": "@kozane/client",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Shared Kozane board, tags, map and editor views for Svelte.",
   "license": "MIT",
   "author": "Kozo Oeda",

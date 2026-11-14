@@ -77,7 +77,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
-    "@kozane/client": "workspace:0.2.0",
+    "@kozane/client": "workspace:0.3.0",
     "@kozane/core": "workspace:0.2.0",
     "@kozmof/reed": "^4.1.0",
     "@libsql/client": "^0.17.4",

@@ -16,7 +16,7 @@ importers:
         specifier: 3.0.3
         version: 3.0.3
       '@kozane/client':
-        specifier: workspace:0.2.0
+        specifier: workspace:0.3.0
         version: link:packages/client
       '@kozane/core':
         specifier: workspace:0.2.0
@@ -119,7 +119,7 @@ importers:
   packages/kozane:
     dependencies:
       '@kozane/client':
-        specifier: workspace:0.2.0
+        specifier: workspace:0.3.0
         version: link:../client
       '@kozane/core':
         specifier: workspace:0.2.0
