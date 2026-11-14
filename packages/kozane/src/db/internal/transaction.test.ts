@@ -139,3 +139,28 @@ for (const fails of [false, true]) {
     else await expect(observed).resolves.toBe(42);
   });
 }
+
+for (const fails of [false, true]) {
+  it(`invalidates on cleanup failure after ${fails ? "rollback" : "commit"}`, async () => {
+    const failure = new Error("operation failed");
+    const invalid = vi.fn();
+    const result = runNodeTransaction(
+      async () => ({
+        handle: 42,
+        commit: async () => {},
+        rollback: async () => {},
+        close: async () => {
+          throw new Error("cleanup failed");
+        },
+      }),
+      async (handle) => {
+        if (fails) throw failure;
+        return handle;
+      },
+      invalid,
+    );
+    if (fails) await expect(result).rejects.toBe(failure);
+    else await expect(result).rejects.toBeInstanceOf(UnavailableError);
+    expect(invalid).toHaveBeenCalledOnce();
+  });
+}

@@ -21,12 +21,14 @@ export async function runNodeTransaction<Handle, Result>(
     throw normalizeDatabaseFailure(cause, classifyLibsqlFailure(cause));
   }
   let committing = false;
+  let failed = false;
   try {
     const result = await operation(transaction.handle);
     committing = true;
     await transaction.commit();
     return result;
   } catch (cause) {
+    failed = true;
     try {
       await transaction.rollback();
     } catch (rollbackCause) {
@@ -40,6 +42,13 @@ export async function runNodeTransaction<Handle, Result>(
       throw normalizeDatabaseFailure(cause, failure);
     throw cause;
   } finally {
-    await transaction.close();
+    try {
+      await transaction.close();
+    } catch (closeCause) {
+      invalidate();
+      // Preserve the operation or commit failure when cleanup also fails.
+      if (!failed)
+        throw normalizeDatabaseFailure(closeCause, classifyLibsqlFailure(closeCause));
+    }
   }
 }
