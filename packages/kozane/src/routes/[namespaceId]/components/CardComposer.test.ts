@@ -227,7 +227,7 @@ describe("CardComposer — selection mode", () => {
     render(CardComposer, { props: makeProps({ selectedCards, onCancel }) });
 
     expect(screen.getByText("2 cards")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Clear selection Escape" }));
+    await user.click(screen.getByRole("button", { name: "Clear selection" }));
 
     expect(onCancel).toHaveBeenCalledOnce();
   });

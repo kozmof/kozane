@@ -591,3 +591,22 @@ Return `{ status, cpuUsage, memoryUsage }`. A successful database query returns
 200 with `status: "ok"`. Failure returns 503 with `status: "error"` and a fixed
 `error` message. The underlying cause is logged.
 Check `status` in monitoring. The endpoint uses the same authentication as other routes.
+
+## Images
+
+### `POST /api/images`
+
+Send `multipart/form-data` with an `image` file field. Accepted filename extensions
+are `.jpg`, `.jpeg`, `.png`, and `.svg`, ignoring case. Files must contain between
+1 byte and 10 MiB. Invalid files return 400.
+
+Returns `{ "url": "/api/images/<uuid>.<extension>" }` with status 200.
+Files are stored in the active workspace under `.kozane/assets/images`.
+A missing workspace returns 500.
+
+### `GET /api/images/[name]`
+
+Returns the stored image bytes with the JPEG, PNG, or SVG content type.
+Invalid filenames and unreadable files return 404. A missing workspace returns 500.
+Responses include `X-Content-Type-Options: nosniff`, a sandboxed content security
+policy, and `Cache-Control: public, max-age=31536000, immutable`.
