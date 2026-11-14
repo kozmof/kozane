@@ -248,24 +248,33 @@ export async function retryImageDeletions(root: string, db: DB): Promise<void> {
     if (cause && typeof cause === "object" && "code" in cause && cause.code === "ENOENT") return;
     throw cause;
   }
-  await composeWrite(db, async (tx) => {
-    for (const name of names) {
-      const path = imagePath("kozane-image:/api/images/" + name);
-      if (!path) continue;
-      const referenced = await tx
-        .select({ id: cardTable.id })
-        .from(cardTable)
-        .where(eq(cardTable.content, "kozane-image:" + path))
-        .limit(1)
-        .get();
-      if (referenced) continue;
-      try {
-        await rm(join(imageDirectory(root), name), { force: true });
-        await rm(join(imageDirectory(root), ".retained", name), { force: true });
-        await rm(join(queue, name), { force: true });
-      } catch (cause) {
-        console.warn("Pending image deletion failed:", cause);
+  const candidates = names.filter((name) => imagePath("kozane-image:/api/images/" + name));
+  for (let offset = 0; offset < candidates.length; offset += 400) {
+    const batch = candidates.slice(offset, offset + 400);
+    await composeWrite(db, async (tx) => {
+      const referenced = new Set(
+        (
+          await tx
+            .selectDistinct({ content: cardTable.content })
+            .from(cardTable)
+            .where(
+              inArray(
+                cardTable.content,
+                batch.map((name) => "kozane-image:/api/images/" + name),
+              ),
+            )
+        ).map((row) => row.content),
+      );
+      for (const name of batch) {
+        if (referenced.has("kozane-image:/api/images/" + name)) continue;
+        try {
+          await rm(join(imageDirectory(root), name), { force: true });
+          await rm(join(imageDirectory(root), ".retained", name), { force: true });
+          await rm(join(queue, name), { force: true });
+        } catch (cause) {
+          console.warn("Pending image deletion failed:", cause);
+        }
       }
-    }
-  });
+    });
+  }
 }

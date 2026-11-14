@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { deleteNamespaceInTx } from "../../db/api/namespace.js";
 import { createNamespace } from "../../db/api/namespace.js";
 import { getDefaultPartition } from "../../db/api/partition.js";
@@ -14,7 +15,7 @@ import {
   readImage,
   maintainImageAssets,
 } from "./image-assets.js";
-import { mkdtemp, readFile, rm, utimes, readdir, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, rm, utimes, readdir, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestDB } from "../../test-utils/db.js";
@@ -224,6 +225,30 @@ it("cleans cascading namespace deletions and retries filesystem failures durably
     await retryImageDeletions(root, db);
     expect(await readdir(join(imageDirectory(root), ".pending-delete"))).toEqual([]);
     await expect(readImage(root, name)).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("retries queues larger than one query batch while preserving shared references", async () => {
+  const root = await mkdtemp(join(tmpdir(), "kozane-batched-retries-"));
+  const db = await createTestDB();
+  try {
+    const namespaceId = await createNamespace({ db, name: "Batch" });
+    const partition = await getDefaultPartition({ db, namespaceId });
+    const url = await storeImage(root, "shared.svg", svg);
+    await create(db, createServiceContext(), namespaceId, {
+      partitionId: partition!.id,
+      content: "kozane-image:" + url,
+    });
+    const queue = join(imageDirectory(root), ".pending-delete");
+    await mkdir(queue, { recursive: true });
+    const shared = url.split("/").pop()!;
+    const names = [shared, ...Array.from({ length: 400 }, () => randomUUID() + ".svg")];
+    await Promise.all(names.map((name) => writeFile(join(queue, name), "")));
+    await retryImageDeletions(root, db);
+    expect(await readdir(queue)).toEqual([shared]);
+    expect(Array.from(await readImage(root, shared))).toEqual(Array.from(svg));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
