@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InlineNameInput from "./InlineNameInput.svelte";
   import { css, cx } from "../../styles/css.js";
   import type { CardWithGlue, PartitionWithColor } from "@kozane/core";
 
@@ -12,6 +13,7 @@
     newPartitionName = $bindable(),
     onCreatePartition,
     onDeletePartition,
+    onRenamePartition,
     readonly = false,
   }: {
     visible: boolean;
@@ -23,9 +25,12 @@
     newPartitionName: string;
     onCreatePartition: () => void;
     onDeletePartition: (partitionId: string) => void;
+    onRenamePartition?: (partitionId: string, name: string) => Promise<string | null>;
     // A read-only export keeps partition filtering but hides the create and delete controls.
     readonly?: boolean;
   } = $props();
+
+  let editingPartitionId: string | null = $state(null);
 
   const dotClass = css({ width: "7px", height: "7px", borderRadius: "50%", flexShrink: "0" });
   const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
@@ -105,8 +110,18 @@
       {#each partitions as b (b.id)}
         {@const active = activePartition === b.id}
         <div class={css({ position: "relative", "&:hover .partition-delete": { opacity: "1" } })}>
+          {#if editingPartitionId === b.id && !readonly && onRenamePartition}
+            <InlineNameInput value={b.name} label="Partition name" onCancel={() => { editingPartitionId = null; }} onSubmit={async (name) => {
+              const error = await onRenamePartition!(b.id, name);
+              if (!error) editingPartitionId = null;
+              return error;
+            }} />
+          {:else}
           <button
-            class={cx(sideBtn(active), css({ paddingRight: "28px" }))}
+            title={!readonly && onRenamePartition ? "Double-click or press F2 to rename partition" : undefined}
+            ondblclick={() => { if (!readonly && onRenamePartition) editingPartitionId = b.id; }}
+            onkeydown={(event) => { if (event.key === "F2" && !readonly && onRenamePartition) { event.preventDefault(); event.stopPropagation(); editingPartitionId = b.id; } }}
+            class={cx(sideBtn(active), css({ paddingRight: !readonly && onRenamePartition ? "50px" : "28px" }))}
             style:background={active ? b.bg : "transparent"}
             onclick={() => (activePartition = active ? null : b.id)}
           >
@@ -114,7 +129,20 @@
             <span class={flex1Class}>{b.name}</span>
             <span class={countClass}>{cards.filter((c) => c.partitionId === b.id).length}</span>
           </button>
-          {#if !b.isDefault && !readonly}
+          {/if}
+          {#if !readonly && onRenamePartition && editingPartitionId !== b.id}
+            <button
+              class={css({ position: "absolute", right: "28px", top: "50%", transform: "translateY(-50%)", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0", background: "none", border: "none", cursor: "pointer", borderRadius: "2px", color: "neutral.subtle", "&:hover": { color: "ink.black" } })}
+              aria-label={`Rename ${b.name}`}
+              title="Rename partition"
+              onclick={() => { editingPartitionId = b.id; }}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M10.5 2.5l3 3M3 10l7.5-7.5a1.4 1.4 0 012 0l1 1a1.4 1.4 0 010 2L6 13l-4 1 1-4z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          {/if}
+          {#if !b.isDefault && !readonly && editingPartitionId !== b.id}
             <button
               class={cx("partition-delete", css({
                 position: "absolute",

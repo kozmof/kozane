@@ -51,3 +51,23 @@ it("adds a layer from stored client position and selects it", async () => {
   expect(state.layers.find((layer) => layer.id === "created")?.position).toBe(10);
   expect(state.activeLayerId).toBe("created");
 });
+it("renames the default partition and preserves its identity", async () => {
+  const state = new NamespaceState();
+  state.resetFromData(data);
+  const partition = state.partitions[0];
+  const fetcher = vi.fn(async () => Response.json({ ok: true }));
+  const actions = createClientBoardActions(state, new HttpClient({ fetcher, capabilities }));
+  expect(await actions.handleRenamePartition(partition.id, " Inbox ")).toBeNull();
+  expect(state.partitions[0]).toEqual({ ...partition, name: "Inbox" });
+});
+it("preserves partition names when renaming is rejected", async () => {
+  const state = new NamespaceState();
+  state.resetFromData(data);
+  const partition = state.partitions[0];
+  const fetcher = vi.fn(async () =>
+    Response.json({ message: "Duplicate partition" }, { status: 400 }),
+  );
+  const actions = createClientBoardActions(state, new HttpClient({ fetcher, capabilities }));
+  expect(await actions.handleRenamePartition(partition.id, "Research")).toBe("Duplicate partition");
+  expect(state.partitions[0]).toEqual(partition);
+});

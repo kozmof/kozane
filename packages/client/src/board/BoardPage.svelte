@@ -114,6 +114,7 @@
     bind:newPartitionName={s.sidebar.newPartitionName}
     onCreatePartition={actions.handleCreatePartition}
     onDeletePartition={actions.handleDeletePartition}
+    onRenamePartition={actions.handleRenamePartition}
     readonly={board.readonly}
   />
 

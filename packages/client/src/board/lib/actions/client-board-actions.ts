@@ -133,6 +133,21 @@ export function createClientBoardActions(
       state.setError(failureMessage(res.error, "Failed to remove warp"));
     }
   }
+  async function handleRenamePartition(partitionId: string, name: string): Promise<string | null> {
+    const trimmed = name.trim();
+    if (!trimmed) return "Partition name is required";
+    const partition = state.partitions.find((row) => row.id === partitionId);
+    if (!partition) return "Partition not found";
+    if (partition.name === trimmed) return null;
+    const res = await attempt(() =>
+      client.partitions.rename(state.namespaceId, partitionId, { name: trimmed }),
+    );
+    if (!res.ok) return failureMessage(res.error, "Failed to rename partition");
+    state.partitions = state.partitions.map((row) =>
+      row.id === partitionId ? { ...row, name: trimmed } : row,
+    );
+    return null;
+  }
   async function handleRenameLayer(layerId: string, name: string) {
     const trimmed = name.trim();
     const layer = state.layers.find((l) => l.id === layerId);
@@ -165,6 +180,7 @@ export function createClientBoardActions(
   return {
     handleCreatePartition: track(handleCreatePartition),
     handleDeletePartition: track(handleDeletePartition),
+    handleRenamePartition: track(handleRenamePartition),
     handleCreateLayer: track(handleCreateLayer),
     handleDeleteLayer: track(handleDeleteLayer),
     handleSetWarp: track(handleSetWarp),
