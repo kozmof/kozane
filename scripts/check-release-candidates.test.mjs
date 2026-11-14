@@ -15,6 +15,9 @@ test("release candidates distinguish version pins and shared release inputs", ()
     mkdirSync(join(root, "drizzle"));
     copyFileSync(new URL("./check-release-candidates.mjs", import.meta.url), join(root, "scripts/check-release-candidates.mjs"));
     git("init", "--quiet");
+    git("config", "commit.gpgsign", "false");
+    mkdirSync(join(root, "empty-hooks"));
+    git("config", "core.hooksPath", join(root, "empty-hooks"));
     git("config", "user.name", "Test");
     git("config", "user.email", "test@example.com");
     const manifest = (pin, version = "1.0.0") => JSON.stringify({ version, peerDependencies: { "@kozane/core": pin } });
@@ -31,6 +34,12 @@ test("release candidates distinguish version pins and shared release inputs", ()
       assert.match(compare(previous, next), /@kozane\/client:/);
       previous = next;
     }
+    write("packages/client/package.json", manifest("workspace:1.0.0"));
+    previous = commit();
+    write("packages/client/package.json", manifest("workspace:2.0.0"));
+    const workspaceBump = commit();
+    assert.match(compare(previous, workspaceBump), /No release candidates/);
+    previous = workspaceBump;
     write("README.md", "Published readme");
     let next = commit();
     assert.match(compare(previous, next), /  kozane:/);

@@ -61,7 +61,7 @@
     "changeset": "changeset",
     "release:status": "changeset status",
     "release:version": "changeset version && pnpm install --lockfile-only --ignore-scripts && node scripts/check-release-packages.mjs",
-    "release:check": "node scripts/check-release-packages.mjs && node scripts/check-release-versioning.mjs && node --test scripts/release-registry.test.mjs && node --test scripts/release-artifacts.test.mjs && node --test scripts/verification-plan.test.mjs scripts/migration-build.test.mjs && node --test scripts/auto-release.test.mjs",
+    "release:check": "node scripts/check-release-packages.mjs && node scripts/check-release-versioning.mjs && node --test scripts/release-registry.test.mjs && node --test scripts/release-artifacts.test.mjs && node --test scripts/verification-plan.test.mjs scripts/migration-build.test.mjs && node --test scripts/auto-release.test.mjs && node --test scripts/check-release-candidates.test.mjs",
     "smoke:package:install": "node scripts/smoke-package.mjs --install-only",
     "release:verify:registry": "node scripts/check-registry-release.mjs && node scripts/smoke-package.mjs --registry",
     "test:db-wasm": "vitest run --config scripts/database-parity/vitest.config.ts",
