@@ -68,7 +68,9 @@
       ? `1px solid ${color.dot}`
       : isSelected || isPrimaryUnglue
         ? "1px solid var(--colors-select-accent)"
-        : "1px solid var(--colors-neutral-card)",
+        : imageUrl
+          ? "1px solid transparent"
+          : "1px solid var(--colors-neutral-card)",
   );
 
   function isLinkEvent(event: Event): boolean {
