@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { KozaneClient } from "../../client/contract.js";
   import type { ComponentProps } from "svelte";
   import type { NamespaceState } from "../namespace-state.svelte.js";
   import type { createNamespaceActions } from "../namespace-actions.svelte.js";
@@ -24,6 +25,7 @@
     partitions: ComposerProps["partitions"];
     defaultPartitionId: string;
     otherNamespaces: ComposerProps["otherNamespaces"];
+    onUploadImage?: KozaneClient["uploadImage"];
     onSubmit: ComposerProps["onSubmit"];
     onResizeToggle: ComposerProps["onResizeToggle"];
     onOpenFileBrowser: () => void;
@@ -43,6 +45,7 @@
     partitions,
     defaultPartitionId,
     otherNamespaces,
+    onUploadImage,
     onSubmit,
     onResizeToggle,
     onOpenFileBrowser,
@@ -96,6 +99,7 @@
     {partitions}
     {defaultPartitionId}
     layers={s.layers}
+    {onUploadImage}
     {onSubmit}
     onCancel={clearSelection}
     onPartitionChange={actions.handleCardPartitionChange}

@@ -30,6 +30,15 @@ export type { MutationOptions } from "./contract.js";
 const ALL: readonly ClientDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 /** HTTP implementation of the shared client data and lifecycle contract. */
 export class HttpClient implements ManagedClient {
+  async uploadImage(file: File): Promise<{ url: string }> {
+    if (this.disposed || !this.capabilities.writable) throw new ClientError("read_only", "Image uploads are unavailable");
+    const form = new FormData();
+    form.set("image", file);
+    const response = await this.transport.request("/api/images", "POST", form, { signal: this.lifetime.signal });
+    const result: unknown = await response.json();
+    if (!result || typeof result !== "object" || !("url" in result) || typeof result.url !== "string" || !/^\/api\/images\/[a-f0-9-]{36}\.(jpg|jpeg|png|svg)$/.test(result.url)) throw new ClientError("unavailable", "Invalid image upload response");
+    return { url: result.url };
+  }
   private disposed = false;
   private readonly lifetime = new AbortController();
   readonly kind = "http" as const;

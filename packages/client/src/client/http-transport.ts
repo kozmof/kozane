@@ -92,12 +92,13 @@ export class HttpTransport {
   ): Promise<Response> {
     options.signal?.throwIfAborted();
     // HttpClient supplies a prepared JSON-compatible copy. Transport only encodes it.
-    const body = input === undefined ? undefined : JSON.stringify(input);
+    const multipart = typeof FormData !== "undefined" && input instanceof FormData;
+    const body = multipart ? input : input === undefined ? undefined : JSON.stringify(input);
     const remaining = this.retryAfterMs;
     if (remaining > 0)
       throw new ClientError("rate_limited", MESSAGES.rate_limited, { retryAfterMs: remaining });
     const headers = new Headers(options.headers);
-    if (body !== undefined) headers.set("content-type", "application/json");
+    if (body !== undefined && !multipart) headers.set("content-type", "application/json");
     const deadline = AbortSignal.timeout(this.timeoutMs);
     const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
     let response: Response;
@@ -110,7 +111,7 @@ export class HttpTransport {
         body,
         keepalive:
           options.keepalive === true &&
-          body !== undefined &&
+          typeof body === "string" &&
           new TextEncoder().encode(body).byteLength <= KEEPALIVE_BYTES_MAX,
       });
     } catch (cause) {

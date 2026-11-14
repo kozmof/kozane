@@ -18,6 +18,7 @@ export type BoardViewClient = Pick<
   | "subscribeState"
   | "snapshot"
   | "cards"
+  | "uploadImage"
   | "glues"
   | "layers"
   | "partitions"

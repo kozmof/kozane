@@ -79,6 +79,7 @@ export interface SnapshotReadOptions extends ReadOptions {
  * See operation-matrix.md for behavior and verification coverage.
  */
 export interface KozaneClient {
+  uploadImage?: (file: File) => Promise<{ url: string }>;
   readonly kind: "http" | "static" | "local";
   readonly capabilities: ClientCapabilities;
   readonly version: ClientVersion;

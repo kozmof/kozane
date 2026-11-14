@@ -251,6 +251,7 @@
 
     {#if !board.readonly}
       <BoardComposer
+    onUploadImage={client.uploadImage?.bind(client)}
         bind:this={composerComponent}
         {s}
         {actions}

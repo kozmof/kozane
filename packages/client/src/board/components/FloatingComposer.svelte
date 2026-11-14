@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { KozaneClient } from "../../client/contract.js";
   import { css } from "../../styles/css.js";
   import CardComposer from "./CardComposer.svelte";
   import type { CardWithGlue, PartitionWithColor, GlueRel, Layer } from "@kozane/core";
@@ -13,6 +14,7 @@
     defaultPartitionId: string;
     layers: Layer[];
     otherNamespaces: { id: string; name: string }[];
+    onUploadImage?: KozaneClient["uploadImage"];
     onSubmit: (id: string | null, content: string, partitionId: string) => void;
     onCancel: () => void;
     onPartitionChange?: (partitionId: string) => void;
@@ -42,6 +44,7 @@
     defaultPartitionId,
     layers,
     otherNamespaces,
+    onUploadImage,
     onSubmit,
     onCancel,
     onPartitionChange,
@@ -91,6 +94,7 @@
     {defaultPartitionId}
     {layers}
     {otherNamespaces}
+    {onUploadImage}
     {onSubmit}
     {onCancel}
     {onPartitionChange}

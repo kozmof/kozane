@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { KozaneClient } from "../../client/contract.js";
   import { onDestroy, untrack, tick } from "svelte";
   import CardTypeDropdown from "./CardTypeDropdown.svelte";
   import PartitionDropdown from "./PartitionDropdown.svelte";
@@ -19,6 +20,7 @@
     defaultPartitionId: string;
     layers: Layer[];
     otherNamespaces: { id: string; name: string }[];
+    onUploadImage?: KozaneClient["uploadImage"];
     onSubmit: (id: string | null, content: string, partitionId: string) => void;
     onCancel: () => void;
     onPartitionChange?: (partitionId: string) => void;
@@ -57,6 +59,7 @@
     defaultPartitionId,
     layers,
     otherNamespaces,
+    onUploadImage,
     onSubmit,
     onCancel,
     onPartitionChange,
@@ -131,11 +134,8 @@
     imageError = '';
     content = '';
     try {
-      const form = new FormData();
-      form.set('image', file);
-      const response = await fetch('/api/images', { method: 'POST', body: form });
-      if (!response.ok) throw new Error('Choose a JPEG, PNG, or SVG image up to 10 MB.');
-      const result = await response.json();
+      if (!onUploadImage) throw new Error("Image uploads are unavailable");
+      const result = await onUploadImage(file);
       content = 'kozane-image:' + result.url;
       onSubmit(targetId, content, targetPartition);
       content = '';
