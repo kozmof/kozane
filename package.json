@@ -73,7 +73,8 @@
     "test:packages": "node scripts/check-core-package.mjs --client-package",
     "check:app-imports": "node scripts/check-app-package-imports.mjs",
     "build:packages": "node scripts/pack-workspace.mjs",
-    "release:auto": "node scripts/auto-release.mjs"
+    "release:auto": "node scripts/auto-release.mjs",
+    "release:candidates": "node scripts/check-release-candidates.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
