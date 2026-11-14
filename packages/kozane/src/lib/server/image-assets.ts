@@ -1,3 +1,4 @@
+import { and, eq, inArray, like } from "drizzle-orm";
 import { composeWrite } from "../../db/database.js";
 import { validPng, validJpeg } from "./raster-validation.js";
 import { activeServerProcess } from "./runtime-state.js";
@@ -6,7 +7,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { imagePath, IMAGE_MAX_BYTES } from "@kozane/core";
 import type { DB, Tx } from "../../db/tx.js";
-import { cardTable } from "../../db/schema.js";
+import { cardTable, partitionTable } from "../../db/schema.js";
 
 export function imageDirectory(root: string): string {
   return join(root, ".kozane", "assets", "images");
@@ -163,19 +164,61 @@ export async function maintainImageAssets(root: string, db: DB, now = Date.now()
 export async function withImageDeletion<T>(
   root: string | null,
   db: DB,
-  removeCards: (tx: Tx) => Promise<T>,
+  removeCards: (
+    tx: Tx,
+    capture: (scope: { namespaceId: string; cardIds?: unknown }) => Promise<void>,
+  ) => Promise<T>,
 ): Promise<T> {
   const persistent =
     root && process.env.KOZANE_MEMORY_MODE !== "1" && !activeServerProcess(root)?.memory;
   const result = await composeWrite(db, async (tx) => {
-    const before = persistent
-      ? await tx.select({ id: cardTable.id, content: cardTable.content }).from(cardTable)
-      : [];
-    const result = await removeCards(tx);
+    const before: { id: string; content: string }[] = [];
+    const capture = async ({
+      namespaceId,
+      cardIds,
+    }: {
+      namespaceId: string;
+      cardIds?: unknown;
+    }) => {
+      if (!persistent) return;
+      if (
+        cardIds !== undefined &&
+        (!Array.isArray(cardIds) || !cardIds.every((id) => typeof id === "string"))
+      )
+        return;
+      const ids = cardIds as string[] | undefined;
+      if (ids?.length === 0) return;
+      for (let offset = 0; offset < (ids?.length ?? 1); offset += 400) {
+        before.push(
+          ...(await tx
+            .select({ id: cardTable.id, content: cardTable.content })
+            .from(cardTable)
+            .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
+            .where(
+              and(
+                eq(partitionTable.namespaceId, namespaceId),
+                like(cardTable.content, "kozane-image:/api/images/%"),
+                ids ? inArray(cardTable.id, ids.slice(offset, offset + 400)) : undefined,
+              ),
+            )),
+        );
+      }
+    };
+    const result = await removeCards(tx, capture);
     if (persistent) {
-      const remaining = new Set(
-        (await tx.select({ id: cardTable.id }).from(cardTable)).map((row) => row.id),
-      );
+      const remaining = new Set<string>();
+      for (let offset = 0; offset < before.length; offset += 400) {
+        const rows = await tx
+          .select({ id: cardTable.id })
+          .from(cardTable)
+          .where(
+            inArray(
+              cardTable.id,
+              before.slice(offset, offset + 400).map((row) => row.id),
+            ),
+          );
+        for (const row of rows) remaining.add(row.id);
+      }
       const paths = new Set(
         before.filter((row) => !remaining.has(row.id)).map((row) => imagePath(row.content)),
       );
@@ -206,14 +249,16 @@ export async function retryImageDeletions(root: string, db: DB): Promise<void> {
     throw cause;
   }
   await composeWrite(db, async (tx) => {
-    const references = new Set(
-      (await tx.select({ content: cardTable.content }).from(cardTable)).map((row) =>
-        imagePath(row.content),
-      ),
-    );
     for (const name of names) {
       const path = imagePath("kozane-image:/api/images/" + name);
-      if (!path || references.has(path)) continue;
+      if (!path) continue;
+      const referenced = await tx
+        .select({ id: cardTable.id })
+        .from(cardTable)
+        .where(eq(cardTable.content, "kozane-image:" + path))
+        .limit(1)
+        .get();
+      if (referenced) continue;
       try {
         await rm(join(imageDirectory(root), name), { force: true });
         await rm(join(imageDirectory(root), ".retained", name), { force: true });

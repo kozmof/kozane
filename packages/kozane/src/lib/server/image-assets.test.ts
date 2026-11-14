@@ -168,13 +168,15 @@ it("deletes an image only when its last card is deleted, including archived imag
       }),
     ).rejects.toThrow("Deletion failed");
     expect(Array.from(await readImage(root, url.split("/").pop()!))).toEqual(Array.from(svg));
-    await withImageDeletion(root, db, (tx) =>
-      removeInTx(tx, context, namespaceId, { cardIds: [first.id] }),
-    );
+    await withImageDeletion(root, db, async (tx, capture) => {
+      await capture({ namespaceId, cardIds: [first.id] });
+      return removeInTx(tx, context, namespaceId, { cardIds: [first.id] });
+    });
     expect(Array.from(await readImage(root, url.split("/").pop()!))).toEqual(Array.from(svg));
-    await withImageDeletion(root, db, (tx) =>
-      removeInTx(tx, context, namespaceId, { cardIds: [second.id] }),
-    );
+    await withImageDeletion(root, db, async (tx, capture) => {
+      await capture({ namespaceId, cardIds: [second.id] });
+      return removeInTx(tx, context, namespaceId, { cardIds: [second.id] });
+    });
     await expect(readImage(root, url.split("/").pop()!)).rejects.toThrow();
     const archivedUrl = await storeImage(root, "archived.svg", svg);
     await utimes(
@@ -187,9 +189,10 @@ it("deletes an image only when its last card is deleted, including archived imag
       ...input,
       content: "kozane-image:" + archivedUrl,
     });
-    await withImageDeletion(root, db, (tx) =>
-      removeInTx(tx, context, namespaceId, { cardIds: [archivedCard.id] }),
-    );
+    await withImageDeletion(root, db, async (tx, capture) => {
+      await capture({ namespaceId, cardIds: [archivedCard.id] });
+      return removeInTx(tx, context, namespaceId, { cardIds: [archivedCard.id] });
+    });
     await expect(readImage(root, archivedUrl.split("/").pop()!)).rejects.toThrow();
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -212,7 +215,10 @@ it("cleans cascading namespace deletions and retries filesystem failures durably
     const filename = join(imageDirectory(root), name);
     await rm(filename);
     await mkdir(filename);
-    await withImageDeletion(root, db, (tx) => deleteNamespaceInTx({ db: tx, namespaceId }));
+    await withImageDeletion(root, db, async (tx, capture) => {
+      await capture({ namespaceId });
+      return deleteNamespaceInTx({ db: tx, namespaceId });
+    });
     expect(await readdir(join(imageDirectory(root), ".pending-delete"))).toContain(name);
     await rm(filename, { recursive: true });
     await retryImageDeletions(root, db);

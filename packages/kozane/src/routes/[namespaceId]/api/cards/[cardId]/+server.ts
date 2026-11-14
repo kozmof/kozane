@@ -19,8 +19,9 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
 );
 export const DELETE: RequestHandler = apiHandler(async ({ locals, params }) =>
   json(
-    await withImageDeletion(getWorkspaceRoot(), locals.db, (tx) =>
-      removeOneInTx(tx, workspaceServiceContext(), params.namespaceId, params.cardId),
-    ),
+    await withImageDeletion(getWorkspaceRoot(), locals.db, async (tx, capture) => {
+      await capture({ namespaceId: params.namespaceId, cardIds: [params.cardId] });
+      return removeOneInTx(tx, workspaceServiceContext(), params.namespaceId, params.cardId);
+    }),
   ),
 );

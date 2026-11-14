@@ -66,9 +66,10 @@ export async function namespaceDelete(namespaceId: string): Promise<void> {
     );
     const namespaceIds = namespaces.map((namespace) => namespace.id);
     const resolvedId = resolveShortId(namespaceId, namespaceIds, "Namespace");
-    await withImageDeletion(root, db, (tx) =>
-      deleteNamespaceInTx({ db: tx, namespaceId: resolvedId }),
-    );
+    await withImageDeletion(root, db, async (tx, capture) => {
+      await capture({ namespaceId: resolvedId });
+      return deleteNamespaceInTx({ db: tx, namespaceId: resolvedId });
+    });
     console.log(`Namespace deleted.`);
     console.log(`  id: ${shortId(resolvedId, namespaceIds)}`);
   });

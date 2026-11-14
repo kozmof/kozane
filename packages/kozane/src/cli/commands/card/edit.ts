@@ -138,8 +138,9 @@ export async function cardDelete(requestedIds: string[]): Promise<void> {
       contentMax: contentMaxForRoot(root),
       ...canvasBoundsForRoot(root),
     });
-    const { allIds, cardIds } = await withImageDeletion(root, db, async (tx) => {
+    const { allIds, cardIds } = await withImageDeletion(root, db, async (tx, capture) => {
       const { allIds, cardIds, namespaceId } = await resolveCardGroup(tx, requestedIds);
+      await capture({ namespaceId, cardIds });
       try {
         await removeInTx(tx, context, namespaceId, { cardIds });
       } catch (error) {
