@@ -24,17 +24,26 @@ try {
   function normalizeManifest(ref, file) {
     const value = JSON.parse(git("show", ref + ":" + file));
     delete value.version;
-    for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+    for (const section of [
+      "dependencies",
+      "devDependencies",
+      "peerDependencies",
+      "optionalDependencies",
+    ]) {
       for (const pkg of packages) {
         if (typeof value[section]?.[pkg.name] === "string") {
-          value[section][pkg.name] = value[section][pkg.name].replace(/^(workspace:)?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/, "$1<version>");
+          value[section][pkg.name] = value[section][pkg.name].replace(
+            /^(workspace:)?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/,
+            "$1<version>",
+          );
         }
       }
     }
     return value;
   }
   const relevantFiles = files.filter((file) => {
-    if (file !== "package.json" && !packages.some((pkg) => file === pkg.path + "package.json")) return true;
+    if (file !== "package.json" && !packages.some((pkg) => file === pkg.path + "package.json"))
+      return true;
     try {
       return !isDeepStrictEqual(normalizeManifest(from, file), normalizeManifest(to, file));
     } catch {
@@ -48,11 +57,17 @@ try {
     { exact: "scripts/stage-package-readme.mjs", packages: ["kozane"] },
     { exact: "scripts/stage-cli-migrations.mjs", packages: ["kozane"] },
   ];
-  const sharedFor = (file, name) => sharedInputs.some((input) =>
-    input.packages.includes(name) && (input.exact === file || (input.prefix && file.startsWith(input.prefix))));
+  const sharedFor = (file, name) =>
+    sharedInputs.some(
+      (input) =>
+        input.packages.includes(name) &&
+        (input.exact === file || (input.prefix && file.startsWith(input.prefix))),
+    );
   const affected = new Map();
   for (const pkg of packages) {
-    const changed = relevantFiles.filter((file) => file.startsWith(pkg.path) || sharedFor(file, pkg.name));
+    const changed = relevantFiles.filter(
+      (file) => file.startsWith(pkg.path) || sharedFor(file, pkg.name),
+    );
     if (!changed.length) continue;
     affected.set(pkg.name, [
       ...(affected.get(pkg.name) ?? []),

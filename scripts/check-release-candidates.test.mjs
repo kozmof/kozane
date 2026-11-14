@@ -13,22 +13,41 @@ test("release candidates distinguish version pins and shared release inputs", ()
     mkdirSync(join(root, "scripts"));
     mkdirSync(join(root, "packages/client"), { recursive: true });
     mkdirSync(join(root, "drizzle"));
-    copyFileSync(new URL("./check-release-candidates.mjs", import.meta.url), join(root, "scripts/check-release-candidates.mjs"));
+    copyFileSync(
+      new URL("./check-release-candidates.mjs", import.meta.url),
+      join(root, "scripts/check-release-candidates.mjs"),
+    );
     git("init", "--quiet");
     git("config", "commit.gpgsign", "false");
     mkdirSync(join(root, "empty-hooks"));
     git("config", "core.hooksPath", join(root, "empty-hooks"));
     git("config", "user.name", "Test");
     git("config", "user.email", "test@example.com");
-    const manifest = (pin, version = "1.0.0") => JSON.stringify({ version, peerDependencies: { "@kozane/core": pin } });
-    const commit = () => { git("add", "."); git("commit", "--quiet", "-m", "fixture"); return git("rev-parse", "HEAD"); };
-    const compare = (from, to) => execFileSync(process.execPath, ["scripts/check-release-candidates.mjs", from, to], { cwd: root, encoding: "utf8" });
+    const manifest = (pin, version = "1.0.0") =>
+      JSON.stringify({ version, peerDependencies: { "@kozane/core": pin } });
+    const commit = () => {
+      git("add", ".");
+      git("commit", "--quiet", "-m", "fixture");
+      return git("rev-parse", "HEAD");
+    };
+    const compare = (from, to) =>
+      execFileSync(process.execPath, ["scripts/check-release-candidates.mjs", from, to], {
+        cwd: root,
+        encoding: "utf8",
+      });
     write("packages/client/package.json", manifest("1.0.0"));
     const initial = commit();
     write("packages/client/package.json", manifest("2.0.0", "2.0.0"));
     let previous = commit();
     assert.match(compare(initial, previous), /No release candidates/);
-    for (const pin of ["^2.0.0", "^3.0.0", "file:../core-1.0.0", "file:../core-2.0.0", "git+https:\/\/example.com/core#1.0.0", "git+https:\/\/example.com/core#2.0.0"]) {
+    for (const pin of [
+      "^2.0.0",
+      "^3.0.0",
+      "file:../core-1.0.0",
+      "file:../core-2.0.0",
+      "git+https:\/\/example.com/core#1.0.0",
+      "git+https:\/\/example.com/core#2.0.0",
+    ]) {
       write("packages/client/package.json", manifest(pin));
       const next = commit();
       assert.match(compare(previous, next), /@kozane\/client:/);
@@ -47,7 +66,8 @@ test("release candidates distinguish version pins and shared release inputs", ()
     write("drizzle/0001.sql", "select 1;");
     next = commit();
     const output = compare(previous, next);
-    for (const name of ["@kozane/core:", "@kozane/client:", "kozane:"]) assert.ok(output.includes(name));
+    for (const name of ["@kozane/core:", "@kozane/client:", "kozane:"])
+      assert.ok(output.includes(name));
     previous = next;
     // Deletions still affect the package that owned the file.
     rmSync(join(root, "drizzle/0001.sql"));
@@ -75,7 +95,11 @@ test("release candidates distinguish version pins and shared release inputs", ()
     assert.match(compare(next, next), /No release candidates/);
 
     for (const args of [["missing-commit", next], [], [next], ["--help", next]]) {
-      const result = spawnSync(process.execPath, ["scripts/check-release-candidates.mjs", ...args], { cwd: root, encoding: "utf8" });
+      const result = spawnSync(
+        process.execPath,
+        ["scripts/check-release-candidates.mjs", ...args],
+        { cwd: root, encoding: "utf8" },
+      );
       assert.equal(result.status, 1);
       assert.match(result.stderr, /Cannot compare commits:|Usage:/);
       assert.doesNotMatch(result.stdout, /Release candidates/);
