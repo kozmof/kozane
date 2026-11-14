@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { copyFileSync, renameSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -48,6 +48,38 @@ test("release candidates distinguish version pins and shared release inputs", ()
     next = commit();
     const output = compare(previous, next);
     for (const name of ["@kozane/core:", "@kozane/client:", "kozane:"]) assert.ok(output.includes(name));
+    previous = next;
+    // Deletions still affect the package that owned the file.
+    rmSync(join(root, "drizzle/0001.sql"));
+    next = commit();
+    assert.match(compare(previous, next), /  @kozane\/core:/);
+
+    mkdirSync(join(root, "packages/kozane"), { recursive: true });
+    write("packages/kozane/moved.ts", "export const value = 1;");
+    previous = commit();
+    renameSync(join(root, "packages/kozane/moved.ts"), join(root, "packages/client/moved.ts"));
+    next = commit();
+    const moved = compare(previous, next);
+    assert.match(moved, /  @kozane\/client:/);
+    // The old package must have a direct change, not just dependency propagation.
+    assert.match(moved, /kozane:.*1 changed package or shared input file/);
+
+    previous = next;
+    write("packages/kozane/package.json", JSON.stringify({ name: "kozane", version: "1.0.0" }));
+    next = commit();
+    assert.match(compare(previous, next), /  kozane:/);
+    previous = next;
+    rmSync(join(root, "packages/kozane/package.json"));
+    next = commit();
+    assert.match(compare(previous, next), /  kozane:/);
+    assert.match(compare(next, next), /No release candidates/);
+
+    for (const args of [["missing-commit", next], [], [next], ["--help", next]]) {
+      const result = spawnSync(process.execPath, ["scripts/check-release-candidates.mjs", ...args], { cwd: root, encoding: "utf8" });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Cannot compare commits:|Usage:/);
+      assert.doesNotMatch(result.stdout, /Release candidates/);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
