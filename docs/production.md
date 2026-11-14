@@ -62,7 +62,10 @@ See the [Security matrix](./security-matrix.md) for access rules.
 ## Backup and recovery
 
 Back up `.kozane/` while the server is stopped. To back up database data alone,
-export it to a JSON file. Back up taskspace directories separately.
+export it to a JSON file. Image bytes are stored separately in
+`.kozane/assets/images` and are not included in database exports or migration
+backups. Back up that directory with the database. Back up taskspace directories
+separately.
 
 ```sh
 kozane db export backup.json

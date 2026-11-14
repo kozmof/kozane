@@ -25,7 +25,8 @@ See the [security matrix](../docs/security-matrix.md).
 
 ### Request bodies
 
-Send one JSON object with `Content-Type: application/json`.
+Send one JSON object with `Content-Type: application/json`, except for the
+[multipart image upload](#post-apiimages).
 
 | Invalid input                 | Response                                            |
 | ----------------------------- | --------------------------------------------------- |
@@ -600,23 +601,31 @@ Send `multipart/form-data` with an `image` file field. Accepted filename extensi
 are `.jpg`, `.jpeg`, `.png`, and `.svg`, ignoring case. Files must contain between
 1 byte and 10 MiB. Image signatures must match the filename extension.
 SVG files must have balanced tags and quoted attributes. Scripts, event handlers,
-embedded HTML, and external resource links are rejected. Local fragment references are allowed. Invalid files return 400.
+embedded HTML, and external resource links are rejected. Local fragment
+references are allowed. PNG validation checks chunk integrity and scanline layout,
+with a 64 MiB decompression limit. JPEG validation checks structure without
+decoding pixels. Invalid files return 400.
 
 Returns `{ "url": "/api/images/<uuid>.<extension>" }` with status 200.
 Files are stored in the active workspace under `.kozane/assets/images`.
 A missing workspace or a storage failure returns 500. Storage failures use a generic message.
 
-Uploads and CLI card creation offer an asset maintenance opportunity, limited to
-once per hour per workspace in each process. Memory sessions skip collection.
-Images with no card reference are moved to `.kozane/assets/images/.retained`
-after 24 hours. Archived images remain readable at their original URLs so a
-concurrent card reference cannot lose its image. Archives are not automatically
-deleted. Deleting a card through the card endpoints or CLI removes its image
-from both directories after the last card reference is deleted. Memory sessions
-preserve workspace image files. Namespace deletion through the CLI also cleans up images
-whose last card reference is removed. Pending file removals are recorded under
-`.kozane/assets/images/.pending-delete` and retried during subsequent deletions
-or asset maintenance. Fresh uploads are preserved. Maintenance failures do not fail committed writes.
+### Storage and deletion
+
+Uploads and CLI card creation trigger maintenance at most once per hour per
+workspace in each process. Memory sessions preserve workspace image files.
+
+Maintenance moves images with no card reference to
+`.kozane/assets/images/.retained` after 24 hours. Archived images remain readable
+at their original URLs. Maintenance does not permanently delete archives.
+
+Deleting a card through the card endpoints or CLI removes its image from both
+directories when the last card reference is deleted. CLI namespace deletion uses
+the same cleanup. The database deletion commits before file removal.
+
+Failed file removals are recorded in `.kozane/assets/images/.pending-delete`.
+Subsequent deletions and maintenance retry them. Maintenance failures do not fail
+committed writes. Browser caches and backups can retain copies after deletion.
 
 ### `GET /api/images/[name]`
 

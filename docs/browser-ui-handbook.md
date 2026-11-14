@@ -30,9 +30,26 @@ The composer sits at the bottom of the canvas.
 Cards appear near the center of the view and stack downward. New cards use the
 selected layer, partition, and scope, if any.
 
+### Image cards
+
+Select Image in the card type list beside the partition list. Drop a JPEG, PNG, or
+SVG into the white drop area, or use Choose file below it on the right. Uploading
+the file creates the card automatically. There is no separate submit button.
+
+Files must contain between 1 byte and 10 MiB. PNG validation also limits
+decompressed scanline data to 64 MiB. See [image validation and storage](../spec/http.md#images)
+for format restrictions.
+
+Resize an image card with the same right-edge handle as a text card. Its height
+follows the image’s aspect ratio. Double-click an image card to choose a replacement.
+
+Deleting the last card that references an image also removes the stored file.
+Memory sessions preserve workspace image files. Keep image files with your
+workspace backups.
+
 ## Editing a card
 
-Double-click a card to edit its text or partition in the composer.
+Double-click a text card to edit its text or partition in the composer.
 Press `Enter` to save or `Esc` to cancel.
 
 ## Moving around the canvas

@@ -8,6 +8,10 @@ Core owns domain types, errors, services, and schema migrations. Your host suppl
 the database driver, transaction handling, filesystem access, and presentation.
 Each host can choose its environment and reuse the same domain rules.
 
+Image reference helpers (`imagePath`, `imageReference`, and `IMAGE_MAX_BYTES`)
+are exported from the root entry. Hosts validate and store image bytes. Core
+stores the card reference and does not access image files.
+
 ## What core is for
 
 Core supports three main tasks.

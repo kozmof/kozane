@@ -3,16 +3,6 @@
 Run checks from the workspace root. Use Node 24 or later and the pnpm version
 declared in `package.json`.
 
-| Change                                  | Checks                                                                 |
-| --------------------------------------- | ---------------------------------------------------------------------- |
-| Core services or database behavior      | `pnpm test`, `pnpm check:core-browser`                                 |
-| Client contracts or adapters            | `pnpm test`, `pnpm check:client-contract`, `pnpm check:client-browser` |
-| Svelte views or application integration | `pnpm check`, `pnpm test`, `pnpm test:e2e`                             |
-| Package exports or build output         | `pnpm test:packages`                                                   |
-| Persistence recovery                    | `pnpm test:restoration-harness`                                        |
-| Release scripts or versioning           | `pnpm release:check`                                                   |
-| Documentation                           | Check local links and verify commands against `package.json`           |
-
 Run `pnpm lint` and `pnpm fmt:check` for source changes. Build the application
 with `pnpm build` before running application end-to-end tests.
 
@@ -22,16 +12,21 @@ production candidate, including package installation and browser behavior.
 
 ## Choose checks for a change
 
-| Change                      | Checks                                                    |
-| --------------------------- | --------------------------------------------------------- |
-| Core validation or services | `pnpm test`                                               |
-| Database adapters           | `pnpm check:core-package` and `pnpm test:db-wasm`         |
-| Browser database adapters   | Also run `pnpm test:db-browser`                           |
-| Public types or exports     | `pnpm check:core-package` and `pnpm check:client-package` |
-| Client views or lifecycle   | `pnpm test` and `pnpm test:client-package`                |
-| Restoration                 | `pnpm test:restoration-harness`                           |
-| Host integration            | `pnpm check:app-imports` and `pnpm check`                 |
-| Formatting and lint         | `pnpm fmt:check` and `pnpm lint`                          |
+| Change                          | Checks                                                                     |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| Core validation or services     | `pnpm test` and `pnpm check:core-browser`                                  |
+| Database adapters               | `pnpm check:core-package` and `pnpm test:db-wasm`                          |
+| Browser database adapters       | Also run `pnpm test:db-browser`                                            |
+| Public types or exports         | `pnpm check:core-package` and `pnpm check:client-package`                  |
+| Client contracts or adapters    | `pnpm test`, `pnpm check:client-contract`, and `pnpm check:client-browser` |
+| Client views or lifecycle       | `pnpm test` and `pnpm test:client-package`                                 |
+| Restoration                     | `pnpm test:restoration-harness`                                            |
+| Host integration                | `pnpm check:app-imports` and `pnpm check`                                  |
+| Application integration         | `pnpm check`, `pnpm test`, and `pnpm test:e2e`                             |
+| Release scripts or versioning   | `pnpm release:check`                                                       |
+| Package exports or build output | `pnpm test:packages`                                                       |
+| Documentation                   | Check local links and run CLI/HTTP reference coverage tests                |
+| Formatting and lint             | `pnpm fmt:check` and `pnpm lint`                                           |
 
 The verification plan consumes prepared artifacts. Use `pnpm verify` to run the
 workspace verification entry point. Use `pnpm release:local` for release preparation.

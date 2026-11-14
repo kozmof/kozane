@@ -147,6 +147,17 @@ validation, limits, and cleanup.
 Static sites can read only the files embedded during export and cannot write to
 the original taskspaces.
 
+## Image assets
+
+Image upload and serving routes use the workspace’s normal authentication rules.
+Files live under `.kozane/assets/images`. SVG responses use a sandboxed content
+security policy, and all image responses prevent content-type sniffing. See the
+[image API reference](../spec/http.md#images) for validation and retention rules.
+
+Deleting the last card reference removes the stored image after the database
+change commits. This does not remove copies from browser caches or backups.
+Include image files in workspace backups and protect them like the database.
+
 ## Config page
 
 `kozane config open` runs its own small server, separate from `kozane open`. It always binds
@@ -167,7 +178,7 @@ checked with the `doctor config` rules, and are written atomically.
 
 | Rule                                       | Source                                         |
 | ------------------------------------------ | ---------------------------------------------- |
-| Startup host and key checks                | `src/cli/commands/open.ts`                     |
+| Startup host and key checks                | `packages/kozane/src/cli/commands/open.ts`     |
 | TLS, host, and missing-key gating          | `src/hooks.server.ts`                          |
 | Authentication, login redirect, throttling | `src/lib/server/request-auth.ts`               |
 | Loopback, TLS, and rate-limit helpers      | `src/lib/server/security.ts`                   |

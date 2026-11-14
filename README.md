@@ -8,12 +8,12 @@ The name "Kozane" comes from こざね法 (kozane method), developed by Japanese
 
 Start by adding cards to a namespace. Use other structures only when you need them.
 
-The names of these structures do not fix how you use them, so different projects can use them in different ways.
+Use these structures in the way that fits your project.
 
 ### Main
 
 - Namespace: A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
-- Card: A unit of text.
+- Card: A unit of text or an image.
 
 ### Others
 
@@ -73,7 +73,8 @@ when `--namespace` is omitted. Change it with `kozane namespace default <id>`.
 
 Use `kozane open --memory` for a temporary database with a namespace named
 `:memory:`. Workspace commands use that database while the server runs. All changes
-are discarded when the server stops.
+to the database are discarded when the server stops. Imported image files can
+remain in `.kozane/assets/images`.
 
 The `/health` endpoint checks server and database readiness. If the workspace has an API key, send it with monitoring probes. See [Production operations](./docs/production.md).
 
@@ -85,7 +86,11 @@ to open its canvas.
 ### Creating and arranging cards
 
 Type text in the composer at the bottom of the canvas and press `Enter` to create
-a card. Double-click a card to edit it, and drag cards to arrange them.
+a card. Double-click a text card to edit it, and drag cards to arrange them.
+
+To add an image, select Image beside the partition list. Drop a JPEG, PNG, or SVG
+into the drop area, or click Choose file at the bottom right. The card is created
+after upload and keeps the image’s aspect ratio when resized.
 
 See the [Browser UI handbook](./docs/browser-ui-handbook.md) for selection,
 keyboard shortcuts, layers, scopes, and taskspaces.
@@ -162,6 +167,17 @@ kozane layer move Sketches down
 ```
 
 A layer can be named by its name, its ID, or a short ID. An exact name wins.
+
+### Adding image cards
+
+Pass a local image path with `--type image`. The source file stays unchanged.
+
+```sh
+kozane card add ./photo.png --type image
+```
+
+See [image card options](./spec/cli.md#kozane-card-add-content) for file limits
+and [image storage](./spec/http.md#images) for deletion and maintenance behavior.
 
 ### Tagging
 
@@ -276,7 +292,9 @@ kozane doctor
 kozane doctor config
 ```
 
-Migrations create a backup first. Back up the entire `.kozane` directory and test restores regularly.
+Migrations create a database backup first. Back up the entire `.kozane` directory
+to preserve image files as well, and test restores regularly. Database exports and
+database backups do not include image bytes.
 After hand-editing `.kozane/config.json`, `kozane doctor config` lists every missing key,
 unknown key, and invalid value in one pass.
 For persisted-cache contents, refresh rules, and safe cleanup, see

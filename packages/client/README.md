@@ -91,6 +91,15 @@ Use the smallest public client interface accepted by each view. Full `KozaneClie
 
 The host entry uses explicit exports. Its `ActivityGuard` and `BoardPoint` interfaces are independent of board implementation modules, and `CardPositionPatch` comes from the public core domain type. New private decoder helpers do not automatically become public API.
 
+## Image cards
+
+Provide `uploadImage(file)` on the borrowed client to enable image uploads.
+`HttpClient` sends the file through its configured transport and returns the
+workspace-relative asset URL. Its `resolveImageUrl(path)` method adds the
+configured server base when shared board views render the image. Custom clients
+can provide both optional methods. Image references alone do not embed file bytes
+in static data.
+
 ## Taskspace availability
 
 Use `createClientFeatures(capabilities, taskspaces)` when constructing a client. It derives the taskspace capability from the attached API and freezes the feature pair. Omit the API to disable taskspaces. An attached API must implement every taskspace method, including explicit rejections for unsupported writes.

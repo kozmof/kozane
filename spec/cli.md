@@ -420,7 +420,15 @@ kozane card add <content> [--type text|image] [--namespace <namespaceId>] [--par
                           [--x <number>] [--y <number>]
 ```
 
-For example, create an image card with `kozane card add ./photo.png --type image`.
+Create an image card from a local file.
+
+```bash
+kozane card add ./photo.png --type image
+```
+
+PNG scanline data must fit within 64 MiB after decompression. JPEG validation
+checks file structure without decoding pixels. See [image storage](http.md#images)
+for shared validation, archival, and deletion rules.
 
 ### `kozane card squash [content]`
 
@@ -444,7 +452,7 @@ cat foo.txt | kozane card squash
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
-Apply the same options to piped text:
+Apply the same options to piped text.
 
 ```bash
 cat foo.txt | kozane card squash --namespace eb155d6 --scope e3ee90b
@@ -489,6 +497,10 @@ kozane card edit 3f9a2c1 "Investigate caching, then measure"
 
 Delete cards from one namespace, inferred from the first ID. Dissolve glue groups left with
 fewer than two cards. Print the count and short IDs.
+
+When the last card reference to an image is deleted, remove the stored image and
+its archived copy. Failed file removals are queued for retry. Memory sessions
+preserve workspace image files. The original imported source file is unchanged.
 
 ```bash
 kozane card delete <cardIds...>
@@ -757,7 +769,7 @@ kozane db migrate
 
 Export database data as JSON to a file or stdout. Requires current migrations. `--compact`
 removes formatting. Writes format version 8. Import also accepts version 7, which has no scope
-frames.
+frames. Image bytes are not included. Back up `.kozane/assets/images` separately.
 
 Older formats use `project` and `bundle` tables and are refused. Import them with Kozane 0.10
 or earlier, then migrate.

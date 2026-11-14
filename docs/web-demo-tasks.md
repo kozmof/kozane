@@ -2,7 +2,7 @@
 
 Implement the demo in the separate `kozane-demo` repository using published core and client packages. Use the [web demo specification](web-demo-specification.md) for the full contracts and acceptance cases.
 
-Before starting, publish and verify the intended package versions through the [local release flow](releases.md). The current candidates are core 0.1.0, client 0.1.0 and kozane 0.22.0. No initial publication is claimed here.
+Before starting, publish and verify the package versions declared in the manifests through the [local release flow](releases.md).
 
 The shared restoration harness and compatibility corpus remain reusable test infrastructure in this repository. The pre-extraction performance baseline is commit `226facea14e7a9323e4fd6fd1c8d5f4daed76d06`. Keep P4 and acceptance task identifiers stable when transferring this document to the demo repository.
 
@@ -36,9 +36,9 @@ The future `WorkerClient` belongs to `@kozane/client`. Dedicated and Service Wor
 ### Startup, assets and suspension
 
 - [ ] P4-18 Embed a manifest with build ID, schema version, fingerprinted absolute asset URLs and hashes. Verify preview/worker IDs and reuse only verified original sample bytes for reset.
-- [ ] P4-19 Start worker/wasm loading after FCP. Validate the sample on every startup before accepting restored or fresh working data; cache sample bytes for the root lifetime.
+- [ ] P4-19 Start worker/wasm loading after FCP. Validate the sample on every startup before accepting restored or fresh working data. Cache sample bytes for the root lifetime.
 - [ ] P4-20 Add the synchronous CSP-hashed recovery/namespace preview script. Prevent sample flashes during restoration or explicit non-sample destinations and keep controls disabled through hydration and initial live-data application.
-- [ ] P4-21 Track navigation sequences during initialization. Reuse database-wide work while superseding destination reads; stale destinations cannot publish readiness, authorize fallback or delete storage.
+- [ ] P4-21 Track navigation sequences during initialization. Reuse database-wide work while superseding destination reads. Stale destinations cannot publish readiness, authorize fallback or delete storage.
 - [ ] P4-22 Enforce the specified finite asset, compilation, loader and handshake deadlines. Abort fetch/readers, terminate workers, revoke Blob URLs and ignore uncancelable late results after failure/disposal.
 - [ ] P4-23 Implement shared active-time accounting for confirmed suspension and ambiguous heartbeat gaps, including pre-worker initialization. Preserve retained budgets without replenishment.
 - [ ] P4-24 Implement independent responsiveness probes and read-only resume connection checks with separate 10-second deadlines. Reconcile pending replies before timeout decisions and gate new database work without replay.
@@ -47,9 +47,9 @@ The future `WorkerClient` belongs to `@kozane/client`. Dedicated and Service Wor
 
 - [ ] P4-25 Implement guarded `kozane-demo:session` envelope serialization/validation, canonical padded base64 and informational timestamp rules. Exclude preferences and ignore additional envelope fields.
 - [ ] P4-26 Implement integrity, foreign-key, complete migration-history, canonical-schema and initial-view validation for restored/sample/reset candidates through public exports.
-- [ ] P4-27 Apply the recovery decision table by failure classification and candidate source. Preserve saved bytes for unknown/transient failures; delete invalid/incompatible copies only after validated fallback succeeds.
+- [ ] P4-27 Apply the recovery decision table by failure classification and candidate source. Preserve saved bytes for unknown or transient failures. Delete invalid/incompatible copies only after validated fallback succeeds.
 - [ ] P4-28 Implement generation-local committed revisions and export stamps. Debounce saves by 500 ms with a 5-second maximum scheduling wait and at most one queued/in-flight export.
-- [ ] P4-29 Cover only the exported revision after successful storage. Track newer commits and schedule follow-up from their earliest uncovered commit; coalesce visibility/pagehide requests.
+- [ ] P4-29 Cover only the exported revision after successful storage. Track newer commits and schedule follow-up from their earliest uncovered commit. Coalesce visibility/pagehide requests.
 - [ ] P4-30 Enforce the 2 MiB database and 3 Mi-character envelope limits before the specified export, transfer, encoding, parsing and decoding stages. Suspend saves for the generation after a size-limit failure.
 - [ ] P4-31 Handle storage failures in memory, suppress retries until a later write and attempt stale-copy deletion. Disclose unavailable recovery and failed deletion accurately.
 - [ ] P4-32 After validated reset, replace navigation with the sample board and clear filters/selections. Preserve URL and saved data on reset failure and avoid intermediate navigation during consecutive resets.
@@ -61,12 +61,12 @@ The future `WorkerClient` belongs to `@kozane/client`. Dedicated and Service Wor
 - [ ] P4-35 Emit the specified meta CSP before scripts with bootstrap hashes and Blob worker support. Keep the main Node app's existing CSP unchanged.
 - [ ] P4-36 Configure adapter-static, `.nojekyll`, a dedicated production origin and an empty production base path. Keep analytics and cookies out of the first release.
 - [ ] P4-37 Add exact-version release dispatches that create dependency-update PRs and regenerate the lockfile. Validate payload versions, peer/runtime identity and frozen installations.
-- [ ] P4-38 Validate final merge candidates, serialize update merges and invalidate stale checks. Record tested commit, package pair and artifact hash; deploy the tested artifact or repeat checks after rebuilding.
+- [ ] P4-38 Validate final merge candidates, serialize update merges and invalidate stale checks. Record tested commit, package pair and artifact hash. Deploy the tested artifact or repeat checks after rebuilding.
 - [ ] P4-39 Add nightly checks for the latest published pair and separately for source `main`, without changing production dependencies. Run candidate package checks against the production restoration path before future publication.
 
 ## Gate 5 — Acceptance and launch
 
-Run every case in the specification's [demo acceptance checks](web-demo-specification.md#demo-acceptance-checks). The groups below organize execution and evidence; they do not replace individual cases.
+Run every case in the specification's [demo acceptance checks](web-demo-specification.md#demo-acceptance-checks). The groups below organize execution and evidence. Run every acceptance case.
 
 - [ ] A-01 Run the shared writable-client contract suite against HTTP and local clients with equivalent default and non-default contexts. Cover input preparation, errors, namespace creation, transactions and rollback.
 - [ ] A-02 Run conditional snapshot cases across HTTP, local and static clients, including cross-instance/namespace validators, reset, replacement and eviction.
@@ -85,6 +85,6 @@ Run every case in the specification's [demo acceptance checks](web-demo-specific
 - [ ] A-15 Recheck global CLI installation, existing workspaces/migrations, HTTP compatibility, Node read-only/in-memory modes and existing SSG output.
 - [ ] A-16 Exercise overlapping release dispatches and modified merge candidates. Verify a failed update leaves production unchanged and deployment matches the tested commit/artifact.
 - [ ] A-17 Implement the versioned performance profile with the specified viewport, CPU/network throttling, pinned Chromium, runner details and identical fixture/baseline artifacts.
-- [ ] A-18 Run and retain all 20 cold loads for candidate and baseline. Require p75 FCP within baseline plus 100 ms and trace proof of worker/wasm startup after FCP; missing timings fail the run.
+- [ ] A-18 Run and retain all 20 cold loads for candidate and baseline. Require p75 FCP within baseline plus 100 ms and trace proof of worker/wasm startup after FCP. Missing timings fail the run.
 - [ ] A-19 Publish actual wasm sizes and both aspirational timings with fixture, environment, raw timing and trace identifiers. Do not make aspirational targets release blockers.
 - [ ] G5 Record all required checks passing, production origin isolation and tested deployment evidence. Launch the demo from that artifact.
