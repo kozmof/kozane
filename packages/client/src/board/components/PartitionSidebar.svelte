@@ -30,6 +30,9 @@
     readonly?: boolean;
   } = $props();
 
+  function startRename(id: string) {
+    if (!readonly && onRenamePartition) editingPartitionId = id;
+  }
   let editingPartitionId: string | null = $state(null);
 
   const dotClass = css({ width: "7px", height: "7px", borderRadius: "50%", flexShrink: "0" });
@@ -101,7 +104,7 @@
 
   <div class={css({ flex: "1", overflowY: "auto", padding: "14px 0 8px" })}>
     <div class={css({ padding: "0 8px", display: "flex", flexDirection: "column", gap: "1px" })}>
-      <button class={sideBtn(activePartition === null)} onclick={() => (activePartition = null)}>
+      <button class={sideBtn(activePartition === null)} onclick={() => { activePartition = null; }}>
         <span class={dotClass} style:background="var(--colors-neutral-faded)"></span>
         <span class={flex1Class}>All cards</span>
         <span class={countClass}>{cards.length}</span>
@@ -118,12 +121,13 @@
             }} />
           {:else}
           <button
-            title={!readonly && onRenamePartition ? "Double-click or press F2 to rename partition" : undefined}
-            ondblclick={() => { if (!readonly && onRenamePartition) editingPartitionId = b.id; }}
-            onkeydown={(event) => { if (event.key === "F2" && !readonly && onRenamePartition) { event.preventDefault(); event.stopPropagation(); editingPartitionId = b.id; } }}
+            aria-pressed={active}
+            title={!readonly && onRenamePartition ? "Double-click, press F2, or use the edit button to rename partition" : undefined}
+            ondblclick={(event) => { event.preventDefault(); event.stopPropagation(); startRename(b.id); }}
+            onkeydown={(event) => { if (event.key === "F2" && !readonly && onRenamePartition) { event.preventDefault(); event.stopPropagation(); startRename(b.id); } }}
             class={cx(sideBtn(active), css({ paddingRight: !readonly && onRenamePartition ? "50px" : "28px" }))}
             style:background={active ? b.bg : "transparent"}
-            onclick={() => (activePartition = active ? null : b.id)}
+            onclick={() => { activePartition = b.id; }}
           >
             <span class={dotClass} style:background={b.dot}></span>
             <span class={flex1Class}>{b.name}</span>
@@ -135,7 +139,7 @@
               class={css({ position: "absolute", right: "28px", top: "50%", transform: "translateY(-50%)", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0", background: "none", border: "none", cursor: "pointer", borderRadius: "2px", color: "neutral.subtle", "&:hover": { color: "ink.black" } })}
               aria-label={`Rename ${b.name}`}
               title="Rename partition"
-              onclick={() => { editingPartitionId = b.id; }}
+              onclick={() => startRename(b.id)}
             >
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M10.5 2.5l3 3M3 10l7.5-7.5a1.4 1.4 0 012 0l1 1a1.4 1.4 0 010 2L6 13l-4 1 1-4z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
