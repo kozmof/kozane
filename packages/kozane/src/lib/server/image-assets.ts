@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile, readdir, stat, rename, rm } from "node:fs/p
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { imagePath, IMAGE_MAX_BYTES } from "@kozane/core";
-import type { DB } from "../../db/tx.js";
+import type { DB, Tx } from "../../db/tx.js";
 import { cardTable } from "../../db/schema.js";
 
 export function imageDirectory(root: string): string {
@@ -150,6 +150,7 @@ export async function maintainImageAssets(root: string, db: DB, now = Date.now()
   if (previous && (previous.running || now - previous.at < 60 * 60 * 1000)) return;
   maintenance.set(root, { at: now, running: true });
   try {
+    await retryImageDeletions(root, db);
     await collectUnusedImages(root, db, now);
   } catch {
     /* Retry on a later maintenance opportunity. */
@@ -158,36 +159,68 @@ export async function maintainImageAssets(root: string, db: DB, now = Date.now()
   }
 }
 
-/** Remove assets belonging to deleted cards only after the database deletion commits. */
+/** Capture deleted references under the same writer lock as the deletion. */
 export async function withImageDeletion<T>(
   root: string | null,
   db: DB,
-  removeCards: () => Promise<T>,
+  removeCards: (tx: Tx) => Promise<T>,
 ): Promise<T> {
-  if (!root || process.env.KOZANE_MEMORY_MODE === "1" || activeServerProcess(root)?.memory)
-    return removeCards();
-  const before = await db.select({ id: cardTable.id, content: cardTable.content }).from(cardTable);
-  const result = await removeCards();
-  // Cleanup is serialized with card writers. A remaining reference always keeps its image.
-  try {
-    await composeWrite(db, async (tx) => {
-      const remaining = await tx
-        .select({ id: cardTable.id, content: cardTable.content })
-        .from(cardTable);
-      const ids = new Set(remaining.map((row) => row.id));
-      const references = new Set(remaining.map((row) => imagePath(row.content)));
-      const deleted = new Set(
-        before.filter((row) => !ids.has(row.id)).map((row) => imagePath(row.content)),
+  const persistent =
+    root && process.env.KOZANE_MEMORY_MODE !== "1" && !activeServerProcess(root)?.memory;
+  const result = await composeWrite(db, async (tx) => {
+    const before = persistent
+      ? await tx.select({ id: cardTable.id, content: cardTable.content }).from(cardTable)
+      : [];
+    const result = await removeCards(tx);
+    if (persistent) {
+      const remaining = new Set(
+        (await tx.select({ id: cardTable.id }).from(cardTable)).map((row) => row.id),
       );
-      for (const path of deleted) {
-        if (!path || references.has(path)) continue;
-        const name = path.split("/").pop()!;
+      const paths = new Set(
+        before.filter((row) => !remaining.has(row.id)).map((row) => imagePath(row.content)),
+      );
+      const queue = join(imageDirectory(root), ".pending-delete");
+      for (const path of paths)
+        if (path) {
+          await mkdir(queue, { recursive: true });
+          await writeFile(join(queue, path.split("/").pop()!), "", { flag: "a" });
+        }
+    }
+    return result;
+  });
+  if (persistent)
+    await retryImageDeletions(root, db).catch((cause) =>
+      console.warn("Image cleanup after card deletion failed:", cause),
+    );
+  return result;
+}
+
+export async function retryImageDeletions(root: string, db: DB): Promise<void> {
+  if (process.env.KOZANE_MEMORY_MODE === "1" || activeServerProcess(root)?.memory) return;
+  const queue = join(imageDirectory(root), ".pending-delete");
+  let names: string[];
+  try {
+    names = await readdir(queue);
+  } catch (cause) {
+    if (cause && typeof cause === "object" && "code" in cause && cause.code === "ENOENT") return;
+    throw cause;
+  }
+  await composeWrite(db, async (tx) => {
+    const references = new Set(
+      (await tx.select({ content: cardTable.content }).from(cardTable)).map((row) =>
+        imagePath(row.content),
+      ),
+    );
+    for (const name of names) {
+      const path = imagePath("kozane-image:/api/images/" + name);
+      if (!path || references.has(path)) continue;
+      try {
         await rm(join(imageDirectory(root), name), { force: true });
         await rm(join(imageDirectory(root), ".retained", name), { force: true });
+        await rm(join(queue, name), { force: true });
+      } catch (cause) {
+        console.warn("Pending image deletion failed:", cause);
       }
-    });
-  } catch (cause) {
-    console.warn("Image cleanup after card deletion failed:", cause);
-  }
-  return result;
+    }
+  });
 }

@@ -138,19 +138,17 @@ export async function cardDelete(requestedIds: string[]): Promise<void> {
       contentMax: contentMaxForRoot(root),
       ...canvasBoundsForRoot(root),
     });
-    const { allIds, cardIds } = await withImageDeletion(root, db, () =>
-      composeWrite(db, async (tx) => {
-        const { allIds, cardIds, namespaceId } = await resolveCardGroup(tx, requestedIds);
-        try {
-          await removeInTx(tx, context, namespaceId, { cardIds });
-        } catch (error) {
-          if (error instanceof ValidationError)
-            throw new Error("Cards must belong to the same namespace.", { cause: error });
-          throw error;
-        }
-        return { allIds, cardIds };
-      }),
-    );
+    const { allIds, cardIds } = await withImageDeletion(root, db, async (tx) => {
+      const { allIds, cardIds, namespaceId } = await resolveCardGroup(tx, requestedIds);
+      try {
+        await removeInTx(tx, context, namespaceId, { cardIds });
+      } catch (error) {
+        if (error instanceof ValidationError)
+          throw new Error("Cards must belong to the same namespace.", { cause: error });
+        throw error;
+      }
+      return { allIds, cardIds };
+    });
     console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} deleted.`);
     for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allIds)}`);
   });

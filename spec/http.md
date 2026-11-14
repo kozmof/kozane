@@ -613,7 +613,10 @@ after 24 hours. Archived images remain readable at their original URLs so a
 concurrent card reference cannot lose its image. Archives are not automatically
 deleted. Deleting a card through the card endpoints or CLI removes its image
 from both directories after the last card reference is deleted. Memory sessions
-preserve workspace image files. Fresh uploads are preserved. Maintenance failures do not fail committed writes.
+preserve workspace image files. Namespace deletion through the CLI also cleans up images
+whose last card reference is removed. Pending file removals are recorded under
+`.kozane/assets/images/.pending-delete` and retried during subsequent deletions
+or asset maintenance. Fresh uploads are preserved. Maintenance failures do not fail committed writes.
 
 ### `GET /api/images/[name]`
 

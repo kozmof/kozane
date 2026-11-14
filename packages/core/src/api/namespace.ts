@@ -85,36 +85,44 @@ async function namespaceGlueIds(tx: Tx, namespaceId: string): Promise<string[]> 
 
 type DeleteNamespace = { db: DB; namespaceId: string };
 export async function deleteNamespace({ db, namespaceId }: DeleteNamespace): Promise<void> {
-  await withTx(db, async (tx) => {
-    const namespace = await tx
-      .select()
+  await withTx(db, (tx) => deleteNamespaceInTx({ db: tx, namespaceId }));
+}
+
+export async function deleteNamespaceInTx({
+  db: tx,
+  namespaceId,
+}: {
+  db: Tx;
+  namespaceId: string;
+}): Promise<void> {
+  const namespace = await tx
+    .select()
+    .from(namespaceTable)
+    .where(eq(namespaceTable.id, namespaceId))
+    .get();
+  assertFound(namespace ? [namespace] : [], `Namespace namespaceId=${namespaceId}`);
+
+  // Collect glue IDs before namespace deletion cascades to their members.
+  const glueIds = await namespaceGlueIds(tx, namespaceId);
+  await tx.delete(namespaceTable).where(eq(namespaceTable.id, namespaceId));
+  // Preserve surviving members of groups that span namespaces.
+  await dissolveOrphanGlueGroupsInTx({ db: tx, glueIds });
+
+  if (namespace?.isDefault) {
+    // Choose the oldest surviving namespace consistently using UUIDv7 creation order.
+    const replacement = await tx
+      .select({ id: namespaceTable.id })
       .from(namespaceTable)
-      .where(eq(namespaceTable.id, namespaceId))
+      .orderBy(asc(namespaceTable.id))
+      .limit(1)
       .get();
-    assertFound(namespace ? [namespace] : [], `Namespace namespaceId=${namespaceId}`);
-
-    // Collect glue IDs before namespace deletion cascades to their members.
-    const glueIds = await namespaceGlueIds(tx, namespaceId);
-    await tx.delete(namespaceTable).where(eq(namespaceTable.id, namespaceId));
-    // Preserve surviving members of groups that span namespaces.
-    await dissolveOrphanGlueGroupsInTx({ db: tx, glueIds });
-
-    if (namespace?.isDefault) {
-      // Choose the oldest surviving namespace consistently using UUIDv7 creation order.
-      const replacement = await tx
-        .select({ id: namespaceTable.id })
-        .from(namespaceTable)
-        .orderBy(asc(namespaceTable.id))
-        .limit(1)
-        .get();
-      if (replacement) {
-        await tx
-          .update(namespaceTable)
-          .set({ isDefault: true })
-          .where(eq(namespaceTable.id, replacement.id));
-      }
+    if (replacement) {
+      await tx
+        .update(namespaceTable)
+        .set({ isDefault: true })
+        .where(eq(namespaceTable.id, replacement.id));
     }
-  });
+  }
 }
 
 type UpdateNamespaceName = NeedsDB & { namespaceId: string; name: string };

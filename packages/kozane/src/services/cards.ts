@@ -26,3 +26,5 @@ export type CardSetLayerInput = service.CardSetLayerInput;
 export type CardSetPartitionInput = service.CardSetPartitionInput;
 export type CardSetStackingInput = service.CardSetStackingInput;
 export type CardSquashInput = service.CardSquashInput;
+
+export const removeOneInTx = service.removeOneInTx;

@@ -1,3 +1,5 @@
+import { withImageDeletion } from "../../lib/server/image-assets.js";
+import { deleteNamespaceInTx } from "../../db/api/namespace.js";
 import * as namespaceService from "../../services/namespaces.js";
 import { createServiceContext } from "../../services/context.js";
 import { getUiConfigForRoot } from "../../db/internal/config.js";
@@ -64,7 +66,9 @@ export async function namespaceDelete(namespaceId: string): Promise<void> {
     );
     const namespaceIds = namespaces.map((namespace) => namespace.id);
     const resolvedId = resolveShortId(namespaceId, namespaceIds, "Namespace");
-    await namespaceService.remove(db, createServiceContext(getUiConfigForRoot(root)), resolvedId);
+    await withImageDeletion(root, db, (tx) =>
+      deleteNamespaceInTx({ db: tx, namespaceId: resolvedId }),
+    );
     console.log(`Namespace deleted.`);
     console.log(`  id: ${shortId(resolvedId, namespaceIds)}`);
   });

@@ -3,7 +3,6 @@ import {
   moveCardsToNamespaceInTx,
   squashNamespaceCard,
   type SquashCardResult,
-  deleteNamespaceCards,
 } from "../api/composite.js";
 import {
   reassignCardsToPartitionInTx,
@@ -412,7 +411,16 @@ export async function removeOne(
   namespaceId: string,
   cardId: string,
 ) {
-  const result = await deleteNamespaceCards({ db, namespaceId, cardIds: [cardId] });
+  return withTx(db, (tx) => removeOneInTx(tx, _context, namespaceId, cardId));
+}
+
+export async function removeOneInTx(
+  db: Tx,
+  _context: ServiceContext,
+  namespaceId: string,
+  cardId: string,
+) {
+  const result = await deleteNamespaceCardsInTx({ db, namespaceId, cardIds: [cardId] });
   if (!result.ok) throw new NotFoundError("Card");
   return { ok: true as const };
 }
