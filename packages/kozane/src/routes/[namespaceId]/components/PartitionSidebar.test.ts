@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { render, screen, fireEvent, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import PartitionSidebar from "../../../../../client/src/board/components/PartitionSidebar.svelte";
 const props = () => ({
@@ -87,4 +87,55 @@ it("renames on double-click without clearing the partition filter", async () => 
   expect(screen.getByRole("textbox", { name: "Partition name" })).toHaveValue("General");
   await user.keyboard("{Escape}");
   expect(screen.getByRole("button", { name: /^General/ })).toHaveAttribute("aria-pressed", "true");
+});
+it("restores focus to the edit icon after saving and cancelling", async () => {
+  const user = userEvent.setup();
+  render(PartitionSidebar, { props: props() });
+  await user.click(screen.getByRole("button", { name: "Rename General" }));
+  await user.type(screen.getByRole("textbox", { name: "Partition name" }), "Inbox{Enter}");
+  await waitFor(() => expect(screen.getByRole("button", { name: "Rename General" })).toHaveFocus());
+  await user.click(screen.getByRole("button", { name: "Rename General" }));
+  await user.keyboard("{Escape}");
+  expect(screen.getByRole("button", { name: "Rename General" })).toHaveFocus();
+});
+it("restores focus to the row after cancelling keyboard renaming", async () => {
+  const user = userEvent.setup();
+  render(PartitionSidebar, { props: props() });
+  screen.getByRole("button", { name: /^General/ }).focus();
+  await user.keyboard("{F2}{Escape}");
+  expect(screen.getByRole("button", { name: /^General/ })).toHaveFocus();
+});
+it("does not close another editor or steal its focus when an older save completes", async () => {
+  const user = userEvent.setup();
+  const options = props();
+  options.partitions.push({
+    ...options.partitions[0],
+    id: "other",
+    name: "Other",
+    isDefault: false,
+  });
+  let finish!: (error: string | null) => void;
+  options.onRenamePartition.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(PartitionSidebar, { props: options });
+  await user.click(screen.getByRole("button", { name: "Rename General" }));
+  await user.type(screen.getByRole("textbox", { name: "Partition name" }), "Inbox{Enter}");
+  await user.click(screen.getByRole("button", { name: "Rename Other" }));
+  finish(null);
+  await waitFor(() =>
+    expect(screen.getByRole("textbox", { name: "Partition name" })).toHaveValue("Other"),
+  );
+  expect(screen.getByRole("textbox", { name: "Partition name" })).toHaveFocus();
+});
+it("keeps focus on the destination when editing is cancelled by a click elsewhere", async () => {
+  const user = userEvent.setup();
+  render(PartitionSidebar, { props: props() });
+  await user.click(screen.getByRole("button", { name: "Rename General" }));
+  await user.click(screen.getByRole("button", { name: "All cards" }));
+  expect(screen.getByRole("button", { name: "All cards" })).toHaveFocus();
+  expect(screen.queryByRole("textbox", { name: "Partition name" })).not.toBeInTheDocument();
 });

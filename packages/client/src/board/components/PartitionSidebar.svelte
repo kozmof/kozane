@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import InlineNameInput from "./InlineNameInput.svelte";
   import { css, cx } from "../../styles/css.js";
   import type { PartitionWithColor } from "@kozane/core";
@@ -28,10 +29,26 @@
     readonly?: boolean;
   } = $props();
 
-  function startRename(id: string) {
-    if (!readonly && onRenamePartition) editingPartitionId = id;
-  }
+  let sidebarElement: HTMLElement | undefined = $state();
+  let renameSession = 0;
+  let renameControl: "row" | "edit" = "row";
   let editingPartitionId: string | null = $state(null);
+  function startRename(id: string, control: "row" | "edit" = "row") {
+    if (readonly || !onRenamePartition) return;
+    renameSession++;
+    renameControl = control;
+    editingPartitionId = id;
+  }
+  async function closeRename(id: string, session: number, restoreFocus: boolean) {
+    if (session !== renameSession || editingPartitionId !== id) return;
+    const control = renameControl;
+    editingPartitionId = null;
+    await tick();
+    if (!restoreFocus || session !== renameSession || editingPartitionId !== null || !visible) return;
+    const button = Array.from(sidebarElement?.querySelectorAll<HTMLButtonElement>("button[data-partition-control]") ?? [])
+      .find(element => element.dataset.partitionId === id && element.dataset.partitionControl === control);
+    button?.focus();
+  }
 
   const dotClass = css({ width: "7px", height: "7px", borderRadius: "50%", flexShrink: "0" });
   const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
@@ -62,6 +79,7 @@
 
 <!-- Float over the left edge of the board, so opening the panel never moves the canvas. -->
 <aside
+  bind:this={sidebarElement}
   class={css({
     position: "absolute",
     top: "0",
@@ -110,13 +128,16 @@
         {@const active = activePartition === b.id}
         <div class={css({ position: "relative", "&:hover .partition-delete": { opacity: "1" }, "&:hover .partition-edit": { opacity: "1", pointerEvents: "auto" }, "&:focus-within .partition-edit": { opacity: "1", pointerEvents: "auto" } })}>
           {#if editingPartitionId === b.id && !readonly && onRenamePartition}
-            <InlineNameInput value={b.name} label="Partition name" onCancel={() => { editingPartitionId = null; }} onSubmit={async (name) => {
+            <InlineNameInput value={b.name} label="Partition name" onCancel={(focusTo) => { void closeRename(b.id, renameSession, focusTo === undefined); }} onSubmit={async (name) => {
+              const session = renameSession;
               const error = await onRenamePartition!(b.id, name);
-              if (!error) editingPartitionId = null;
+              if (!error) await closeRename(b.id, session, true);
               return error;
             }} />
           {:else}
           <button
+            data-partition-id={b.id}
+            data-partition-control="row"
             aria-pressed={active}
             title={!readonly && onRenamePartition ? "Double-click, press F2, or use the edit button to rename partition" : undefined}
             ondblclick={(event) => { event.preventDefault(); event.stopPropagation(); startRename(b.id); }}
@@ -132,9 +153,11 @@
           {#if !readonly && onRenamePartition && editingPartitionId !== b.id}
             <button
               class={cx("partition-edit", css({ opacity: "0", pointerEvents: "none", transition: "opacity 0.12s", position: "absolute", right: "28px", top: "50%", transform: "translateY(-50%)", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0", background: "none", border: "none", cursor: "pointer", borderRadius: "2px", color: "neutral.subtle", "&:hover": { color: "ink.black" } }))}
+              data-partition-id={b.id}
+              data-partition-control="edit"
               aria-label={`Rename ${b.name}`}
               title="Rename partition"
-              onclick={() => startRename(b.id)}
+              onclick={() => startRename(b.id, "edit")}
             >
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M10.5 2.5l3 3M3 10l7.5-7.5a1.4 1.4 0 012 0l1 1a1.4 1.4 0 010 2L6 13l-4 1 1-4z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
