@@ -301,9 +301,12 @@ describe("card add --type image", () => {
     const root = tempWorkspace();
     cli(root, "init");
     const source = join(root, "drawing.SVG");
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40"><rect width="80" height="40"/></svg>';
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40"><rect width="80" height="40"/></svg>';
     writeFileSync(source, svg);
-    const id = outputId(cli(root, "card", "add", "--type", "image", source, "--x", "120", "--y", "80"));
+    const id = outputId(
+      cli(root, "card", "add", "--type", "image", source, "--x", "120", "--y", "80"),
+    );
     const content = cli(root, "card", "show", id).trim();
     expect(content).toMatch(/^kozane-image:\/api\/images\/[a-f0-9-]{36}\.svg$/);
     const name = content.split("/").pop()!;

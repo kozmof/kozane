@@ -26,7 +26,11 @@ export function registerCardCommands(program: Command): void {
   card
     .command("add <content>")
     .description("Add a text or image card to a namespace")
-    .addOption(new Option("--type <type>", "Card type (image content is a local file path)").choices(["text", "image"]).default("text"))
+    .addOption(
+      new Option("--type <type>", "Card type (image content is a local file path)")
+        .choices(["text", "image"])
+        .default("text"),
+    )
     .option("--namespace <namespaceId>", "Namespace ID or short ID to add the card to")
     .option("--partition <partitionId>", "Partition ID or short ID (defaults to General)")
     .option("--scope <scopeId>", "Add the card to a scope ID or short ID")
@@ -36,7 +40,9 @@ export function registerCardCommands(program: Command): void {
     )
     .option("--x <number>", "Horizontal card position", integer)
     .option("--y <number>", "Vertical card position", integer)
-    .action((content, opts) => opts.type === "image" ? cardAddImage(content, opts) : cardAdd(content, opts));
+    .action((content, opts) =>
+      opts.type === "image" ? cardAddImage(content, opts) : cardAdd(content, opts),
+    );
 
   card
     .command("squash [content]")
