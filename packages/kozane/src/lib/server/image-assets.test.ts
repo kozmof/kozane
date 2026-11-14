@@ -19,10 +19,10 @@ const svg = new TextEncoder().encode(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40"><rect width="80" height="40"/></svg>',
 );
 describe("image assets", () => {
-  it("checks signatures, extensions, limits, and active SVG content", () => {
-    expect(validateImage("drawing.SVG", svg)).toBe("svg");
+  it("checks signatures, extensions, limits, and active SVG content", async () => {
+    expect(await validateImage("drawing.SVG", svg)).toBe("svg");
     for (const name of ["x.png", "x.jpg", "x.gif"])
-      expect(() => validateImage(name, svg)).toThrow();
+      await expect(validateImage(name, svg)).rejects.toThrow();
     for (const text of [
       "",
       "<svg><rect></svg>",
@@ -33,8 +33,8 @@ describe("image assets", () => {
       '<svg onload="alert(1)"/>',
       '<svg><image href="https://example.com/a"/></svg>',
     ])
-      expect(() => validateImage("x.svg", new TextEncoder().encode(text))).toThrow();
-    expect(() => validateImage("x.png", new Uint8Array(10 * 1024 * 1024 + 1))).toThrow();
+      await expect(validateImage("x.svg", new TextEncoder().encode(text))).rejects.toThrow();
+    await expect(validateImage("x.png", new Uint8Array(10 * 1024 * 1024 + 1))).rejects.toThrow();
   });
   it("stores bytes and collects abandoned uploads only after the grace period", async () => {
     const root = await mkdtemp(join(tmpdir(), "kozane-images-"));
@@ -56,25 +56,25 @@ describe("image assets", () => {
       expect(await readdir(imageDirectory(root))).toHaveLength(1);
       await removeOne(db, createServiceContext(), namespaceId, card.id);
       await collectUnusedImages(root, db);
-      expect(await readdir(imageDirectory(root))).toEqual(['.retained']);
+      expect(await readdir(imageDirectory(root))).toEqual([".retained"]);
       // A reference created after the collector's snapshot still resolves the bytes.
-      expect(Array.from(await readImage(root, url.split('/').pop()!))).toEqual(Array.from(svg));
+      expect(Array.from(await readImage(root, url.split("/").pop()!))).toEqual(Array.from(svg));
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 });
 
-it("accepts local SVG gradients, clips, and use references", () => {
+it("accepts local SVG gradients, clips, and use references", async () => {
   const source =
     '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="paint"/><clipPath id="clip"/><path id="shape"/></defs><use href="#shape" fill="url(#paint)" clip-path="url(\'#clip\')"/></svg>';
-  expect(validateImage("drawing.svg", new TextEncoder().encode(source))).toBe("svg");
-  expect(() =>
+  expect(await validateImage("drawing.svg", new TextEncoder().encode(source))).toBe("svg");
+  await expect(
     validateImage(
       "drawing.svg",
       new TextEncoder().encode('<svg><rect fill="url(https://example.com/a)"/></svg>'),
     ),
-  ).toThrow();
+  ).rejects.toThrow();
 });
 it("never collects persistent assets from a memory session", async () => {
   const root = await mkdtemp(join(tmpdir(), "kozane-memory-assets-"));
@@ -109,7 +109,26 @@ it("contains cleanup failures and throttles repeated maintenance", async () => {
   }
 });
 
-it('checks decoded SVG resource references', () => {
-  for (const source of ['<svg><rect fill="u&#114;l(https://example.com/a)"/></svg>', '<svg><rect fill="url(&#104;ttps://example.com/a)"/></svg>']) expect(() => validateImage('x.svg', new TextEncoder().encode(source))).toThrow();
-  expect(validateImage('x.svg', new TextEncoder().encode('<svg><use href="&#35;shape"/></svg>'))).toBe('svg');
+it("checks decoded SVG resource references", async () => {
+  for (const source of [
+    '<svg><rect fill="u&#114;l(https://example.com/a)"/></svg>',
+    '<svg><rect fill="url(&#104;ttps://example.com/a)"/></svg>',
+  ])
+    await expect(validateImage("x.svg", new TextEncoder().encode(source))).rejects.toThrow();
+  expect(
+    await validateImage("x.svg", new TextEncoder().encode('<svg><use href="&#35;shape"/></svg>')),
+  ).toBe("svg");
+});
+it("rejects malformed entities and duplicate SVG attributes", async () => {
+  for (const source of [
+    '<svg title="&"/>',
+    '<svg title="&bogus;"/>',
+    '<svg title="&#;"/>',
+    '<svg width="1" width="2"/>',
+  ]) {
+    await expect(validateImage("x.svg", new TextEncoder().encode(source))).rejects.toThrow();
+  }
+  expect(await validateImage("x.svg", new TextEncoder().encode('<svg title="A &amp; B"/>'))).toBe(
+    "svg",
+  );
 });

@@ -12,14 +12,23 @@ export function imageDirectory(root: string): string {
 }
 export class ImageValidationError extends Error {}
 
-export function validateImage(name: string, bytes: Uint8Array): string {
+export async function validateImage(name: string, bytes: Uint8Array): Promise<string> {
   const extension = name.split(".").pop()?.toLowerCase();
   if (!extension || !["jpg", "jpeg", "png", "svg"].includes(extension))
     throw new ImageValidationError("Choose JPEG, PNG, or SVG");
   if (!bytes.length || bytes.length > IMAGE_MAX_BYTES)
     throw new ImageValidationError("Image must be between 1 byte and 10 MiB");
   let valid = false;
-  try { valid = extension === 'png' ? validPng(bytes) : extension === 'svg' ? validSvg(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) : validJpeg(bytes); } catch { valid = false; }
+  try {
+    valid =
+      extension === "png"
+        ? await validPng(bytes)
+        : extension === "svg"
+          ? validSvg(new TextDecoder("utf-8", { fatal: true }).decode(bytes))
+          : validJpeg(bytes);
+  } catch {
+    valid = false;
+  }
   if (!valid) throw new ImageValidationError("File content does not match its image extension");
   return extension;
 }
@@ -35,17 +44,23 @@ function validSvg(source: string): boolean {
     /<!|<\s*(?:script|foreignObject)\b|\bon\w+\s*=/i.test(clean)
   )
     return false;
+  if (clean.replace(/&(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-f]+);/gi, "").includes("&"))
+    return false;
   let decoded: string;
   try {
     decoded = clean.replace(/&([^;]*);/g, (_, entity: string) => {
-      const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+      const named: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
       if (named[entity]) return named[entity];
-      if (!/^#(?:[0-9]+|x[0-9a-f]+)$/i.test(entity)) throw new Error('Invalid XML entity');
-      const value = entity[1].toLowerCase() === 'x' ? parseInt(entity.slice(2), 16) : Number(entity.slice(1));
-      if (!value || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) throw new Error('Invalid XML character');
+      if (!/^#(?:[0-9]+|x[0-9a-f]+)$/i.test(entity)) throw new Error("Invalid XML entity");
+      const value =
+        entity[1].toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : Number(entity.slice(1));
+      if (!value || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff))
+        throw new Error("Invalid XML character");
       return String.fromCodePoint(value);
     });
-  } catch { return false; }
+  } catch {
+    return false;
+  }
   // Inspect decoded values so character references cannot hide resource URLs.
   const references = decoded
     .replace(/(?:[\w.-]+:)?(?:href|src)\s*=\s*(["'])\s*#[A-Za-z_][\w:.-]*\s*\1/gi, "")
@@ -64,6 +79,11 @@ function validSvg(source: string): boolean {
     } else {
       const opening = /^([A-Za-z][\w:.-]*)([\s\S]*?)(\/?)$/.exec(token);
       if (!opening) return false;
+      const attributeNames = new Set<string>();
+      for (const attribute of opening[2].matchAll(/\s+([A-Za-z_:][\w:.-]*)\s*=/g)) {
+        if (attributeNames.has(attribute[1])) return false;
+        attributeNames.add(attribute[1]);
+      }
       // Attributes must be quoted. Reject unmatched or unquoted fragments.
       if (opening[2].replace(/\s+[A-Za-z_:][\w:.-]*\s*=\s*(?:"[^"<>]*"|'[^'<>]*')/g, "").trim())
         return false;
@@ -75,7 +95,7 @@ function validSvg(source: string): boolean {
   return roots === 1 && stack.length === 0 && clean.slice(offset).trim() === "";
 }
 export async function storeImage(root: string, name: string, bytes: Uint8Array): Promise<string> {
-  const extension = validateImage(name, bytes);
+  const extension = await validateImage(name, bytes);
   const filename = randomUUID() + "." + extension;
   await mkdir(imageDirectory(root), { recursive: true });
   await writeFile(join(imageDirectory(root), filename), bytes, { flag: "wx" });
@@ -101,7 +121,7 @@ export async function collectUnusedImages(root: string, db: DB, now = Date.now()
     const filename = join(imageDirectory(root), name);
     try {
       if ((await stat(filename)).mtimeMs < now - 86400000) {
-        const archive = join(imageDirectory(root), '.retained');
+        const archive = join(imageDirectory(root), ".retained");
         await mkdir(archive, { recursive: true });
         await rename(filename, join(archive, name));
       }
@@ -112,10 +132,11 @@ export async function collectUnusedImages(root: string, db: DB, now = Date.now()
 }
 export async function readImage(root: string, name: string): Promise<Uint8Array> {
   if (!imagePath("kozane-image:/api/images/" + name)) throw new Error("Invalid image name");
-  try { return await readFile(join(imageDirectory(root), name)); }
-  catch (cause) {
-    if (!(cause instanceof Error) || !('code' in cause) || cause.code !== 'ENOENT') throw cause;
-    return readFile(join(imageDirectory(root), '.retained', name));
+  try {
+    return await readFile(join(imageDirectory(root), name));
+  } catch (cause) {
+    if (!(cause instanceof Error) || !("code" in cause) || cause.code !== "ENOENT") throw cause;
+    return readFile(join(imageDirectory(root), ".retained", name));
   }
 }
 
