@@ -1,24 +1,24 @@
+import { IMAGE_MAX_BYTES } from "@kozane/core";
 import { apiHandler } from "$lib/server/http/api-handler.js";
 import type { RequestHandler } from "./$types";
 import { getWorkspaceRoot } from "../../../db/internal/config.js";
-import { mkdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { storeImage, collectUnusedImages } from "$lib/server/image-assets.js";
+
 import { error, json } from "@sveltejs/kit";
-export const POST: RequestHandler = apiHandler(async ({ request }) => {
+export const POST: RequestHandler = apiHandler(async ({ request, locals }) => {
   const form = await request.formData();
   const file = form.get("image");
   if (!(file instanceof File)) error(400, "Choose an image");
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  if (!extension || !["jpg", "jpeg", "png", "svg"].includes(extension))
-    error(400, "Choose JPEG, PNG, or SVG");
-  if (file.size === 0 || file.size > 10 * 1024 * 1024)
-    error(400, "Image must be between 1 byte and 10 MB");
+  if (file.size === 0 || file.size > IMAGE_MAX_BYTES)
+    error(400, "Image must be between 1 byte and 10 MiB");
   const root = getWorkspaceRoot();
   if (!root) error(500, "Workspace not found");
-  const directory = resolve(root, ".kozane/assets/images");
-  await mkdir(directory, { recursive: true });
-  const name = randomUUID() + "." + extension;
-  await writeFile(resolve(directory, name), Buffer.from(await file.arrayBuffer()), { flag: "wx" });
-  return json({ url: "/api/images/" + name });
+  let url: string;
+  try {
+    url = await storeImage(root, file.name, new Uint8Array(await file.arrayBuffer()));
+  } catch (cause) {
+    error(400, cause instanceof Error ? cause.message : "Invalid image");
+  }
+  await collectUnusedImages(root, locals.db).catch(() => {});
+  return json({ url });
 });

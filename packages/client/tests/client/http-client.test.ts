@@ -228,3 +228,16 @@ it("owns workspace polling without a mounted board and cleans up on final unsubs
     vi.useRealTimers();
   }
 });
+it("uploads multipart files and resolves image URLs through the configured base", async () => {
+  const url = "/api/images/12345678-1234-1234-1234-123456789abc.svg";
+  const fetcher = vi.fn(async () => Response.json({ url }));
+  const client = new HttpClient({ fetcher, base: "https://workspace.example/base", capabilities });
+  const file = new File(["<svg/>"], "drawing.svg", { type: "image/svg+xml" });
+  expect(await client.uploadImage(file)).toEqual({ url });
+  expect(fetcher).toHaveBeenCalledWith(
+    "https://workspace.example/base/api/images",
+    expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
+  );
+  expect(client.resolveImageUrl(url)).toBe("https://workspace.example/base" + url);
+  client.dispose();
+});

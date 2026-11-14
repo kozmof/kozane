@@ -598,11 +598,17 @@ Check `status` in monitoring. The endpoint uses the same authentication as other
 
 Send `multipart/form-data` with an `image` file field. Accepted filename extensions
 are `.jpg`, `.jpeg`, `.png`, and `.svg`, ignoring case. Files must contain between
-1 byte and 10 MiB. Invalid files return 400.
+1 byte and 10 MiB. Image signatures must match the filename extension.
+SVG files must have balanced tags and quoted attributes. Scripts, event handlers,
+embedded HTML, and resource links are rejected. Invalid files return 400.
 
 Returns `{ "url": "/api/images/<uuid>.<extension>" }` with status 200.
 Files are stored in the active workspace under `.kozane/assets/images`.
 A missing workspace returns 500.
+
+Uploads and successful card mutations trigger asset cleanup. Images with no card
+reference are eligible for deletion after 24 hours. Fresh uploads are preserved
+to allow concurrent card creation to finish. Cleanup failures do not fail committed writes.
 
 ### `GET /api/images/[name]`
 

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { setContext } from "svelte";
+  import { IMAGE_RESOLVER } from "../rendering/image-context.js";
   import RefreshNotice from "../RefreshNotice.svelte";
   import ClientNotice from "../ClientNotice.svelte";
   import type { BoardViewProps } from "./types.js";
@@ -16,6 +18,7 @@
   import FilePalette from "./components/FilePalette.svelte";
   import FileBrowser from "./components/FileBrowser.svelte";
   import { createBoardController } from "./board-controller.svelte.js";
+  setContext(IMAGE_RESOLVER, (path: string) => client.resolveImageUrl?.(path) ?? path);
   let {
     data,
     client,

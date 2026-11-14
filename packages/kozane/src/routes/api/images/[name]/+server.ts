@@ -1,8 +1,8 @@
 import { apiHandler } from "$lib/server/http/api-handler.js";
 import type { RequestHandler } from "./$types";
 import { getWorkspaceRoot } from "../../../../db/internal/config.js";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readImage } from "$lib/server/image-assets.js";
+
 import { error } from "@sveltejs/kit";
 export const GET: RequestHandler = apiHandler(async ({ params }) => {
   if (!/^[a-f0-9-]{36}\.(jpg|jpeg|png|svg)$/.test(params.name)) error(404);
@@ -10,12 +10,12 @@ export const GET: RequestHandler = apiHandler(async ({ params }) => {
   if (!root) error(500, "Workspace not found");
   let data;
   try {
-    data = await readFile(resolve(root, ".kozane/assets/images", params.name));
+    data = await readImage(root, params.name);
   } catch {
     error(404);
   }
   const extension = params.name.split(".").pop();
-  return new Response(data, {
+  return new Response(new Uint8Array(data).buffer, {
     headers: {
       "Content-Type":
         extension === "svg" ? "image/svg+xml" : extension === "png" ? "image/png" : "image/jpeg",

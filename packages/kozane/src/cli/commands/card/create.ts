@@ -1,6 +1,6 @@
-import { mkdirSync, statSync, writeFileSync, unlinkSync } from "node:fs";
-import { extname, join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { statSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { storeImage, collectUnusedImages } from "../../../lib/server/image-assets.js";
 import { createInTx as createBatchInTx } from "../../../services/card-batch.js";
 import { createInTx } from "../../../services/cards.js";
 import { createServiceContext } from "../../../services/context.js";
@@ -32,22 +32,19 @@ export async function cardAdd(rawContent: string, options: CardAddOptions = {}):
   await addCard(rawContent, options);
 }
 
-async function addCard(rawContent: string, options: CardAddOptions, imageFile?: string): Promise<void> {
+async function addCard(
+  rawContent: string,
+  options: CardAddOptions,
+  imageFile?: string,
+): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
     let imagePath: string | undefined;
     if (imageFile !== undefined) {
-      const extension = extname(imageFile).slice(1).toLowerCase();
-      if (!["jpg", "jpeg", "png", "svg"].includes(extension)) throw new Error("Choose JPEG, PNG, or SVG");
       const stat = statSync(imageFile);
-      if (!stat.isFile() || stat.size === 0 || stat.size > 10 * 1024 * 1024) throw new Error("Image must be a file between 1 byte and 10 MiB");
-      const bytes = readFileSync(imageFile);
-      if (bytes.length === 0 || bytes.length > 10 * 1024 * 1024) throw new Error("Image must be between 1 byte and 10 MiB");
-      const directory = join(root, ".kozane", "assets", "images");
-      mkdirSync(directory, { recursive: true });
-      const name = randomUUID() + "." + extension;
-      imagePath = join(directory, name);
-      writeFileSync(imagePath, bytes, { flag: "wx" });
-      rawContent = "kozane-image:/api/images/" + name;
+      if (!stat.isFile() || stat.size > 10 * 1024 * 1024) throw new Error("Invalid image file");
+      const path = await storeImage(root, imageFile, readFileSync(imageFile));
+      imagePath = join(root, ".kozane", "assets", "images", path.split("/").pop()!);
+      rawContent = "kozane-image:" + path;
     }
     const context = createServiceContext({
       contentMax: contentMaxForRoot(root),
@@ -84,6 +81,7 @@ async function addCard(rawContent: string, options: CardAddOptions, imageFile?: 
       scopeId ? db.select({ id: scopeTable.id }).from(scopeTable) : Promise.resolve([]),
       getAllLayers({ db, namespaceId }),
     ]);
+    await collectUnusedImages(root, db);
     console.log("Card added.");
     console.log(
       `  id      : ${shortId(

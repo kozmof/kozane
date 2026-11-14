@@ -411,6 +411,8 @@ Use `--type image` to interpret `<content>` as a local JPEG, PNG, or SVG file pa
 Extensions are checked without regard to case. Files must contain between 1 byte
 and 10 MiB. The image is copied to `.kozane/assets/images` with a unique filename.
 The source file is preserved. Other type values are rejected.
+Image signatures must match the extension. SVG files must have balanced tags and
+quoted attributes. Scripts, event handlers, embedded HTML, and resource links are rejected.
 
 ```bash
 kozane card add <content> [--type text|image] [--namespace <namespaceId>] [--partition <partitionId>]

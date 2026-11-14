@@ -1,3 +1,6 @@
+import { collectUnusedImages } from "../image-assets.js";
+import { getWorkspaceRoot } from "../../../db/internal/config.js";
+import type { RequestEvent } from "@sveltejs/kit";
 import { TaskspaceServiceError } from "$lib/server/taskspace-service/errors";
 import { domainErrorCode } from "../../../services/error-code.js";
 import {
@@ -77,7 +80,19 @@ export function apiHandler<E>(
 ): (event: E) => Promise<Response> {
   const wrapped = async (event: E): Promise<Response> => {
     try {
-      return await handler(event);
+      const response = await handler(event);
+      const requestEvent = event as Partial<RequestEvent>;
+      if (
+        response.ok &&
+        requestEvent.request &&
+        requestEvent.locals?.db &&
+        requestEvent.request.method !== "GET" &&
+        requestEvent.request.url.includes("/api/cards")
+      ) {
+        const root = getWorkspaceRoot();
+        if (root) await collectUnusedImages(root, requestEvent.locals.db).catch(() => {});
+      }
+      return response;
     } catch (e) {
       const code =
         domainErrorCode(e) ??

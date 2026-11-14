@@ -30,6 +30,8 @@ export type { MutationOptions } from "./contract.js";
 const ALL: readonly ClientDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 /** HTTP implementation of the shared client data and lifecycle contract. */
 export class HttpClient implements ManagedClient {
+  resolveImageUrl = (path: string): string => this.imageBase + path;
+  private imageBase = "";
   async uploadImage(file: File): Promise<{ url: string }> {
     if (this.disposed || !this.capabilities.writable)
       throw new ClientError("read_only", "Image uploads are unavailable");
@@ -78,6 +80,7 @@ export class HttpClient implements ManagedClient {
       filesystemRefreshIntervalMs?: number;
     },
   ) {
+    this.imageBase = options.base ?? "";
     const interval = options.filesystemRefreshIntervalMs ?? 1000;
     if (!Number.isFinite(interval) || interval < 1000)
       throw new TypeError("Filesystem refresh interval must be at least 1000ms");

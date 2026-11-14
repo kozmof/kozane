@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { KozaneClient } from "../../client/contract.js";
   import { onDestroy, untrack, tick } from "svelte";
+  import { imageReference } from "../../images.js";
   import CardTypeDropdown from "./CardTypeDropdown.svelte";
   import PartitionDropdown from "./PartitionDropdown.svelte";
   import LayerDropdown from "./LayerDropdown.svelte";
@@ -125,7 +126,7 @@
   let cardType = $state('text');
   let imageError = $state('');
   let uploading = $state(false);
-  let imageInput: HTMLInputElement;
+  let imageInput: HTMLInputElement = $state()!;
   async function uploadImage(file: File | undefined) {
     if (!file || uploading) return;
     const targetId = editingCard?.id ?? null;
@@ -136,8 +137,8 @@
     try {
       if (!onUploadImage) throw new Error("Image uploads are unavailable");
       const result = await onUploadImage(file);
-      content = 'kozane-image:' + result.url;
-      onSubmit(targetId, content, targetPartition);
+      content = imageReference(result.url);
+      await onSubmit(targetId, content, targetPartition);
       content = '';
       if (imageInput) imageInput.value = '';
     } catch (err) { imageError = err instanceof Error ? err.message : 'Image upload failed'; }

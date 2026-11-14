@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { useImageResolver } from "../../rendering/image-context.js";
+  const resolveImageUrl = useImageResolver();
+  import { imagePath } from "../../images.js";
   import { css } from "../../styles/css.js";
   import type { CardWithGlue, PartitionWithColor } from "@kozane/core";
   import InlineContent from "../../rendering/InlineContent.svelte";
@@ -50,7 +53,7 @@
     onResizeMouseDown,
   }: Props = $props();
 
-  const imageUrl = $derived(/^kozane-image:\/api\/images\/[a-f0-9-]{36}\.(jpg|jpeg|png|svg)$/.test(card.content) ? card.content.slice(13) : null);
+  const imageUrl = $derived(imagePath(card.content));
 
   let background = $derived(
     isPrimaryUnglue
@@ -107,7 +110,7 @@
 >
   <!-- Image height follows its intrinsic ratio as the card width changes. -->
   {#if imageUrl}
-    <img src={imageUrl} alt="Card attachment" draggable="false" style="display: block; width: 100%; height: auto" />
+    <img src={resolveImageUrl(imageUrl)} alt="Card attachment" draggable="false" style="display: block; width: 100%; height: auto" />
   {:else}
   <!-- Content -->
   <div

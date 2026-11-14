@@ -219,3 +219,5 @@ export { byteLength } from "./byte-length.js";
 export { isPlainObject } from "./plain-object.js";
 export { entryNameIssue } from "./entry-name.js";
 export { errorMessage } from "./error-message.js";
+
+export { IMAGE_MAX_BYTES, imagePath, imageReference } from "./images.js";

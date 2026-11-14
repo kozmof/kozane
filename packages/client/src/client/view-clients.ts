@@ -19,6 +19,7 @@ export type BoardViewClient = Pick<
   | "snapshot"
   | "cards"
   | "uploadImage"
+  | "resolveImageUrl"
   | "glues"
   | "layers"
   | "partitions"
