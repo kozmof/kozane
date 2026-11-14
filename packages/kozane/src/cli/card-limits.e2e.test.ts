@@ -295,3 +295,31 @@ describe("card move", () => {
     expect(listedPositions(root)).toEqual([{ posX: 0, posY: 0 }]);
   });
 });
+
+describe("card add --type image", () => {
+  it("copies an image into workspace assets and creates a card reference", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const source = join(root, "drawing.SVG");
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40"><rect width="80" height="40"/></svg>';
+    writeFileSync(source, svg);
+    const id = outputId(cli(root, "card", "add", "--type", "image", source, "--x", "120", "--y", "80"));
+    const content = cli(root, "card", "show", id).trim();
+    expect(content).toMatch(/^kozane-image:\/api\/images\/[a-f0-9-]{36}\.svg$/);
+    const name = content.split("/").pop()!;
+    expect(readFileSync(join(root, ".kozane", "assets", "images", name), "utf8")).toBe(svg);
+    expect(readFileSync(source, "utf8")).toBe(svg);
+  });
+
+  it("rejects unsupported and empty files", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const unsupported = join(root, "image.gif");
+    writeFileSync(unsupported, "GIF89a");
+    expect(run(root, ["card", "add", "--type", "image", unsupported]).status).not.toBe(0);
+    expect(run(root, ["card", "add", "hello", "--type", "video"]).status).not.toBe(0);
+    const empty = join(root, "empty.png");
+    writeFileSync(empty, "");
+    expect(run(root, ["card", "add", "--type", "image", empty]).status).not.toBe(0);
+  });
+});

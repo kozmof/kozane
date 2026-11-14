@@ -1,7 +1,7 @@
 /**
  * `kozane card` subcommands, split by job under `./card/`. `program.ts` imports them from here.
  */
-export { cardAdd, cardSquash } from "./card/create.js";
+export { cardAddImage, cardAdd, cardSquash } from "./card/create.js";
 export {
   cardSetLayer,
   cardMove,

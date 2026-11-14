@@ -405,13 +405,20 @@ Create a card. Omitted namespace, partition, and layer options use their default
 full or short, and layers also accept names. Optional scope membership is committed with the
 card.
 
-Text is trimmed, must be non-empty, and must fit `ui.contentMax`.
+The default type is `text`. Text is trimmed, must be non-empty, and must fit `ui.contentMax`.
+
+Use `--type image` to interpret `<content>` as a local JPEG, PNG, or SVG file path.
+Extensions are checked without regard to case. Files must contain between 1 byte
+and 10 MiB. The image is copied to `.kozane/assets/images` with a unique filename.
+The source file is preserved. Other type values are rejected.
 
 ```bash
-kozane card add <content> [--namespace <namespaceId>] [--partition <partitionId>]
+kozane card add <content> [--type text|image] [--namespace <namespaceId>] [--partition <partitionId>]
                           [--scope <scopeId>] [--layer <layer>]
                           [--x <number>] [--y <number>]
 ```
+
+For example, create an image card with `kozane card add ./photo.png --type image`.
 
 ### `kozane card squash [content]`
 

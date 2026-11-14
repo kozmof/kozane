@@ -1,3 +1,6 @@
+import { mkdirSync, statSync, writeFileSync, unlinkSync } from "node:fs";
+import { extname, join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { createInTx as createBatchInTx } from "../../../services/card-batch.js";
 import { createInTx } from "../../../services/cards.js";
 import { createServiceContext } from "../../../services/context.js";
@@ -21,8 +24,31 @@ import { canvasBoundsForRoot } from "../../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../../lib/server/content-limit.js";
 import { type CardAddOptions, type CardSquashOptions } from "./options.js";
 
+export async function cardAddImage(file: string, options: CardAddOptions = {}): Promise<void> {
+  await addCard("", options, file);
+}
+
 export async function cardAdd(rawContent: string, options: CardAddOptions = {}): Promise<void> {
+  await addCard(rawContent, options);
+}
+
+async function addCard(rawContent: string, options: CardAddOptions, imageFile?: string): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
+    let imagePath: string | undefined;
+    if (imageFile !== undefined) {
+      const extension = extname(imageFile).slice(1).toLowerCase();
+      if (!["jpg", "jpeg", "png", "svg"].includes(extension)) throw new Error("Choose JPEG, PNG, or SVG");
+      const stat = statSync(imageFile);
+      if (!stat.isFile() || stat.size === 0 || stat.size > 10 * 1024 * 1024) throw new Error("Image must be a file between 1 byte and 10 MiB");
+      const bytes = readFileSync(imageFile);
+      if (bytes.length === 0 || bytes.length > 10 * 1024 * 1024) throw new Error("Image must be between 1 byte and 10 MiB");
+      const directory = join(root, ".kozane", "assets", "images");
+      mkdirSync(directory, { recursive: true });
+      const name = randomUUID() + "." + extension;
+      imagePath = join(directory, name);
+      writeFileSync(imagePath, bytes, { flag: "wx" });
+      rawContent = "kozane-image:/api/images/" + name;
+    }
     const context = createServiceContext({
       contentMax: contentMaxForRoot(root),
       ...canvasBoundsForRoot(root),
@@ -47,7 +73,10 @@ export async function cardAdd(rawContent: string, options: CardAddOptions = {}):
         });
         return { id: cardId, namespaceId, partitionId, layerId, scopeId };
       },
-    );
+    ).catch((error) => {
+      if (imagePath) unlinkSync(imagePath);
+      throw error;
+    });
     const [namespaces, partitions, cards, scopes, layers] = await Promise.all([
       db.select({ id: namespaceTable.id }).from(namespaceTable),
       db.select({ id: partitionTable.id }).from(partitionTable),
