@@ -6,7 +6,6 @@ const props = () => ({
   visible: true,
   namespacesHref: "/",
   panelWidth: 220,
-  cards: [],
   partitions: [
     { id: "general", namespaceId: "ns", name: "General", isDefault: true, dot: "#000", bg: "#fff" },
   ],
@@ -54,7 +53,7 @@ it("does not rename partitions in a read-only view", async () => {
   expect(screen.queryByRole("textbox", { name: "Partition name" })).not.toBeInTheDocument();
 });
 
-it("opens renaming from the edit icon beside the card count", async () => {
+it("opens renaming from the edit icon on the partition row", async () => {
   const user = userEvent.setup();
   const options = props();
   render(PartitionSidebar, { props: options });

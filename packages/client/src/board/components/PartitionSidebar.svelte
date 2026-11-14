@@ -1,13 +1,12 @@
 <script lang="ts">
   import InlineNameInput from "./InlineNameInput.svelte";
   import { css, cx } from "../../styles/css.js";
-  import type { CardWithGlue, PartitionWithColor } from "@kozane/core";
+  import type { PartitionWithColor } from "@kozane/core";
 
   let {
     visible,
     namespacesHref,
     panelWidth,
-    cards,
     partitions,
     activePartition = $bindable(),
     newPartitionName = $bindable(),
@@ -19,7 +18,6 @@
     visible: boolean;
     namespacesHref: string;
     panelWidth: number;
-    cards: CardWithGlue[];
     partitions: PartitionWithColor[];
     activePartition: string | null;
     newPartitionName: string;
@@ -37,7 +35,6 @@
 
   const dotClass = css({ width: "7px", height: "7px", borderRadius: "50%", flexShrink: "0" });
   const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
-  const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", flexShrink: "0" });
 
   const sideBtnBase = css({
     display: "flex",
@@ -107,12 +104,11 @@
       <button class={sideBtn(activePartition === null)} onclick={() => { activePartition = null; }}>
         <span class={dotClass} style:background="var(--colors-neutral-faded)"></span>
         <span class={flex1Class}>All cards</span>
-        <span class={countClass}>{cards.length}</span>
       </button>
 
       {#each partitions as b (b.id)}
         {@const active = activePartition === b.id}
-        <div class={css({ position: "relative", "&:hover .partition-delete": { opacity: "1" } })}>
+        <div class={css({ position: "relative", "&:hover .partition-delete": { opacity: "1" }, "&:hover .partition-edit": { opacity: "1", pointerEvents: "auto" }, "&:focus-within .partition-edit": { opacity: "1", pointerEvents: "auto" } })}>
           {#if editingPartitionId === b.id && !readonly && onRenamePartition}
             <InlineNameInput value={b.name} label="Partition name" onCancel={() => { editingPartitionId = null; }} onSubmit={async (name) => {
               const error = await onRenamePartition!(b.id, name);
@@ -131,12 +127,11 @@
           >
             <span class={dotClass} style:background={b.dot}></span>
             <span class={flex1Class}>{b.name}</span>
-            <span class={countClass}>{cards.filter((c) => c.partitionId === b.id).length}</span>
           </button>
           {/if}
           {#if !readonly && onRenamePartition && editingPartitionId !== b.id}
             <button
-              class={css({ position: "absolute", right: "28px", top: "50%", transform: "translateY(-50%)", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0", background: "none", border: "none", cursor: "pointer", borderRadius: "2px", color: "neutral.subtle", "&:hover": { color: "ink.black" } })}
+              class={cx("partition-edit", css({ opacity: "0", pointerEvents: "none", transition: "opacity 0.12s", position: "absolute", right: "28px", top: "50%", transform: "translateY(-50%)", width: "18px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0", background: "none", border: "none", cursor: "pointer", borderRadius: "2px", color: "neutral.subtle", "&:hover": { color: "ink.black" } }))}
               aria-label={`Rename ${b.name}`}
               title="Rename partition"
               onclick={() => startRename(b.id)}

@@ -108,7 +108,6 @@
     namespacesHref={navigation.namespaces()}
     visible={board.sidebarsVisible}
     panelWidth={data.uiConfig.leftPanelWidth}
-    cards={s.cards}
     partitions={view.partitions}
     bind:activePartition={s.sidebar.activePartition}
     bind:newPartitionName={s.sidebar.newPartitionName}

@@ -142,11 +142,11 @@ Press `f` to toggle card footers, which show the partition, glue icon, and
 
 ## Partitions
 
-Every card has a partition. The left panel lists partitions and their card counts.
+Every card has a partition. The left panel lists partitions.
 
 - Filter by clicking a partition. Choose "All cards" to clear the filter.
 - Create one by entering a name at the bottom and pressing `Enter` or `+`.
-- Rename any partition, including General, with the edit icon beside its count.
+- Rename any partition, including General, with the edit icon shown when its row is hovered or focused.
   Double-clicking its name or focusing its row and pressing `F2` also opens the field. Press `Enter` to save or `Esc` to cancel. Renaming the default partition
   preserves its default status.
 - Delete one by hovering its row and clicking `×`. Its cards move to the default
