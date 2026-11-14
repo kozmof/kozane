@@ -50,6 +50,8 @@
     onResizeMouseDown,
   }: Props = $props();
 
+  const imageUrl = $derived(/^kozane-image:\/api\/images\/[a-f0-9-]{36}\.(jpg|jpeg|png|svg)$/.test(card.content) ? card.content.slice(13) : null);
+
   let background = $derived(
     isPrimaryUnglue
       ? "var(--colors-select-bg)"
@@ -103,6 +105,10 @@
   style:transition="opacity 0.18s, box-shadow 0.1s, background 0.1s"
   style:z-index={isDragging ? 2147483647 : zIndex}
 >
+  <!-- Image height follows its intrinsic ratio as the card width changes. -->
+  {#if imageUrl}
+    <img src={imageUrl} alt="Card attachment" draggable="false" style="display: block; width: 100%; height: auto" />
+  {:else}
   <!-- Content -->
   <div
     class={css({ padding: "8px 10px", lineHeight: "1.65", minHeight: "44px", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
@@ -115,8 +121,10 @@
     {:else}Empty card…{/if}
   </div>
 
-  <!-- Footer -->
-  <div class={css({ display: "flex", alignItems: "center", padding: "4px 9px 7px", fontSize: "10px", color: "neutral.muted", gap: "6px" })} style:visibility={showFooters ? "visible" : "hidden"}>
+  {/if}
+
+  <!-- Overlay image metadata so it does not add to the image height. -->
+  <div class={css({ display: "flex", alignItems: "center", padding: "4px 9px 7px", fontSize: "10px", color: "neutral.muted", gap: "6px" })} style:visibility={showFooters ? "visible" : "hidden"} style:position={imageUrl ? "absolute" : undefined} style:bottom={imageUrl ? "0" : undefined} style:left={imageUrl ? "0" : undefined} style:right={imageUrl ? "0" : undefined} style:background={imageUrl ? background : undefined}>
     {#if card.glueId}
       <span class={css({ display: "flex", alignItems: "center", gap: "3px" })}>
         <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
