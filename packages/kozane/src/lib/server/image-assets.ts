@@ -1,5 +1,6 @@
+import { validPng, validJpeg } from "./raster-validation.js";
 import { activeServerProcess } from "./runtime-state.js";
-import { mkdir, readFile, writeFile, readdir, stat, unlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile, readdir, stat, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { imagePath, IMAGE_MAX_BYTES } from "@kozane/core";
@@ -17,16 +18,8 @@ export function validateImage(name: string, bytes: Uint8Array): string {
     throw new ImageValidationError("Choose JPEG, PNG, or SVG");
   if (!bytes.length || bytes.length > IMAGE_MAX_BYTES)
     throw new ImageValidationError("Image must be between 1 byte and 10 MiB");
-  const starts = (...values: number[]) => values.every((value, index) => bytes[index] === value);
-  const valid =
-    extension === "png"
-      ? starts(137, 80, 78, 71, 13, 10, 26, 10) && bytes.length >= 24
-      : extension === "svg"
-        ? validSvg(new TextDecoder().decode(bytes))
-        : starts(255, 216, 255) &&
-          bytes.length >= 4 &&
-          bytes[bytes.length - 2] === 255 &&
-          bytes[bytes.length - 1] === 217;
+  let valid = false;
+  try { valid = extension === 'png' ? validPng(bytes) : extension === 'svg' ? validSvg(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) : validJpeg(bytes); } catch { valid = false; }
   if (!valid) throw new ImageValidationError("File content does not match its image extension");
   return extension;
 }
@@ -42,8 +35,19 @@ function validSvg(source: string): boolean {
     /<!|<\s*(?:script|foreignObject)\b|\bon\w+\s*=/i.test(clean)
   )
     return false;
-  // Allow only document-local fragment references, including paint and clip paths.
-  const references = clean
+  let decoded: string;
+  try {
+    decoded = clean.replace(/&([^;]*);/g, (_, entity: string) => {
+      const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+      if (named[entity]) return named[entity];
+      if (!/^#(?:[0-9]+|x[0-9a-f]+)$/i.test(entity)) throw new Error('Invalid XML entity');
+      const value = entity[1].toLowerCase() === 'x' ? parseInt(entity.slice(2), 16) : Number(entity.slice(1));
+      if (!value || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) throw new Error('Invalid XML character');
+      return String.fromCodePoint(value);
+    });
+  } catch { return false; }
+  // Inspect decoded values so character references cannot hide resource URLs.
+  const references = decoded
     .replace(/(?:[\w.-]+:)?(?:href|src)\s*=\s*(["'])\s*#[A-Za-z_][\w:.-]*\s*\1/gi, "")
     .replace(/url\(\s*(["']?)#[A-Za-z_][\w:.-]*\1\s*\)/gi, "");
   if (/(?:href|src)\s*=|url\s*\(|@import|\\/i.test(references)) return false;
@@ -96,7 +100,11 @@ export async function collectUnusedImages(root: string, db: DB, now = Date.now()
     if (!imagePath("kozane-image:" + path) || referenced.has(path)) continue;
     const filename = join(imageDirectory(root), name);
     try {
-      if ((await stat(filename)).mtimeMs < now - 86400000) await unlink(filename);
+      if ((await stat(filename)).mtimeMs < now - 86400000) {
+        const archive = join(imageDirectory(root), '.retained');
+        await mkdir(archive, { recursive: true });
+        await rename(filename, join(archive, name));
+      }
     } catch {
       /* Another collector may have removed it. */
     }
@@ -104,7 +112,11 @@ export async function collectUnusedImages(root: string, db: DB, now = Date.now()
 }
 export async function readImage(root: string, name: string): Promise<Uint8Array> {
   if (!imagePath("kozane-image:/api/images/" + name)) throw new Error("Invalid image name");
-  return readFile(join(imageDirectory(root), name));
+  try { return await readFile(join(imageDirectory(root), name)); }
+  catch (cause) {
+    if (!(cause instanceof Error) || !('code' in cause) || cause.code !== 'ENOENT') throw cause;
+    return readFile(join(imageDirectory(root), '.retained', name));
+  }
 }
 
 const maintenance = new Map<string, { at: number; running: boolean }>();

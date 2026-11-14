@@ -608,9 +608,10 @@ A missing workspace or a storage failure returns 500. Storage failures use a gen
 
 Uploads and CLI card creation offer an asset maintenance opportunity, limited to
 once per hour per workspace in each process. Memory sessions skip collection.
-Images with no card reference are eligible for deletion after 24 hours. Fresh
-uploads are preserved to allow concurrent card creation to finish. Cleanup
-failures do not fail committed writes.
+Images with no card reference are moved to `.kozane/assets/images/.retained`
+after 24 hours. Archived images remain readable at their original URLs so a
+concurrent card reference cannot lose its image. Archives are not automatically
+deleted. Fresh uploads are preserved. Maintenance failures do not fail committed writes.
 
 ### `GET /api/images/[name]`
 

@@ -8,6 +8,7 @@ import {
   storeImage,
   imageDirectory,
   collectUnusedImages,
+  readImage,
   maintainImageAssets,
 } from "./image-assets.js";
 import { mkdtemp, readFile, rm, utimes, readdir } from "node:fs/promises";
@@ -55,7 +56,9 @@ describe("image assets", () => {
       expect(await readdir(imageDirectory(root))).toHaveLength(1);
       await removeOne(db, createServiceContext(), namespaceId, card.id);
       await collectUnusedImages(root, db);
-      expect(await readdir(imageDirectory(root))).toEqual([]);
+      expect(await readdir(imageDirectory(root))).toEqual(['.retained']);
+      // A reference created after the collector's snapshot still resolves the bytes.
+      expect(Array.from(await readImage(root, url.split('/').pop()!))).toEqual(Array.from(svg));
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -104,4 +107,9 @@ it("contains cleanup failures and throttles repeated maintenance", async () => {
     select.mockRestore();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+it('checks decoded SVG resource references', () => {
+  for (const source of ['<svg><rect fill="u&#114;l(https://example.com/a)"/></svg>', '<svg><rect fill="url(&#104;ttps://example.com/a)"/></svg>']) expect(() => validateImage('x.svg', new TextEncoder().encode(source))).toThrow();
+  expect(validateImage('x.svg', new TextEncoder().encode('<svg><use href="&#35;shape"/></svg>'))).toBe('svg');
 });
