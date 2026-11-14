@@ -315,7 +315,7 @@
         class={css({ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "neutral.muted", fontFamily: "inherit", padding: "0", lineHeight: "1", "&:hover": { color: "ink.black" } })}
         title="Clear selection"
         onclick={onCancel}
-      >Clear selection {shortcuts.clearSelectionShortcut}</button>
+      >Clear selection</button>
     {/if}
   </div>
 
