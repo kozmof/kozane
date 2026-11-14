@@ -1,6 +1,7 @@
 # Release packages locally
 
-Prepare and publish Kozane from your workstation. This project has no CI/CD release workflow. Test CI remains available, but publication does not depend on a workflow dispatch or GitHub environment.
+Prepare and publish Kozane from your workstation. CI runs tests. Publication uses
+the local commands below and does not require a GitHub workflow or environment.
 
 The packages publish in dependency order as core, client and the unscoped CLI. Client declares an exact core peer. The CLI declares exact core and client runtime versions. The repository root stays private.
 
@@ -18,7 +19,9 @@ After finalizing versions, committing changes and completing the tool setup belo
 pnpm release:auto
 ```
 
-This prepares and publishes core, client and kozane in dependency order, then verifies their registry installations. It uses the versions already committed in the package manifests. It does not bump versions or create commits. After preparation, the command checks npm authentication with `npm whoami`. If that check fails, it runs `npm login --registry=https://registry.npmjs.org/` and verifies the account before publishing. Existing authentication is reused. npm 2FA prompts still apply.
+This prepares and publishes core, client and kozane in dependency order, then verifies their registry installations. It uses the versions already committed in the package manifests. It does not bump versions or create commits.
+
+After preparation, the command checks npm authentication with `npm whoami`. If that check fails, it runs `npm login --registry=https://registry.npmjs.org/` and verifies the account before publishing. Existing authentication is reused. npm 2FA prompts still apply.
 
 If a prepared release already exists for the current commit, the command reuses it. Rerun the command after a partial publication to resume with the same archives. The publisher validates the manifest and archive hashes and skips published versions only when their bytes match. Preparation failures stop publication.
 
@@ -34,7 +37,9 @@ Commit all source changes, then run the local release checks.
 pnpm release:local
 ```
 
-This runs release metadata and versioning regressions, verification and coverage, production dependency auditing, local/global archive installation and HTTP smoke, and the app, restoration and public-client browser suites. It builds once and packs all three packages once with lifecycle rebuilds disabled. Verification, installed-package tests, browser fixtures, installation smoke and npm dry-run publication consume those same archives. It writes a release manifest containing their versions, SHA-256 hashes and source commit under `tmp/releases/<commit>/`. An optional directory argument chooses another destination.
+This runs release metadata and versioning regressions, verification and coverage, production dependency auditing, local/global archive installation and HTTP smoke, and the app, restoration and public-client browser suites. It builds once and packs all three packages once with lifecycle rebuilds disabled. Verification, installed-package tests, browser fixtures, installation smoke and npm dry-run publication consume those same archives.
+
+It writes a release manifest containing their versions, SHA-256 hashes and source commit under `tmp/releases/<commit>/`. An optional directory argument chooses another destination.
 
 Database driver parity checks are optional and are not part of release preparation. Run `pnpm test:db-wasm` or `pnpm test:db-browser` separately when needed.
 
@@ -54,7 +59,7 @@ The publisher requires a clean checkout at the prepared commit. It checks packag
 
 Publication is not atomic across packages. A rerun skips a published version only when its registry integrity matches the prepared archive. It rejects an existing version with different bytes and preserves unpublished archives for investigation.
 
-The local flow does not request CI-generated npm provenance. Registry checks accept local publications without that metadata. If npm supplies provenance metadata, the check validates and records its registry link. It does not verify the signed attestation itself. This local publishing policy replaces the specification's earlier GitHub Actions provenance requirement at the user's request.
+The local flow does not request CI-generated npm provenance. Registry checks accept local publications without that metadata. If npm supplies provenance metadata, the check validates and records its registry link. It does not verify the signed attestation itself. The local release flow defines the publication policy.
 
 ## Verify publication
 
@@ -66,7 +71,9 @@ Retain the prepared manifest and registry verification output as release evidenc
 
 ## Development verification
 
-Run `pnpm verify` to build and pack once, then check the prepared outputs. Source unit tests use `vitest.source.config.ts` and source aliases. Installed-package tests use `vitest.package.config.ts` without source aliases. Run `pnpm test:packages` to prepare an isolated installation and run its public runtime tests.
+Run `pnpm verify` to build and pack once, then check the prepared outputs.
+
+Source unit tests use `vitest.source.config.ts` and source aliases. Installed-package tests use `vitest.package.config.ts` without source aliases. Run `pnpm test:packages` to prepare an isolated installation and run its public runtime tests.
 
 Normal builds check committed migration records and schema without rewriting them. After editing the application schema, run `pnpm db:generate`, review the SQL and generated core inputs, and commit them together.
 
@@ -79,4 +86,6 @@ pnpm smoke:package --artifacts=tmp/verified-packages
 
 The verifier checks that its prepared archive hashes remain unchanged. Pass `--artifacts=<directory>` to verify existing archives without rebuilding. Run `pnpm build:packages --output=tmp/packages` to build and pack a candidate without running verification.
 
-Each CI verification job retains its candidate and passes those archives to package smoke checks. The browser job builds its own candidate once, compiles both harnesses from those archives and runs the suites without rebuilding packages. Jobs remain independent so the Node versions and browser checks can run in parallel. These are test workflows. Publication continues through the local release flow.
+Each CI verification job retains its candidate and passes those archives to package smoke checks. The browser job builds its own candidate once, compiles both harnesses from those archives and runs the suites without rebuilding packages.
+
+Jobs remain independent so the Node versions and browser checks can run in parallel. These are test workflows. Publication continues through the local release flow.

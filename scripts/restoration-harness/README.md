@@ -14,8 +14,10 @@ Run `pnpm test:restoration-harness` to rebuild and execute the browser tests in 
 Chromium. The local server uses the demo CSP and serves worker, wasm and database assets.
 The browser entry uses the embedded hashes and build-ID handshake before database access.
 The disposable sample and its metadata are regenerated on each build.
-Retained corpus databases keep their original bytes and recorded expectations. The CI `browser-e2e` job runs
-this command on Node 24 with Chromium for pushes and pull requests.
+Retained corpus databases keep their original bytes and recorded expectations.
+
+The CI `browser-e2e` job runs this command on Node 24 with Chromium for pushes
+and pull requests.
 
 The shared startup policy reads recovery storage before opening a database. It bounds JSON
 and decoded database sizes, validates required own fields and canonical padded base64,

@@ -17,8 +17,8 @@ Only workspace-wide tag scans remove cached taskspace directories that disappear
 ## How freshness is checked
 
 Database caches match the database file's inode, nanosecond modification time,
-and size, including the SQLite `-wal` file when present. File-tag cache entries are checked against
-individual file identities.
+and size. The signature includes the SQLite `-wal` file when present.
+File-tag cache entries use individual file identities.
 
 Each request validates the cache's schema and signature. A mismatch triggers a
 fresh gather and replacement. The database signature is captured before gathering,
@@ -30,8 +30,8 @@ In-memory databases bypass persistent database caching.
 Missing, malformed, truncated, and unknown-version caches are ignored. Each cache
 has a 16 MiB read and write limit. Oversized results are gathered without persistence.
 
-Writes use a temporary file and atomic rename. Write failures are non-fatal and
-never modify the database or taskspace files.
+Writes use a temporary file and atomic rename. A cache write failure leaves
+the database and taskspace files unchanged. Requests continue without the cache.
 
 ## Security and backups
 

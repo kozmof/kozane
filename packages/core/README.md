@@ -25,7 +25,7 @@ runtime dependencies. Database drivers belong to the host.
 
 ## Where to start
 
-To connect your application to core, follow these steps.
+Connect your application to core with the following steps.
 
 1. Create a Drizzle database handle using the exported schema and your chosen driver.
 2. Register the handle with `createDatabaseAdapter` and supply read and write transaction hooks.

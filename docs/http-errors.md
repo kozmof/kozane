@@ -1,6 +1,7 @@
 # HTTP error compatibility
 
-Shared Node HTTP utilities live under `packages/kozane/src/lib/server/http`. Routes use the same error adapter and JSON-object reader. Domain validation stays in core services.
+HTTP routes share error handling and JSON-object parsing through
+`packages/kozane/src/lib/server/http`. Core services validate domain inputs.
 
 Domain codes travel in `X-Kozane-Error-Code`. Error bodies retain the existing `{ message }` shape. Authentication, permission and throttling errors retain their transport statuses without a domain header.
 
@@ -17,6 +18,8 @@ Domain codes travel in `X-Kozane-Error-Code`. Error bodies retain the existing `
 | New service size limit             | 413    | limit       | Safe service message                          |
 | Unavailable database               | 500    | unavailable | Safe service message                          |
 
-Existing content and batch limits remain validation errors with status 400. Normalization does not change them to size-limit errors. Database classification metadata and diagnostic causes are never serialized into HTTP error bodies or headers.
+Existing content and batch limits return status 400 with the `validation` code.
+Error normalization preserves that behavior. HTTP error bodies and headers never
+include database classification metadata or diagnostic causes.
 
 The adapter sets headers through SvelteKit's request event and retains thrown HTTP errors. Unit tests verify header assignment and compatibility mappings.

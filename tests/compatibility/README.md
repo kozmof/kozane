@@ -5,7 +5,7 @@ Run `pnpm check:core-package` to verify their hashes and recorded view outcomes 
 the current candidate. This check opens copies in wasm memory and requires read-only
 validation. It never generates replacement fixtures or expectations.
 
-The initial `core-0.1.0-rc1-wasm` cohort retains four databases and eleven selection
+The `core-0.1.0-rc1-wasm` cohort retains four databases and eleven selection
 outcomes. They cover empty workspaces, a sole namespace, multiple namespaces without
 a default, an explicit default, missing selections, shared scopes across namespaces,
 Unicode, omitted card options, nullable width and content at the configured limit.
@@ -53,8 +53,10 @@ native library execution, use an executable temporary directory, such as
 The bootstrap refuses an existing cohort name. Retain the original `producer.tgz`,
 database bytes, manifest and index hashes in Git. Do not regenerate an old cohort
 when a candidate rejects it. Investigate the regression or record an intentional
-migration-ID change with explicit compatibility expectations. The packed check also compares the current index with every committed index reachable
-from HEAD. Earlier records must remain unchanged and in the same order. Each historical
+migration-ID change with explicit compatibility expectations.
+
+The packed check also compares the current index with every committed index
+reachable from HEAD. Earlier records must remain unchanged and in the same order. Each historical
 manifest hash pins its expectations, producer metadata and original byte hashes. Rewriting
 a fixture and all its current hashes still fails. Review remains necessary for changes
 to validators, normalization, services and drivers.

@@ -315,8 +315,7 @@ Click a text file to open the editor. Files must be valid UTF-8 and at most 16 M
 | Pin open     | The pin button, beside Save                             |
 | Resize panel | Drag its left edge, or focus the edge and use `←` / `→` |
 
-Pinning keeps the editor open when you click outside it, so you can work on
-the board with a file beside you. Board shortcuts work while focus is outside
+Pin the editor to keep it open while working on the board. Board shortcuts work while focus is outside
 the editor. `Esc` and Close still close a pinned editor. The pin stays set
 across files until the tab reloads.
 

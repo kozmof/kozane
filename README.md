@@ -222,7 +222,9 @@ kozane api key generate
 kozane open --host 0.0.0.0 --allow-remote --no-open
 ```
 
-The key is stored separately in `.kozane/api.json` with owner-only permissions. Once that file exists, every HTTP request requires the key. API clients send it as `Authorization: Bearer <key>` (preferred) or `X-API-Key: <key>`.
+The key is stored in `.kozane/api.json` with owner-only permissions. Once that file
+exists, every HTTP request requires authentication. API clients send
+`Authorization: Bearer <key>` or `X-API-Key: <key>`. Prefer the bearer header.
 `kozane api key refresh` immediately replaces the old key.
 
 API and `fetch` requests without valid credentials receive `401`. Browser requests can authenticate with the login cookie. For browser access, see [Remote login](#remote-login).
@@ -246,7 +248,10 @@ Set `--base` to the URL path when hosting under a subdirectory such as
 kozane net ssg generate --out ./site --base /kozane
 ```
 
-The output directory includes a `.nojekyll` file so GitHub Pages serves SvelteKit's `_app/` directory. Commit the directory to a branch and enable Pages for it. Static export requires the source build toolchain, so run it from a cloned repository after `pnpm install`.
+The output includes `.nojekyll` so GitHub Pages serves SvelteKit’s `_app/`
+directory. Commit the output to a branch and enable Pages for it. Run static
+export from a cloned repository after `pnpm install`. It requires the source
+build toolchain.
 
 The default export omits scopes and taskspaces. Add `--include-scoped-files` to
 include scopes, taskspace names, and browsable copies of scoped taskspace files.
@@ -255,7 +260,9 @@ include scopes, taskspace names, and browsable copies of scoped taskspace files.
 kozane net ssg generate --out ./site --include-scoped-files
 ```
 
-This publishes real file contents from your local taskspace directories, so only use it on a workspace you're comfortable making public. Only taskspaces that belong to a scope are exported, because those are the ones a board draws. A taskspace outside every scope stays off the export entirely.
+This option publishes file contents from local taskspace directories. Use it only
+for content you intend to make public. Only scoped taskspaces are exported,
+because those are the taskspaces shown on a board.
 
 Each exported taskspace is capped at 20MB of embedded content and 50,000 entries. Files beyond the content cap, files over 16 MiB, and non-text files are still listed by name, but they open with an explanation instead of their contents. A directory past the entry cap, or nested more than 64 levels deep, is marked as not included. Dotfiles are never included, and symlinks are listed but never followed, the same as in the live file panel. No other files are skipped, so a taskspace pointed at a large checkout with `node_modules` will hit these limits.
 
