@@ -45,8 +45,8 @@ test("release candidates distinguish version pins and shared release inputs", ()
       "^3.0.0",
       "file:../core-1.0.0",
       "file:../core-2.0.0",
-      "git+https:\/\/example.com/core#1.0.0",
-      "git+https:\/\/example.com/core#2.0.0",
+      "git+https://example.com/core#1.0.0",
+      "git+https://example.com/core#2.0.0",
     ]) {
       write("packages/client/package.json", manifest(pin));
       const next = commit();
