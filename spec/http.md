@@ -600,15 +600,17 @@ Send `multipart/form-data` with an `image` file field. Accepted filename extensi
 are `.jpg`, `.jpeg`, `.png`, and `.svg`, ignoring case. Files must contain between
 1 byte and 10 MiB. Image signatures must match the filename extension.
 SVG files must have balanced tags and quoted attributes. Scripts, event handlers,
-embedded HTML, and resource links are rejected. Invalid files return 400.
+embedded HTML, and external resource links are rejected. Local fragment references are allowed. Invalid files return 400.
 
 Returns `{ "url": "/api/images/<uuid>.<extension>" }` with status 200.
 Files are stored in the active workspace under `.kozane/assets/images`.
-A missing workspace returns 500.
+A missing workspace or a storage failure returns 500. Storage failures use a generic message.
 
-Uploads and successful card mutations trigger asset cleanup. Images with no card
-reference are eligible for deletion after 24 hours. Fresh uploads are preserved
-to allow concurrent card creation to finish. Cleanup failures do not fail committed writes.
+Uploads and CLI card creation offer an asset maintenance opportunity, limited to
+once per hour per workspace in each process. Memory sessions skip collection.
+Images with no card reference are eligible for deletion after 24 hours. Fresh
+uploads are preserved to allow concurrent card creation to finish. Cleanup
+failures do not fail committed writes.
 
 ### `GET /api/images/[name]`
 

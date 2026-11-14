@@ -2,7 +2,7 @@ import { IMAGE_MAX_BYTES } from "@kozane/core";
 import { apiHandler } from "$lib/server/http/api-handler.js";
 import type { RequestHandler } from "./$types";
 import { getWorkspaceRoot } from "../../../db/internal/config.js";
-import { storeImage, collectUnusedImages } from "$lib/server/image-assets.js";
+import { storeImage, maintainImageAssets, ImageValidationError } from "$lib/server/image-assets.js";
 
 import { error, json } from "@sveltejs/kit";
 export const POST: RequestHandler = apiHandler(async ({ request, locals }) => {
@@ -17,8 +17,9 @@ export const POST: RequestHandler = apiHandler(async ({ request, locals }) => {
   try {
     url = await storeImage(root, file.name, new Uint8Array(await file.arrayBuffer()));
   } catch (cause) {
-    error(400, cause instanceof Error ? cause.message : "Invalid image");
+    if (cause instanceof ImageValidationError) error(400, cause.message);
+    error(500, "Unable to store image");
   }
-  await collectUnusedImages(root, locals.db).catch(() => {});
+  await maintainImageAssets(root, locals.db);
   return json({ url });
 });

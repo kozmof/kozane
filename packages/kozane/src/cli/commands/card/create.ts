@@ -1,6 +1,6 @@
 import { statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { storeImage, collectUnusedImages } from "../../../lib/server/image-assets.js";
+import { storeImage, maintainImageAssets } from "../../../lib/server/image-assets.js";
 import { createInTx as createBatchInTx } from "../../../services/card-batch.js";
 import { createInTx } from "../../../services/cards.js";
 import { createServiceContext } from "../../../services/context.js";
@@ -81,7 +81,7 @@ async function addCard(
       scopeId ? db.select({ id: scopeTable.id }).from(scopeTable) : Promise.resolve([]),
       getAllLayers({ db, namespaceId }),
     ]);
-    await collectUnusedImages(root, db);
+    await maintainImageAssets(root, db);
     console.log("Card added.");
     console.log(
       `  id      : ${shortId(

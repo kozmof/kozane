@@ -2,8 +2,14 @@ import { createNamespace } from "../../db/api/namespace.js";
 import { getDefaultPartition } from "../../db/api/partition.js";
 import { create, removeOne } from "../../services/cards.js";
 import { createServiceContext } from "../../services/context.js";
-import { describe, expect, it } from "vitest";
-import { validateImage, storeImage, imageDirectory, collectUnusedImages } from "./image-assets.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  validateImage,
+  storeImage,
+  imageDirectory,
+  collectUnusedImages,
+  maintainImageAssets,
+} from "./image-assets.js";
 import { mkdtemp, readFile, rm, utimes, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,4 +60,48 @@ describe("image assets", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+});
+
+it("accepts local SVG gradients, clips, and use references", () => {
+  const source =
+    '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="paint"/><clipPath id="clip"/><path id="shape"/></defs><use href="#shape" fill="url(#paint)" clip-path="url(\'#clip\')"/></svg>';
+  expect(validateImage("drawing.svg", new TextEncoder().encode(source))).toBe("svg");
+  expect(() =>
+    validateImage(
+      "drawing.svg",
+      new TextEncoder().encode('<svg><rect fill="url(https://example.com/a)"/></svg>'),
+    ),
+  ).toThrow();
+});
+it("never collects persistent assets from a memory session", async () => {
+  const root = await mkdtemp(join(tmpdir(), "kozane-memory-assets-"));
+  const db = await createTestDB();
+  try {
+    const url = await storeImage(root, "drawing.svg", svg);
+    const file = join(imageDirectory(root), url.split("/").pop()!);
+    await utimes(file, new Date(0), new Date(0));
+    vi.stubEnv("KOZANE_MEMORY_MODE", "1");
+    await collectUnusedImages(root, db);
+    expect(await readdir(imageDirectory(root))).toHaveLength(1);
+  } finally {
+    vi.unstubAllEnvs();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+it("contains cleanup failures and throttles repeated maintenance", async () => {
+  const root = await mkdtemp(join(tmpdir(), "kozane-maintenance-"));
+  const db = await createTestDB();
+  const select = vi.spyOn(db, "select").mockImplementation(() => {
+    throw new Error("database unavailable");
+  });
+  try {
+    await expect(maintainImageAssets(root, db, 1000)).resolves.toBeUndefined();
+    await maintainImageAssets(root, db, 2000);
+    expect(select).toHaveBeenCalledTimes(1);
+    await maintainImageAssets(root, db, 3601001);
+    expect(select).toHaveBeenCalledTimes(2);
+  } finally {
+    select.mockRestore();
+    await rm(root, { recursive: true, force: true });
+  }
 });

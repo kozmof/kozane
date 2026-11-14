@@ -1,3 +1,4 @@
+import { activeServerProcess } from "./runtime-state.js";
 import { mkdir, readFile, writeFile, readdir, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -8,12 +9,14 @@ import { cardTable } from "../../db/schema.js";
 export function imageDirectory(root: string): string {
   return join(root, ".kozane", "assets", "images");
 }
+export class ImageValidationError extends Error {}
+
 export function validateImage(name: string, bytes: Uint8Array): string {
   const extension = name.split(".").pop()?.toLowerCase();
   if (!extension || !["jpg", "jpeg", "png", "svg"].includes(extension))
-    throw new Error("Choose JPEG, PNG, or SVG");
+    throw new ImageValidationError("Choose JPEG, PNG, or SVG");
   if (!bytes.length || bytes.length > IMAGE_MAX_BYTES)
-    throw new Error("Image must be between 1 byte and 10 MiB");
+    throw new ImageValidationError("Image must be between 1 byte and 10 MiB");
   const starts = (...values: number[]) => values.every((value, index) => bytes[index] === value);
   const valid =
     extension === "png"
@@ -24,7 +27,7 @@ export function validateImage(name: string, bytes: Uint8Array): string {
           bytes.length >= 4 &&
           bytes[bytes.length - 2] === 255 &&
           bytes[bytes.length - 1] === 217;
-  if (!valid) throw new Error("File content does not match its image extension");
+  if (!valid) throw new ImageValidationError("File content does not match its image extension");
   return extension;
 }
 function validSvg(source: string): boolean {
@@ -36,9 +39,14 @@ function validSvg(source: string): boolean {
     .trim();
   if (
     !/^<svg(?:\s|\/?>)/i.test(clean) ||
-    /<!|<\s*(?:script|foreignObject)\b|\bon\w+\s*=|(?:href|src)\s*=|url\s*\(/i.test(clean)
+    /<!|<\s*(?:script|foreignObject)\b|\bon\w+\s*=/i.test(clean)
   )
     return false;
+  // Allow only document-local fragment references, including paint and clip paths.
+  const references = clean
+    .replace(/(?:[\w.-]+:)?(?:href|src)\s*=\s*(["'])\s*#[A-Za-z_][\w:.-]*\s*\1/gi, "")
+    .replace(/url\(\s*(["']?)#[A-Za-z_][\w:.-]*\1\s*\)/gi, "");
+  if (/(?:href|src)\s*=|url\s*\(|@import|\\/i.test(references)) return false;
   const stack: string[] = [];
   let offset = 0;
   let roots = 0;
@@ -71,6 +79,7 @@ export async function storeImage(root: string, name: string, bytes: Uint8Array):
 }
 /** Keep fresh uploads for a day so concurrent card creation cannot lose its image. */
 export async function collectUnusedImages(root: string, db: DB, now = Date.now()): Promise<void> {
+  if (process.env.KOZANE_MEMORY_MODE === "1" || activeServerProcess(root)?.memory) return;
   const referenced = new Set(
     (await db.select({ content: cardTable.content }).from(cardTable)).map((row) =>
       imagePath(row.content),
@@ -96,4 +105,19 @@ export async function collectUnusedImages(root: string, db: DB, now = Date.now()
 export async function readImage(root: string, name: string): Promise<Uint8Array> {
   if (!imagePath("kozane-image:/api/images/" + name)) throw new Error("Invalid image name");
   return readFile(join(imageDirectory(root), name));
+}
+
+const maintenance = new Map<string, { at: number; running: boolean }>();
+/** Opportunistic maintenance must never change the outcome of a committed write. */
+export async function maintainImageAssets(root: string, db: DB, now = Date.now()): Promise<void> {
+  const previous = maintenance.get(root);
+  if (previous && (previous.running || now - previous.at < 60 * 60 * 1000)) return;
+  maintenance.set(root, { at: now, running: true });
+  try {
+    await collectUnusedImages(root, db, now);
+  } catch {
+    /* Retry on a later maintenance opportunity. */
+  } finally {
+    maintenance.set(root, { at: now, running: false });
+  }
 }

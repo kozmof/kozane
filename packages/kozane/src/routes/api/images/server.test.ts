@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestDB } from "../../../test-utils/db.js";
@@ -32,5 +32,23 @@ it("uploads and serves validated images with sandbox headers", async () => {
     ).rejects.toMatchObject({ status: 404 });
   } finally {
     await rm(workspace.root, { recursive: true, force: true });
+  }
+});
+
+it("reports storage failures as generic server errors", async () => {
+  const root = await mkdtemp(join(tmpdir(), "kozane-storage-failure-"));
+  workspace.root = join(root, "not-a-directory");
+  await writeFile(workspace.root, "file");
+  const db = await createTestDB();
+  const form = new FormData();
+  form.set("image", new File(["<svg/>"], "drawing.svg"));
+  try {
+    await expect(
+      POST({ locals: { db }, request: { formData: async () => form } } as unknown as Parameters<
+        typeof POST
+      >[0]),
+    ).rejects.toMatchObject({ status: 500, body: { message: "Unable to store image" } });
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

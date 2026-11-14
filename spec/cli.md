@@ -412,7 +412,7 @@ Extensions are checked without regard to case. Files must contain between 1 byte
 and 10 MiB. The image is copied to `.kozane/assets/images` with a unique filename.
 The source file is preserved. Other type values are rejected.
 Image signatures must match the extension. SVG files must have balanced tags and
-quoted attributes. Scripts, event handlers, embedded HTML, and resource links are rejected.
+quoted attributes. Scripts, event handlers, embedded HTML, and external resource links are rejected. Local fragment references are allowed.
 
 ```bash
 kozane card add <content> [--type text|image] [--namespace <namespaceId>] [--partition <partitionId>]
