@@ -47,8 +47,7 @@ export async function runNodeTransaction<Handle, Result>(
     } catch (closeCause) {
       invalidate();
       // Preserve the operation or commit failure when cleanup also fails.
-      if (!failed)
-        throw normalizeDatabaseFailure(closeCause, classifyLibsqlFailure(closeCause));
+      if (!failed) throw normalizeDatabaseFailure(closeCause, classifyLibsqlFailure(closeCause));
     }
   }
 }
