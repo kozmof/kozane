@@ -312,6 +312,9 @@ describe("card add --type image", () => {
     const name = content.split("/").pop()!;
     expect(readFileSync(join(root, ".kozane", "assets", "images", name), "utf8")).toBe(svg);
     expect(readFileSync(source, "utf8")).toBe(svg);
+    expect(cli(root, "card", "delete", id)).toContain("deleted");
+    expect(() => readFileSync(join(root, ".kozane", "assets", "images", name))).toThrow();
+    expect(readFileSync(source, "utf8")).toBe(svg);
   });
 
   it("rejects unsupported and empty files", () => {

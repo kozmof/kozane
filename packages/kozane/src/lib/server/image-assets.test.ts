@@ -4,6 +4,7 @@ import { create, removeOne } from "../../services/cards.js";
 import { createServiceContext } from "../../services/context.js";
 import { describe, expect, it, vi } from "vitest";
 import {
+  withImageDeletion,
   validateImage,
   storeImage,
   imageDirectory,
@@ -146,4 +147,43 @@ it("does not treat text inside quoted SVG values as attribute names", async () =
       new TextEncoder().encode('<svg title=" width=example" width="100" width="200"/>'),
     ),
   ).rejects.toThrow();
+});
+
+it("deletes an image only when its last card is deleted, including archived images", async () => {
+  const root = await mkdtemp(join(tmpdir(), "kozane-delete-image-"));
+  const db = await createTestDB();
+  try {
+    const namespaceId = await createNamespace({ db, name: "Deletion" });
+    const partition = await getDefaultPartition({ db, namespaceId });
+    const context = createServiceContext();
+    const url = await storeImage(root, "image.svg", svg);
+    const input = { partitionId: partition!.id, content: "kozane-image:" + url };
+    const first = await create(db, context, namespaceId, input);
+    const second = await create(db, context, namespaceId, input);
+    await expect(
+      withImageDeletion(root, db, async () => {
+        throw new Error("Deletion failed");
+      }),
+    ).rejects.toThrow("Deletion failed");
+    expect(Array.from(await readImage(root, url.split("/").pop()!))).toEqual(Array.from(svg));
+    await withImageDeletion(root, db, () => removeOne(db, context, namespaceId, first.id));
+    expect(Array.from(await readImage(root, url.split("/").pop()!))).toEqual(Array.from(svg));
+    await withImageDeletion(root, db, () => removeOne(db, context, namespaceId, second.id));
+    await expect(readImage(root, url.split("/").pop()!)).rejects.toThrow();
+    const archivedUrl = await storeImage(root, "archived.svg", svg);
+    await utimes(
+      join(imageDirectory(root), archivedUrl.split("/").pop()!),
+      new Date(0),
+      new Date(0),
+    );
+    await collectUnusedImages(root, db);
+    const archivedCard = await create(db, context, namespaceId, {
+      ...input,
+      content: "kozane-image:" + archivedUrl,
+    });
+    await withImageDeletion(root, db, () => removeOne(db, context, namespaceId, archivedCard.id));
+    await expect(readImage(root, archivedUrl.split("/").pop()!)).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

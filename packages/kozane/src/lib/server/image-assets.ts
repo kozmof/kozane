@@ -1,6 +1,7 @@
+import { composeWrite } from "../../db/database.js";
 import { validPng, validJpeg } from "./raster-validation.js";
 import { activeServerProcess } from "./runtime-state.js";
-import { mkdir, readFile, writeFile, readdir, stat, rename } from "node:fs/promises";
+import { mkdir, readFile, writeFile, readdir, stat, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { imagePath, IMAGE_MAX_BYTES } from "@kozane/core";
@@ -155,4 +156,38 @@ export async function maintainImageAssets(root: string, db: DB, now = Date.now()
   } finally {
     maintenance.set(root, { at: now, running: false });
   }
+}
+
+/** Remove assets belonging to deleted cards only after the database deletion commits. */
+export async function withImageDeletion<T>(
+  root: string | null,
+  db: DB,
+  removeCards: () => Promise<T>,
+): Promise<T> {
+  if (!root || process.env.KOZANE_MEMORY_MODE === "1" || activeServerProcess(root)?.memory)
+    return removeCards();
+  const before = await db.select({ id: cardTable.id, content: cardTable.content }).from(cardTable);
+  const result = await removeCards();
+  // Cleanup is serialized with card writers. A remaining reference always keeps its image.
+  try {
+    await composeWrite(db, async (tx) => {
+      const remaining = await tx
+        .select({ id: cardTable.id, content: cardTable.content })
+        .from(cardTable);
+      const ids = new Set(remaining.map((row) => row.id));
+      const references = new Set(remaining.map((row) => imagePath(row.content)));
+      const deleted = new Set(
+        before.filter((row) => !ids.has(row.id)).map((row) => imagePath(row.content)),
+      );
+      for (const path of deleted) {
+        if (!path || references.has(path)) continue;
+        const name = path.split("/").pop()!;
+        await rm(join(imageDirectory(root), name), { force: true });
+        await rm(join(imageDirectory(root), ".retained", name), { force: true });
+      }
+    });
+  } catch (cause) {
+    console.warn("Image cleanup after card deletion failed:", cause);
+  }
+  return result;
 }

@@ -1,3 +1,5 @@
+import { withImageDeletion } from "$lib/server/image-assets.js";
+import { getWorkspaceRoot } from "../../../../db/internal/config.js";
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
 import { create, updatePositions, remove } from "../../../../services/cards.js";
@@ -24,13 +26,11 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
     ),
   ),
 );
-export const DELETE: RequestHandler = apiHandler(async ({ locals, params, request }) =>
-  json(
-    await remove(
-      locals.db,
-      workspaceServiceContext(),
-      params.namespaceId,
-      await readJsonObject(request),
+export const DELETE: RequestHandler = apiHandler(async ({ locals, params, request }) => {
+  const body = await readJsonObject(request);
+  return json(
+    await withImageDeletion(getWorkspaceRoot(), locals.db, () =>
+      remove(locals.db, workspaceServiceContext(), params.namespaceId, body),
     ),
-  ),
-);
+  );
+});

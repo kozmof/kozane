@@ -611,7 +611,9 @@ once per hour per workspace in each process. Memory sessions skip collection.
 Images with no card reference are moved to `.kozane/assets/images/.retained`
 after 24 hours. Archived images remain readable at their original URLs so a
 concurrent card reference cannot lose its image. Archives are not automatically
-deleted. Fresh uploads are preserved. Maintenance failures do not fail committed writes.
+deleted. Deleting a card through the card endpoints or CLI removes its image
+from both directories after the last card reference is deleted. Memory sessions
+preserve workspace image files. Fresh uploads are preserved. Maintenance failures do not fail committed writes.
 
 ### `GET /api/images/[name]`
 
