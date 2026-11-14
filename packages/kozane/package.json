@@ -1,6 +1,6 @@
 {
   "name": "kozane",
-  "version": "0.22.6",
+  "version": "0.23.0",
   "license": "MIT",
   "author": "Kozo Oeda",
   "repository": {
@@ -37,8 +37,8 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@kozane/client": "workspace:0.1.4",
-    "@kozane/core": "workspace:0.1.1",
+    "@kozane/client": "workspace:0.2.0",
+    "@kozane/core": "workspace:0.2.0",
     "@kozmof/reed": "^4.1.0",
     "@libsql/client": "^0.17.4",
     "commander": "^14.0.3",
