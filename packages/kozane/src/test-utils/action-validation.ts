@@ -11,9 +11,9 @@ import { installationInsert, type InstallationValue } from "../../../core/src/ac
 import { canonicalSchemaManifest } from "../../../core/src/generated/schema-manifest.js";
 import { compareSchemaManifests } from "../../../core/src/migrations/schema.js";
 import { readSchemaManifest } from "../../../core/src/migrations/schema-reader.js";
-import { capturedTables, captureApplicationRows } from "./action-capture.js";
+import { capturedTables, captureApplicationRows } from "./action-tables.js";
 
-function statement(value: InstallationValue) {
+export function installationStatement(value: InstallationValue) {
   // The canonical application identifiers contain no question marks.
   const parts = value.sql.split("?");
   if (parts.length !== value.args.length + 1)
@@ -54,7 +54,8 @@ export async function validateApplicationProjection(
     await tx.run(sql`DROP TRIGGER card_inventory_clear_slot`);
     await tx.run(sql`DROP TRIGGER card_stamp_missing_timestamps`);
     for (const { name } of plan.loadOrder)
-      for (const row of snapshot.rows(name)) await tx.run(statement(installationInsert(name, row)));
+      for (const row of snapshot.rows(name))
+        await tx.run(installationStatement(installationInsert(name, row)));
     if ((await tx.values(sql`PRAGMA foreign_key_check`)).length)
       throw new Error("Validation foreign-key check failed");
     if (

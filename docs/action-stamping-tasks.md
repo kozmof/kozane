@@ -84,6 +84,14 @@ mutating triggers suppressed. Constraints, the inventory pair invariant, foreign
 keys and exact codec read-back are checked on libsql and Node WASM. Production
 epoch validation and installation remain pending.
 
+The capture fixture now has a test-only restore mode and persisted materialization
+selection. It validates selected history in an isolated database, atomically
+replaces populated rows and selection, and preserves all origin history. Guards
+stay installed while capture and mutating triggers are suppressed. Libsql and
+Node WASM tests cover continued recording, failed validation, partial installation
+and read-back rollback. Production restoration still requires epoch and local
+metadata integration.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -149,6 +157,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 
 - [x] Derive and test an internal acyclic restoration load plan from schema metadata and refuse unsupported table dependencies.
 - [x] Prototype isolated application projection validation with constraints, trigger invariants and exact read-back on libsql and Node WASM.
+- [x] Prototype atomic populated-row replacement and selected-history bookkeeping with active guards, suppressed mutation triggers and rollback checks on libsql and Node WASM.
 - [ ] Add workspace and epoch identities, schema and encoding versions, baseline hashes and restoration selections.
 - [ ] Implement restartable initial baseline capture for populated and seeded databases with application writes blocked until activation.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.

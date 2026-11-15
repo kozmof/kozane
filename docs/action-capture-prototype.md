@@ -9,19 +9,27 @@ before the production log schema is finalized.
 Run the Node libsql prototype with the source test configuration.
 
 ```sh
-pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts packages/kozane/src/db/api/action-restoration-validation.test.ts packages/kozane/src/services/action-projection.test.ts packages/kozane/src/services/action-restoration-plan.test.ts
+pnpm exec vitest run --config vitest.source.config.ts \
+  packages/kozane/src/db/api/action-capture*.test.ts \
+  packages/kozane/src/db/api/action-restoration*.test.ts \
+  packages/kozane/src/services/action-projection.test.ts \
+  packages/kozane/src/services/action-restoration-plan.test.ts
 ```
 
 Run the same capture tests against SQLite WASM in Node.
 
 ```sh
-pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts packages/kozane/src/db/api/action-restoration-validation.test.ts
+pnpm exec vitest run --config scripts/database-parity/vitest.config.ts \
+  packages/kozane/src/db/api/action-capture*.test.ts \
+  packages/kozane/src/db/api/action-restoration*.test.ts
 ```
 
 Run SQLite WASM in a browser with Chromium installed for Playwright.
 
 ```sh
-KOZANE_DB_BROWSER=1 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts packages/kozane/src/db/api/action-restoration-validation.test.ts
+KOZANE_DB_BROWSER=1 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts \
+  packages/kozane/src/db/api/action-capture*.test.ts \
+  packages/kozane/src/db/api/action-restoration*.test.ts
 ```
 
 The libsql and Node WASM checks pass. Browser verification is pending. Chromium
@@ -72,8 +80,9 @@ including composite keys.
 
 Completion finalizes provisional images and persists the finalized composition
 invocation, execution inputs and generated bindings. It rebuilds the projection
-from the original baseline and all completed runs, then compares every application
-row before commit. No mutable projection state advances before commit. A failed
+from the original baseline and selected completed runs in persisted materialization
+order, then compares every application row before commit. No mutable projection
+state advances before commit. A failed
 commit or root savepoint leaves no captured run behind, and later groups can use
 the persisted history.
 
@@ -146,6 +155,34 @@ incompatible validation destinations are refused before loading.
 
 These checks pass on libsql and Node WASM. Epoch selection, shared and local
 metadata separation, production restore mode and live installation remain pending.
+
+## Replace populated rows in the fixture
+
+The capture fixture's `restore` method accepts a fresh validation database factory
+and an ordered list of captured run IDs. It reconstructs selected complete runs
+while holding the destination write transaction, then validates the target in the
+separate database before changing destination rows. Missing runs, duplicate
+selections and incompatible before images fail before validation begins.
+
+The fixture has an explicit restore mode. Its persistent application guards stay
+installed and require an empty action marker in that mode. Capture and the two
+mutating card triggers run only in record mode. Restoration deletes children
+before parents, inserts parents before children, checks foreign keys and reads
+back every row. The selected run list and row replacement commit together after
+the context returns to record mode.
+
+Tests restore the baseline and successive cascade states into populated rows.
+They preserve historical zero timestamps and all origin invocations, bindings,
+execution records and effects without allocating a clock or creating an action.
+New actions append to the restored selection while retaining unselected origin
+history. Validation errors, installation SQL errors and read-back mismatches
+leave rows, selection and markers unchanged. Ordinary unstamped writes remain
+refused after success and rollback.
+
+This method exists only in test fixtures. It still includes every current
+taskspace column, including local paths and observations. Production shared-row
+replacement must first separate that metadata and preserve it independently.
+These tests do not establish epoch activation, durable recovery or browser support.
 
 ## Remaining activation work
 

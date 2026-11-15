@@ -185,7 +185,9 @@ async function fixture() {
     runActionGroup({ db, ...customOptions(runId, operation, child) });
   return { db, capture, registry, bindings, run, custom, customOptions, recover };
 }
-const emptyMarker = [{ runId: null, actionId: null, executionOrd: null, nextEffectOrd: 0 }];
+const emptyMarker = [
+  { mode: "record", runId: null, actionId: null, executionOrd: null, nextEffectOrd: 0 },
+];
 
 it("reconstructs all application tables from real service composition effects and finalized invocations", async () => {
   const f = await fixture();
