@@ -39,6 +39,12 @@ before later roots enter. Savepoint boundary failures, overlapping calls and
 unfinished roots abort the outer transaction even when caught. Production
 reconciliation, outcome handling and failure classification remain pending.
 
+Guarded action handles now bind generated IDs in the namespace, partition, layer,
+scope, scope-area, warp, inventory, glue and card record helpers. Single and batch
+card creation bind their shared timestamps. Text updates bind clocks while
+preserving unchanged-text timestamps. Taskspace, composite squash and raw ORM
+allocations still need integration before activation.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -53,6 +59,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Define complete invocation envelopes, including routing and target IDs, for every registered kind.
 - [ ] Classify each kind as `syncable` or `local-only` and define its replay or file recovery handler.
 - [ ] Define stable binding paths for entity IDs, child action IDs and clock readings. Preserve bindings when query ordering changes.
+- [x] Bind IDs in the covered record helpers and clocks in single and batch card creation and text updates when called through opt-in action handles.
 - [ ] Persist `contract_ver` from the first execution and dispatch the whole group through its compatible registry.
 - [ ] Refuse unbound replay allocations without changing the binding map. Preserve original invocations when replay resolves child arguments differently.
 - [ ] Replace migration 0019's timestamp fallback with explicit bindings and record-mode validation. Preserve historical timestamps during restoration.

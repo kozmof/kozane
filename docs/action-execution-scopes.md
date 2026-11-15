@@ -72,6 +72,41 @@ The full original binding map remains available. Replayed child arguments and
 entry order belong to the new execution records. Earlier returned records and
 the root invocation remain unchanged.
 
+`actions/allocations.ts` connects guarded handles to their handler's binding
+provider. Covered record helpers supply IDs and card timestamps explicitly before
+SQL execution. Handles outside an action retain their existing defaults. A closed
+handle keeps its allocation binding so later calls fail ownership checks before
+they can fall back to a new ID or clock reading.
+
+The following allocation keys are scoped by the selected contract, handler and
+invocation hierarchy.
+
+| Write | Key passed to the handler's provider |
+| --- | --- |
+| One namespace, partition, layer, scope, scope area, warp, inventory, glue or card | `["entity", table]` |
+| Cards supplied as a batch | `["entity", "card", "batch", inputIndex]` |
+| One card's creation time | `["clock", "card", "create"]` |
+| A batch's shared creation time | `["clock", "card", "batch"]` |
+| A card's text update | `["clock", "card", "update", cardId]` |
+
+Keys are encoded as JSON tuples. Batch indexes identify the original supplied
+input before chunking and database reads. Use stable child action paths for
+multiple independent creates of the same table within one named handler.
+Creation reads the clock once for both timestamp columns, and once per batch.
+Text updates bind a clock even when the existing text matches, so replay can use
+that binding if the current row differs. The SQL comparison still preserves the
+old timestamp for unchanged text. Geometry-only updates allocate no clock.
+
+Bound card times must be nonzero and fit a JavaScript Date. Zero would invoke
+migration 0019's wall-clock fallback. Invalid times and unbound allocations latch
+the root failure even when a direct record caller catches the error. Valid
+historical timestamps before the Unix epoch remain supported.
+
+Taskspace writes, direct ORM inserts, composite squash writes and service paths
+that still own nested transactions need further integration. Migration 0019's
+fallback also needs replacement before activation. These helpers do not enable
+mandatory action guards or install production handlers.
+
 ## Replay roots inside one transaction
 
 `actions/replay.ts` provides the internal `withActionReplayTransaction` boundary.
@@ -108,12 +143,17 @@ WASM. It tests caught errors, savepoint rollback, pending work, parent ownership
 relational reads, resource services, changed replay branches and marker cleanup.
 Replay tests also cover root isolation, fresh scopes, composition descendants,
 cleanup failure, overlapping roots, unfinished work and outer commit failure.
+Allocation tests call real record and service writes on both adapters. They cover
+stable IDs, creation and edit clocks, changed child order, SQL chunking, changed
+replay branches, retained handles and ordinary defaults outside action scopes.
 
 ```sh
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-execution.test.ts
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-execution.test.ts
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-replay.test.ts
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-replay.test.ts
+pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-allocations.test.ts
+pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-allocations.test.ts
 ```
 
 Production integration must supply persistent action/context hooks, route all

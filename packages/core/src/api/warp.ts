@@ -1,3 +1,4 @@
+import { boundEntityId } from "../actions/allocations.js";
 import { warpTable } from "../schema.js";
 import { and, asc, eq } from "drizzle-orm";
 import type {
@@ -29,7 +30,10 @@ export async function getAllWorkspaceWarps({ db }: NeedsReader): Promise<Warp[]>
 type AddWarp = NeedsNamespace & { posX: number; posY: number };
 
 export async function addWarp({ db, namespaceId, posX, posY }: AddWarp): Promise<Warp> {
-  const [row] = await db.insert(warpTable).values({ namespaceId, posX, posY }).returning();
+  const [row] = await db
+    .insert(warpTable)
+    .values({ id: boundEntityId(db, "warp"), namespaceId, posX, posY })
+    .returning();
   return row;
 }
 

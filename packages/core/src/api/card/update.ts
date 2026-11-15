@@ -1,6 +1,7 @@
 /** Card updates: fields, positions, and partition moves. */
 
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { boundCardTimestamp } from "../../actions/allocations.js";
 import type { SQL } from "drizzle-orm";
 import { cardTable, layerTable, partitionTable } from "../../schema.js";
 import type { NeedsPartition, NeedsTx } from "../../database-types.js";
@@ -75,11 +76,12 @@ type CardUpdate = Partial<
  * Compare against the existing content in the `SET` expression so the decision and write are
  * atomic. Unchanged text must not reset the gap reported by `card list --sort gap`.
  *
- * Take the new time from the same JS clock as {@link newCardStamps}, so creation and edit
- * times never come from two sources. The timestamp column stores whole seconds.
+ * Use the owning action's recorded clock, or the ordinary JS clock outside an action,
+ * as {@link newCardStamps} does. The timestamp column stores whole seconds.
  */
-function contentUpdatedAt(content: string): SQL {
-  const now = Math.floor(Date.now() / 1000);
+function contentUpdatedAt(db: Tx, cardId: string, content: string): SQL {
+  const bound = boundCardTimestamp(db, "update", cardId);
+  const now = bound === undefined ? Math.floor(Date.now() / 1000) : bound.getTime() / 1000;
   return sql`CASE WHEN ${cardTable.content} <> ${content} THEN ${now} ELSE ${cardTable.updatedAt} END`;
 }
 
@@ -154,7 +156,7 @@ export async function updateCardInTx({
   // changes preserve it.
   if (content !== undefined) {
     fields.content = content;
-    fields.updatedAt = contentUpdatedAt(content);
+    fields.updatedAt = contentUpdatedAt(db, cardId, content);
   }
   if (posX !== undefined) fields.posX = posX;
   if (posY !== undefined) fields.posY = posY;

@@ -1,3 +1,4 @@
+import { boundEntityId } from "../actions/allocations.js";
 import { partitionTable, cardTable, glueRelTable, namespaceTable } from "../schema.js";
 import { and, asc, eq } from "drizzle-orm";
 import type { ReadsNamespace, NeedsDB, Namespace, NeedsReader } from "../database-types.js";
@@ -26,7 +27,7 @@ export async function addNamespace({ db, name, isDefault = false }: AddNamespace
   assertNameWithinLimit(name, "Namespace name");
   const [row] = await db
     .insert(namespaceTable)
-    .values({ name, isDefault })
+    .values({ id: boundEntityId(db, "namespace"), name, isDefault })
     .returning({ id: namespaceTable.id });
   return row.id;
 }

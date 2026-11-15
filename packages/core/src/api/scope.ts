@@ -1,3 +1,4 @@
+import { boundEntityId } from "../actions/allocations.js";
 import {
   scopeTable,
   scopeRelTable,
@@ -163,7 +164,10 @@ export async function getScope({ db, scopeId }: GetScope): Promise<Scope | undef
 type AddScope = NeedsDB & { name: string };
 export async function addScope({ db, name }: AddScope): Promise<string> {
   assertNameWithinLimit(name, "Scope name");
-  const [row] = await db.insert(scopeTable).values({ name }).returning({ id: scopeTable.id });
+  const [row] = await db
+    .insert(scopeTable)
+    .values({ id: boundEntityId(db, "scope"), name })
+    .returning({ id: scopeTable.id });
   return row.id;
 }
 

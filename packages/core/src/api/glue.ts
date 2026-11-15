@@ -1,3 +1,4 @@
+import { boundEntityId } from "../actions/allocations.js";
 import { partitionTable, cardTable, glueTable, glueRelTable } from "../schema.js";
 import { and, count, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { NeedsDB, ReadsNamespace, NeedsTx, GlueRel } from "../database-types.js";
@@ -118,7 +119,10 @@ async function glueCardsCore(db: Tx, cardIds: string[]): Promise<GlueOutcome> {
   const clearedCardIds = (await detachCards(db, cardIds)).filter((id) => !glued.has(id));
 
   // Create a new glue group for all specified cards.
-  const [{ id: newGlueId }] = await db.insert(glueTable).values({}).returning({ id: glueTable.id });
+  const [{ id: newGlueId }] = await db
+    .insert(glueTable)
+    .values({ id: boundEntityId(db, "glue") })
+    .returning({ id: glueTable.id });
   // Chunk glue-member inserts within the parameter limit.
   for (const batch of chunked(cardIds, { columnsPerRow: columnCount(glueRelTable) }))
     await db.insert(glueRelTable).values(batch.map((cardId) => ({ glueId: newGlueId, cardId })));

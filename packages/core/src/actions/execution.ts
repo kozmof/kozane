@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import { bindActionServiceFrame } from "./service-frame.js";
+import { bindActionAllocations } from "./allocations.js";
 import { withTx, type DB, type Tx } from "../database.js";
 import { prepareInput } from "../services/prepare-input.js";
 import { actionBindingPath, type ActionBindingMap, type ActionBindings } from "./bindings.js";
@@ -326,6 +327,14 @@ export async function runActionGroupAtBoundary<Inputs extends object, C>(
         );
         if (failed) throw firstFailure;
         const handle = guardedHandle(frame);
+        const allocations = frameBindings(frame);
+        bindActionAllocations(handle, {
+          bindings: allocations,
+          check: () => assertOwner(frame),
+          fail: (cause) => {
+            throw fail(cause);
+          },
+        });
         unbind = bindActionServiceFrame(handle, {
           check: () => assertOwner(frame),
           track: <T>(operation: Promise<T>): Promise<T> =>
@@ -338,7 +347,7 @@ export async function runActionGroupAtBoundary<Inputs extends object, C>(
         });
         const execution = {
           context: createContext(access, handle),
-          bindings: frameBindings(frame),
+          bindings: allocations,
         };
         result = await registry[bindings.mode === "record" ? "execute" : "replay"](
           action.kind as keyof Inputs & string,

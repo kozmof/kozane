@@ -1,3 +1,4 @@
+import { boundEntityId } from "../actions/allocations.js";
 import { scopeAreaTable } from "../schema.js";
 import { and, asc, eq } from "drizzle-orm";
 import type { ReadsNamespace, NeedsNamespace, ScopeArea } from "../database-types.js";
@@ -37,7 +38,15 @@ export async function addScopeArea({
 }: AddScopeArea): Promise<ScopeArea> {
   const [row] = await db
     .insert(scopeAreaTable)
-    .values({ namespaceId, scopeId, posX, posY, width, height })
+    .values({
+      id: boundEntityId(db, "scope_area"),
+      namespaceId,
+      scopeId,
+      posX,
+      posY,
+      width,
+      height,
+    })
     .returning();
   return row;
 }

@@ -1,4 +1,5 @@
 /** Inventory rows: reading, creating, renaming, moving, and deleting them. */
+import { boundEntityId } from "../../actions/allocations.js";
 import { cardTable, inventoryTable } from "../../schema.js";
 import { and, asc, count, eq } from "drizzle-orm";
 import type {
@@ -64,7 +65,7 @@ export async function addInventory({
   assertNameWithinLimit(name, "Inventory name");
   const [row] = await db
     .insert(inventoryTable)
-    .values({ namespaceId, name, posX, posY })
+    .values({ id: boundEntityId(db, "inventory"), namespaceId, name, posX, posY })
     .returning();
   return row;
 }

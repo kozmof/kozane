@@ -126,8 +126,19 @@ skipped bindings and refuses unbound paths or type changes. Snapshots preserve
 unused bindings. Path keys encode tuples so separators in entity IDs cannot
 collide. The execution scope adds hierarchical child paths and handler-scoped
 allocation paths. Replay preserves the original map while recording the actual
-child envelopes and entry order for that run. Concrete allocation paths in
-production handlers and generated service values remain pending. `actions/import-timestamps.ts` resolves missing or zero creation
+child envelopes and entry order for that run. `actions/allocations.ts` now binds
+generated IDs in the namespace, partition, layer, scope, scope-area, warp,
+inventory, glue and card record helpers when called through a guarded action
+handle. Single and batch card creation bind timestamps before insertion. Card
+text updates bind their SQL clock while retaining the unchanged-text comparison.
+Batch IDs use original input indexes before SQL chunking. Other IDs use table
+roles within the owning handler's stable invocation path. See
+[allocation keys](action-execution-scopes.md#invocations-and-allocations).
+
+Ordinary handles retain existing defaults. Production handler installation,
+taskspace allocations, composite squash writes and raw ORM inserts remain
+pending. The migration 0019 timestamp fallback remains unchanged and must be
+replaced before activation. `actions/import-timestamps.ts` resolves missing or zero creation
 timestamps through a binding keyed by the imported card ID. A missing or zero
 update timestamp follows creation time. Supplied nonzero timestamps and the
 original input remain unchanged. The resolver is not yet connected to CLI import
