@@ -1,3 +1,4 @@
+import { withActionService } from "../actions/service-frame.js";
 export type {
   ScopeCreateInput,
   ScopeRenameInput,
@@ -44,39 +45,43 @@ function clampRect(rect: BoardRect, context: ServiceContext): BoardRect {
   };
 }
 
-export async function createInTx(db: Tx, _context: ServiceContext, body: Record<string, unknown>) {
-  body = prepareInput(body);
-  const name = requireBoundedName(body);
+export function createInTx(db: Tx, _context: ServiceContext, body: Record<string, unknown>) {
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const name = requireBoundedName(body);
 
-  try {
-    const id = await addScope({ db, name });
-    return { id };
-  } catch (e) {
-    if (isUniqueConstraintError(e))
-      throw new ConflictError(`A scope named "${name}" already exists`);
-    throw e;
-  }
+    try {
+      const id = await addScope({ db, name });
+      return { id };
+    } catch (e) {
+      if (isUniqueConstraintError(e))
+        throw new ConflictError(`A scope named "${name}" already exists`);
+      throw e;
+    }
+  });
 }
 
-export async function renameInTx(
+export function renameInTx(
   db: Tx,
   _context: ServiceContext,
   _namespaceId: string,
   scopeId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const name = requireBoundedName(body);
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const name = requireBoundedName(body);
 
-  if (!(await getScope({ db, scopeId: scopeId }))) throw missing("Scope not found");
-  try {
-    await updateScopeName({ db, scopeId: scopeId, name });
-  } catch (e) {
-    if (isUniqueConstraintError(e))
-      throw new ConflictError(`A scope named "${name}" already exists`);
-    throw e;
-  }
-  return { id: scopeId, name };
+    if (!(await getScope({ db, scopeId: scopeId }))) throw missing("Scope not found");
+    try {
+      await updateScopeName({ db, scopeId: scopeId, name });
+    } catch (e) {
+      if (isUniqueConstraintError(e))
+        throw new ConflictError(`A scope named "${name}" already exists`);
+      throw e;
+    }
+    return { id: scopeId, name };
+  });
 }
 
 export async function remove(
@@ -90,54 +95,60 @@ export async function remove(
   return { ok: true };
 }
 
-export async function addMembersInTx(
+export function addMembersInTx(
   db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   scopeId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const cardIds = requireStringArray(body, "cardIds");
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const cardIds = requireStringArray(body, "cardIds");
 
-  const result = await addScopeMembersInTx({ db, scopeId, namespaceId, cardIds });
-  if (!result.ok) rejectBatch(result.reason);
+    const result = await addScopeMembersInTx({ db, scopeId, namespaceId, cardIds });
+    if (!result.ok) rejectBatch(result.reason);
 
-  return { ok: true };
+    return { ok: true };
+  });
 }
 
-export async function removeMembersInTx(
+export function removeMembersInTx(
   db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   scopeId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const cardIds = requireStringArray(body, "cardIds");
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const cardIds = requireStringArray(body, "cardIds");
 
-  const result = await removeScopeMembersFromNamespaceInTx({ db, scopeId, namespaceId, cardIds });
-  if (!result.ok) rejectBatch(result.reason);
+    const result = await removeScopeMembersFromNamespaceInTx({ db, scopeId, namespaceId, cardIds });
+    if (!result.ok) rejectBatch(result.reason);
 
-  return { ok: true };
+    return { ok: true };
+  });
 }
 
-export async function createAreaInTx(
+export function createAreaInTx(
   db: Tx,
   context: ServiceContext,
   namespaceId: string,
   scopeId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const rect = readAreaRect(body);
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const rect = readAreaRect(body);
 
-  // The whole stored row, so a client that drew the frame where the pointer let go cannot
-  // keep it at an unclamped rectangle until the next snapshot poll corrects it.
-  return await addScopeArea({ db, namespaceId, scopeId, ...clampRect(rect, context) });
+    // The whole stored row, so a client that drew the frame where the pointer let go cannot
+    // keep it at an unclamped rectangle until the next snapshot poll corrects it.
+    return await addScopeArea({ db, namespaceId, scopeId, ...clampRect(rect, context) });
+  });
 }
 
-export async function updateAreaInTx(
+export function updateAreaInTx(
   db: Tx,
   context: ServiceContext,
   namespaceId: string,
@@ -145,21 +156,25 @@ export async function updateAreaInTx(
   areaId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const rect = readAreaRect(body);
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const rect = readAreaRect(body);
 
-  return await moveScopeArea({ db, namespaceId, scopeId, areaId, ...clampRect(rect, context) });
+    return await moveScopeArea({ db, namespaceId, scopeId, areaId, ...clampRect(rect, context) });
+  });
 }
 
-export async function removeAreaInTx(
+export function removeAreaInTx(
   db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   scopeId: string,
   areaId: string,
 ) {
-  await deleteScopeArea({ db, namespaceId, scopeId, areaId });
-  return { ok: true };
+  return withActionService(db, async () => {
+    await deleteScopeArea({ db, namespaceId, scopeId, areaId });
+    return { ok: true };
+  });
 }
 
 export async function addMembers(
@@ -185,9 +200,11 @@ export async function removeMembers(
 }
 
 /** Workspace deletion differs from removing one board's scope placement. */
-export async function removeWorkspaceInTx(tx: Tx, _context: ServiceContext, scopeId: string) {
-  await deleteScope({ db: tx, scopeId });
-  return { ok: true as const };
+export function removeWorkspaceInTx(tx: Tx, _context: ServiceContext, scopeId: string) {
+  return withActionService(tx, async () => {
+    await deleteScope({ db: tx, scopeId });
+    return { ok: true as const };
+  });
 }
 export async function removeWorkspace(db: DB, context: ServiceContext, scopeId: string) {
   return withTx(db, (tx) => removeWorkspaceInTx(tx, context, scopeId));

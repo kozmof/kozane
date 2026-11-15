@@ -81,6 +81,21 @@ export function defineActionRegistry<Inputs extends object, C>(options: {
   return Object.freeze({
     contractVersion: version,
     supportsSchema: (schemaVersion: number) => schemas.has(schemaVersion),
+    /** First execution uses the same intent handler with a recording binding provider. */
+    async execute<K extends keyof Inputs & string>(
+      kind: K,
+      input: unknown,
+      execution: ActionHandlerContext<C>,
+    ): Promise<unknown> {
+      const definition = definitions.get(kind);
+      if (!definition) throw new TypeError(`Unknown action kind: ${kind}`);
+      if (definition.eligibility !== "syncable")
+        throw new TypeError(`Action is local-only: ${kind}`);
+      if (execution.bindings.mode !== "record")
+        throw new TypeError("First execution requires recording bindings");
+      const prepared = definition.prepare(prepareInput(input));
+      return definition.replay(prepared, execution);
+    },
     /** Only intent replay. File recovery is a separate, explicit operation. */
     async replay<K extends keyof Inputs & string>(
       kind: K,

@@ -28,6 +28,10 @@ contract version against supported schema versions and returns
 descriptors and schema support are copied so callers cannot replace them afterward.
 Intent replay requires a replay binding provider and cannot invoke file recovery.
 
+The [execution scope](action-execution-scopes.md) now provides an opt-in root
+transaction, sequential child dispatch, handler ownership and a failure latch.
+Core `InTx` services share that latch, including failures before SQL.
+
 Production handler installation, system import, repair, composition, config and
 taskspace observation envelopes remain pending. Contract version persistence and
 group dispatch integration also remain pending. Do not submit work based only on
@@ -115,8 +119,10 @@ application-row timestamps.
 from injected sources during recording. Replay copies the recorded map, permits
 skipped bindings and refuses unbound paths or type changes. Snapshots preserve
 unused bindings. Path keys encode tuples so separators in entity IDs cannot
-collide. Handler integration, concrete allocation paths and failure latching
-remain pending. `actions/import-timestamps.ts` resolves missing or zero creation
+collide. The execution scope adds hierarchical child paths and handler-scoped
+allocation paths. Replay preserves the original map while recording the actual
+child envelopes and entry order for that run. Concrete allocation paths in
+production handlers and generated service values remain pending. `actions/import-timestamps.ts` resolves missing or zero creation
 timestamps through a binding keyed by the imported card ID. A missing or zero
 update timestamp follows creation time. Supplied nonzero timestamps and the
 original input remain unchanged. The resolver is not yet connected to CLI import
