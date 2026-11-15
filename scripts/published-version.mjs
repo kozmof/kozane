@@ -15,9 +15,13 @@ export async function publishedVersion(name, version, integrity, request = fetch
     } catch (cause) {
       if (attempt < 2 && cause.cause?.code === "EAI_AGAIN") continue;
       throw new Error(
-        "Cannot check " + name + "@" + version + ": " +
-        (cause.cause?.code ?? cause.message) +
-        ". Check registry connectivity and proxy settings; no publication was attempted for this archive.",
+        "Cannot check " +
+          name +
+          "@" +
+          version +
+          ": " +
+          (cause.cause?.code ?? cause.message) +
+          ". Check registry connectivity and proxy settings; no publication was attempted for this archive.",
         { cause },
       );
     }

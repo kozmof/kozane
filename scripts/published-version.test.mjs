@@ -37,9 +37,12 @@ test("retries temporary DNS errors", async () => {
 });
 test("persistent DNS errors stop after three attempts with actionable context", async () => {
   let calls = 0;
-  await assert.rejects(publishedVersion("x", "1.0.0", "sha512-test", async () => {
-    calls++;
-    throw new Error("fetch failed", { cause: { code: "EAI_AGAIN" } });
-  }), /EAI_AGAIN.*proxy settings/);
+  await assert.rejects(
+    publishedVersion("x", "1.0.0", "sha512-test", async () => {
+      calls++;
+      throw new Error("fetch failed", { cause: { code: "EAI_AGAIN" } });
+    }),
+    /EAI_AGAIN.*proxy settings/,
+  );
   assert.equal(calls, 3);
 });
