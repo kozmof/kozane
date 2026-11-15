@@ -25,7 +25,7 @@ const cases = {
   rename: {
     invoke: (api) => api.rename(ns, id, { name: "Notes" }),
     result: { id, name: "Notes", path: null, pathKind: "absolute" },
-    path: prefix,
+    path: prefix + "/label",
     method: "PATCH",
   },
   remove: {
@@ -137,6 +137,21 @@ it("rejects a renamed record with the wrong identity after publishing its commit
     code: "unavailable",
   });
   expect(client.version.revision).toBe(1);
+});
+
+it("does not fall back to the directory-moving endpoint when label routing is unavailable", async () => {
+  const fetcher = vi.fn(async () =>
+    Response.json({ message: "Label route is unavailable" }, { status: 404 }),
+  );
+  const client = new HttpClient({ capabilities, fetcher });
+  await expect(client.taskspaces!.rename(ns, id, { name: "Label" })).rejects.toMatchObject({
+    code: "not_found",
+  });
+  expect(fetcher).toHaveBeenCalledExactlyOnceWith(
+    prefix + "/label",
+    expect.objectContaining({ method: "PATCH" }),
+  );
+  expect(client.version.revision).toBe(0);
 });
 it("forwards cancellation and rejects malformed committed JSON without retry", async () => {
   const controller = new AbortController();

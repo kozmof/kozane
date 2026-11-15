@@ -71,9 +71,13 @@ child list. Every descendant uses the root's contract and binding provider.
 
 Libsql and Node WASM tests cover local metadata independence, retained attachments,
 scope and namespace validation, cascades, caught failures, replay and nested
-compositions. Node HTTP and CLI lifecycle operations still own their current
-filesystem workflows. Migrating those callers, durable local recovery and
-production stamping remain pending.
+compositions. The current HTTP client sends label changes to
+`PATCH /[namespaceId]/api/taskspaces/[taskspaceId]/label`. The Node wrapper uses the
+shared service and reads attachment fields for the existing response inside the
+same transaction. It does not consult directory configuration or touch disk.
+The older combined endpoint remains available for earlier clients.
+Creation, removal and CLI lifecycle workflows still require separation and
+durable local recovery. Production stamping remains pending.
 
 ## Request an inventory repair
 

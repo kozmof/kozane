@@ -117,6 +117,13 @@ its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
 Application lifecycle routing and durable filesystem recovery remain pending.
 
+The board's taskspace rename now uses a dedicated label endpoint backed by the
+shared service. It preserves directory paths, marker bytes and local observation
+timestamps, including while an editor file remains open. Response assembly shares
+the label transaction. The old combined endpoint retains its directory behavior
+for earlier clients. Creation, removal, durable local recovery and production
+action persistence still need application integration.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -177,7 +184,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Wait for outstanding children and service work to settle before rollback and discard each failed root's execution scope.
 - [ ] Separate filesystem handlers from syncable database handlers. Refuse local-only children in generic compositions and named syncable handlers.
 - [x] Move taskspace paths and observations into local metadata storage before baseline capture. Preserve metadata for absent taskspaces without cascading deletion.
-- [ ] Keep shared taskspace rename independent of directory movement and local observation timestamps.
+- [x] Keep shared taskspace rename independent of directory movement and local observation timestamps.
 - [ ] Verify write coverage, caught failures, overlapping calls, outstanding children, nested execution order and serialized composition replay.
 - [ ] Verify all five taskspace file methods remain local-only and cannot mutate shared application rows.
 - [ ] Verify shared restoration preserves local taskspace metadata and installs no remote directory attachments.
