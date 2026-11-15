@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import { bindActionServiceFrame } from "./service-frame.js";
 import { withTx, type DB, type Tx } from "../database.js";
 import { prepareInput } from "../services/prepare-input.js";
@@ -96,6 +98,8 @@ export async function runActionGroup<Inputs extends object, C>(options: {
   )
     throw new ActionExecutionError("Root action requires an ID and kind");
   return withTx(db, async (tx) => {
+    const executeConnection = (statement: string) => tx.values(sql.raw(statement));
+    await configureActionConnection(executeConnection);
     let failed = false;
     let firstFailure: unknown;
     let current: Frame | null = null;
@@ -368,6 +372,8 @@ export async function runActionGroup<Inputs extends object, C>(options: {
       executions,
     });
     await complete?.(tx, output);
+    if (failed) throw firstFailure;
+    await verifyActionConnection(executeConnection);
     if (failed) throw firstFailure;
     return output;
   });

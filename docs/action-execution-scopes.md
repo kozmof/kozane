@@ -14,6 +14,13 @@ File recovery remains a separate registry operation. The
 [composition API](action-composition.md) uses this scope to record direct child
 IDs and enforce callback and reader access.
 
+Before entering a handler, the scope enables and verifies `foreign_keys` and
+`recursive_triggers` on its transaction connection. The host must enable foreign
+keys before opening the transaction because SQLite cannot change that flag within
+one. The scope checks both flags again after the completion hook. A failed check
+rolls back application data and completed history. New roots repeat the setup so
+connections recycled by the driver retain recursive trigger behavior.
+
 A root owns a failure latch outside SQLite. The first child dispatch, validation,
 service or SQL failure is retained even when a handler catches it. SQL savepoint
 rollback cannot clear the latch. Later child calls fail with the same cause, and

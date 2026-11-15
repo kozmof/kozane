@@ -26,7 +26,11 @@ interface Context {
 }
 type Handlers = { [K in keyof Inputs]: ActionHandler<Inputs[K], Context> };
 const prepare = <T>(input: unknown) => input as T;
-async function fixture(handlers: Partial<Handlers> = {}, completionFailure?: Error) {
+async function fixture(
+  handlers: Partial<Handlers> = {},
+  completionFailure?: Error,
+  afterComplete?: (tx: Tx) => Promise<void>,
+) {
   // Both Vitest configs resolve the package-typed fixture to the core source adapter.
   const db = (await createTestDB()) as unknown as DB;
   await db.run(sql`CREATE TABLE execution_value (id TEXT PRIMARY KEY,value INTEGER)`);
@@ -121,6 +125,7 @@ async function fixture(handlers: Partial<Handlers> = {}, completionFailure?: Err
           sql`INSERT INTO execution_group VALUES(${group.invocation.id},${JSON.stringify(group.generated)},${JSON.stringify(group.executions)})`,
         );
         if (completionFailure) throw completionFailure;
+        await afterComplete?.(tx);
       },
     });
   };
@@ -637,4 +642,83 @@ it("rolls back data and execution records when final persistence fails", async (
   expect(await audit(f)).toEqual([]);
   expect(await f.db.select({ id: sql<string>`root_id` }).from(sql`execution_group`)).toEqual([]);
   expect(await marker(f)).toEqual([{ id: null }]);
+});
+
+it("reenables recursive triggers on every action transaction, including recycled connections", async () => {
+  const f = await fixture({
+    root: async (input, { context }) => {
+      await context.db.run(sql`UPDATE execution_recursive SET value=1 WHERE id=${input.value}`);
+    },
+  });
+  await f.db.run(sql`CREATE TABLE execution_recursive(id INTEGER PRIMARY KEY,value INTEGER)`);
+  await f.db
+    .run(sql`CREATE TRIGGER execution_repeat AFTER UPDATE ON execution_recursive WHEN NEW.value<3 BEGIN
+    UPDATE execution_recursive SET value=value+1 WHERE id=NEW.id;
+  END`);
+  for (const id of [1, 2]) {
+    await f.db.run(sql`INSERT INTO execution_recursive VALUES(${id},0)`);
+    await f.db.run(sql`PRAGMA recursive_triggers=OFF`);
+    await f.execute("record", {}, { value: id });
+    const [row] = await f.db
+      .select({ value: sql<number>`value` })
+      .from(sql`execution_recursive`)
+      .where(sql`id=${id}`);
+    expect(row.value).toBe(3);
+  }
+});
+
+it("refuses disabled foreign keys before entering handlers or writing execution records", async () => {
+  const handler = vi.fn(async () => "must not run");
+  const f = await fixture({ root: handler });
+  await f.db.run(sql`PRAGMA foreign_keys=OFF`);
+  await expect(f.execute()).rejects.toMatchObject({
+    code: "action-connection-required",
+    pragma: "foreign_keys",
+  });
+  expect(handler).not.toHaveBeenCalled();
+  expect(await audit(f)).toEqual([]);
+  expect(await marker(f)).toEqual([{ id: null }]);
+  await f.db.run(sql`PRAGMA foreign_keys=ON`);
+  await expect(f.execute()).resolves.toBeDefined();
+});
+
+it("rolls back data and completed history if a handler disables required connection settings", async () => {
+  let disable = true;
+  const f = await fixture({
+    root: async (_input, { context }) => {
+      await context.db.run(sql`INSERT INTO execution_value VALUES('changed',1)`);
+      if (disable) await context.db.run(sql`PRAGMA recursive_triggers=OFF`);
+    },
+  });
+  await expect(f.execute()).rejects.toMatchObject({
+    code: "action-connection-required",
+    pragma: "recursive_triggers",
+  });
+  expect(await stored(f)).toEqual([]);
+  expect(await audit(f)).toEqual([]);
+  expect(await f.db.select({ id: sql<string>`root_id` }).from(sql`execution_group`)).toEqual([]);
+  disable = false;
+  await expect(f.execute()).resolves.toBeDefined();
+  expect(await stored(f)).toEqual([{ id: "changed", value: 1 }]);
+});
+
+it("checks connection settings after the completion hook before committing data and history", async () => {
+  const f = await fixture(
+    {
+      root: async (_input, { context }) => {
+        await context.db.run(sql`INSERT INTO execution_value VALUES('changed',1)`);
+      },
+    },
+    undefined,
+    async (tx) => {
+      await tx.run(sql`PRAGMA recursive_triggers=OFF`);
+    },
+  );
+  await expect(f.execute()).rejects.toMatchObject({
+    code: "action-connection-required",
+    pragma: "recursive_triggers",
+  });
+  expect(await stored(f)).toEqual([]);
+  expect(await audit(f)).toEqual([]);
+  expect(await f.db.select({ id: sql<string>`root_id` }).from(sql`execution_group`)).toEqual([]);
 });

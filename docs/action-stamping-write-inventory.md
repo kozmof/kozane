@@ -147,11 +147,13 @@ Capture must observe the slot-clearing update and all foreign-key cascade/set-nu
 writes. Replace the timestamp fallback before activation. Gate mutating triggers
 out of trusted restore mode without disabling write guards.
 
-The Node/libsql connection setup enables foreign keys in
-`packages/kozane/src/db/pragmas.ts`. The WASM parity adapter and browser restoration
-harness also enable them. None of those setup sites currently enables and verifies
-`recursive_triggers`. Prove both settings on every adapter connection, including
-connections opened after a transaction.
+The Node/libsql setup, WASM parity adapter and browser restoration worker now use
+`configureActionConnection` to enable and verify `foreign_keys` and
+`recursive_triggers`. Each opt-in action transaction repeats configuration before
+entering handlers and verifies both flags after its completion hook. This covers
+recycled libsql connections. Disabled foreign keys refuse entry because SQLite
+cannot enable them inside an open transaction. Libsql and Node WASM regression
+tests pass. Browser runtime verification remains pending.
 
 The [capture prototype](action-capture-prototype.md) passes persistent `BEFORE`
 capture, projection reconstruction and lossless installation checks on libsql and

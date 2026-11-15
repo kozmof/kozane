@@ -117,3 +117,10 @@ export function composeWrite<T>(db: DB, operation: (tx: Tx) => Promise<T>): Prom
  * for application writes, including inside composeWrite.
  */
 export * as records from "./api/index.js";
+
+export {
+  configureActionConnection,
+  verifyActionConnection,
+  ActionConnectionError,
+  type ConnectionExecutor,
+} from "./actions/connection.js";

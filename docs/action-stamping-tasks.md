@@ -7,7 +7,7 @@ the [write inventory](action-stamping-write-inventory.md),
 [execution scopes](action-execution-scopes.md) and
 [composition API](action-composition.md).
 
-Started phase 1. See the [write inventory](action-stamping-write-inventory.md).
+Phases 1–3 are in progress. See the [write inventory](action-stamping-write-inventory.md).
 Version 1 client envelopes and sync classifications have compile-time coverage.
 Versioned registry selection, complete routing checks, replay-safe allocation
 bindings, import timestamp resolution and the tagged row codec are implemented
@@ -26,6 +26,12 @@ savepoints and default-handler integration remain pending. The opt-in
 provides registered readers and sequential dispatch, and replays without the
 recording callback. Existing `composeWrite` callers still need migration. Capture
 guards remain disabled.
+
+Connection setup now enables and verifies foreign keys and recursive triggers in
+the Node host, WASM parity adapter and restoration worker. Opt-in action scopes
+repeat setup before handlers and verify again after completion. Libsql and Node
+WASM tests cover recycled connections, entry refusal and rollback when settings
+change. Browser runtime verification remains pending.
 
 ## Version one
 
@@ -57,7 +63,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Add action, effect-set, execution and persistent context tables after the prototype passes.
 - [ ] Implement root and child attribution with separate group-wide execution and effect counters. Include children with no row effects.
 - [ ] Keep origin effect sets immutable and retain execution records for each later execution.
-- [ ] Enable and verify `foreign_keys` and `recursive_triggers` on adapter connections.
+- [x] Add shared connection configuration and verification, and check both flags before handlers and after completion in opt-in action scopes.
+- [ ] Verify `foreign_keys` and `recursive_triggers` on every supported adapter at runtime. Libsql and Node WASM pass. Browser execution remains pending.
 - [ ] Restrict mutating business triggers to `AFTER` execution. Refuse primary-key changes and unsupported skipped-write behavior.
 - [ ] Verify unstamped raw writes fail and marker cleanup survives success, rollback and failed commit.
 

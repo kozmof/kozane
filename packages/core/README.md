@@ -117,6 +117,17 @@ enforce read-only access through driver or connection configuration. Type brands
 separate handles at compile time, while registration and dispatch check required
 reader methods at runtime.
 
+For action capture, call `configureActionConnection(execute)` from
+`@kozane/core/database` on each native connection before opening a transaction.
+Pass an async callback that executes one SQL statement and returns rows with
+numeric column indexes. The helper enables and reads back `foreign_keys` and
+`recursive_triggers`. SQLite cannot enable foreign keys after a transaction begins.
+Use `verifyActionConnection(execute)` to check the settings without changing them.
+An unavailable setting raises `ActionConnectionError` with its `pragma` and
+`observed` value. Driver failures propagate unchanged. Opt-in action scopes repeat
+setup on their transaction connection and verify settings after completion.
+Production action capture remains gated on adapter verification and write coverage.
+
 ### Migration hook
 
 Migration application requires a separate `migrate(prepare)` hook. Ordinary write
