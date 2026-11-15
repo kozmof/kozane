@@ -1,3 +1,4 @@
+import type { ActionKindV1 } from "@kozane/core";
 import type { KozaneClient } from "./contract.js";
 
 type ResourceKey = {
@@ -12,7 +13,11 @@ type ResourceKey = {
     : never;
 }[keyof KozaneClient];
 type OperationKinds = {
-  [K in ResourceKey]: { [M in keyof NonNullable<KozaneClient[K]>]: "read" | "write" };
+  [K in ResourceKey]: {
+    [M in keyof NonNullable<KozaneClient[K]>]: `${K & string}.${M & string}` extends ActionKindV1
+      ? "write"
+      : "read";
+  };
 };
 
 /** Adding a resource or method requires an explicit dispatch classification. */
