@@ -62,6 +62,7 @@ export function createActionBindings(
     return binding.value;
   }
   return Object.freeze({
+    mode: options.mode,
     entityId: (path: string): string => resolve(path, "entity-id") as string,
     childId: (path: string): string => resolve(path, "child-id") as string,
     /** Epoch seconds, matching SQLite timestamp columns. Inject a source that returns seconds. */

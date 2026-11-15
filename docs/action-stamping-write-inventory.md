@@ -17,10 +17,21 @@ The client classification is checked against these declarations during its build
 A client method declared as a write must have a core action kind. The focused
 contract test checks this correspondence at runtime too.
 
-These declarations are not a replay dispatcher. System import, repair, composition,
-config and taskspace observation contracts still need concrete envelopes and
-handlers. Contract version persistence and compatibility checks also remain pending.
-Do not submit work based only on a declaration's sync classification.
+`actions/invocation.ts` checks each envelope's complete routing arguments and body
+presence before dispatch. It copies JSON-compatible input without applying domain
+normalization. Service validation still owns content limits and resolved values.
+
+`actions/registry.ts` requires replay handlers for syncable declarations and explicit
+recovery handlers for local-only declarations. Registry selection checks the recorded
+contract version against supported schema versions and returns
+`action-contract-required` without entering a handler on incompatibility. Registry
+descriptors and schema support are copied so callers cannot replace them afterward.
+Intent replay requires a replay binding provider and cannot invoke file recovery.
+
+Production handler installation, system import, repair, composition, config and
+taskspace observation envelopes remain pending. Contract version persistence and
+group dispatch integration also remain pending. Do not submit work based only on
+a declaration's sync classification.
 
 Taskspace lifecycle and file methods are declared local-only while their current
 handlers still combine filesystem work and shared rows. Before activation, split
@@ -100,8 +111,12 @@ from injected sources during recording. Replay copies the recorded map, permits
 skipped bindings and refuses unbound paths or type changes. Snapshots preserve
 unused bindings. Path keys encode tuples so separators in entity IDs cannot
 collide. Handler integration, concrete allocation paths and failure latching
-remain pending. Use epoch seconds when binding SQLite timestamps. Do not use
-query result positions to identify allocations.
+remain pending. `actions/import-timestamps.ts` resolves missing or zero creation
+timestamps through a binding keyed by the imported card ID. A missing or zero
+update timestamp follows creation time. Supplied nonzero timestamps and the
+original input remain unchanged. The resolver is not yet connected to CLI import
+and must never be used for exact restoration. Use epoch seconds when binding
+SQLite timestamps. Do not use query result positions to identify allocations.
 
 ## Tables, triggers and adapter gate
 
@@ -126,3 +141,23 @@ The next gate is persistent `BEFORE` capture plus lossless projection reconstruc
 and installation on libsql and SQLite WASM in Node and the browser. Test signed
 64-bit limits, storage classes, REAL bits, Unicode/NUL and blobs before adding
 production log tables. Existing JSON export values cannot serve as the row codec.
+
+## Tagged row codec
+
+`actions/row-codec.ts` implements encoding version 1 for SQL NULL, signed 64-bit
+INTEGER, finite REAL, Unicode TEXT and BLOB values. INTEGER encoding accepts
+`bigint` and decoding returns `bigint`. REAL encoding preserves the full binary64
+bit pattern, including signed zero. TEXT preserves embedded NUL and is not
+normalized. Unpaired surrogates are rejected. BLOB encoding uses lowercase hexadecimal bytes.
+
+Row comparison includes every column, storage class and REAL bit pattern while
+ignoring object property order. Projection key encoding sorts primary-key column
+names. Malformed tags, noncanonical values, unknown encoding versions and accessors
+are rejected. Rows and tagged values are copied and frozen.
+
+Unit tests cover JSON transport, both signed 64-bit limits, integers beyond the
+JavaScript safe range, subnormal REAL values, Unicode, embedded NUL and empty blobs.
+These tests do not establish adapter capture or installation support. The codec
+requires actual SQLite storage classes and uncoerced values from the adapter.
+Persistent capture, projection reconstruction and installation tests on libsql and
+SQLite WASM in Node and browsers remain the next gate.
