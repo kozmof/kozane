@@ -107,6 +107,12 @@ context updates. The completion hook receives all execution records and generate
 bindings before commit, so persistence can remain atomic with application data.
 A completion-hook failure rolls back the entire group.
 
+The [capture integration fixture](action-capture-prototype.md#capture-real-service-actions)
+uses these hooks to persist parent and child attribution, finalized invocation
+inputs and bindings on all application tables. It verifies the full projection
+before commit and tests rollback of data and history together. These tables and
+guards remain confined to test databases.
+
 `actions/service-frame.ts` connects every core service function ending in `InTx`
 to its active execution frame. The bridge catches validation failures before SQL
 and tracks the Promise returned to the caller. Ordinary transactions without an

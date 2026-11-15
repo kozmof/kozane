@@ -47,7 +47,11 @@ export function trackedClient(client: Client, state: CommitRevision): Client {
             get(tx, prop) {
               if (prop === "commit")
                 return async () => {
-                  await tx.commit();
+                  // Local libsql's prepared COMMIT retains a lock after a deferred
+                  // constraint failure, even after rollback. Its exec path releases
+                  // the failed statement so the next transaction can commit.
+                  if (target.protocol === "file") await tx.executeMultiple("COMMIT");
+                  else await tx.commit();
                   if (!committed && mode !== "read" && mode !== "deferred") {
                     committed = true;
                     state.revision++;

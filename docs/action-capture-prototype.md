@@ -9,19 +9,19 @@ before the production log schema is finalized.
 Run the Node libsql prototype with the source test configuration.
 
 ```sh
-pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/services/action-projection.test.ts
+pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts packages/kozane/src/services/action-projection.test.ts
 ```
 
 Run the same capture tests against SQLite WASM in Node.
 
 ```sh
-pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts
+pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts
 ```
 
 Run SQLite WASM in a browser with Chromium installed for Playwright.
 
 ```sh
-KOZANE_DB_BROWSER=1 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts
+KOZANE_DB_BROWSER=1 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts
 ```
 
 The libsql and Node WASM checks pass. Browser verification is pending. Chromium
@@ -51,9 +51,45 @@ preserved. Invalid bytes abort the transaction without changing the original dat
 The fixture finalizes new provisional images into tagged rows before commit.
 
 The `probe_context` and `probe_effect` tables belong only to test databases.
-They are not migrations or the production action log format. The fixture sets and
-verifies foreign keys and recursive triggers on the connections it uses. Production
-adapter connection setup and action attribution remain separate work.
+They are not migrations or the production action log format. The fixture and
+opt-in action scopes use the shared connection configuration and verification
+helpers. Node hosts, the WASM parity adapter and the restoration worker also
+configure both flags. Browser runtime verification remains pending.
+
+## Capture real service actions
+
+`packages/kozane/src/test-utils/action-capture.ts` connects persistent capture to
+the execution scope's entry, leave and completion hooks. It derives columns and
+complete primary keys from all 12 exported application tables. Its baseline
+includes populated rows before capture guards are installed. The `capture_*`
+tables and guards exist only in test databases.
+
+Entry persists an execution record before SQL and sets the current action marker.
+Child exit restores its parent's marker. Execution ordinals count handler entries,
+including no-op children. Effect ordinals count every captured row operation across
+the whole root. Guards refuse missing or mismatched markers and primary-key changes,
+including composite keys.
+
+Completion finalizes provisional images and persists the finalized composition
+invocation, execution inputs and generated bindings. It rebuilds the projection
+from the original baseline and all completed runs, then compares every application
+row before commit. No mutable projection state advances before commit. A failed
+commit or root savepoint leaves no captured run behind, and later groups can use
+the persisted history.
+
+The integration tests use the real service registry to exercise every application
+table, namespace cascades, inventory placement cleanup, orphan glue cleanup,
+parent and child attribution, and zero-effect children. They also cover caught
+service errors, malformed trigger-generated text, corrupt before images, phantom
+capture from skipped inserts, failed commits and replay root isolation. Later
+groups preserve earlier run, execution and effect rows. Taskspace rows still
+contain local fields in this fixture. Their shared and local split remains required
+before production baseline capture.
+
+The local Node libsql adapter executes transaction commits through the driver's
+`executeMultiple` method. In the installed driver, a failed prepared `COMMIT`
+retains a database lock after rollback. The exec path avoids that lock. Regression
+tests verify rollback, unchanged commit revisions and a successful later write.
 
 ## Reconstruct and verify installation
 
@@ -87,7 +123,7 @@ deferred commit failures and marker cleanup.
 
 The prototype does not enroll a workspace, install production guards or restore
 an epoch. Browser verification, isolated final-state validation, epoch schema
-compatibility, business invariants and production connection setup remain pending.
+compatibility, business invariants and production capture integration remain pending.
 Production activation must refuse any unsupported value or failed read-back
 comparison. Do not treat passing these fixture checks as permission to enable
 stamping on an existing workspace.

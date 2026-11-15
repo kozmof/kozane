@@ -68,6 +68,15 @@ assignments, conflict clauses, insert-select and runtime update generators.
 Captured timestamps are copied before query construction. Persistent SQL guards
 and raw SQL allocation coverage remain pending.
 
+A test-only fixture now connects persistent capture on all 12 application tables
+to real service actions and execution hooks. It verifies group-wide effect order,
+parent and child attribution, no-op executions, finalized compositions, cascades
+and exact reconstruction across successive groups. Failed commits, replay roots
+and capture validation roll back application rows and history together. Local
+libsql commits use the driver's exec path to avoid a retained lock after deferred
+constraint failures. Production capture tables and activation remain gated on
+browser verification and the remaining write coverage.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -94,6 +103,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 
 - [ ] Prototype persistent `BEFORE` capture with an unconstrained row projection on every supported adapter.
 - [x] Implement the tagged row-value codec for baseline rows, primary keys and full effect images.
+- [x] Integrate test-only capture across all application tables with real service actions, execution attribution and full projection read-back on libsql and Node WASM.
 - [ ] Verify signed 64-bit integers without JavaScript number conversion, storage classes, finite REAL bits, NULL, Unicode text, embedded NUL characters and blobs.
 - [ ] Refuse malformed encodings and unsupported baseline or stamped values without changing application data.
 - [ ] Verify capture order for nested triggers, repeated updates, FK cascades and intermediate row images under different trigger creation orders.
