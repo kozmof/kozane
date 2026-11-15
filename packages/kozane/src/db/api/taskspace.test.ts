@@ -11,6 +11,7 @@ import {
 import { addNamespace } from "./namespace.js";
 import { addScope } from "./scope.js";
 import { NotFoundError } from "./utils.js";
+import { sql } from "drizzle-orm";
 
 async function setup() {
   const db = await createTestDB();
@@ -102,6 +103,26 @@ describe("getAllTaskspaces", () => {
 });
 
 describe("updateTaskspace", () => {
+  it("preserves shared timestamps for ordinary location, observation and unchanged-label updates", async () => {
+    const { db, namespaceId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, name: "Label", path: "before" });
+    await db.run(sql`UPDATE taskspace SET created_at=1000,updated_at=2000 WHERE id=${id}`);
+    await updateTaskspace({ db, taskspaceId: id, path: "after", lastSeenAt: new Date(3000000) });
+    await updateTaskspace({ db, taskspaceId: id, name: "Label" });
+    expect(await getTaskspace({ db, taskspaceId: id })).toMatchObject({
+      name: "Label",
+      path: "after",
+      lastSeenAt: new Date(3000000),
+      createdAt: new Date(1000000),
+      updatedAt: new Date(2000000),
+    });
+    await updateTaskspace({ db, taskspaceId: id, name: "Changed" });
+    const changed = (await getTaskspace({ db, taskspaceId: id }))!;
+    expect(changed.createdAt).toEqual(new Date(1000000));
+    expect(changed.updatedAt.getTime()).toBeGreaterThan(2000000);
+    expect(changed.lastSeenAt).toEqual(new Date(3000000));
+  });
+
   it("updates name", async () => {
     const { db, namespaceId, scopeId } = await setup();
     const id = await addTaskspace({ db, namespaceId, scopeId, name: "old" });

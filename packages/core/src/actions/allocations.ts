@@ -66,14 +66,29 @@ export function boundEntityId(
 
 /** Card timestamp zero is a legacy SQL sentinel and would invoke an unbound trigger clock. */
 export function boundCardTimestamp(db: AnyDB, ...keys: readonly string[]): Date | undefined {
+  return boundTimestamp(db, "card", "Card", true, keys);
+}
+
+/** Taskspaces have no SQL clock sentinel, so a recorded Unix epoch remains valid. */
+export function boundTaskspaceTimestamp(db: AnyDB, ...keys: readonly string[]): Date | undefined {
+  return boundTimestamp(db, "taskspace", "Taskspace", false, keys);
+}
+
+function boundTimestamp(
+  db: AnyDB,
+  table: string,
+  label: string,
+  nonzero: boolean,
+  keys: readonly string[],
+): Date | undefined {
   return resolve(db, (bindings) => {
-    const path = actionBindingPath("clock", "card", ...keys);
+    const path = actionBindingPath("clock", table, ...keys);
     const seconds = bindings.clock(path);
     const date = new Date(seconds * 1000);
-    if (seconds === 0 || !Number.isFinite(date.getTime()))
+    if ((nonzero && seconds === 0) || !Number.isFinite(date.getTime()))
       throw new ActionBindingError(
         path,
-        "Card timestamps must be nonzero and representable as dates",
+        `${label} timestamps must be ${nonzero ? "nonzero and " : ""}representable as dates`,
       );
     return date;
   });

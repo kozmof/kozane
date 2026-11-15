@@ -138,6 +138,38 @@ for (const driver of ["libsql", "wasm"]) {
     await cards.removeOne(db, context, ns.id, recovered.id);
     await cards.removeOne(db, context, ns.id, card.id);
     assert.equal((await snapshot.get(db, context, ns.id)).snapshot.cards.length, 0);
+    const taskspaceId = await withTx(db, (tx) =>
+      records.taskspace.addTaskspaceInTx({ db: tx, namespaceId: ns.id, name: "Label" }),
+    );
+    await withTx(db, (tx) =>
+      records.taskspace.updateTaskspaceNameInTx({ db: tx, taskspaceId, name: "Renamed" }),
+    );
+    const taskspace = await records.taskspace.getTaskspace({ db, taskspaceId });
+    assert.equal(taskspace.name, "Renamed");
+    assert.equal(taskspace.path, null);
+    await withTx(db, (tx) =>
+      records.taskspace.updateTaskspaceLocationInTx({
+        db: tx,
+        taskspaceId,
+        path: "local-only",
+        lastSeenAt: new Date(3000000),
+      }),
+    );
+    const attached = await records.taskspace.getTaskspace({ db, taskspaceId });
+    assert.equal(attached.path, "local-only");
+    assert.equal(attached.lastSeenAt.getTime(), 3000000);
+    assert.equal(attached.createdAt.getTime(), taskspace.createdAt.getTime());
+    assert.equal(attached.updatedAt.getTime(), taskspace.updatedAt.getTime());
+    await assert.rejects(
+      withTx(db, async (tx) => {
+        await records.taskspace.deleteTaskspaceInTx({ db: tx, taskspaceId });
+        throw failure;
+      }),
+      (error) => error === failure,
+    );
+    assert.deepEqual(await records.taskspace.getTaskspace({ db, taskspaceId }), attached);
+    await withTx(db, (tx) => records.taskspace.deleteTaskspaceInTx({ db: tx, taskspaceId }));
+    assert.equal(await records.taskspace.getTaskspace({ db, taskspaceId }), undefined);
   } finally {
     engine.close();
   }

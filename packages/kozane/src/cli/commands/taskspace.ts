@@ -27,7 +27,11 @@ import {
 import { taskspaceTable, scopeTable } from "../../db/schema.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { pickNamespaceId, resolveNamespaceId } from "../lib/namespace-selection.js";
-import { getAllTaskspaces, getTaskspacesInNamespace } from "../../db/api/taskspace.js";
+import {
+  getAllTaskspaces,
+  getTaskspacesInNamespace,
+  updateTaskspaceLocation,
+} from "../../db/api/taskspace.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { taskspaceParentDir } from "../../lib/taskspace-location.js";
 import { isStrictlyInside } from "../../lib/server/fs-paths.js";
@@ -107,10 +111,11 @@ async function scanWithin(
       `  ok      ${shortId(taskspace.taskspaceId, taskspaceIds)}  ${taskspace.path}${seenSuffix}`,
     );
     if (options.apply) {
-      await db
-        .update(taskspaceTable)
-        .set({ lastSeenAt: new Date() })
-        .where(eq(taskspaceTable.id, taskspace.taskspaceId));
+      await updateTaskspaceLocation({
+        db,
+        taskspaceId: taskspace.taskspaceId,
+        lastSeenAt: new Date(),
+      });
     }
   }
 
@@ -123,10 +128,13 @@ async function scanWithin(
     console.log(`    new: ${scanned.path}`);
     if (options.apply) {
       const { pathKind, storedPath } = storedLocation(root, scanned.path);
-      await db
-        .update(taskspaceTable)
-        .set({ path: storedPath, pathKind, lastSeenAt: new Date(), updatedAt: new Date() })
-        .where(eq(taskspaceTable.id, record.id));
+      await updateTaskspaceLocation({
+        db,
+        taskspaceId: record.id,
+        path: storedPath,
+        pathKind,
+        lastSeenAt: new Date(),
+      });
       updated++;
     }
   }

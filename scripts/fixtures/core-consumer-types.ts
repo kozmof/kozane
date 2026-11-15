@@ -130,6 +130,34 @@ void invalidBatch;
 void cards.create(db, context, "n", input);
 void namespaces.list(db, context).then((rows: Namespace[]) => rows);
 void withTx(db, (tx) => cards.createInTx(tx, context, "n", input));
+void withTx(db, async (tx) => {
+  const taskspaceId: string = await records.taskspace.addTaskspaceInTx({
+    db: tx,
+    namespaceId: "n",
+    name: "Label",
+  });
+  await records.taskspace.updateTaskspaceNameInTx({ db: tx, taskspaceId, name: "Renamed" });
+  await records.taskspace.updateTaskspaceLocationInTx({
+    db: tx,
+    taskspaceId,
+    path: "local",
+    lastSeenAt: new Date(),
+  });
+  // @ts-expect-error Shared database creation cannot attach a local path.
+  await records.taskspace.addTaskspaceInTx({ db: tx, path: "local" });
+  await records.taskspace.updateTaskspaceNameInTx({
+    db: tx,
+    taskspaceId,
+    name: "Label",
+    // @ts-expect-error A label change cannot also move the local directory.
+    path: "local",
+  });
+  // @ts-expect-error Local observations cannot rename the shared label.
+  await records.taskspace.updateTaskspaceLocationInTx({ db: tx, taskspaceId, name: "Label" });
+  await records.taskspace.deleteTaskspaceInTx({ db: tx, taskspaceId });
+});
+// @ts-expect-error Caller-owned taskspace transaction methods require a Tx handle.
+void records.taskspace.addTaskspaceInTx({ db, name: "Requires transaction" });
 void withReadTx(db, async (tx) => {
   // @ts-expect-error Read handles cannot enter a write service.
   await cards.createInTx(tx, context, "n", input);

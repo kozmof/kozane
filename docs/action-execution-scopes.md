@@ -175,7 +175,7 @@ invocation hierarchy.
 
 | Write | Key passed to the handler's provider |
 | --- | --- |
-| One namespace, partition, layer, scope, scope area, warp, inventory, glue or card | `["entity", table]` |
+| One namespace, partition, layer, scope, scope area, warp, inventory, glue, card or taskspace | `["entity", table]` |
 | Cards supplied as a batch | `["entity", "card", "batch", inputIndex]` |
 | One card's creation time | `["clock", "card", "create"]` |
 | A batch's shared creation time | `["clock", "card", "batch"]` |
@@ -183,6 +183,8 @@ invocation hierarchy.
 | A squash inventory | `["entity", "inventory", "squash", sourceCardId]` |
 | A squash piece | `["entity", "card", "squash", sourceCardId, segmentIndex]` |
 | A squash's shared creation time | `["clock", "card", "squash", sourceCardId]` |
+| One taskspace's shared creation time | `["clock", "taskspace", "create"]` |
+| A taskspace label request | `["clock", "taskspace", "update", taskspaceId]` |
 
 Keys are encoded as JSON tuples. Batch indexes identify the original supplied
 input before chunking and database reads. Use stable child action paths for
@@ -200,9 +202,26 @@ migration 0019's wall-clock fallback. Invalid times and unbound allocations latc
 the root failure even when a direct record caller catches the error. Valid
 historical timestamps before the Unix epoch remain supported.
 
-Taskspace writes, raw SQL allocations and system import handlers need further
-integration. Migration 0019's fallback also needs replacement before activation.
-These helpers do not enable mandatory SQL guards or route production writes.
+Taskspace record creation binds one ID and one timestamp for both creation columns.
+Label requests bind a clock even when the name is unchanged. Their SQL comparison
+preserves the old timestamp until the stored label changes, including during
+intent replay. Taskspaces have no SQL timestamp sentinel, so a representable
+recorded Unix epoch is valid.
+
+`records.taskspace.addTaskspaceInTx` accepts identity placement and a label without
+a local path. `updateTaskspaceNameInTx` changes only the label and its timestamp.
+`updateTaskspaceLocationInTx` changes only path and observation fields without
+allocating a shared clock. `deleteTaskspaceInTx` reuses the owning transaction.
+These APIs and the legacy record wrappers share the action failure latch, including
+pre-SQL validation failures. The legacy combined update still changes its requested
+fields in one statement, and path-only calls preserve both shared timestamps.
+
+Local taskspace fields still live in the application table. Physical storage
+separation, filesystem handler separation and production action routing remain
+pending. Taskspace lifecycle kinds therefore remain local-only in the service
+registry. Raw SQL allocations and system import handlers also need integration.
+Migration 0019's fallback needs replacement before activation. These helpers do
+not enable mandatory SQL guards or route production writes.
 
 ## Replay roots inside one transaction
 

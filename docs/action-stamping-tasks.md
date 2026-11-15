@@ -42,7 +42,8 @@ reconciliation, outcome handling and failure classification remain pending.
 Guarded action handles now bind generated IDs in the namespace, partition, layer,
 scope, scope-area, warp, inventory, glue and card record helpers. Single and batch
 card creation bind their shared timestamps. Text updates bind clocks while
-preserving unchanged-text timestamps. Taskspace and raw SQL allocations still
+preserving unchanged-text timestamps. Taskspace record creation and label edits
+also bind IDs and clocks. Raw SQL allocations and production action routing still
 need integration before activation.
 
 Stacking, squash, layer and partition removal, board scope removal and namespace
@@ -92,6 +93,13 @@ Node WASM tests cover continued recording, failed validation, partial installati
 and read-back rollback. Production restoration still requires epoch and local
 metadata integration.
 
+Taskspace records now expose transaction-bound database creation, label edits,
+location updates and deletion. Label edits preserve local observations, and
+location updates preserve both shared timestamps. CLI scans use the location
+API. Creation and label clocks use scoped bindings, and caught record failures
+abort their root. Physical local metadata storage and filesystem handler
+separation remain pending, so taskspace lifecycle kinds remain local-only.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -109,6 +117,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Define stable binding paths for entity IDs, child action IDs and clock readings. Preserve bindings when query ordering changes.
 - [x] Bind IDs in the covered record helpers and clocks in single and batch card creation and text updates when called through opt-in action handles.
 - [x] Bind squash inventory and piece IDs and their shared timestamp to the source card and segment roles.
+- [x] Bind taskspace record IDs, creation timestamps and label clocks through opt-in execution handles without allocating clocks for location updates.
 - [ ] Persist `contract_ver` from the first execution and dispatch the whole group through its compatible registry.
 - [ ] Refuse unbound replay allocations without changing the binding map. Preserve original invocations when replay resolves child arguments differently.
 - [ ] Replace migration 0019's timestamp fallback with explicit bindings and record-mode validation. Preserve historical timestamps during restoration.
@@ -135,6 +144,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 
 - [ ] Wrap every service write in a stamped adapter transaction, including direct layer creation and rename.
 - [x] Add caller-owned transaction variants for stacking, squash, layer and partition removal, board scope removal and namespace administration.
+- [x] Add transaction-bound taskspace database APIs and separate label changes from local observations at the record API boundary.
 - [ ] Require active action groups in transaction-bound record and service methods.
 - [x] Require matching live execution scopes for real service registry dispatch and enforce ORM write restrictions through opted-in handles.
 - [x] Define and register the opt-in `system.repair` action for explicitly requested inventory repair.

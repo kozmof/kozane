@@ -1,10 +1,10 @@
-import type { Tx } from "../database.js";
+import type { DB, Tx } from "../database.js";
 
 interface ServiceFrame {
   check(): void;
   track<T>(operation: Promise<T>): Promise<T>;
 }
-const frames = new WeakMap<Tx, ServiceFrame>();
+const frames = new WeakMap<DB | Tx, ServiceFrame>();
 
 /** Internal bridge for opted-in execution handles. Ordinary transactions keep their existing behavior. */
 export function bindActionServiceFrame(handle: Tx, frame: ServiceFrame): () => void {
@@ -16,7 +16,7 @@ export function bindActionServiceFrame(handle: Tx, frame: ServiceFrame): () => v
 }
 
 /** Latch validation and domain failures even if a caller catches them before any SQL runs. */
-export function withActionService<T>(handle: Tx, operation: () => Promise<T>): Promise<T> {
+export function withActionService<T>(handle: DB | Tx, operation: () => Promise<T>): Promise<T> {
   const frame = frames.get(handle);
   if (!frame) return operation();
   try {

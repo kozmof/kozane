@@ -86,7 +86,7 @@ must be covered before mandatory guards are enabled. Application modules in
 | Warps | `services/warps.ts` create, update, remove | `api/warp.ts` | Existing transaction and `InTx` helpers need attribution |
 | Inventories | `services/inventories.ts` create, update, remove, stow, take, repair | `api/inventory/{rows,stow,slots,repair}.ts`. Moves other cards' slots, refits widths and clears placement on removal | The opt-in `system.repair` handler wraps requested inventory repair. Production CLI routing and action attribution remain pending |
 | Namespaces | `services/namespaces.ts` create, rename, remove, setDefault; administration also calls records | `api/namespace.ts` add, create, rename, setDefault, delete. Creation adds default partition and layer. Deletion cascades and dissolves surviving orphan glue groups | All listed service writes expose `InTx` variants. Low-level add and rename still accept DB handles. Action attribution remains pending |
-| Taskspaces | Node handlers described below | `api/taskspace.ts` add, update, delete. Delete clears `card.taskspace_id` | Direct writes and local/shared storage split are pending |
+| Taskspaces | Node handlers described below | `api/taskspace.ts` add, update, delete. Transaction-bound APIs separate database creation, label changes, location updates and deletion. Delete clears `card.taskspace_id` | IDs and shared clocks bind in opt-in scopes. Path and observation changes preserve shared timestamps. Local/shared storage and filesystem handler separation remain pending |
 
 `services/snapshot.ts`, tags, map and warp-directory expose reads. Derived tag
 indexes are rebuilt and are not stamped application tables.
@@ -98,7 +98,7 @@ indexes are rebuilt and are not stamped application tables.
 | HTTP routes in `packages/kozane/src/routes` | Dispatch to resource services or Node taskspace handlers | Capture route IDs before validation. Attribute the full service invocation |
 | CLI card, glue, layer, inventory, scope and warp commands | Many use `composeWrite` to resolve short IDs and call `InTx` services. Some callbacks call low-level helpers | Resolve replayable references and serialize ordered dispatcher children, or replace callbacks with named handlers |
 | CLI namespace commands | Create/default use services. Delete calls `deleteNamespaceInTx` inside `withImageDeletion` | Register namespace administration and preserve image history protection |
-| CLI taskspace scan, prune and create in `cli/commands/taskspace.ts` | Scan directly updates timestamps and paths or inserts rows. Prune directly deletes rows. Create also calls filesystem claim code | Separate local observations from shared identity/placement changes. Move `path`, `path_kind`, `last_seen_at` to local metadata |
+| CLI taskspace scan, prune and create in `cli/commands/taskspace.ts` | Scan uses location record updates for paths and observations, and directly inserts reattached rows. Prune directly deletes rows. Create also calls filesystem claim code | Move `path`, `path_kind`, `last_seen_at` to local metadata. Attribute shared identity/placement separately from local observations |
 | `lib/server/taskspace-service/{create,claim,mutate}.ts` | Create, rename and remove combine disk work and taskspace records. Rename may move a directory | Split shared label changes and local directory changes. Record external effects durably |
 | `lib/server/taskspace-service/{file,files}.ts` and `taskspace-files.ts` | File create/save, directory create, entry rename/remove mutate disk | Local-only operations with recovery records. Include paths and intended content hashes |
 | `cli/lib/db-json/import.ts` | Validates dump, opens DB, deletes rows in reverse table order and inserts rows inside `withTx` | `system.import` must retain original input and bind missing timestamps. Exact restoration needs a separate path |
@@ -124,7 +124,7 @@ through the low-level path separately.
 | `schema.ts` | `new Date()` defaults for taskspace and card timestamps | Explicit bound clock readings before SQL execution |
 | `api/card/create.ts` `newCardStamps` | One `new Date()` for creation timestamps, shared by batch inserts | Bind creation time at the handler's stable invocation path |
 | `api/card/update.ts` | `Math.floor(Date.now() / 1000)` used in conditional text update SQL | Bind the clock before the update, preserve unchanged-text behavior |
-| `api/taskspace.ts` | `new Date()` on updates | Bind shared changes, isolate local observations |
+| `api/taskspace.ts` | Ordinary timestamp defaults and `Date.now()` on label requests | Guarded creation binds one timestamp for both columns. Label requests bind their conditional update clock. Location updates preserve shared timestamps |
 | CLI taskspace scan/create | `Date.now()` and `new Date()` | Local observation records and bindings where replay/recovery needs them |
 | `drizzle/0011_card_timestamps.sql` | Migration-time `unixepoch()` backfill | Allowed only during migration before baseline capture |
 | `drizzle/0005_layer.sql` | SQL random UUID backfill | Allowed only during migration before baseline capture |
@@ -152,7 +152,7 @@ collide. The execution scope adds hierarchical child paths and handler-scoped
 allocation paths. Replay preserves the original map while recording the actual
 child envelopes and entry order for that run. `actions/allocations.ts` now binds
 generated IDs in the namespace, partition, layer, scope, scope-area, warp,
-inventory, glue and card record helpers when called through a guarded action
+inventory, glue, card and taskspace record helpers when called through a guarded action
 handle. Single and batch card creation bind timestamps before insertion. Card
 text updates bind their SQL clock while retaining the unchanged-text comparison.
 Batch IDs use original input indexes before SQL chunking. Other IDs use table
@@ -165,8 +165,14 @@ segments preserves unused bindings. Requiring an extra segment or a different
 source refuses replay without extending the map. Layout and inventory naming
 still resolve against the current rows.
 
-Ordinary handles retain existing defaults. Production application routing,
-taskspace allocations and raw SQL allocation coverage remain pending. The
+Taskspace creation and label clocks are also bound. Database creation and label
+APIs exclude local observation fields. Location updates and CLI scans preserve
+shared timestamps. The record methods share the root failure latch, including
+caught validation errors. Taskspace lifecycle kinds remain local-only until
+physical metadata storage and filesystem work are separated.
+
+Ordinary handles retain their creation defaults. Production application routing
+and raw SQL allocation coverage remain pending. The
 migration 0019 timestamp fallback remains unchanged and must be replaced before activation.
 `actions/import-timestamps.ts` resolves missing or zero creation
 timestamps through a binding keyed by the imported card ID. A missing or zero

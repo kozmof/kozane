@@ -85,6 +85,20 @@ root. Deeper inputs fail with `ValidationError` before dispatch. JSON input prep
 uses stricter prototype checks than the root `isPlainObject` helper, which accepts
 non-null objects other than arrays without inspecting their prototypes.
 
+### Taskspace database records
+
+Use `records.taskspace.addTaskspaceInTx` to create a taskspace label and placement
+inside your transaction. Attach directory information separately through
+`updateTaskspaceLocationInTx`. Change the label with `updateTaskspaceNameInTx`,
+and delete the database record with `deleteTaskspaceInTx`. Your host owns directory
+creation, movement and removal.
+
+Location and observation updates preserve `createdAt` and `updatedAt`. A label
+request changes `updatedAt` only when the stored name changes. The existing
+`addTaskspace` and combined `updateTaskspace` methods remain available. Path-only
+calls to the combined update also preserve both timestamps. Local taskspace fields
+still share the current database table while their storage split is pending.
+
 ## Shared data and helpers
 
 Use the root entry to share domain behavior across application features.
