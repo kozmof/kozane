@@ -11,6 +11,10 @@ version 1 registry factory with the built-in `system.compose` handler. Supply
 registered resource handlers, a fresh recording binding provider, registered
 read helpers and the adapter database.
 
+The [service registry](action-execution-scopes.md#dispatch-real-service-actions)
+installs the core database handlers together with the composition interpreter.
+It requires explicit host recovery handlers for every local-only kind.
+
 The callback receives `read` and `dispatch`. `read` calls a registered helper
 with copied JSON-compatible input. A helper receives query builders and relational
 reads without raw SQL or mutation methods. `dispatch` takes a stable path, a
@@ -98,5 +102,5 @@ pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-composition.test.ts
 ```
 
-Production log tables, default resource handlers, caller migration, durable action
+Production log tables, application routing, caller migration, durable action
 attribution and browser capture/restoration verification remain pending.

@@ -37,7 +37,15 @@ The [composition API](action-composition.md) now defines `system.compose` with
 registered read helpers, a sequential dispatcher and serialized direct child
 envelopes. Replay interprets the frozen list without rerunning the callback.
 
-Production handler installation, system import, repair, config and taskspace
+`actions/service-registry.ts` now installs every declared syncable database kind
+through its real `InTx` service, together with `system.compose`. The factory
+requires complete host recovery registrations for local-only kinds and refuses
+attempts to replace database handlers. Version 1 currently supports schema 19.
+Tests record and replay each database kind, check namespace ownership and apply
+the executing host's limits. See the
+[service registry](action-execution-scopes.md#dispatch-real-service-actions).
+
+Production application routing, system import, repair, config and taskspace
 observation envelopes remain pending. Contract version persistence and
 group dispatch integration also remain pending. Do not submit work based only on
 a declaration's sync classification.
@@ -141,7 +149,7 @@ segments preserves unused bindings. Requiring an extra segment or a different
 source refuses replay without extending the map. Layout and inventory naming
 still resolve against the current rows.
 
-Ordinary handles retain existing defaults. Production handler installation,
+Ordinary handles retain existing defaults. Production application routing,
 taskspace allocations and raw ORM inserts remain pending. The migration 0019
 timestamp fallback remains unchanged and must be replaced before activation.
 `actions/import-timestamps.ts` resolves missing or zero creation

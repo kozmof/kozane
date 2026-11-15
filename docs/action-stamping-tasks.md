@@ -11,7 +11,7 @@ Phases 1–3 are in progress. See the [write inventory](action-stamping-write-in
 Version 1 client envelopes and sync classifications have compile-time coverage.
 Versioned registry selection, complete routing checks, replay-safe allocation
 bindings, import timestamp resolution and the tagged row codec are implemented
-and unit-tested. Production handler installation, system envelopes, persistence
+and unit-tested. Production application routing, system envelopes, persistence
 and write-path integration remain pending. The persistent capture, unconstrained
 projection and lossless installation prototype passes on libsql and Node WASM.
 Browser verification remains pending because Chromium was unavailable and the
@@ -21,7 +21,7 @@ transaction-bound variants. An opt-in execution scope now provides handler-entry
 ordering, scoped bindings, ownership checks and a failure latch shared by core
 transaction-bound services. Caught child, SQL and pre-SQL service failures abort
 the root after outstanding work settles. Production action attribution and
-default-handler integration remain pending. The opt-in
+application routing remain pending. The opt-in
 `system.compose` implementation now records direct child envelopes and IDs,
 provides registered readers and sequential dispatch, and replays without the
 recording callback. Existing `composeWrite` callers still need migration. Capture
@@ -48,8 +48,14 @@ need integration before activation.
 Stacking, squash, layer and partition removal, board scope removal and namespace
 administration now reuse caller-owned transactions through `InTx` variants. Their
 service failures share the active root latch. Squash binds inventory and piece
-IDs and timestamps to the source card and segment roles. Default handler
-registration and production stamping remain pending.
+IDs and timestamps to the source card and segment roles. Production stamping
+remains pending.
+
+The opt-in service registry now installs real handlers for every declared
+syncable database kind and `system.compose`. It supports schema 19 and requires
+explicit host recovery registrations for local-only kinds. Application routing,
+system import and repair handlers, durable recovery and persistence remain
+pending.
 
 ## Version one
 
@@ -62,6 +68,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Inventory service, record, CLI and system write paths, including direct statements, import, repair and migrations.
 - [x] Inventory generated IDs, ORM defaults, SQL clock expressions, business triggers and conflict modes.
 - [x] Define the versioned core action registry and type-check coverage against client write classifications.
+- [x] Install real transaction-bound service handlers for the declared syncable database kinds and `system.compose` in an opt-in version 1 registry.
 - [ ] Define complete invocation envelopes, including routing and target IDs, for every registered kind.
 - [ ] Classify each kind as `syncable` or `local-only` and define its replay or file recovery handler.
 - [ ] Define stable binding paths for entity IDs, child action IDs and clock readings. Preserve bindings when query ordering changes.

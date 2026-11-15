@@ -2,7 +2,34 @@
 
 The internal execution scope provides one rollback boundary for a root and its
 children. It is opt-in and does not activate stamping on application databases.
-Production log tables, default handlers and guard activation remain pending.
+Production log tables, application routing and guard activation remain pending.
+
+## Dispatch real service actions
+
+`actions/service-registry.ts` provides `createServiceActionRegistryV1`.
+It installs handlers for every declared syncable database service kind and
+the built-in `system.compose` interpreter. Each database handler forwards its
+complete routing arguments and body to the corresponding `InTx` service.
+The registry currently supports schema 19 only.
+
+Supply a complete `LocalRecoveryHandlersV1` map when constructing the registry.
+Missing handlers, wrong handler roles, unknown kinds and attempts to replace a
+database handler are refused. Local-only kinds remain excluded from recording
+and intent replay. The registry invokes host recovery callbacks only through
+its explicit `recover` operation. Durable filesystem recovery and local
+metadata separation still need implementation.
+
+Use the registry with `runActionGroup`, `composeActions` or a replay session.
+Each execution context supplies the guarded `db`, current `actions` frame and
+`value` containing a `ServiceContext`. Create those limits with
+`createServiceContext`. The context type can include additional host fields.
+Replay validates against the executing host's limits and resolves layout against
+its current rows while retaining the original envelope and recorded bindings.
+
+Handler semantics, invocation shapes and allocation paths belong to contract
+version 1. Incompatible service changes require a new registry version. This
+factory is an internal opt-in integration and does not install action history,
+route application writes or activate guards.
 
 ## Root boundary and failure handling
 
@@ -159,6 +186,9 @@ stable IDs, creation and edit clocks, changed child order, SQL chunking, changed
 replay branches, retained handles and ordinary defaults outside action scopes.
 Composite service tests cover enclosing rollback, caught failures, namespace
 defaults and squash replay, including late SQL failures and changed segment counts.
+The service registry fixture records and replays every database kind on both
+adapters. It checks namespace ownership, local-only refusal, host limits,
+composition rollback and unchanged original envelopes.
 
 ```sh
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-execution.test.ts
@@ -169,6 +199,8 @@ pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-allocations.test.ts
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-composite-services.test.ts
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-composite-services.test.ts
+pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-service-registry.test.ts
+pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-service-registry.test.ts
 ```
 
 Production integration must supply persistent action/context hooks, route all
