@@ -9,19 +9,19 @@ before the production log schema is finalized.
 Run the Node libsql prototype with the source test configuration.
 
 ```sh
-pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts packages/kozane/src/services/action-projection.test.ts
+pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts packages/kozane/src/db/api/action-restoration-validation.test.ts packages/kozane/src/services/action-projection.test.ts packages/kozane/src/services/action-restoration-plan.test.ts
 ```
 
 Run the same capture tests against SQLite WASM in Node.
 
 ```sh
-pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts
+pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts packages/kozane/src/db/api/action-restoration-validation.test.ts
 ```
 
 Run SQLite WASM in a browser with Chromium installed for Playwright.
 
 ```sh
-KOZANE_DB_BROWSER=1 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts
+KOZANE_DB_BROWSER=1 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-capture.test.ts packages/kozane/src/db/api/action-capture-integration.test.ts packages/kozane/src/db/api/action-restoration-validation.test.ts
 ```
 
 The libsql and Node WASM checks pass. Browser verification is pending. Chromium
@@ -119,11 +119,39 @@ trigger writes, repeated updates, alternate capture/business trigger creation
 orders, parent-first cascade capture, corrupt before images, composite keys,
 deferred commit failures and marker cleanup.
 
+## Validate complete application projections
+
+`actions/restoration-plan.ts` derives a deterministic load order from a trusted
+schema manifest and an explicit table selection. It keeps complete composite
+primary keys and reverses that order for deletion. It refuses cycles, missing
+parents, generated columns and excluded tables that reference restored rows.
+The current application schema has an acyclic load order. The plan is internal
+and does not authorize live row replacement.
+
+`packages/kozane/src/test-utils/action-validation.ts` loads complete target rows
+into a separate, empty test database. It verifies the canonical schema before
+loading and suppresses only the two mutating card triggers in that isolated
+transaction. Checks, unique indexes, foreign keys and validation-only triggers
+remain active. It also checks the final inventory pair invariant, runs
+`foreign_key_check` and compares every loaded row with the target projection.
+
+Tests reconstruct real cascade effects before validation. Intermediate rows stay
+in the unconstrained projection. Successful loading preserves historical zero
+timestamps, large integers and nonintegral REAL storage without repair. Invalid
+foreign keys, NULLs, scope names, inventory pairs and unique slots abort the load.
+Affinity changes also abort it, including integral REAL values and signed zero
+stored in INTEGER columns. A failed load rolls back rows and trigger removal.
+The source database and capture history remain unchanged. Populated or
+incompatible validation destinations are refused before loading.
+
+These checks pass on libsql and Node WASM. Epoch selection, shared and local
+metadata separation, production restore mode and live installation remain pending.
+
 ## Remaining activation work
 
 The prototype does not enroll a workspace, install production guards or restore
-an epoch. Browser verification, isolated final-state validation, epoch schema
-compatibility, business invariants and production capture integration remain pending.
+an epoch. Browser verification, production validation and epoch compatibility,
+business invariant coverage and production capture integration remain pending.
 Production activation must refuse any unsupported value or failed read-back
 comparison. Do not treat passing these fixture checks as permission to enable
 stamping on an existing workspace.

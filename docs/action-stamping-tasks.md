@@ -77,6 +77,13 @@ libsql commits use the driver's exec path to avoid a retained lock after deferre
 constraint failures. Production capture tables and activation remain gated on
 browser verification and the remaining write coverage.
 
+An internal restoration planner now derives an acyclic load order and refuses
+omitted parents or excluded tables that reference restored rows. A test-only
+validator loads complete application projections into isolated databases with
+mutating triggers suppressed. Constraints, the inventory pair invariant, foreign
+keys and exact codec read-back are checked on libsql and Node WASM. Production
+epoch validation and installation remain pending.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -140,6 +147,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 
 ### 4. Implement baselines, restoration and migration recovery
 
+- [x] Derive and test an internal acyclic restoration load plan from schema metadata and refuse unsupported table dependencies.
+- [x] Prototype isolated application projection validation with constraints, trigger invariants and exact read-back on libsql and Node WASM.
 - [ ] Add workspace and epoch identities, schema and encoding versions, baseline hashes and restoration selections.
 - [ ] Implement restartable initial baseline capture for populated and seeded databases with application writes blocked until activation.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
