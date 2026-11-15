@@ -1,8 +1,9 @@
+import { publishedVersion } from "./published-version.mjs";
 import { preparePackageArtifacts } from "./prepare-package-artifacts.mjs";
 import { validateReleaseArtifacts } from "./release-artifacts.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,43 +36,12 @@ const commit = output("git", ["rev-parse", "HEAD"]);
 const directory = resolve(argument ?? join(root, "tmp", "releases", commit));
 const manifestPath = join(directory, "release.json");
 
-function alreadyPublished(artifact) {
-  const existing = spawnSync(
-    "npm",
-    [
-      "view",
-      artifact.name + "@" + artifact.version,
-      "dist.integrity",
-      "--json",
-      "--registry=https://registry.npmjs.org/",
-      "--fetch-retries=0",
-      "--prefer-online",
-      "--safe-chain-skip-minimum-package-age=true",
-    ],
-    { cwd: root, encoding: "utf8" },
-  );
-  if (existing.status === 0) {
-    const integrity =
-      "sha512-" +
-      createHash("sha512")
-        .update(readFileSync(join(directory, artifact.file)))
-        .digest("base64");
-    assert.equal(
-      JSON.parse(existing.stdout),
-      integrity,
-      "Published version contains different bytes",
-    );
-    console.log(artifact.name + "@" + artifact.version + " already matches the prepared archive");
-    return true;
-  }
-  let error;
-  try {
-    error = JSON.parse(existing.stdout).error?.code;
-  } catch {
-    /* npm may report a non-JSON connection error. */
-  }
-  assert.equal(error, "E404", existing.stderr || "Cannot check existing registry version");
-  return false;
+async function alreadyPublished(artifact) {
+  const integrity = "sha512-" + createHash("sha512")
+    .update(readFileSync(join(directory, artifact.file))).digest("base64");
+  const exists = await publishedVersion(artifact.name, artifact.version, integrity);
+  if (exists) console.log(artifact.name + "@" + artifact.version + " already matches the prepared archive");
+  return exists;
 }
 if (mode === "prepare") {
   assert.ok(!existsSync(manifestPath), "Release directory already contains a prepared release");
@@ -92,7 +62,7 @@ if (mode === "prepare") {
     }
   }
   for (const artifact of artifacts) {
-    if (alreadyPublished(artifact)) continue;
+    if (await alreadyPublished(artifact)) continue;
     run("npm", [
       "publish",
       join(directory, artifact.file),
@@ -119,7 +89,7 @@ if (mode === "prepare") {
   run("pnpm", ["release:check"]);
   run("npm", ["whoami", "--registry=https://registry.npmjs.org/"]);
   for (const artifact of manifest.artifacts) {
-    if (alreadyPublished(artifact)) continue;
+    if (await alreadyPublished(artifact)) continue;
     run("npm", [
       "publish",
       join(directory, artifact.file),
