@@ -10,6 +10,7 @@ import type { ServiceContext } from "../services/context.js";
 import { actionContractsV1, type ActionKindV1, type SyncableActionKindV1 } from "./contracts.js";
 import { createCompositionRegistryV1, type CompositionContext } from "./composition.js";
 import type { ActionHandlersV1 } from "./registry.js";
+import { runRequestedRepairInTx } from "./repair.js";
 
 export type ServiceActionContext<C extends ServiceContext = ServiceContext> = CompositionContext<C>;
 export type LocalRecoveryHandlersV1<C extends ServiceContext = ServiceContext> = Pick<
@@ -33,6 +34,9 @@ export function createServiceActionRegistryV1<C extends ServiceContext = Service
       throw new TypeError(`Unexpected local recovery handler: ${kind}`);
   }
   const handlers: ServiceHandlers<C> = {
+    "system.repair": {
+      replay: ({ body }, { context }) => runRequestedRepairInTx(context.db, context.value, body),
+    },
     "cards.create": {
       replay: ({ args, body }, { context }) =>
         cards.createInTx(context.db, context.value, args.namespaceId, body),

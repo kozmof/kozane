@@ -54,8 +54,13 @@ remains pending.
 The opt-in service registry now installs real handlers for every declared
 syncable database kind and `system.compose`. It supports schema 19 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
-system import and repair handlers, durable recovery and persistence remain
+system import handlers, durable recovery and persistence remain
 pending.
+
+`system.repair` now accepts the explicit `inventories` target and runs the real
+workspace-wide repair service in its action transaction. Replay can resolve
+changed rows or a no-op while preserving the original request and timestamps.
+CLI repair routing, including the separate post-import repair, remains pending.
 
 ## Version one
 
@@ -100,7 +105,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Wrap every service write in a stamped adapter transaction, including direct layer creation and rename.
 - [x] Add caller-owned transaction variants for stacking, squash, layer and partition removal, board scope removal and namespace administration.
 - [ ] Require active action groups in transaction-bound record and service methods.
-- [ ] Add stamped import and requested repair operations.
+- [x] Define and register the opt-in `system.repair` action for explicitly requested inventory repair.
+- [ ] Add stamped import and route CLI repair operations through persistent action boundaries.
 - [x] Replace no-op upserts with existence checks inside serialized write transactions.
 - [x] Implement `system.compose` with read helpers, a registered dispatcher and a serialized ordered list of direct children. The implementation is opt-in; caller migration remains pending.
 - [ ] Migrate composition callers that use direct SQL or need replayed control flow to dispatcher calls or named handlers.

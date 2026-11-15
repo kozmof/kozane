@@ -45,7 +45,14 @@ Tests record and replay each database kind, check namespace ownership and apply
 the executing host's limits. See the
 [service registry](action-execution-scopes.md#dispatch-real-service-actions).
 
-Production application routing, system import, repair, config and taskspace
+The service registry also installs `system.repair` for explicit workspace-wide
+inventory repair. Its envelope is `{args: {}, body: {target: "inventories"}}`.
+It reuses the action transaction, preserves timestamps and allocates no IDs or
+clocks. Replay may resolve a different repair set or no changes. Requested repair
+remains separate from exact restoration. See
+[repair requests](action-execution-scopes.md#request-an-inventory-repair).
+
+Production application routing, system import, config and taskspace
 observation envelopes remain pending. Contract version persistence and
 group dispatch integration also remain pending. Do not submit work based only on
 a declaration's sync classification.
@@ -70,7 +77,7 @@ must be covered before mandatory guards are enabled. Application modules in
 | Partitions | `services/partitions.ts` create, rename, remove | `api/partition.ts`, `api/composite/reassign.ts`. Service removal moves cards to the default partition. The separate low-level cascading delete can delete cards | All listed service writes expose `InTx` variants. Attribute reassignment and raw cascading deletion |
 | Scopes | `services/scopes.ts` create, rename, remove, addMembers, removeMembers, createArea, updateArea, removeArea, removeWorkspace | `api/{scope,scope-rel,scope-area}.ts`. Board removal differs from workspace deletion. Scope deletion can clear taskspace references and delete relations and areas | All listed service writes expose `InTx` variants, including board removal. Action attribution remains pending |
 | Warps | `services/warps.ts` create, update, remove | `api/warp.ts` | Existing transaction and `InTx` helpers need attribution |
-| Inventories | `services/inventories.ts` create, update, remove, stow, take, repair | `api/inventory/{rows,stow,slots,repair}.ts`. Moves other cards' slots, refits widths and clears placement on removal | Wrap repair as an explicit system action and keep every slot shift in its root |
+| Inventories | `services/inventories.ts` create, update, remove, stow, take, repair | `api/inventory/{rows,stow,slots,repair}.ts`. Moves other cards' slots, refits widths and clears placement on removal | The opt-in `system.repair` handler wraps requested inventory repair. Production CLI routing and action attribution remain pending |
 | Namespaces | `services/namespaces.ts` create, rename, remove, setDefault; administration also calls records | `api/namespace.ts` add, create, rename, setDefault, delete. Creation adds default partition and layer. Deletion cascades and dissolves surviving orphan glue groups | All listed service writes expose `InTx` variants. Low-level add and rename still accept DB handles. Action attribution remains pending |
 | Taskspaces | Node handlers described below | `api/taskspace.ts` add, update, delete. Delete clears `card.taskspace_id` | Direct writes and local/shared storage split are pending |
 
@@ -94,9 +101,11 @@ indexes are rebuilt and are not stamped application tables.
 | `packages/core/src/migrations/apply.ts` and Node migration hooks | Driver-owned batch applies SQL and migration history | Trusted migrate mode and durable transition gate before capture activation |
 | Database JSON export, DB backup/restore and standalone restoration harness | Export/read snapshots or replace database files | Keep exact recovery distinct from import, preserve local metadata and verify complete recovery bookkeeping |
 
-The current `cli/lib/db-json/import.ts` does not call inventory repair. The design's
-current-state summary says it does. Preserve current import behavior until its
-explicit action contract is implemented. Likewise, service partition removal
+The `cli/lib/db-json/import.ts` helper does not call inventory repair. The CLI
+command in `cli/commands/db.ts` performs a separate post-import repair after the
+import commits. That call still needs a persistent `system.repair` action when
+the import command is migrated. Preserve this distinction when implementing
+the import contract. Likewise, service partition removal
 currently reassigns cards rather than deleting them. Test cascading deletes
 through the low-level path separately.
 

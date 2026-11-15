@@ -31,6 +31,31 @@ version 1. Incompatible service changes require a new registry version. This
 factory is an internal opt-in integration and does not install action history,
 route application writes or activate guards.
 
+## Request an inventory repair
+
+`system.repair` is a syncable version 1 action with an explicit repair target.
+Its current envelope is workspace-wide.
+
+```json
+{ "args": {}, "body": { "target": "inventories" } }
+```
+
+The handler accepts only that target and refuses extra body or routing fields.
+`actions/repair.ts` validates the request and calls the inventory repair service
+inside the owning action transaction. It clears legacy half placements, moves
+overlapping cards and removes stored cards from glue groups. Placement and glue
+changes roll back together if SQL, a child or history persistence fails.
+
+Repair reads current rows during intent replay. It may change different cards or
+find nothing to do. Each execution retains the original request and bindings,
+including no-op executions. Inventory repair allocates no IDs or clock readings
+and preserves card timestamps. It can run as a named composition child or inside
+a root replay savepoint.
+
+Exact restoration does not invoke this handler. Keep requested repair separate
+from loading recorded row images. CLI repair calls and the CLI's post-import
+repair still need production action routing and persistent history.
+
 ## Root boundary and failure handling
 
 `packages/core/src/actions/execution.ts` runs a selected registry inside one adapter
@@ -140,7 +165,7 @@ migration 0019's wall-clock fallback. Invalid times and unbound allocations latc
 the root failure even when a direct record caller catches the error. Valid
 historical timestamps before the Unix epoch remain supported.
 
-Taskspace writes, direct ORM inserts and system import and repair handlers need
+Taskspace writes, direct ORM inserts and system import handlers need
 further integration. Migration 0019's
 fallback also needs replacement before activation. These helpers do not enable
 mandatory action guards or install production handlers.
@@ -189,6 +214,8 @@ defaults and squash replay, including late SQL failures and changed segment coun
 The service registry fixture records and replays every database kind on both
 adapters. It checks namespace ownership, local-only refusal, host limits,
 composition rollback and unchanged original envelopes.
+Repair tests cover explicit targets, changed replay results, no-op execution
+records, half placements, late failures and savepoint isolation.
 
 ```sh
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-execution.test.ts
@@ -201,6 +228,8 @@ pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-composite-services.test.ts
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-service-registry.test.ts
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-service-registry.test.ts
+pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-repair.test.ts
+pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-repair.test.ts
 ```
 
 Production integration must supply persistent action/context hooks, route all

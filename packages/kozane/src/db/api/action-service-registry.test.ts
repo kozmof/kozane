@@ -180,6 +180,7 @@ async function snapshot(db: DB | Tx) {
 type ServiceKind = Exclude<SyncableActionKindV1, "system.compose">;
 const namespace = { namespaceId: "n" };
 const requests = {
+  "system.repair": { args: {}, body: { target: "inventories" } },
   "cards.create": {
     args: namespace,
     body: { partitionId: "p", content: "  Created  ", posX: -12.5 },
@@ -249,7 +250,10 @@ it.each(Object.entries(requests))(
     const origin = await fixture();
     const before = await snapshot(origin.db);
     const recorded = await origin.run(kind, input);
-    expect(await snapshot(origin.db)).not.toEqual(before);
+    if (kind === "system.repair") {
+      expect(await snapshot(origin.db)).toEqual(before);
+      expect(recorded.result).toEqual({ moved: [], unglued: [], cleared: [] });
+    } else expect(await snapshot(origin.db)).not.toEqual(before);
     expect(recorded.invocation.input).toEqual(input);
     expect(recorded.executions).toHaveLength(1);
     const target = await fixture();

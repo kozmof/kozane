@@ -10,6 +10,7 @@ type EmptyArgs = Record<string, never>;
 /** Original caller arguments, including route IDs, before domain normalization. */
 export interface ActionInputsV1 {
   "system.compose": Envelope<EmptyArgs, { children: readonly CompositionChildV1[] }>;
+  "system.repair": Envelope<EmptyArgs, { target: "inventories" }>;
   "cards.create": Envelope<NamespaceArgs, Input.CardCreateInput>;
   "cards.update": Envelope<TargetArgs<"cardId">, Input.CardUpdateInput>;
   "cards.updatePositions": Envelope<NamespaceArgs, Input.CardUpdatePositionsInput>;
@@ -71,6 +72,7 @@ export type ActionKindV1 = keyof ActionInputsV1;
 /** Contract declarations only. Activation still requires registered handlers and proven capture. */
 export const actionContractsV1 = Object.freeze({
   "system.compose": "syncable",
+  "system.repair": "syncable",
   "cards.create": "syncable",
   "cards.update": "syncable",
   "cards.updatePositions": "syncable",

@@ -21,6 +21,7 @@ const taskspace = { ...namespace, taskspaceId: true } as const;
 /** Shape checks cover routing, independently of service body validation. */
 const inputShapes = {
   "system.compose": { args: {}, body: true },
+  "system.repair": { args: {}, body: true },
   "cards.create": { args: namespace, body: true },
   "cards.update": { args: card, body: true },
   "cards.updatePositions": { args: namespace, body: true },
