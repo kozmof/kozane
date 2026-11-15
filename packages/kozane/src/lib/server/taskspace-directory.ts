@@ -17,7 +17,7 @@ import { type NamespaceRef, folderKey, namespaceFolders } from "../taskspace-loc
 import {
   TASKSPACE_MARKER_FILE,
   TASKSPACE_MARKER_KIND,
-  TASKSPACE_MARKER_VERSION,
+  taskspaceMarkerText,
 } from "../taskspace-marker.js";
 import type { TaskspaceDirectoryOutcome } from "../types.js";
 import { errorCode, isStrictlyInside, isWithin, sameEntry } from "./fs-paths.js";
@@ -453,16 +453,14 @@ export function claimTaskspaceDirectory(request: ClaimRequest): { dirCreated: bo
         if (code !== "ENOENT" || attempt >= MAX_PARENT_ATTEMPTS) throw e;
       }
     }
-    const marker = {
-      kind: TASKSPACE_MARKER_KIND,
-      version: TASKSPACE_MARKER_VERSION,
-      taskspaceId: request.taskspaceId,
-      namespaceId: request.namespaceId,
-      ...(request.ownIfCreated && dirCreated && { ownsDirectory: true }),
-    };
+    const marker = taskspaceMarkerText(
+      request.taskspaceId,
+      request.namespaceId,
+      request.ownIfCreated && dirCreated,
+    );
     try {
       // `wx` refuses a marker another process wrote since the directory was checked.
-      writeFileSync(markerPath, JSON.stringify(marker, null, 2) + "\n", {
+      writeFileSync(markerPath, marker, {
         flag: "wx",
         mode: 0o600,
       });

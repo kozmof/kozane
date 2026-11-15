@@ -211,6 +211,16 @@ const records = [
     sql: "-- Keep local attachments independently of shared taskspace identity. Do not add a foreign\n-- key: shared deletion and restoration must retain metadata for temporarily absent rows.\nCREATE TABLE `taskspace_local` (\n  `taskspace_id` text PRIMARY KEY NOT NULL,\n  `path` text,\n  `path_kind` text DEFAULT 'workspace_relative' NOT NULL,\n  `last_seen_at` integer\n);\n--> statement-breakpoint\nINSERT INTO `taskspace_local` (`taskspace_id`, `path`, `path_kind`, `last_seen_at`)\nSELECT `id`, `path`, `path_kind`, `last_seen_at` FROM `taskspace`;\n--> statement-breakpoint\n-- Dropping these columns preserves the taskspace table, its IDs, timestamps and card FKs.\nALTER TABLE `taskspace` DROP COLUMN `path`;\n--> statement-breakpoint\nALTER TABLE `taskspace` DROP COLUMN `path_kind`;\n--> statement-breakpoint\nALTER TABLE `taskspace` DROP COLUMN `last_seen_at`;\n",
     hash: "9e6a0c75ed6092adc4139bfcd6c9db383a85c740091a937eda4007bf7d8382af",
   },
+  {
+    id: "0021_local_file_operation",
+    tag: "0021_local_file_operation",
+    idx: 21,
+    version: "6",
+    when: 1794782282900,
+    breakpoints: true,
+    sql: 'CREATE TABLE `local_file_operation` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`kind` text NOT NULL,\n\t`version` integer NOT NULL,\n\t`taskspace_id` text NOT NULL,\n\t`namespace_id` text NOT NULL,\n\t`path` text NOT NULL,\n\t`path_kind` text NOT NULL,\n\t`state` text NOT NULL,\n\t`intent` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`confirmed_at` integer,\n\t`error` text,\n\tCONSTRAINT "local_file_operation_kind" CHECK("local_file_operation"."kind" = \'taskspace.claim\' AND "local_file_operation"."version" = 1),\n\tCONSTRAINT "local_file_operation_path_kind" CHECK("local_file_operation"."path_kind" IN (\'workspace_relative\', \'absolute\')),\n\tCONSTRAINT "local_file_operation_state" CHECK(("local_file_operation"."state" = \'pending\' AND "local_file_operation"."confirmed_at" IS NULL) OR ("local_file_operation"."state" = \'confirmed\' AND "local_file_operation"."confirmed_at" IS NOT NULL AND "local_file_operation"."error" IS NULL))\n);\n--> statement-breakpoint\nCREATE INDEX `local_file_operation_state` ON `local_file_operation` (`state`);',
+    hash: "d4e4d2d6e58bd03f904b729584bd352dea2b50206e8097aa78d46ed1eeba6a39",
+  },
 ];
 export const migrations: readonly MigrationRecord[] = Object.freeze(
   records.map((record) =>

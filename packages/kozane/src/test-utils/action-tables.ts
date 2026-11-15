@@ -2,6 +2,7 @@
 import { is, sql } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../../../core/src/schema.js";
+import { localTableNames } from "../../../core/src/actions/local-tables.js";
 import type { DB, Tx } from "../../../core/src/database.js";
 import type { ProjectionRow } from "../../../core/src/actions/projection.js";
 import { captureRowSql, decodeCapturedRow } from "../../../core/src/actions/sql-codec.js";
@@ -9,7 +10,7 @@ const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"';
 export const capturedTables = Object.freeze(
   Object.values(schema)
     .filter((table) => is(table, SQLiteTable))
-    .filter((table) => table !== schema.taskspaceLocalTable)
+    .filter((table) => !localTableNames.includes(getTableConfig(table).name))
     .map((table) => {
       const config = getTableConfig(table);
       const primaryKey = [

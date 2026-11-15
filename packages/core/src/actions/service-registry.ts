@@ -228,7 +228,7 @@ export function createServiceActionRegistryV1<C extends ServiceContext = Service
     )
       throw new TypeError(`Unexpected local recovery handler: ${kind}`);
   }
-  const registry = createCompositionRegistryV1<C>([19, 20], {
+  const registry = createCompositionRegistryV1<C>([19, 20, 21], {
     ...recoveryHandlers,
     ...databaseHandlers<C>(),
   });

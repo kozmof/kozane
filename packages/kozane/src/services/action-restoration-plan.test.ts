@@ -4,6 +4,7 @@ import {
   RestorationSchemaError,
 } from "../../../core/src/actions/restoration-plan.js";
 import { canonicalSchemaManifest } from "../../../core/src/generated/schema-manifest.js";
+import { localTableNames } from "../../../core/src/actions/local-tables.js";
 import type { SchemaObject } from "../../../core/src/schema-types.js";
 
 const table = (name: string, parents: string[] = []): SchemaObject => ({
@@ -28,7 +29,7 @@ it("plans the current application schema with parents before children and comple
   const names = canonicalSchemaManifest
     .filter(
       ({ type, name }) =>
-        type === "table" && name !== "__drizzle_migrations" && name !== "taskspace_local",
+        type === "table" && name !== "__drizzle_migrations" && !localTableNames.includes(name),
     )
     .map(({ name }) => name);
   const original = JSON.stringify(canonicalSchemaManifest);

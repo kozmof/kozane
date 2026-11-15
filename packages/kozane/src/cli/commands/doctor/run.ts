@@ -3,6 +3,7 @@ import { existsSync, accessSync, constants } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { DEFAULT_TASKSPACE_DIR, NAME_MAX } from "../../../lib/constants.js";
 import { openDb } from "../../../db/client.js";
+import { pendingLocalClaims } from "../../../lib/server/local-file-operations.js";
 import { getAllNamespaces } from "../../../db/api/namespace.js";
 import type { DB } from "../../../db/tx.js";
 import { errorMessage } from "../../../lib/error-message.js";
@@ -141,6 +142,25 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
 
   // Check timestamps only after migrations are current. Older schemas may lack the columns,
   // and the migration check already reports that problem.
+  if (dbOk && migrationOk) {
+    let complete = false;
+    let detail: string | undefined;
+    try {
+      const connection = await openDb(workspaceDbUrl);
+      try {
+        const pending = await pendingLocalClaims(connection.db, root);
+        complete = pending.total === 0;
+        if (!complete)
+          detail = `${plural(pending.total, "pending directory claim")}: ${pending.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}; inspect directories before creating them again; --fix does not retry claims`;
+      } finally {
+        connection.close();
+      }
+    } catch (error) {
+      detail = errorMessage(error);
+    }
+    checks.push(check("Local directory claims complete", complete, detail));
+  }
+
   if (dbOk && migrationOk) {
     let stampOk = false;
     let detail: string | undefined;

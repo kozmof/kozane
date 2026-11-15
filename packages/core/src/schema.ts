@@ -202,6 +202,37 @@ export const taskspaceLocalTable = sqliteTable("taskspace_local", {
   lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
 });
 
+/** Local filesystem intent and completion evidence, retained independently of shared rows. */
+export const localFileOperationTable = sqliteTable(
+  "local_file_operation",
+  {
+    id: text("id").primaryKey().notNull(),
+    kind: text("kind", { enum: ["taskspace.claim"] }).notNull(),
+    version: integer("version").notNull(),
+    taskspaceId: text("taskspace_id").notNull(),
+    namespaceId: text("namespace_id").notNull(),
+    path: text("path").notNull(),
+    pathKind: text("path_kind", { enum: PATH_KINDS }).notNull(),
+    state: text("state", { enum: ["pending", "confirmed"] }).notNull(),
+    intent: text("intent").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    confirmedAt: integer("confirmed_at", { mode: "timestamp" }),
+    error: text("error"),
+  },
+  (t) => [
+    index("local_file_operation_state").on(t.state),
+    check("local_file_operation_kind", sql`${t.kind} = 'taskspace.claim' AND ${t.version} = 1`),
+    check(
+      "local_file_operation_path_kind",
+      sql`${t.pathKind} IN ('workspace_relative', 'absolute')`,
+    ),
+    check(
+      "local_file_operation_state",
+      sql`(${t.state} = 'pending' AND ${t.confirmedAt} IS NULL) OR (${t.state} = 'confirmed' AND ${t.confirmedAt} IS NOT NULL AND ${t.error} IS NULL)`,
+    ),
+  ],
+);
+
 export const cardTable = sqliteTable(
   "card",
   {

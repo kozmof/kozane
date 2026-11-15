@@ -16,23 +16,25 @@ it.each([false, true])(
   "upgrades populated schema 19 without losing attachments or related rows (rollback=%s)",
   async (failFirst) => {
     const db = (await createTestDB()) as unknown as DB;
-    const latest = migrations.at(-1)!;
-    expect(latest.tag).toBe("0020_taskspace_local");
+    const splitIndex = migrations.findIndex(({ tag }) => tag === "0020_taskspace_local");
+    expect(splitIndex).toBeGreaterThan(0);
+    const latest = migrations[splitIndex];
     const names = canonicalSchemaManifest
       .filter(
         ({ type, name }) =>
-          type === "table" && !["__drizzle_migrations", "taskspace_local"].includes(name),
+          type === "table" &&
+          !["__drizzle_migrations", "taskspace_local", "local_file_operation"].includes(name),
       )
       .map(({ name }) => name);
     const plan = createRestorationPlan(canonicalSchemaManifest, names);
     // Rebuild this empty test database with the exact retained schema-19 migration prefix.
     await withMigration(db, async () => [
-      ...["taskspace_local", ...plan.deleteOrder].map((name) => ({
+      ...["local_file_operation", "taskspace_local", ...plan.deleteOrder].map((name) => ({
         sql: `DROP TABLE "${name}"`,
         args: [],
       })),
       { sql: "DELETE FROM __drizzle_migrations", args: [] },
-      ...migrations.slice(0, -1).flatMap((migration) => [
+      ...migrations.slice(0, splitIndex).flatMap((migration) => [
         ...migration.statements.map((text) => ({ sql: text, args: [] })),
         {
           sql: "INSERT INTO __drizzle_migrations(hash,created_at) VALUES(?,?)",
@@ -64,7 +66,9 @@ it.each([false, true])(
       );
       await db.run(sql`DROP TRIGGER reject_split`);
     }
-    expect((await applyMigrations(db)).appliedIds).toEqual([latest.id]);
+    expect((await applyMigrations(db)).appliedIds).toEqual(
+      migrations.slice(splitIndex).map(({ id }) => id),
+    );
     expect(
       (
         await db.values(

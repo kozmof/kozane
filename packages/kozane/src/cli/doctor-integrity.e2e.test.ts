@@ -85,6 +85,28 @@ afterEach(() => {
 });
 
 describe("kozane doctor — integrity and limits", () => {
+  it("reports interrupted directory claims without retrying them with --fix", async () => {
+    const root = initWorkspace();
+    await withRawDb(root, (client) =>
+      client
+        .execute(
+          "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('interrupted','taskspace.claim',1,'absent','absent','pending-directory','workspace_relative','pending','{\"markerHashes\":[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}',1)",
+        )
+        .then(() => undefined),
+    );
+    for (const args of [[], ["--fix"]]) {
+      const result = runCli(root, "doctor", ...args);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("Local directory claims complete");
+      expect(result.stdout).toContain("interrupted (absent)");
+      expect(result.stdout).toContain("--fix does not retry claims");
+    }
+    await withRawDb(root, async (client) => {
+      expect((await client.execute("SELECT state FROM local_file_operation")).rows[0].state).toBe(
+        "pending",
+      );
+    });
+  });
   it("passes both checks on a workspace kozane itself wrote", () => {
     const root = initWorkspace();
     expect(runCli(root, "card", "add", "ordinary").status).toBe(0);

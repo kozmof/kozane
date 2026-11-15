@@ -138,6 +138,19 @@ it("preserves current local metadata for present and absent taskspaces through s
     .set({ path: "local/changed", lastSeenAt: new Date(9000) })
     .where(eq(tables.taskspaceLocalTable.taskspaceId, "t"));
   const local = await getAllTaskspaceLocalMetadata({ db: f.db });
+  await f.db.insert(tables.localFileOperationTable).values({
+    id: "pending-local",
+    kind: "taskspace.claim",
+    version: 1,
+    taskspaceId: "absent",
+    namespaceId: "absent-namespace",
+    path: "local/pending",
+    pathKind: "workspace_relative",
+    state: "pending",
+    intent: "{}",
+    createdAt: new Date(1000),
+  });
+  const operations = await f.db.select().from(tables.localFileOperationTable);
   await f.capture.restore(createDatabase, []);
   expect(await getTaskspace({ db: f.db, taskspaceId: "t" })).toMatchObject({
     path: "local/changed",
@@ -149,6 +162,7 @@ it("preserves current local metadata for present and absent taskspaces through s
   expect(await getTaskspace({ db: f.db, taskspaceId: "t" })).toBeUndefined();
   expect(await getAllTaskspaceLocalMetadata({ db: f.db })).toEqual(local);
   await f.capture.verify();
+  expect(await f.db.select().from(tables.localFileOperationTable)).toEqual(operations);
 });
 
 it("records new actions after restoration against the selected state while retaining unselected origin history", async () => {

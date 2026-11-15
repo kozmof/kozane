@@ -148,6 +148,7 @@ describe("db JSON export/import", () => {
       inventory: 1,
       taskspace: 1,
       taskspace_local: 1,
+      local_file_operation: 0,
       card: 2,
       glue: 1,
       glue_rel: 2,
@@ -248,6 +249,44 @@ describe("db JSON export/import", () => {
     );
     expect((await importDbJson(targetUrl, source)).taskspace_local).toBe(2);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+  });
+
+  it("round-trips local file operations whose shared identities are absent", async () => {
+    const sourceUrl = await migratedDbUrl("operations-source.db");
+    const targetUrl = await migratedDbUrl("operations-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('pending','taskspace.claim',1,'missing','missing','local/pending','workspace_relative','pending','{}',1)",
+      );
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at,confirmed_at) VALUES('confirmed','taskspace.claim',1,'missing','missing','local/confirmed','workspace_relative','confirmed','{}',1,2)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    source.tables.local_file_operation[0].path = "../escape";
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow("leaves the workspace");
+    source.tables.local_file_operation[0].path = "/external";
+    source.tables.local_file_operation[0].path_kind = "absolute";
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow("--allow-absolute-paths");
+    await importDbJson(targetUrl, source, { allowAbsolutePaths: true });
+  });
+
+  it("imports version 10 with an empty local operation journal", async () => {
+    const sourceUrl = await migratedDbUrl("operations-v10-source.db");
+    const targetUrl = await migratedDbUrl("operations-v10-target.db");
+    await seedDb(sourceUrl);
+    const source = await exportDbJson(sourceUrl);
+    const { local_file_operation: _operations, ...tables } = source.tables;
+    const legacy = { ...source, version: 10, tables };
+    const original = JSON.stringify(legacy);
+    expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(0);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(JSON.stringify(legacy)).toBe(original);
   });
 
   it("reads a version 7 dump, which predates scope_area, as having no frames", async () => {

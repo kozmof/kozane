@@ -134,7 +134,7 @@ export function validateDumpPaths(
   { allowAbsolutePaths = false }: ImportDbJsonOptions,
 ) {
   const absolute: string[] = [];
-  for (const row of tables.taskspace_local) {
+  for (const row of [...tables.taskspace_local, ...tables.local_file_operation]) {
     if (row.path === null || row.path === undefined) continue;
     if (typeof row.path !== "string")
       throw new Error(`taskspace ${row.taskspace_id}: path must be a string or null`);

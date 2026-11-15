@@ -403,6 +403,12 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       );
     } catch (failure) {
       if (!(failure instanceof TaskspaceClaimError)) throw failure;
+      if (failure.phase === "attach") {
+        console.error(
+          "Directory creation needs recovery. Run 'kozane doctor' before creating it again.",
+        );
+        process.exit(1);
+      }
       const e = failure.cause;
       console.error("Failed to initialize taskspace directory.");
       const outside = e instanceof TaskspaceFilesError && e.reason === "invalid-path";
