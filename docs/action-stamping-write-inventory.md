@@ -137,10 +137,12 @@ harness also enable them. None of those setup sites currently enables and verifi
 `recursive_triggers`. Prove both settings on every adapter connection, including
 connections opened after a transaction.
 
-The next gate is persistent `BEFORE` capture plus lossless projection reconstruction
-and installation on libsql and SQLite WASM in Node and the browser. Test signed
-64-bit limits, storage classes, REAL bits, Unicode/NUL and blobs before adding
-production log tables. Existing JSON export values cannot serve as the row codec.
+The [capture prototype](action-capture-prototype.md) passes persistent `BEFORE`
+capture, projection reconstruction and lossless installation checks on libsql and
+Node WASM. Browser verification remains pending because Chromium was unavailable
+and its download was denied by the environment's network policy. Keep production
+log tables and activation gated on that verification. Existing JSON export values
+cannot serve as the row codec.
 
 ## Tagged row codec
 
@@ -157,7 +159,7 @@ are rejected. Rows and tagged values are copied and frozen.
 
 Unit tests cover JSON transport, both signed 64-bit limits, integers beyond the
 JavaScript safe range, subnormal REAL values, Unicode, embedded NUL and empty blobs.
-These tests do not establish adapter capture or installation support. The codec
-requires actual SQLite storage classes and uncoerced values from the adapter.
-Persistent capture, projection reconstruction and installation tests on libsql and
-SQLite WASM in Node and browsers remain the next gate.
+The codec requires actual SQLite storage classes and uncoerced values from the
+adapter. The capture prototype supplies SQL encoding and installation expressions
+and verifies full read-back equality on libsql and Node WASM. Browser support and
+production integration still need verification.
