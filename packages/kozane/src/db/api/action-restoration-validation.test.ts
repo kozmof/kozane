@@ -38,10 +38,10 @@ async function fixture() {
     namespaceId: "n",
     scopeId: "s",
     name: "Taskspace",
-    path: "local-folder",
     createdAt: new Date(1000),
     updatedAt: new Date(2000),
   });
+  await db.insert(tables.taskspaceLocalTable).values({ taskspaceId: "t", path: "local-folder" });
   await db.insert(tables.inventoryTable).values({ id: "i", namespaceId: "n", name: "Inventory" });
   await db.insert(tables.cardTable).values([
     {
@@ -99,6 +99,10 @@ it("validates populated application rows in a separate database without timestam
   const f = await fixture();
   const validation = await validateApplicationProjection(createDatabase, f.target);
   const loaded = await captureApplicationRows(validation);
+  expect(await validation.select().from(tables.taskspaceLocalTable)).toEqual([]);
+  expect(await f.db.select().from(tables.taskspaceLocalTable)).toMatchObject([
+    { taskspaceId: "t", path: "local-folder" },
+  ]);
   expect(loaded).toEqual(f.rows);
   expect(
     loaded.find(({ table, row }) => table === "card" && row.id[1] === "canvas")!.row,

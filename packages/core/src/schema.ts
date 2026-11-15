@@ -181,9 +181,6 @@ export const taskspaceTable = sqliteTable(
       onUpdate: "cascade",
     }),
     name: text().notNull().default(""),
-    path: text("path"),
-    pathKind: text("path_kind", { enum: PATH_KINDS }).notNull().default("workspace_relative"),
-    lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -195,6 +192,15 @@ export const taskspaceTable = sqliteTable(
   // namespace. Without this index, each board poll scans the taskspace table twice per scope.
   (t) => [index("taskspace_scope").on(t.scopeId)],
 );
+
+/** Device-local attachments survive shared taskspace deletion and restoration. */
+export const taskspaceLocalTable = sqliteTable("taskspace_local", {
+  // Deliberately no FK. Metadata for absent taskspaces remains available to local recovery.
+  taskspaceId: text("taskspace_id").primaryKey().notNull(),
+  path: text("path"),
+  pathKind: text("path_kind", { enum: PATH_KINDS }).notNull().default("workspace_relative"),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
+});
 
 export const cardTable = sqliteTable(
   "card",

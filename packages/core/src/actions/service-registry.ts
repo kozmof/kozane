@@ -24,7 +24,7 @@ type ServiceHandlers<C extends ServiceContext> = Pick<
   Exclude<SyncableActionKindV1, "system.compose">
 >;
 
-/** Internal opt-in registry for schema 19. Hosts supply local recovery explicitly. */
+/** Internal opt-in registry for schemas 19 and 20. Hosts supply local recovery explicitly. */
 export function createServiceActionRegistryV1<C extends ServiceContext = ServiceContext>(
   recoveryHandlers: LocalRecoveryHandlersV1<C>,
 ) {
@@ -211,7 +211,7 @@ export function createServiceActionRegistryV1<C extends ServiceContext = Service
         namespaces.setDefaultInTx(context.db, context.value, args.namespaceId),
     },
   };
-  const registry = createCompositionRegistryV1<C>([19], { ...recoveryHandlers, ...handlers });
+  const registry = createCompositionRegistryV1<C>([19, 20], { ...recoveryHandlers, ...handlers });
   const scoped = (
     execution: ActionHandlerContext<ServiceActionContext<C>>,
     operation: () => Promise<unknown>,

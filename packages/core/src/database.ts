@@ -1,5 +1,6 @@
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import type * as schema from "./schema.js";
+import { registerDatabaseHandle } from "./database-handles.js";
 
 declare const databaseBrand: unique symbol;
 declare const transactionBrand: unique symbol;
@@ -61,6 +62,7 @@ export function createDatabaseAdapter(handle: DatabaseHandle, hooks: DatabaseAda
   if (adapters.has(handle as DB)) throw new Error("Database handle already has an adapter");
   const db = handle as DB;
   adapters.set(db, hooks);
+  registerDatabaseHandle(db);
   return db;
 }
 function adapter(db: DB): DatabaseAdapterHooks {
@@ -71,7 +73,16 @@ function adapter(db: DB): DatabaseAdapterHooks {
 export function withTx<T>(db: DB, operation: (tx: Tx) => Promise<T>): Promise<T> {
   return adapter(db).write((handle) => {
     assertHandle(handle);
-    return operation(handle as Tx);
+    // Some adapters reuse the database object for their transaction connection.
+    // Give the caller a distinct handle so DB-or-Tx record wrappers can reuse the
+    // owning transaction without opening a nested boundary on that adapter.
+    const tx = new Proxy(handle, {
+      get(target, property) {
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as Tx;
+    return operation(tx);
   });
 }
 export function withReadTx<T>(db: DB, operation: (tx: ReadTx) => Promise<T>): Promise<T> {

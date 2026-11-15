@@ -7,6 +7,7 @@ import {
 } from "../../test-utils/action-capture.js";
 import type { DB } from "../../../../core/src/database.js";
 import * as tables from "../../../../core/src/schema.js";
+import { getTaskspace, getAllTaskspaceLocalMetadata } from "../../../../core/src/api/taskspace.js";
 import { runActionGroup } from "../../../../core/src/actions/execution.js";
 import { createActionBindings } from "../../../../core/src/actions/bindings.js";
 import {
@@ -30,6 +31,18 @@ async function fixture() {
     .values({ id: "l", namespaceId: "n", name: "Base", isDefault: true });
   await db.insert(tables.scopeTable).values({ id: "s", name: "Scope" });
   await db.insert(tables.inventoryTable).values({ id: "i", namespaceId: "n", name: "Box" });
+  await db.insert(tables.taskspaceTable).values({
+    id: "t",
+    namespaceId: "n",
+    scopeId: "s",
+    name: "Taskspace",
+    createdAt: new Date(1000),
+    updatedAt: new Date(2000),
+  });
+  await db.insert(tables.taskspaceLocalTable).values([
+    { taskspaceId: "t", path: "local/original", lastSeenAt: new Date(3000) },
+    { taskspaceId: "absent", path: "local/retained", pathKind: "workspace_relative" },
+  ]);
   await db.insert(tables.cardTable).values({
     id: "c",
     partitionId: "p",
@@ -114,6 +127,27 @@ it("restores selected complete groups into populated rows without new effects, a
   expect(f.now).not.toHaveBeenCalled();
   expect(f.recover).not.toHaveBeenCalled();
   await expect(f.db.run(sql`DELETE FROM scope WHERE id='s'`)).rejects.toBeInstanceOf(Error);
+  await f.capture.verify();
+});
+
+it("preserves current local metadata for present and absent taskspaces through shared restoration", async () => {
+  const f = await fixture();
+  expect(await getTaskspace({ db: f.db, taskspaceId: "t" })).toBeUndefined();
+  await f.db
+    .update(tables.taskspaceLocalTable)
+    .set({ path: "local/changed", lastSeenAt: new Date(9000) })
+    .where(eq(tables.taskspaceLocalTable.taskspaceId, "t"));
+  const local = await getAllTaskspaceLocalMetadata({ db: f.db });
+  await f.capture.restore(createDatabase, []);
+  expect(await getTaskspace({ db: f.db, taskspaceId: "t" })).toMatchObject({
+    path: "local/changed",
+    lastSeenAt: new Date(9000),
+  });
+  expect(await getTaskspace({ db: f.db, taskspaceId: "absent" })).toBeUndefined();
+  expect(await getAllTaskspaceLocalMetadata({ db: f.db })).toEqual(local);
+  await f.capture.restore(createDatabase, ["inventory", "namespace"]);
+  expect(await getTaskspace({ db: f.db, taskspaceId: "t" })).toBeUndefined();
+  expect(await getAllTaskspaceLocalMetadata({ db: f.db })).toEqual(local);
   await f.capture.verify();
 });
 

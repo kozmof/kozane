@@ -150,7 +150,10 @@ const db = createDatabaseAdapter(handle, {
     return operation(handle);
   },
 });
-assert.equal(await withTx(db, async (tx) => tx), handle);
+await withTx(db, async (tx) => {
+  assert.notEqual(tx, handle);
+  assert.equal(tx.select(), handle);
+});
 await withReadTx(db, async (tx) => {
   assert.notEqual(tx, handle);
   assert.ok(Object.isFrozen(tx));

@@ -33,11 +33,14 @@ async function fixture(handler: ActionHandler<Input, Context>) {
     namespaceId: "n",
     scopeId: "s",
     name: "Before",
+    createdAt: stamp,
+    updatedAt: stamp,
+  });
+  await db.insert(schema.taskspaceLocalTable).values({
+    taskspaceId: "seed",
     path: "original",
     pathKind: "workspace_relative",
     lastSeenAt: stamp,
-    createdAt: stamp,
-    updatedAt: stamp,
   });
   const capture = await installCapturePrototype(db);
   const registry = defineActionRegistry<{ root: Input }, Context>({

@@ -134,13 +134,13 @@ export function validateDumpPaths(
   { allowAbsolutePaths = false }: ImportDbJsonOptions,
 ) {
   const absolute: string[] = [];
-  for (const row of tables.taskspace) {
+  for (const row of tables.taskspace_local) {
     if (row.path === null || row.path === undefined) continue;
     if (typeof row.path !== "string")
-      throw new Error(`taskspace ${row.id}: path must be a string or null`);
+      throw new Error(`taskspace ${row.taskspace_id}: path must be a string or null`);
     const issue = taskspacePathIssue(row.path, String(row.path_kind));
-    if (issue) throw new Error(`taskspace ${row.id}: ${issue}`);
-    if (row.path_kind === "absolute") absolute.push(`${row.id} (${row.path})`);
+    if (issue) throw new Error(`taskspace ${row.taskspace_id}: ${issue}`);
+    if (row.path_kind === "absolute") absolute.push(`${row.taskspace_id} (${row.path})`);
   }
   if (absolute.length > 0 && !allowAbsolutePaths)
     throw new Error(

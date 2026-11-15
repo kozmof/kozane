@@ -5,7 +5,7 @@ import * as schema from "../../../db/schema.js";
 
 export const EXPORT_KIND = "kozane.db.export";
 
-export const EXPORT_VERSION = 9;
+export const EXPORT_VERSION = 10;
 
 /**
  * Oldest supported dump version. Version 7 uses the `namespace` and `partition` table names.
@@ -17,6 +17,9 @@ export const EXPORT_VERSION = 9;
  * Version 9 adds `inventory` and the `card.inventory_id` and `card.inventory_slot` columns.
  * Older dumps read as having no inventories and no stored cards. {@link COLUMNS_SINCE} records
  * each added column's first version.
+ *
+ * Version 10 moves inline taskspace paths and observations into `taskspace_local`.
+ * Local rows may outlive shared taskspaces. Imports of older dumps split those fields.
  *
  * Dumps before version 7 are rejected. Migrate an old workspace database in place before
  * exporting it. Migration 0014 renames the tables without discarding rows.
@@ -40,6 +43,7 @@ const TABLE_ORDER = [
   // Before `card`, whose `inventory_id` points at it.
   { name: "inventory", orderBy: ["id"], since: 9 },
   { name: "taskspace", orderBy: ["id"] },
+  { name: "taskspace_local", orderBy: ["taskspace_id"], since: 10 },
   { name: "card", orderBy: ["id"] },
   { name: "glue", orderBy: ["id"] },
   // Keep glue members beside their groups in the dump.

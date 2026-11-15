@@ -26,7 +26,10 @@ const table = (name: string, parents: string[] = []): SchemaObject => ({
 
 it("plans the current application schema with parents before children and complete composite keys", () => {
   const names = canonicalSchemaManifest
-    .filter(({ type, name }) => type === "table" && name !== "__drizzle_migrations")
+    .filter(
+      ({ type, name }) =>
+        type === "table" && name !== "__drizzle_migrations" && name !== "taskspace_local",
+    )
     .map(({ name }) => name);
   const original = JSON.stringify(canonicalSchemaManifest);
   const plan = createRestorationPlan(canonicalSchemaManifest, names.reverse());

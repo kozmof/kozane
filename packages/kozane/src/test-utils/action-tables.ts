@@ -9,6 +9,7 @@ const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"';
 export const capturedTables = Object.freeze(
   Object.values(schema)
     .filter((table) => is(table, SQLiteTable))
+    .filter((table) => table !== schema.taskspaceLocalTable)
     .map((table) => {
       const config = getTableConfig(table);
       const primaryKey = [

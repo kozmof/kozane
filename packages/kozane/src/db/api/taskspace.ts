@@ -1,4 +1,6 @@
 import { records } from "@kozane/core/database";
+export const getAllTaskspaceLocalMetadata: typeof records.taskspace.getAllTaskspaceLocalMetadata =
+  records.taskspace.getAllTaskspaceLocalMetadata;
 export const getAllTaskspaces: typeof records.taskspace.getAllTaskspaces =
   records.taskspace.getAllTaskspaces;
 export const getTaskspacesInNamespace: typeof records.taskspace.getTaskspacesInNamespace =

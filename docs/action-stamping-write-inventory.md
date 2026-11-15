@@ -40,7 +40,7 @@ envelopes. Replay interprets the frozen list without rerunning the callback.
 `actions/service-registry.ts` now installs every declared syncable database kind
 through its real `InTx` service, together with `system.compose`. The factory
 requires complete host recovery registrations for local-only kinds and refuses
-attempts to replace database handlers. Version 1 currently supports schema 19.
+attempts to replace database handlers. Version 1 currently supports schemas 19 and 20.
 Tests record and replay each database kind, check namespace ownership and apply
 the executing host's limits. See the
 [service registry](action-execution-scopes.md#dispatch-real-service-actions).
@@ -86,7 +86,7 @@ must be covered before mandatory guards are enabled. Application modules in
 | Warps | `services/warps.ts` create, update, remove | `api/warp.ts` | Existing transaction and `InTx` helpers need attribution |
 | Inventories | `services/inventories.ts` create, update, remove, stow, take, repair | `api/inventory/{rows,stow,slots,repair}.ts`. Moves other cards' slots, refits widths and clears placement on removal | The opt-in `system.repair` handler wraps requested inventory repair. Production CLI routing and action attribution remain pending |
 | Namespaces | `services/namespaces.ts` create, rename, remove, setDefault; administration also calls records | `api/namespace.ts` add, create, rename, setDefault, delete. Creation adds default partition and layer. Deletion cascades and dissolves surviving orphan glue groups | All listed service writes expose `InTx` variants. Low-level add and rename still accept DB handles. Action attribution remains pending |
-| Taskspaces | Node handlers described below | `api/taskspace.ts` add, update, delete. Transaction-bound APIs separate database creation, label changes, location updates and deletion. Delete clears `card.taskspace_id` | IDs and shared clocks bind in opt-in scopes. Path and observation changes preserve shared timestamps. Local/shared storage and filesystem handler separation remain pending |
+| Taskspaces | Node handlers described below | `api/taskspace.ts` add, update, delete. Shared identity and timestamps live in `taskspace`; paths and observations live in `taskspace_local`. Delete clears `card.taskspace_id` and retains local metadata | IDs and shared clocks bind in opt-in scopes. Location changes preserve shared timestamps. Filesystem handler separation remains pending |
 
 `services/snapshot.ts`, tags, map and warp-directory expose reads. Derived tag
 indexes are rebuilt and are not stamped application tables.
@@ -98,7 +98,7 @@ indexes are rebuilt and are not stamped application tables.
 | HTTP routes in `packages/kozane/src/routes` | Dispatch to resource services or Node taskspace handlers | Capture route IDs before validation. Attribute the full service invocation |
 | CLI card, glue, layer, inventory, scope and warp commands | Many use `composeWrite` to resolve short IDs and call `InTx` services. Some callbacks call low-level helpers | Resolve replayable references and serialize ordered dispatcher children, or replace callbacks with named handlers |
 | CLI namespace commands | Create/default use services. Delete calls `deleteNamespaceInTx` inside `withImageDeletion` | Register namespace administration and preserve image history protection |
-| CLI taskspace scan, prune and create in `cli/commands/taskspace.ts` | Scan uses location record updates for paths and observations, and directly inserts reattached rows. Prune directly deletes rows. Create also calls filesystem claim code | Move `path`, `path_kind`, `last_seen_at` to local metadata. Attribute shared identity/placement separately from local observations |
+| CLI taskspace scan, prune and create in `cli/commands/taskspace.ts` | Scan updates local metadata. Reattachment inserts shared identity and updates retained metadata atomically. Prune deletes shared rows while retaining local metadata. Create also calls filesystem claim code | Attribute shared identity/placement separately from local observations and file recovery |
 | `lib/server/taskspace-service/{create,claim,mutate}.ts` | Create, rename and remove combine disk work and taskspace records. Rename may move a directory | Split shared label changes and local directory changes. Record external effects durably |
 | `lib/server/taskspace-service/{file,files}.ts` and `taskspace-files.ts` | File create/save, directory create, entry rename/remove mutate disk | Local-only operations with recovery records. Include paths and intended content hashes |
 | `cli/lib/db-json/import.ts` | Validates dump, opens DB, deletes rows in reverse table order and inserts rows inside `withTx` | `system.import` must retain original input and bind missing timestamps. Exact restoration needs a separate path |
@@ -168,8 +168,9 @@ still resolve against the current rows.
 Taskspace creation and label clocks are also bound. Database creation and label
 APIs exclude local observation fields. Location updates and CLI scans preserve
 shared timestamps. The record methods share the root failure latch, including
-caught validation errors. Taskspace lifecycle kinds remain local-only until
-physical metadata storage and filesystem work are separated.
+caught validation errors. Local metadata now has independent storage without
+cascading deletion and is excluded from shared capture. Taskspace lifecycle kinds
+remain local-only until filesystem work is separated from replay handlers.
 
 Ordinary handles retain their creation defaults. Production application routing
 and raw SQL allocation coverage remain pending. The

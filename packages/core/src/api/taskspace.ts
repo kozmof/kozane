@@ -1,6 +1,8 @@
-import { taskspaceTable } from "../schema.js";
+import { taskspaceTable, taskspaceLocalTable } from "../schema.js";
 import type { PathKind } from "../schema.js";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, isNull, or, sql } from "drizzle-orm";
+import { withTx, type Tx } from "../database.js";
+import { isDatabaseHandle } from "../database-handles.js";
 import { boundEntityId, boundTaskspaceTimestamp } from "../actions/allocations.js";
 import { withActionService } from "../actions/service-frame.js";
 import type {
@@ -9,17 +11,42 @@ import type {
   NeedsNamespace,
   NeedsTaskspace,
   Taskspace,
+  TaskspaceLocal,
   NeedsReader,
   NeedsTx,
 } from "../database-types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
+
+function taskspaceRows(db: NeedsReader["db"]) {
+  return db
+    .select({
+      ...getTableColumns(taskspaceTable),
+      path: taskspaceLocalTable.path,
+      pathKind: sql<PathKind>`coalesce(${taskspaceLocalTable.pathKind}, 'workspace_relative')`,
+      lastSeenAt: taskspaceLocalTable.lastSeenAt,
+    })
+    .from(taskspaceTable)
+    .leftJoin(taskspaceLocalTable, eq(taskspaceLocalTable.taskspaceId, taskspaceTable.id));
+}
+
+/** Multi-table compatibility writes open one boundary or reuse their caller's transaction. */
+function write<T>(db: NeedsDB["db"], operation: (tx: Tx) => Promise<T>): Promise<T> {
+  return isDatabaseHandle(db)
+    ? withTx(db, (tx) => withActionService(tx, () => operation(tx)))
+    : withActionService(db, () => operation(db));
+}
+
+/** Includes retained attachments whose shared taskspace is currently absent. */
+export function getAllTaskspaceLocalMetadata({ db }: NeedsReader): Promise<TaskspaceLocal[]> {
+  return db.select().from(taskspaceLocalTable);
+}
 
 /**
  * List every workspace taskspace for CLI listing and scanning. Use {@link
  * getTaskspacesInNamespace} for board data.
  */
 export async function getAllTaskspaces({ db }: NeedsReader): Promise<Taskspace[]> {
-  return db.select().from(taskspaceTable);
+  return taskspaceRows(db);
 }
 
 /**
@@ -30,10 +57,9 @@ export async function getTaskspacesInNamespace({
   db,
   namespaceId,
 }: ReadsNamespace): Promise<Taskspace[]> {
-  return db
-    .select()
-    .from(taskspaceTable)
-    .where(or(eq(taskspaceTable.namespaceId, namespaceId), isNull(taskspaceTable.namespaceId)));
+  return taskspaceRows(db).where(
+    or(eq(taskspaceTable.namespaceId, namespaceId), isNull(taskspaceTable.namespaceId)),
+  );
 }
 
 type GetTaskspaceInNamespace = NeedsNamespace & { taskspaceId: string };
@@ -47,9 +73,7 @@ export async function getTaskspaceInNamespace({
   namespaceId,
   taskspaceId,
 }: GetTaskspaceInNamespace): Promise<Taskspace | undefined> {
-  return db
-    .select()
-    .from(taskspaceTable)
+  return taskspaceRows(db)
     .where(
       and(
         eq(taskspaceTable.id, taskspaceId),
@@ -68,7 +92,7 @@ type AddTaskspace = NeedsDB & {
   lastSeenAt?: Date;
 };
 export function addTaskspace(input: AddTaskspace): Promise<string> {
-  return withActionService(input.db, () => insertTaskspace(input));
+  return write(input.db, (tx) => insertTaskspace({ ...input, db: tx }));
 }
 
 /** Create database identity and placement without attaching a local directory. */
@@ -85,7 +109,7 @@ async function insertTaskspace({
   namespaceId,
   name = "",
   path,
-  pathKind = "workspace_relative",
+  pathKind,
   lastSeenAt,
 }: AddTaskspace): Promise<string> {
   assertNameWithinLimit(name, "Taskspace name");
@@ -97,23 +121,25 @@ async function insertTaskspace({
       scopeId,
       namespaceId,
       name,
-      path,
-      pathKind,
-      ...(lastSeenAt !== undefined && { lastSeenAt }),
       ...(timestamp !== undefined && { createdAt: timestamp, updatedAt: timestamp }),
     })
     .returning({ id: taskspaceTable.id });
+  if (path !== undefined || pathKind !== undefined || lastSeenAt !== undefined) {
+    await db
+      .insert(taskspaceLocalTable)
+      .values({ taskspaceId: row.id, path, pathKind, lastSeenAt });
+  }
   return row.id;
 }
 
 type UpdateTaskspace = NeedsTaskspace & {
   name?: string;
-  path?: string;
+  path?: string | null;
   pathKind?: PathKind;
-  lastSeenAt?: Date;
+  lastSeenAt?: Date | null;
 };
 export function updateTaskspace(input: UpdateTaskspace): Promise<void> {
-  return withActionService(input.db, () => writeTaskspace(input));
+  return write(input.db, (tx) => writeTaskspace({ ...input, db: tx }));
 }
 
 /** Change the label without moving directories or updating local observations. */
@@ -160,18 +186,12 @@ async function writeTaskspace({
   lastSeenAt,
 }: UpdateTaskspace): Promise<void> {
   if (name !== undefined) assertNameWithinLimit(name, "Taskspace name");
-  if (
-    name === undefined &&
-    path === undefined &&
-    pathKind === undefined &&
-    lastSeenAt === undefined
-  ) {
+  if (name === undefined) {
     const found = await db
       .select({ id: taskspaceTable.id })
       .from(taskspaceTable)
       .where(eq(taskspaceTable.id, taskspaceId));
     assertFound(found, `Taskspace taskspaceId=${taskspaceId}`);
-    return;
   }
   const timestamp =
     name === undefined ? undefined : boundTaskspaceTimestamp(db, "update", taskspaceId);
@@ -181,20 +201,35 @@ async function writeTaskspace({
       : timestamp === undefined
         ? Math.floor(Date.now() / 1000)
         : timestamp.getTime() / 1000;
-  const updated = await db
-    .update(taskspaceTable)
-    .set({
-      ...(name !== undefined && { name }),
+  if (name !== undefined) {
+    const updated = await db
+      .update(taskspaceTable)
+      .set({
+        name,
+        updatedAt: sql`CASE WHEN ${taskspaceTable.name} <> ${name} THEN ${seconds} ELSE ${taskspaceTable.updatedAt} END`,
+      })
+      .where(eq(taskspaceTable.id, taskspaceId))
+      .returning({ id: taskspaceTable.id });
+    assertFound(updated, `Taskspace taskspaceId=${taskspaceId}`);
+  }
+  if (path !== undefined || pathKind !== undefined || lastSeenAt !== undefined) {
+    const fields = {
       ...(path !== undefined && { path }),
       ...(pathKind !== undefined && { pathKind }),
       ...(lastSeenAt !== undefined && { lastSeenAt }),
-      ...(name !== undefined && {
-        updatedAt: sql`CASE WHEN ${taskspaceTable.name} <> ${name} THEN ${seconds} ELSE ${taskspaceTable.updatedAt} END`,
-      }),
-    })
-    .where(eq(taskspaceTable.id, taskspaceId))
-    .returning({ id: taskspaceTable.id });
-  assertFound(updated, `Taskspace taskspaceId=${taskspaceId}`);
+    };
+    const current = await db
+      .select({ id: taskspaceLocalTable.taskspaceId })
+      .from(taskspaceLocalTable)
+      .where(eq(taskspaceLocalTable.taskspaceId, taskspaceId))
+      .get();
+    if (current)
+      await db
+        .update(taskspaceLocalTable)
+        .set(fields)
+        .where(eq(taskspaceLocalTable.taskspaceId, taskspaceId));
+    else await db.insert(taskspaceLocalTable).values({ taskspaceId, ...fields });
+  }
 }
 
 type GetTaskspace = NeedsTaskspace;
@@ -202,7 +237,7 @@ export async function getTaskspace({
   db,
   taskspaceId,
 }: GetTaskspace): Promise<Taskspace | undefined> {
-  return db.select().from(taskspaceTable).where(eq(taskspaceTable.id, taskspaceId)).get();
+  return taskspaceRows(db).where(eq(taskspaceTable.id, taskspaceId)).get();
 }
 
 type DeleteTaskspace = NeedsTaskspace;

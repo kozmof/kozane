@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schema 19 and requires
+syncable database kind and `system.compose`. It supports schemas 19 and 20 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -69,7 +69,7 @@ assignments, conflict clauses, insert-select and runtime update generators.
 Captured timestamps are copied before query construction. Persistent SQL guards
 and raw SQL allocation coverage remain pending.
 
-A test-only fixture now connects persistent capture on all 12 application tables
+A test-only fixture now connects persistent capture on all 12 shared application tables
 to real service actions and execution hooks. It verifies group-wide effect order,
 parent and child attribution, no-op executions, finalized compositions, cascades
 and exact reconstruction across successive groups. Failed commits, replay roots
@@ -97,8 +97,13 @@ Taskspace records now expose transaction-bound database creation, label edits,
 location updates and deletion. Label edits preserve local observations, and
 location updates preserve both shared timestamps. CLI scans use the location
 API. Creation and label clocks use scoped bindings, and caught record failures
-abort their root. Physical local metadata storage and filesystem handler
-separation remain pending, so taskspace lifecycle kinds remain local-only.
+abort their root. Migration 0020 now moves paths and observations to
+`taskspace_local` without a foreign key to shared rows. Readers join metadata
+only for present taskspaces, while local recovery readers retain absent rows.
+Shared capture, validation and replacement exclude that table. JSON version 10
+exports local rows separately, including absent taskspaces. Imports of versions
+7 through 9 split their inline values without changing the original dump.
+Filesystem handler separation remains pending, so lifecycle kinds remain local-only.
 
 ## Version one
 
@@ -157,7 +162,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Integrate fresh execution scopes with root replay savepoints and check the latch before savepoint release in opt-in replay transactions.
 - [x] Wait for outstanding children and service work to settle before rollback and discard each failed root's execution scope.
 - [ ] Separate filesystem handlers from syncable database handlers. Refuse local-only children in generic compositions and named syncable handlers.
-- [ ] Move taskspace paths and observations into local metadata storage before baseline capture. Preserve metadata for absent taskspaces without cascading deletion.
+- [x] Move taskspace paths and observations into local metadata storage before baseline capture. Preserve metadata for absent taskspaces without cascading deletion.
 - [ ] Keep shared taskspace rename independent of directory movement and local observation timestamps.
 - [ ] Verify write coverage, caught failures, overlapping calls, outstanding children, nested execution order and serialized composition replay.
 - [ ] Verify all five taskspace file methods remain local-only and cannot mutate shared application rows.
@@ -168,6 +173,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Derive and test an internal acyclic restoration load plan from schema metadata and refuse unsupported table dependencies.
 - [x] Prototype isolated application projection validation with constraints, trigger invariants and exact read-back on libsql and Node WASM.
 - [x] Prototype atomic populated-row replacement and selected-history bookkeeping with active guards, suppressed mutation triggers and rollback checks on libsql and Node WASM.
+- [x] Verify populated migration, hidden retained taskspace attachments and shared restoration without remote attachment installation on libsql and Node WASM.
 - [ ] Add workspace and epoch identities, schema and encoding versions, baseline hashes and restoration selections.
 - [ ] Implement restartable initial baseline capture for populated and seeded databases with application writes blocked until activation.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.

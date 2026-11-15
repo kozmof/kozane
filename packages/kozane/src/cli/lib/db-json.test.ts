@@ -7,6 +7,7 @@ import { SQLiteTable, getTableConfig } from "drizzle-orm/sqlite-core";
 import { afterEach, describe, expect, it } from "vitest";
 import * as schema from "../../db/schema";
 import { runMigrations } from "./db";
+import type { DbJsonDump } from "./db-json/format.js";
 import {
   TABLES,
   dumpLimitWarnings,
@@ -64,18 +65,19 @@ async function seedDb(dbUrl: string): Promise<void> {
           args: ["inventory-1", "namespace-1", "Kept", 600, 720],
         },
         {
-          sql: "INSERT INTO taskspace (id, namespace_id, scope_id, name, path, path_kind, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO taskspace (id, namespace_id, scope_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
           args: [
             "taskspace-1",
             "namespace-1",
             "scope-1",
             "Main",
-            ".kozane/taskspaces/main",
-            "workspace_relative",
-            1_800_000_000_000,
             1_700_000_000_000,
             1_700_000_000_001,
           ],
+        },
+        {
+          sql: "INSERT INTO taskspace_local(taskspace_id,path,path_kind,last_seen_at) VALUES(?,?,?,?)",
+          args: ["taskspace-1", ".kozane/taskspaces/main", "workspace_relative", 1_800_000_000_000],
         },
         // Set timestamps explicitly to avoid the epoch default.
         {
@@ -145,6 +147,7 @@ describe("db JSON export/import", () => {
       warp: 1,
       inventory: 1,
       taskspace: 1,
+      taskspace_local: 1,
       card: 2,
       glue: 1,
       glue_rel: 2,
@@ -199,6 +202,54 @@ describe("db JSON export/import", () => {
     await expect(importDbJson(dbUrl, legacy)).rejects.toThrow(/kozane db migrate/);
   });
 
+  function legacyTables(tables: DbJsonDump["tables"]) {
+    const { taskspace_local, ...shared } = structuredClone(tables);
+    return {
+      ...shared,
+      taskspace: shared.taskspace.map((row) => {
+        const local = taskspace_local.find((local) => local.taskspace_id === row.id);
+        return {
+          ...row,
+          path: local?.path ?? null,
+          path_kind: local?.path_kind ?? "workspace_relative",
+          last_seen_at: local?.last_seen_at ?? null,
+        };
+      }),
+    };
+  }
+
+  it("imports version 9 inline taskspace attachments without mutating the original dump", async () => {
+    const sourceUrl = await migratedDbUrl("v9-source.db");
+    const targetUrl = await migratedDbUrl("v9-target.db");
+    await seedDb(sourceUrl);
+    const source = await exportDbJson(sourceUrl);
+    const legacy = { ...source, version: 9, tables: legacyTables(source.tables) };
+    const original = JSON.stringify(legacy);
+    await importDbJson(targetUrl, legacy);
+    expect(JSON.stringify(legacy)).toBe(original);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+  });
+
+  it("round-trips retained local metadata for absent taskspaces", async () => {
+    const sourceUrl = await migratedDbUrl("local-source.db");
+    const targetUrl = await migratedDbUrl("local-target.db");
+    await seedDb(sourceUrl);
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO taskspace_local(taskspace_id,path,path_kind,last_seen_at) VALUES('absent','local/retained','workspace_relative',0)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.tables.taskspace.some((row) => "path" in row || "last_seen_at" in row)).toBe(
+      false,
+    );
+    expect((await importDbJson(targetUrl, source)).taskspace_local).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+  });
+
   it("reads a version 7 dump, which predates scope_area, as having no frames", async () => {
     const sourceUrl = await migratedDbUrl("v7-source.db");
     const targetUrl = await migratedDbUrl("v7-target.db");
@@ -209,7 +260,7 @@ describe("db JSON export/import", () => {
     const legacy = {
       ...dump,
       version: 7,
-      tables: { ...dump.tables, scope_area: undefined },
+      tables: { ...legacyTables(dump.tables), scope_area: undefined },
     };
     delete (legacy.tables as Record<string, unknown>).scope_area;
 
@@ -229,7 +280,7 @@ describe("db JSON export/import", () => {
     // Version 8 has neither the `inventory` table nor the two columns it added to `card`.
     const dump = await exportDbJson(sourceUrl);
     const tables: Record<string, unknown> = {
-      ...dump.tables,
+      ...legacyTables(dump.tables),
       card: dump.tables.card.map(({ inventory_id: _id, inventory_slot: _slot, ...row }) => row),
     };
     delete tables.inventory;
@@ -541,25 +592,25 @@ describe("import reference validation", () => {
 
   it("rejects a workspace-relative taskspace path that leaves the workspace", async () => {
     await expectRejectedImport((tables) => {
-      tables.taskspace[0].path = "../../elsewhere";
+      tables.taskspace_local[0].path = "../../elsewhere";
     }, "taskspace taskspace-1: workspace-relative path leaves the workspace");
   });
 
   it("rejects an unknown taskspace path kind", async () => {
     await expectRejectedImport((tables) => {
-      tables.taskspace[0].path_kind = "remote";
+      tables.taskspace_local[0].path_kind = "remote";
     }, 'taskspace taskspace-1: unknown path kind "remote"');
   });
 
   it("rejects absolute taskspace paths unless allowed", async () => {
     await expectRejectedImport((tables) => {
-      tables.taskspace[0].path = "/home/someone";
-      tables.taskspace[0].path_kind = "absolute";
+      tables.taskspace_local[0].path = "/home/someone";
+      tables.taskspace_local[0].path_kind = "absolute";
     }, /--allow-absolute-paths/);
 
     const dump = await seededDump();
-    dump.tables.taskspace[0].path = "/home/someone";
-    dump.tables.taskspace[0].path_kind = "absolute";
+    dump.tables.taskspace_local[0].path = "/home/someone";
+    dump.tables.taskspace_local[0].path_kind = "absolute";
     const targetUrl = await migratedDbUrl(`refs-target-${sequence++}.db`);
     await expect(
       importDbJson(targetUrl, dump, { allowAbsolutePaths: true }),

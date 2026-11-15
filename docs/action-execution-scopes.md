@@ -10,14 +10,14 @@ Production log tables, application routing and guard activation remain pending.
 It installs handlers for every declared syncable database service kind and
 the built-in `system.compose` interpreter. Each database handler forwards its
 complete routing arguments and body to the corresponding `InTx` service.
-The registry currently supports schema 19 only.
+The registry currently supports schemas 19 and 20.
 
 Supply a complete `LocalRecoveryHandlersV1` map when constructing the registry.
 Missing handlers, wrong handler roles, unknown kinds and attempts to replace a
 database handler are refused. Local-only kinds remain excluded from recording
 and intent replay. The registry invokes host recovery callbacks only through
-its explicit `recover` operation. Durable filesystem recovery and local
-metadata separation still need implementation.
+its explicit `recover` operation. Durable filesystem recovery and separation of
+filesystem operations from shared handlers still need implementation.
 
 Use the registry with `runActionGroup`, `composeActions` or a replay session.
 Each execution context supplies the guarded `db`, current `actions` frame and
@@ -216,9 +216,17 @@ These APIs and the legacy record wrappers share the action failure latch, includ
 pre-SQL validation failures. The legacy combined update still changes its requested
 fields in one statement, and path-only calls preserve both shared timestamps.
 
-Local taskspace fields still live in the application table. Physical storage
-separation, filesystem handler separation and production action routing remain
-pending. Taskspace lifecycle kinds therefore remain local-only in the service
+Migration 0020 moves paths, path kinds and observations into `taskspace_local`.
+That table has no foreign key to shared taskspaces. Deletion and restoration
+retain its rows, and ordinary readers hide attachments for absent identities.
+`getAllTaskspaceLocalMetadata` includes retained rows for local recovery. Shared
+capture and restoration exclude local metadata. Legacy combined writes now
+commit shared and local changes in one adapter transaction. Explicit `InTx`
+calls reuse their caller's handle, including on adapters that reuse a connection
+object. Core supplies a distinct transaction handle for each write callback.
+
+Filesystem handler separation and production action routing remain pending.
+Taskspace lifecycle kinds therefore remain local-only in the service
 registry. Raw SQL allocations and system import handlers also need integration.
 Migration 0019's fallback needs replacement before activation. These helpers do
 not enable mandatory SQL guards or route production writes.

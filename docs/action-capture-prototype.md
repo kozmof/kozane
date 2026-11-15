@@ -68,7 +68,7 @@ configure both flags. Browser runtime verification remains pending.
 
 `packages/kozane/src/test-utils/action-capture.ts` connects persistent capture to
 the execution scope's entry, leave and completion hooks. It derives columns and
-complete primary keys from all 12 exported application tables. Its baseline
+complete primary keys from all 12 shared application tables. Its baseline
 includes populated rows before capture guards are installed. The `capture_*`
 tables and guards exist only in test databases.
 
@@ -91,9 +91,9 @@ table, namespace cascades, inventory placement cleanup, orphan glue cleanup,
 parent and child attribution, and zero-effect children. They also cover caught
 service errors, malformed trigger-generated text, corrupt before images, phantom
 capture from skipped inserts, failed commits and replay root isolation. Later
-groups preserve earlier run, execution and effect rows. Taskspace rows still
-contain local fields in this fixture. Their shared and local split remains required
-before production baseline capture.
+groups preserve earlier run, execution and effect rows. Local taskspace paths and
+observations live in `taskspace_local` after migration 0020 and are excluded from
+shared capture and projection validation.
 
 The local Node libsql adapter executes transaction commits through the driver's
 `executeMultiple` method. In the installed driver, a failed prepared `COMMIT`
@@ -153,8 +153,8 @@ stored in INTEGER columns. A failed load rolls back rows and trigger removal.
 The source database and capture history remain unchanged. Populated or
 incompatible validation destinations are refused before loading.
 
-These checks pass on libsql and Node WASM. Epoch selection, shared and local
-metadata separation, production restore mode and live installation remain pending.
+These checks pass on libsql and Node WASM. Epoch selection, production restore
+mode and live installation remain pending.
 
 ## Replace populated rows in the fixture
 
@@ -179,9 +179,10 @@ history. Validation errors, installation SQL errors and read-back mismatches
 leave rows, selection and markers unchanged. Ordinary unstamped writes remain
 refused after success and rollback.
 
-This method exists only in test fixtures. It still includes every current
-taskspace column, including local paths and observations. Production shared-row
-replacement must first separate that metadata and preserve it independently.
+This method exists only in test fixtures. It replaces shared taskspace identity
+while preserving local metadata for present and absent taskspaces. Restored rows
+use the device's current attachment, and fresh validation destinations receive no
+source directory attachments. Tests check this alongside exact row installation.
 These tests do not establish epoch activation, durable recovery or browser support.
 
 ## Remaining activation work

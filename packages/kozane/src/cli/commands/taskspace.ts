@@ -16,7 +16,7 @@ import { storedLocation } from "../../lib/server/taskspace-path.js";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import type { WorkspaceConfig } from "../lib/config.js";
-import type { DB } from "../../db/tx.js";
+import { withTx, type DB } from "../../db/tx.js";
 import {
   scanTaskspaces,
   diffTaskspaces,
@@ -31,6 +31,7 @@ import {
   getAllTaskspaces,
   getTaskspacesInNamespace,
   updateTaskspaceLocation,
+  updateTaskspaceLocationInTx,
 } from "../../db/api/taskspace.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { taskspaceParentDir } from "../../lib/taskspace-location.js";
@@ -88,7 +89,7 @@ async function scanWithin(
   const searchRoots = config.taskspace.searchRoots.map((r) => (isAbsolute(r) ? r : join(root, r)));
 
   const found = scanTaskspaces(searchRoots);
-  const dbRecords = await db.select().from(taskspaceTable);
+  const dbRecords = await getAllTaskspaces({ db });
   const taskspaceIds = [
     ...new Set([...dbRecords.map(({ id }) => id), ...found.map(({ taskspaceId }) => taskspaceId)]),
   ];
@@ -154,13 +155,19 @@ async function scanWithin(
           workspaceDefault,
         });
         const { pathKind, storedPath } = storedLocation(root, taskspace.path);
-        await db.insert(taskspaceTable).values({
-          id: taskspace.taskspaceId,
-          namespaceId: placement.namespaceId,
-          name: basename(taskspace.path),
-          path: storedPath,
-          pathKind,
-          lastSeenAt: new Date(),
+        await withTx(db, async (tx) => {
+          await tx.insert(taskspaceTable).values({
+            id: taskspace.taskspaceId,
+            namespaceId: placement.namespaceId,
+            name: basename(taskspace.path),
+          });
+          await updateTaskspaceLocationInTx({
+            db: tx,
+            taskspaceId: taskspace.taskspaceId,
+            path: storedPath,
+            pathKind,
+            lastSeenAt: new Date(),
+          });
         });
         if (
           placement.namespaceId === taskspace.namespaceId ||

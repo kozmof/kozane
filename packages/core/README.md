@@ -96,8 +96,15 @@ creation, movement and removal.
 Location and observation updates preserve `createdAt` and `updatedAt`. A label
 request changes `updatedAt` only when the stored name changes. The existing
 `addTaskspace` and combined `updateTaskspace` methods remain available. Path-only
-calls to the combined update also preserve both timestamps. Local taskspace fields
-still share the current database table while their storage split is pending.
+calls to the combined update also preserve both timestamps.
+
+Migration 0020 moves paths, path kinds and observations into `taskspace_local`.
+The `taskspaceTable` schema export contains shared fields only. Read host views
+through taskspace record readers, which join the device's local attachment.
+Raw schema consumers can use `taskspaceLocalTable` for local fields.
+Deletion retains local metadata for absent taskspaces. Ordinary readers hide
+those attachments, and `getAllTaskspaceLocalMetadata` includes them for recovery.
+Legacy methods that change both tables use one adapter transaction.
 
 ## Shared data and helpers
 

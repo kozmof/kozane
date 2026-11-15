@@ -514,10 +514,11 @@ it("refuses missing, incorrectly classified and replacement local recovery regis
 it("limits compatibility to the audited schema and rejects complete routing errors without writes", async () => {
   const f = await fixture();
   expect(f.registry.supportsSchema(19)).toBe(true);
-  expect(f.registry.supportsSchema(20)).toBe(false);
+  expect(f.registry.supportsSchema(20)).toBe(true);
+  expect(f.registry.supportsSchema(21)).toBe(false);
   const before = await snapshot(f.db);
   await expect(
-    f.run("cards.create", requests["cards.create"], undefined, value, 20),
+    f.run("cards.create", requests["cards.create"], undefined, value, 21),
   ).rejects.toMatchObject({ code: "action-contract-required" });
   await expect(
     f.run("cards.update", { args: namespace, body: { content: "Changed" } }),
