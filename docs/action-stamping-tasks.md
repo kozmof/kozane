@@ -42,7 +42,7 @@ reconciliation, outcome handling and failure classification remain pending.
 Guarded action handles now bind generated IDs in the namespace, partition, layer,
 scope, scope-area, warp, inventory, glue and card record helpers. Single and batch
 card creation bind their shared timestamps. Text updates bind clocks while
-preserving unchanged-text timestamps. Taskspace and raw ORM allocations still
+preserving unchanged-text timestamps. Taskspace and raw SQL allocations still
 need integration before activation.
 
 Stacking, squash, layer and partition removal, board scope removal and namespace
@@ -61,6 +61,12 @@ pending.
 workspace-wide repair service in its action transaction. Replay can resolve
 changed rows or a no-op while preserving the original request and timestamps.
 CLI repair routing, including the separate post-import repair, remains pending.
+
+The real service registry now requires its owning live action handle and binding
+provider. Guarded ORM writes refuse implicit generated values, primary-key
+assignments, conflict clauses, insert-select and runtime update generators.
+Captured timestamps are copied before query construction. Persistent SQL guards
+and raw SQL allocation coverage remain pending.
 
 ## Version one
 
@@ -105,6 +111,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Wrap every service write in a stamped adapter transaction, including direct layer creation and rename.
 - [x] Add caller-owned transaction variants for stacking, squash, layer and partition removal, board scope removal and namespace administration.
 - [ ] Require active action groups in transaction-bound record and service methods.
+- [x] Require matching live execution scopes for real service registry dispatch and enforce ORM write restrictions through opted-in handles.
 - [x] Define and register the opt-in `system.repair` action for explicitly requested inventory repair.
 - [ ] Add stamped import and route CLI repair operations through persistent action boundaries.
 - [x] Replace no-op upserts with existence checks inside serialized write transactions.

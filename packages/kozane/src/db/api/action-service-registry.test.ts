@@ -23,13 +23,47 @@ import {
   type CompositionAccess,
 } from "../../../../core/src/actions/composition.js";
 import { runActionGroup } from "../../../../core/src/actions/execution.js";
+import {
+  defineActionRegistry,
+  type ActionHandlerContext,
+} from "../../../../core/src/actions/registry.js";
+import { ActionScopeRequiredError } from "../../../../core/src/actions/allocations.js";
 import { withActionReplayTransaction } from "../../../../core/src/actions/replay.js";
 import {
   createServiceActionRegistryV1,
   type LocalRecoveryHandlersV1,
+  type ServiceActionContext,
 } from "../../../../core/src/actions/service-registry.js";
 
 const value = createServiceContext();
+type Execution = ActionHandlerContext<ServiceActionContext>;
+function runNamed(
+  f: Awaited<ReturnType<typeof fixture>>,
+  operation: (execution: Execution) => Promise<unknown>,
+  enter?: (tx: Tx) => Promise<void>,
+) {
+  const registry = defineActionRegistry<{ named: unknown }, ServiceActionContext>({
+    contractVersion: 1,
+    schemaVersions: [19],
+    definitions: {
+      named: {
+        eligibility: "syncable",
+        prepare: (input) => input,
+        replay: (_input, execution) => operation(execution),
+      },
+    },
+  });
+  return runActionGroup({
+    db: f.db,
+    registry,
+    schemaVersion: 19,
+    invocation: { id: "named", kind: "named", contractVersion: 1, input: {} },
+    bindings: createActionBindings({ mode: "record", allocateId: f.allocate, now: f.now }),
+    createContext: (actions, db) => ({ actions, db, value }),
+    enter,
+    complete: f.complete,
+  });
+}
 const stamp = new Date(1600000000000);
 function recoveryHandlers() {
   const recover = vi.fn(async () => {
@@ -243,6 +277,96 @@ it("covers every syncable version 1 kind with real service handlers or system.co
     .filter((kind) => actionContractsV1[kind as ActionKindV1] === "syncable")
     .sort();
   expect([...Object.keys(requests), "system.compose"].sort()).toEqual(expected);
+});
+
+it("refuses direct service registry dispatch through an unscoped transaction", async () => {
+  const f = await fixture();
+  const before = await snapshot(f.db);
+  let raw!: Tx;
+  await expect(
+    runNamed(
+      f,
+      async (execution) => {
+        await execution.context.db.run(sql`UPDATE card SET pos_x=123 WHERE id='c1'`);
+        try {
+          await f.registry.execute("cards.create", requests["cards.create"], {
+            ...execution,
+            context: { ...execution.context, db: raw },
+          });
+        } catch {
+          /* The binding provider still identifies the failed owning scope. */
+        }
+      },
+      async (tx) => {
+        raw = tx;
+      },
+    ),
+  ).rejects.toBeInstanceOf(ActionScopeRequiredError);
+  expect(await snapshot(f.db)).toEqual(before);
+  expect(f.allocate).not.toHaveBeenCalled();
+  expect(f.now).not.toHaveBeenCalled();
+});
+
+it("latches a mismatched binding provider even if a named handler catches it", async () => {
+  const f = await fixture();
+  const before = await snapshot(f.db);
+  await expect(
+    runNamed(f, async (execution) => {
+      await execution.context.db.run(sql`UPDATE card SET pos_x=123 WHERE id='c1'`);
+      try {
+        await f.registry.execute("cards.create", requests["cards.create"], {
+          ...execution,
+          bindings: createActionBindings({ mode: "record", allocateId: f.allocate, now: f.now }),
+        });
+      } catch {
+        /* Scope identity failures remain latched. */
+      }
+    }),
+  ).rejects.toBeInstanceOf(ActionScopeRequiredError);
+  expect(await snapshot(f.db)).toEqual(before);
+  expect(await f.history()).toEqual([]);
+  expect(f.allocate).not.toHaveBeenCalled();
+});
+
+it.each(["routing", "mode"] as const)(
+  "latches a caught registry %s failure inside a named handler",
+  async (kind) => {
+    const f = await fixture();
+    const before = await snapshot(f.db);
+    await expect(
+      runNamed(f, async (execution) => {
+        await execution.context.db.run(sql`UPDATE card SET pos_x=123 WHERE id='c1'`);
+        try {
+          if (kind === "routing")
+            await f.registry.execute(
+              "cards.update",
+              { args: namespace, body: { content: "Changed" } },
+              execution,
+            );
+          else await f.registry.replay("cards.create", requests["cards.create"], execution);
+        } catch {
+          /* Registry failures must not commit earlier SQL. */
+        }
+      }),
+    ).rejects.toThrow(kind === "routing" ? "routing arguments" : "recorded bindings");
+    expect(await snapshot(f.db)).toEqual(before);
+    expect(await f.history()).toEqual([]);
+  },
+);
+
+it("refuses retained execution contexts after their owning frame closes", async () => {
+  const f = await fixture();
+  const before = await snapshot(f.db);
+  let retained!: Execution;
+  await runNamed(f, async (execution) => {
+    retained = execution;
+  });
+  await expect(
+    f.registry.execute("cards.create", requests["cards.create"], retained),
+  ).rejects.toThrow("does not own");
+  expect(await snapshot(f.db)).toEqual(before);
+  expect(f.allocate).not.toHaveBeenCalled();
+  expect(await f.history()).toHaveLength(1);
 });
 it.each(Object.entries(requests))(
   "records and replays %s through real services and bound allocations",

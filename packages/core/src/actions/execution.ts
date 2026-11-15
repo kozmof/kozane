@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import { bindActionServiceFrame } from "./service-frame.js";
 import { bindActionAllocations } from "./allocations.js";
+import { actionWritePolicy, ActionWriteError } from "./write-policy.js";
 import { withTx, type DB, type Tx } from "../database.js";
 import { prepareInput } from "../services/prepare-input.js";
 import { actionBindingPath, type ActionBindingMap, type ActionBindings } from "./bindings.js";
@@ -156,6 +157,12 @@ export async function runActionGroupAtBoundary<Inputs extends object, C>(
     };
     function guardedHandle(frame: Frame): Tx {
       const proxies = new WeakMap<object, object>();
+      type WriteBuilder = {
+        policy: ReturnType<typeof actionWritePolicy>;
+        operation: "insert" | "update";
+        input: boolean;
+      };
+      const writes = new WeakMap<object, WriteBuilder>();
       const executors = new Set(["run", "all", "get", "execute"]);
       const hidden = new Set(["session", "$client", "_", "dialect"]);
       function guard(target: object): object {
@@ -187,6 +194,29 @@ export async function runActionGroupAtBoundary<Inputs extends object, C>(
                 )
                   return sqlCall(frame, () => value.apply(object, args));
                 try {
+                  let write = writes.get(object);
+                  if (property === "insert" || property === "update")
+                    write = {
+                      policy: actionWritePolicy(args[0]),
+                      operation: property,
+                      input: true,
+                    };
+                  else if (write) {
+                    if (property === "onConflictDoNothing" || property === "onConflictDoUpdate")
+                      throw new ActionWriteError("Action inserts do not support conflict clauses");
+                    if (write.input && write.operation === "insert" && property === "select")
+                      throw new ActionWriteError(
+                        "Action inserts require explicit values instead of insert-select",
+                      );
+                    if (
+                      write.input &&
+                      ((write.operation === "insert" && property === "values") ||
+                        (write.operation === "update" && property === "set"))
+                    ) {
+                      args[0] = write.policy[write.operation](args[0]);
+                      write = { ...write, input: false };
+                    }
+                  }
                   const result: unknown = value.apply(object, args);
                   if (result instanceof Promise) {
                     const tracked = result.catch((cause: unknown) => {
@@ -195,7 +225,11 @@ export async function runActionGroupAtBoundary<Inputs extends object, C>(
                     observe(tracked, frame.sql);
                     return observe(tracked, frame.pending);
                   }
-                  return result !== null && typeof result === "object" ? guard(result) : result;
+                  if (result !== null && typeof result === "object") {
+                    if (write) writes.set(result, write);
+                    return guard(result);
+                  }
+                  return result;
                 } catch (cause) {
                   throw fail(cause);
                 }

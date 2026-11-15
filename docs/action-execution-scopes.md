@@ -26,6 +26,13 @@ Each execution context supplies the guarded `db`, current `actions` frame and
 Replay validates against the executing host's limits and resolves layout against
 its current rows while retaining the original envelope and recorded bindings.
 
+Service registry dispatch verifies that the transaction handle belongs to a live
+execution frame and uses that frame's binding provider. Direct calls with an
+ordinary transaction or a different provider raise `ActionScopeRequiredError`.
+Closed or suspended frames fail ownership checks. Registry validation and mode
+errors share the frame's failure latch even when a named handler catches them.
+Explicit host recovery remains a separate operation.
+
 Handler semantics, invocation shapes and allocation paths belong to contract
 version 1. Incompatible service changes require a new registry version. This
 factory is an internal opt-in integration and does not install action history,
@@ -92,7 +99,7 @@ allocate values or execute SQL while its child owns the frame. Queries built
 before the child started are checked again when executed. Child entry is also
 refused while parent SQL remains outstanding.
 
-The guarded handle supports ordinary query builders, relational reads and
+The guarded handle supports query builders, relational reads and
 transaction-bound resource services. It hides raw transaction internals and
 nested transaction callbacks. Handles retained after their frame closes cannot
 execute SQL. Trusted persistence hooks receive the raw transaction for log and
@@ -110,6 +117,28 @@ Stacking, squash, layer and partition removal, board scope removal and namespace
 administration now expose service and record variants that reuse the caller's
 transaction. Their service wrappers share the current failure latch. The ordinary
 service entry points open one adapter transaction and call those same variants.
+
+## Guard ORM writes
+
+`actions/write-policy.ts` checks inserts and updates constructed through guarded
+handles, including builders returned by `with`. Inserts require explicit primary
+keys and values for columns with runtime defaults. Every row in a batch is checked
+before query construction can invoke a generator. Generated fields cannot use SQL
+expressions. Card insert timestamps must be valid Dates whose stored seconds are
+nonzero. Row accessors are refused, and Dates are copied before the query retains
+them.
+
+ORM updates cannot assign primary-key columns, including composite keys and table
+aliases. Insert-select and conflict clauses are refused. Tables with ORM update
+generators cannot be updated through guarded handles because this Drizzle version
+evaluates those generators even when an explicit value is supplied. Remove those
+generators and supply values through action bindings before using such tables.
+
+Violations latch a root failure before the unsupported SQL runs. Ordinary
+transactions retain their existing defaults, generators and conflict behavior.
+These checks supplement the persistent SQL guards required before activation.
+Raw SQL and trusted persistence hooks remain internal interfaces, and persistent
+primary-key and write-mode enforcement remains pending.
 
 ## Invocations and allocations
 
@@ -165,10 +194,9 @@ migration 0019's wall-clock fallback. Invalid times and unbound allocations latc
 the root failure even when a direct record caller catches the error. Valid
 historical timestamps before the Unix epoch remain supported.
 
-Taskspace writes, direct ORM inserts and system import handlers need
-further integration. Migration 0019's
-fallback also needs replacement before activation. These helpers do not enable
-mandatory action guards or install production handlers.
+Taskspace writes, raw SQL allocations and system import handlers need further
+integration. Migration 0019's fallback also needs replacement before activation.
+These helpers do not enable mandatory SQL guards or route production writes.
 
 ## Replay roots inside one transaction
 
@@ -216,6 +244,9 @@ adapters. It checks namespace ownership, local-only refusal, host limits,
 composition rollback and unchanged original envelopes.
 Repair tests cover explicit targets, changed replay results, no-op execution
 records, half placements, late failures and savepoint isolation.
+Write-policy tests cover default refusal, conflict modes, primary keys, aliases,
+batch validation and copied timestamps. Registry tests also refuse unscoped,
+mismatched and retained execution contexts.
 
 ```sh
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-execution.test.ts
@@ -230,6 +261,8 @@ pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-service-registry.test.ts
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-repair.test.ts
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-repair.test.ts
+pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-write-policy.test.ts
+pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-write-policy.test.ts
 ```
 
 Production integration must supply persistent action/context hooks, route all

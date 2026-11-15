@@ -9,8 +9,10 @@ import * as namespaces from "../services/namespaces.js";
 import type { ServiceContext } from "../services/context.js";
 import { actionContractsV1, type ActionKindV1, type SyncableActionKindV1 } from "./contracts.js";
 import { createCompositionRegistryV1, type CompositionContext } from "./composition.js";
-import type { ActionHandlersV1 } from "./registry.js";
+import type { ActionHandlersV1, ActionHandlerContext } from "./registry.js";
 import { runRequestedRepairInTx } from "./repair.js";
+import { requireActionAllocations } from "./allocations.js";
+import { withActionService } from "./service-frame.js";
 
 export type ServiceActionContext<C extends ServiceContext = ServiceContext> = CompositionContext<C>;
 export type LocalRecoveryHandlersV1<C extends ServiceContext = ServiceContext> = Pick<
@@ -209,5 +211,35 @@ export function createServiceActionRegistryV1<C extends ServiceContext = Service
         namespaces.setDefaultInTx(context.db, context.value, args.namespaceId),
     },
   };
-  return createCompositionRegistryV1<C>([19], { ...recoveryHandlers, ...handlers });
+  const registry = createCompositionRegistryV1<C>([19], { ...recoveryHandlers, ...handlers });
+  const scoped = (
+    execution: ActionHandlerContext<ServiceActionContext<C>>,
+    operation: () => Promise<unknown>,
+  ): Promise<unknown> => {
+    try {
+      requireActionAllocations(execution.context.db, execution.bindings);
+      return withActionService(execution.context.db, operation);
+    } catch (cause) {
+      const rejected = Promise.reject(cause);
+      void rejected.catch(() => {});
+      return rejected;
+    }
+  };
+  return Object.freeze({
+    ...registry,
+    execute<K extends ActionKindV1>(
+      kind: K,
+      input: unknown,
+      execution: ActionHandlerContext<ServiceActionContext<C>>,
+    ) {
+      return scoped(execution, () => registry.execute(kind, input, execution));
+    },
+    replay<K extends ActionKindV1>(
+      kind: K,
+      input: unknown,
+      execution: ActionHandlerContext<ServiceActionContext<C>>,
+    ) {
+      return scoped(execution, () => registry.replay(kind, input, execution));
+    },
+  });
 }

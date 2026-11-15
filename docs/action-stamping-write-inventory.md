@@ -45,6 +45,13 @@ Tests record and replay each database kind, check namespace ownership and apply
 the executing host's limits. See the
 [service registry](action-execution-scopes.md#dispatch-real-service-actions).
 
+Registry recording and replay now require a matching live execution handle and
+binding provider. Guarded ORM builders refuse implicit IDs and timestamps,
+primary-key assignments, conflict clauses and insert-select. Runtime update
+generators are also refused. Violations fail the root even when caught. These
+checks are opt-in and leave ordinary transactions unchanged. Persistent SQL
+guards and raw SQL allocation coverage remain pending.
+
 The service registry also installs `system.repair` for explicit workspace-wide
 inventory repair. Its envelope is `{args: {}, body: {target: "inventories"}}`.
 It reuses the action transaction, preserves timestamps and allocates no IDs or
@@ -159,8 +166,8 @@ source refuses replay without extending the map. Layout and inventory naming
 still resolve against the current rows.
 
 Ordinary handles retain existing defaults. Production application routing,
-taskspace allocations and raw ORM inserts remain pending. The migration 0019
-timestamp fallback remains unchanged and must be replaced before activation.
+taskspace allocations and raw SQL allocation coverage remain pending. The
+migration 0019 timestamp fallback remains unchanged and must be replaced before activation.
 `actions/import-timestamps.ts` resolves missing or zero creation
 timestamps through a binding keyed by the imported card ID. A missing or zero
 update timestamp follows creation time. Supplied nonzero timestamps and the
