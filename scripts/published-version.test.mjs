@@ -26,3 +26,20 @@ test("network failures stop publication", async () => {
     /offline/,
   );
 });
+test("retries temporary DNS errors", async () => {
+  let calls = 0;
+  const result = await publishedVersion("@kozane/core", "0.2.0", "sha512-test", async () => {
+    if (++calls < 3) throw new Error("fetch failed", { cause: { code: "EAI_AGAIN" } });
+    return { status: 200, json: async () => metadata };
+  });
+  assert.equal(result, true);
+  assert.equal(calls, 3);
+});
+test("persistent DNS errors stop after three attempts with actionable context", async () => {
+  let calls = 0;
+  await assert.rejects(publishedVersion("x", "1.0.0", "sha512-test", async () => {
+    calls++;
+    throw new Error("fetch failed", { cause: { code: "EAI_AGAIN" } });
+  }), /EAI_AGAIN.*proxy settings/);
+  assert.equal(calls, 3);
+});
