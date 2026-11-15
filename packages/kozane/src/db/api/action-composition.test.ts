@@ -19,6 +19,10 @@ import {
   type CompositionReadHandle,
 } from "../../../../core/src/actions/composition.js";
 import type { ActionGroupResult } from "../../../../core/src/actions/execution.js";
+import {
+  withActionReplayTransaction,
+  type ActionReplaySession,
+} from "../../../../core/src/actions/replay.js";
 import type { ActionHandlersV1 } from "../../../../core/src/actions/registry.js";
 
 type Handlers = {
@@ -128,9 +132,9 @@ async function fixture() {
       complete,
     });
   };
-  const replay = (group: ActionGroupResult) =>
+  const replay = (group: ActionGroupResult, session?: ActionReplaySession) =>
     replayComposition({
-      db,
+      ...(session ? { session } : { db }),
       schemaVersion: 19,
       registry,
       value: undefined,
@@ -188,6 +192,51 @@ it("records complete direct calls and resolved read arguments, then replays with
   expect(replay.invocation).toEqual(origin.invocation);
   expect(replay.generated).toEqual(origin.generated);
   expect(await f.rows()).toEqual([{ id: "id-2", content: "edited" }]);
+});
+
+it("replays a composition and its named descendants inside a recoverable root savepoint", async () => {
+  const f = await fixture();
+  const callback = vi.fn(async (access: CompositionAccess<typeof f.readers>) => {
+    const { id } = (await access.dispatch(["create"], "cards.create", create)) as { id: string };
+    await access.read("find", { content: "initial" });
+    await access.dispatch(["move", id], "cards.move", {
+      args: { namespaceId: "n" },
+      body: { cardIds: [id], targetNamespaceId: "other" },
+    });
+  });
+  const origin = await f.record(callback);
+  await f.db.run(sql`DELETE FROM composition_card`);
+  await f.db.run(sql`DELETE FROM composition_log`);
+  const failure = new Error("descendant failed");
+  f.updated.mockImplementationOnce(async (input, { context }) => {
+    await context.db.run(
+      sql`UPDATE composition_card SET content='partial' WHERE id=${input.args.cardId}`,
+    );
+    throw failure;
+  });
+  await withActionReplayTransaction(f.db, async (session) => {
+    await expect(f.replay(origin, session)).rejects.toBe(failure);
+    expect(await session.db.select({ id: sql<string>`id` }).from(sql`composition_card`)).toEqual(
+      [],
+    );
+    expect(
+      await session.db.select({ input: sql<string>`input` }).from(sql`composition_log`),
+    ).toEqual([]);
+    const result = await f.replay(origin, session);
+    expect(result.executions.map(({ kind }) => kind)).toEqual([
+      "system.compose",
+      "cards.create",
+      "cards.move",
+      "cards.update",
+    ]);
+    expect(result.generated).toEqual(origin.generated);
+  });
+  expect(await f.rows()).toEqual([{ id: "id-2", content: "moved" }]);
+  expect(await f.logs()).toHaveLength(1);
+  expect(callback).toHaveBeenCalledOnce();
+  expect(f.read).toHaveBeenCalledOnce();
+  expect(f.created).toHaveBeenCalledTimes(3);
+  expect(f.updated).toHaveBeenCalledTimes(3);
 });
 
 it("records only direct children and lets a named handler invoke its descendants once", async () => {

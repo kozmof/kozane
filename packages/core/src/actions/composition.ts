@@ -17,6 +17,7 @@ import {
 } from "./execution.js";
 import { prepareActionInputV1 } from "./invocation.js";
 import { createActionRegistryV1, type ActionHandlersV1 } from "./registry.js";
+import type { ActionReplaySession } from "./replay.js";
 import { withActionService } from "./service-frame.js";
 
 export type CompositionReadHandle = Pick<Tx, "select" | "selectDistinct" | "query">;
@@ -252,28 +253,33 @@ export async function composeActions<C, R extends Readers>(
 
 /** Interpret the frozen list with no callback or recording-time read helper execution. */
 export function replayComposition<C>(
-  options: Persistence & {
-    readonly db: DB;
-    readonly schemaVersion: number;
-    readonly registry: Registry<C>;
-    readonly invocation: ActionInvocation;
-    readonly generated: ActionBindingMap;
-    readonly value: C;
-  },
+  options: Persistence &
+    (
+      | { readonly db: DB; readonly session?: never }
+      | { readonly session: ActionReplaySession; readonly db?: never }
+    ) & {
+      readonly schemaVersion: number;
+      readonly registry: Registry<C>;
+      readonly invocation: ActionInvocation;
+      readonly generated: ActionBindingMap;
+      readonly value: C;
+    },
 ): Promise<ActionGroupResult> {
-  const { db, schemaVersion, registry, invocation, generated, value, enter, leave, complete } =
-    options;
+  const { schemaVersion, registry, invocation, generated, value, enter, leave, complete } = options;
   if (invocation.kind !== "system.compose")
     throw new TypeError("Expected a system.compose invocation");
-  return runActionGroup({
-    db,
+  const groupOptions = {
     schemaVersion,
     registry,
     invocation,
     bindings: createActionBindings({ mode: "replay", bindings: generated }),
-    createContext: (actions, handle) => Object.freeze({ value, db: handle, actions }),
+    createContext: (actions: ActionFrameAccess, handle: Tx) =>
+      Object.freeze({ value, db: handle, actions }),
     enter,
     leave,
     complete,
-  });
+  };
+  return options.session
+    ? options.session.replay(groupOptions)
+    : runActionGroup({ ...groupOptions, db: options.db });
 }

@@ -20,8 +20,8 @@ layer, partition and scope service writes now use adapter transactions and expos
 transaction-bound variants. An opt-in execution scope now provides handler-entry
 ordering, scoped bindings, ownership checks and a failure latch shared by core
 transaction-bound services. Caught child, SQL and pre-SQL service failures abort
-the root after outstanding work settles. Production action attribution, replay
-savepoints and default-handler integration remain pending. The opt-in
+the root after outstanding work settles. Production action attribution and
+default-handler integration remain pending. The opt-in
 `system.compose` implementation now records direct child envelopes and IDs,
 provides registered readers and sequential dispatch, and replays without the
 recording callback. Existing `composeWrite` callers still need migration. Capture
@@ -32,6 +32,12 @@ the Node host, WASM parity adapter and restoration worker. Opt-in action scopes
 repeat setup before handlers and verify again after completion. Libsql and Node
 WASM tests cover recycled connections, entry refusal and rollback when settings
 change. Browser runtime verification remains pending.
+
+Opt-in replay transactions now isolate each root with a savepoint and a fresh
+execution scope. Compositions can use the same session. Failed roots roll back
+before later roots enter. Savepoint boundary failures, overlapping calls and
+unfinished roots abort the outer transaction even when caught. Production
+reconciliation, outcome handling and failure classification remain pending.
 
 ## Version one
 
@@ -78,7 +84,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Migrate composition callers that use direct SQL or need replayed control flow to dispatcher calls or named handlers.
 - [x] Enforce handler ownership, sequential child calls and refusal of parent SQL while a child is active in opted-in execution scopes.
 - [x] Add a root failure latch that survives caught child errors and SQL savepoints, and check it before transaction commit.
-- [ ] Integrate fresh execution scopes with root replay savepoints and check the latch before savepoint release.
+- [x] Integrate fresh execution scopes with root replay savepoints and check the latch before savepoint release in opt-in replay transactions.
 - [x] Wait for outstanding children and service work to settle before rollback and discard each failed root's execution scope.
 - [ ] Separate filesystem handlers from syncable database handlers. Refuse local-only children in generic compositions and named syncable handlers.
 - [ ] Move taskspace paths and observations into local metadata storage before baseline capture. Preserve metadata for absent taskspaces without cascading deletion.

@@ -72,18 +72,51 @@ The full original binding map remains available. Replayed child arguments and
 entry order belong to the new execution records. Earlier returned records and
 the root invocation remain unchanged.
 
+## Replay roots inside one transaction
+
+`actions/replay.ts` provides the internal `withActionReplayTransaction` boundary.
+Its callback receives a trusted transaction handle and a `replay` function. Pass
+the selected registry, root invocation, recorded binding provider, context factory
+and persistence hooks to `replay`. Each call uses a root savepoint and a fresh
+execution scope. Recording bindings are refused.
+
+Await roots sequentially. A failed root drains its outstanding work, rolls back
+data and history, releases its savepoint and then rejects. The caller can handle
+the error and run a later root with a fresh failure latch. A caught child failure
+still aborts its entire root, even after a handler rolls back its own SQL savepoint.
+Successful roots and orchestration bookkeeping commit together when the callback
+finishes. An uncaught error or failed outer commit rolls them all back.
+
+Savepoint creation, release or cleanup failures latch an outer transaction failure.
+`ActionReplayCleanupError` retains the root cause and cleanup failure. Catching a
+boundary failure cannot permit commit or another root.
+Overlapping roots also fail the outer transaction. If the callback returns with
+an outstanding root, the boundary waits for it before rolling back. Retained
+replay functions refuse calls after the callback ends. Connection settings are
+verified again before outer commit.
+
+The callback's transaction handle is trusted orchestration access for installing
+shared rows and updating reconciliation state between roots. Handlers receive
+guarded handles from their execution scope. Keep orchestration SQL outside active
+root calls. Failure classification, rejection receipts and hub or spoke policy
+remain separate work. This helper never retries callbacks or records outcomes.
+
 ## Verify the scope
 
 The shared regression fixture uses real transaction tables on libsql and SQLite
 WASM. It tests caught errors, savepoint rollback, pending work, parent ownership,
 relational reads, resource services, changed replay branches and marker cleanup.
+Replay tests also cover root isolation, fresh scopes, composition descendants,
+cleanup failure, overlapping roots, unfinished work and outer commit failure.
 
 ```sh
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-execution.test.ts
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-execution.test.ts
+pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-replay.test.ts
+pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-replay.test.ts
 ```
 
 Production integration must supply persistent action/context hooks, route all
-registered handlers through the scope, bind generated service values and support
-root savepoints during reconciliation. The browser capture/restoration gate
+registered handlers through the scope, bind generated service values and connect
+replay transactions to reconciliation. The browser capture/restoration gate
 remains incomplete. Existing application writes do not yet produce action logs.

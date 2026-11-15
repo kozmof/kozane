@@ -64,9 +64,7 @@ export function freezeActionInput(input: unknown): unknown {
   return input;
 }
 
-/** Internal opt-in boundary. Persistence hooks may write only transaction-owned log/context rows. */
-export async function runActionGroup<Inputs extends object, C>(options: {
-  readonly db: DB;
+export interface ActionGroupOptions<Inputs extends object, C> {
   readonly schemaVersion: number;
   readonly registry: ReturnType<typeof defineActionRegistry<Inputs, C>>;
   readonly invocation: ActionInvocation;
@@ -75,8 +73,21 @@ export async function runActionGroup<Inputs extends object, C>(options: {
   readonly enter?: (db: Tx, execution: Omit<ActionExecutionRecord, "generated">) => Promise<void>;
   readonly leave?: (db: Tx, actionId: string, parentId: string | null) => Promise<void>;
   readonly complete?: (db: Tx, group: ActionGroupResult) => Promise<void>;
-}) {
-  const { registry, bindings, db, schemaVersion, createContext, enter, leave, complete } = options;
+}
+
+/** Internal opt-in boundary. Persistence hooks may write only transaction-owned log/context rows. */
+export function runActionGroup<Inputs extends object, C>(
+  options: ActionGroupOptions<Inputs, C> & { readonly db: DB },
+): Promise<ActionGroupResult> {
+  return runActionGroupAtBoundary(options, (execute) => withTx(options.db, execute));
+}
+
+/** Trusted orchestration owns rollback and must await this callback before releasing its boundary. */
+export async function runActionGroupAtBoundary<Inputs extends object, C>(
+  options: ActionGroupOptions<Inputs, C>,
+  boundary: (execute: (tx: Tx) => Promise<ActionGroupResult>) => Promise<ActionGroupResult>,
+): Promise<ActionGroupResult> {
+  const { registry, bindings, schemaVersion, createContext, enter, leave, complete } = options;
   const invocation = Object.freeze({
     ...options.invocation,
     input: freezeActionInput(prepareInput(options.invocation.input)),
@@ -97,7 +108,7 @@ export async function runActionGroup<Inputs extends object, C>(options: {
     typeof invocation.kind !== "string"
   )
     throw new ActionExecutionError("Root action requires an ID and kind");
-  return withTx(db, async (tx) => {
+  return boundary(async (tx) => {
     const executeConnection = (statement: string) => tx.values(sql.raw(statement));
     await configureActionConnection(executeConnection);
     let failed = false;

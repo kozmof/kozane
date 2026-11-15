@@ -75,10 +75,18 @@ for audit, and are not flattened into additional root-list calls. Nested seriali
 compositions follow the same rule. A malformed envelope, duplicate ID or path,
 local-only child or child-ID mismatch aborts the entire group.
 
+Supply `db` to replay in a standalone adapter transaction. Within
+`withActionReplayTransaction`, supply its `session` instead. The composition and
+its descendants then share one root savepoint with a fresh execution scope.
+A failed descendant rolls back the composition before replay rejects. Later
+roots can proceed after the caller handles the error. The outer transaction
+commits all successful roots and orchestration bookkeeping together. See
+[replay transaction boundaries](action-execution-scopes.md#replay-roots-inside-one-transaction).
+
 Intent replay assumes that the caller has installed the intended starting state.
 It does not undo an origin's existing materialized rows. Authoritative and rebase
-history selection, baseline restoration and replay savepoints remain separate
-integration work.
+history selection, baseline restoration and production reconciliation remain
+separate integration work.
 
 ## Verify composition
 
