@@ -23,7 +23,16 @@ The `core-0.1.0-rc3-wasm-boundaries` and `core-0.1.0-rc4-libsql-boundaries` coho
 two fixtures per driver. One retains harmless whitespace and comments in the migrated
 schema plus SQLite-owned statistics created by `ANALYZE`. The other holds exactly
 2,097,152 bytes of valid SQLite data populated through public card services. It has
-no appended file padding. The full corpus has twelve databases and 26 view outcomes.
+no appended file padding. These four earlier cohorts retain twelve databases and
+26 recorded view outcomes.
+
+The `core-0.2.0-migration20-wasm` cohort retains four new databases produced by the
+packed candidate at source revision `5e16037`. It uses migration
+`0020_taskspace_local` and records eleven view outcomes. Its manifest pins the
+producer archive and driver versions. The corpus now has sixteen databases.
+Packed core and client checks verify the eleven current-ID outcomes and the
+26 earlier-ID envelope outcomes without changing older fixtures. Chromium
+execution for this new cohort remains pending.
 
 Add a new cohort explicitly after building the intended candidate.
 

@@ -105,6 +105,11 @@ exports local rows separately, including absent taskspaces. Imports of versions
 7 through 9 split their inline values without changing the original dump.
 Filesystem handler separation remains pending, so lifecycle kinds remain local-only.
 
+The schema-20 producer cohort now retains packed core output at migration
+`0020_taskspace_local`. Packed core and client checks pass eleven current-schema
+view outcomes and 26 earlier-schema envelope outcomes. All older cohorts remain
+unchanged. Browser execution of the new cohort remains pending.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in

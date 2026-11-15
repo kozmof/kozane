@@ -16,6 +16,10 @@
     {
       "id": "core-0.1.0-rc4-libsql-boundaries",
       "sha256": "9d5e350ad2197e91aabadc6c3a8cf27683c3f21384152a17f86020a7ba627703"
+    },
+    {
+      "id": "core-0.2.0-migration20-wasm",
+      "sha256": "b47e6e85861d505897045e541cfb2ec89990cc6955106fed6478c29e18fba6b9"
     }
   ]
 }
