@@ -56,14 +56,14 @@ must be covered before mandatory guards are enabled. Application modules in
 
 | Family | Service entry points | Record writes and indirect effects | Boundary work |
 | --- | --- | --- | --- |
-| Cards | `services/cards.ts` create, update, positions, remove, removeOne, move, layer, partition, stacking, squash | `api/card/{create,update,case-update,stacking,placement}.ts` and `api/composite/{cards,move,squash}.ts`. Includes glue cleanup, scope membership, inventory refits and split card creation | Preserve existing transaction wrappers and `InTx` composition paths. Squash and stacking also reach transaction-owning record helpers |
+| Cards | `services/cards.ts` create, update, positions, remove, removeOne, move, layer, partition, stacking, squash | `api/card/{create,update,case-update,stacking,placement}.ts` and `api/composite/{cards,move,squash}.ts`. Includes glue cleanup, scope membership, inventory refits and split card creation | All listed service writes expose `InTx` variants, including stacking and squash. Production action attribution remains pending |
 | Glues | `services/glues.ts` create, remove | `api/glue.ts` creates glue IDs, replaces memberships and dissolves orphan groups | Existing transaction and `InTx` helpers need current-action attribution |
-| Layers | `services/layers.ts` create, rename, remove, reorder | `api/layer.ts`, `api/composite/reassign.ts`. Remove moves cards to the default layer | Create and rename now use adapter transactions and expose `InTx` helpers. Action attribution remains pending |
-| Partitions | `services/partitions.ts` create, rename, remove | `api/partition.ts`, `api/composite/reassign.ts`. Service removal moves cards to the default partition. The separate low-level cascading delete can delete cards | Create and rename now use adapter transactions and expose `InTx` helpers. Attribute reassignment and raw cascading deletion |
-| Scopes | `services/scopes.ts` create, rename, remove, addMembers, removeMembers, createArea, updateArea, removeArea, removeWorkspace | `api/{scope,scope-rel,scope-area}.ts`. Board removal differs from workspace deletion. Scope deletion can clear taskspace references and delete relations and areas | Create, rename and area writes now use adapter transactions and expose `InTx` helpers. Action attribution remains pending |
+| Layers | `services/layers.ts` create, rename, remove, reorder | `api/layer.ts`, `api/composite/reassign.ts`. Remove moves cards to the default layer | All listed service writes expose `InTx` variants. Removal reuses the caller's transaction for card reassignment. Action attribution remains pending |
+| Partitions | `services/partitions.ts` create, rename, remove | `api/partition.ts`, `api/composite/reassign.ts`. Service removal moves cards to the default partition. The separate low-level cascading delete can delete cards | All listed service writes expose `InTx` variants. Attribute reassignment and raw cascading deletion |
+| Scopes | `services/scopes.ts` create, rename, remove, addMembers, removeMembers, createArea, updateArea, removeArea, removeWorkspace | `api/{scope,scope-rel,scope-area}.ts`. Board removal differs from workspace deletion. Scope deletion can clear taskspace references and delete relations and areas | All listed service writes expose `InTx` variants, including board removal. Action attribution remains pending |
 | Warps | `services/warps.ts` create, update, remove | `api/warp.ts` | Existing transaction and `InTx` helpers need attribution |
 | Inventories | `services/inventories.ts` create, update, remove, stow, take, repair | `api/inventory/{rows,stow,slots,repair}.ts`. Moves other cards' slots, refits widths and clears placement on removal | Wrap repair as an explicit system action and keep every slot shift in its root |
-| Namespaces | `services/namespaces.ts` create, setDefault; administration also calls records | `api/namespace.ts` add, create, rename, setDefault, delete. Creation adds default partition and layer. Deletion cascades and dissolves surviving orphan glue groups | Low-level add and rename accept DB handles. Default changes and create/delete use transactions |
+| Namespaces | `services/namespaces.ts` create, rename, remove, setDefault; administration also calls records | `api/namespace.ts` add, create, rename, setDefault, delete. Creation adds default partition and layer. Deletion cascades and dissolves surviving orphan glue groups | All listed service writes expose `InTx` variants. Low-level add and rename still accept DB handles. Action attribution remains pending |
 | Taskspaces | Node handlers described below | `api/taskspace.ts` add, update, delete. Delete clears `card.taskspace_id` | Direct writes and local/shared storage split are pending |
 
 `services/snapshot.ts`, tags, map and warp-directory expose reads. Derived tag
@@ -135,10 +135,16 @@ Batch IDs use original input indexes before SQL chunking. Other IDs use table
 roles within the owning handler's stable invocation path. See
 [allocation keys](action-execution-scopes.md#invocations-and-allocations).
 
+Squash now reuses its caller's transaction. Its inventory, piece IDs and shared
+creation timestamp bind to the source card ID and segment roles. Replaying fewer
+segments preserves unused bindings. Requiring an extra segment or a different
+source refuses replay without extending the map. Layout and inventory naming
+still resolve against the current rows.
+
 Ordinary handles retain existing defaults. Production handler installation,
-taskspace allocations, composite squash writes and raw ORM inserts remain
-pending. The migration 0019 timestamp fallback remains unchanged and must be
-replaced before activation. `actions/import-timestamps.ts` resolves missing or zero creation
+taskspace allocations and raw ORM inserts remain pending. The migration 0019
+timestamp fallback remains unchanged and must be replaced before activation.
+`actions/import-timestamps.ts` resolves missing or zero creation
 timestamps through a binding keyed by the imported card ID. A missing or zero
 update timestamp follows creation time. Supplied nonzero timestamps and the
 original input remain unchanged. The resolver is not yet connected to CLI import

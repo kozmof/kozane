@@ -8,7 +8,7 @@ import { requireBoundedName } from "./validation.js";
 import { ConflictError } from "./errors.js";
 import { isUniqueConstraintError } from "../api/utils.js";
 import { addLayer, updateLayerName } from "../api/layer.js";
-import { deleteLayerWithReassign } from "../api/composite.js";
+import { deleteLayerWithReassignInTx } from "../api/composite.js";
 export function createInTx(
   db: Tx,
   _context: ServiceContext,
@@ -50,12 +50,17 @@ export function renameInTx(
 }
 export async function remove(
   db: DB,
-  _context: ServiceContext,
+  context: ServiceContext,
   namespaceId: string,
   layerId: string,
 ) {
-  const result = await deleteLayerWithReassign({ db, namespaceId, layerId });
-  return { ok: true as const, ...result };
+  return withTx(db, (tx) => removeInTx(tx, context, namespaceId, layerId));
+}
+export function removeInTx(db: Tx, _context: ServiceContext, namespaceId: string, layerId: string) {
+  return withActionService(db, async () => {
+    const result = await deleteLayerWithReassignInTx({ db, namespaceId, layerId });
+    return { ok: true as const, ...result };
+  });
 }
 
 import { reorderLayersInTx, type ReorderRejection } from "../api/layer.js";

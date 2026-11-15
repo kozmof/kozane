@@ -2,7 +2,7 @@ import { withActionService } from "../actions/service-frame.js";
 import {
   deleteNamespaceCardsInTx,
   moveCardsToNamespaceInTx,
-  squashNamespaceCard,
+  squashNamespaceCardInTx,
   type SquashCardResult,
 } from "../api/composite.js";
 import {
@@ -11,7 +11,7 @@ import {
   updateCardInTx,
   withCardInventory,
   type CardStacking,
-  reassignCardsStackOrder,
+  reassignCardsStackOrderInTx,
   updateNamespaceCardPositionsInTx,
   addCardInTx,
 } from "../api/card.js";
@@ -275,20 +275,31 @@ export function setPartitionInTx(
 
 export async function setStacking(
   db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => setStackingInTx(tx, context, namespaceId, prepared));
+}
+export function setStackingInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const cardIds = requireStringArray(body, "cardIds");
-  const direction = requireString(body, "direction");
-  if (direction !== "front" && direction !== "back")
-    throw new ValidationError('direction must be "front" or "back"');
-  const result = await reassignCardsStackOrder({ db, namespaceId, cardIds, direction });
-  if (!result.ok) rejectBatch(result.reason);
-  // Return each moved card's final stacking value because a glue group may span multiple
-  // layers.
-  return { ok: true as const, stacking: result.stacking };
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const cardIds = requireStringArray(body, "cardIds");
+    const direction = requireString(body, "direction");
+    if (direction !== "front" && direction !== "back")
+      throw new ValidationError('direction must be "front" or "back"');
+    const result = await reassignCardsStackOrderInTx({ db, namespaceId, cardIds, direction });
+    if (!result.ok) rejectBatch(result.reason);
+    // Return each moved card's final stacking value because a glue group may span multiple
+    // layers.
+    return { ok: true as const, stacking: result.stacking };
+  });
 }
 
 export async function update(
@@ -462,21 +473,32 @@ export async function squash(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const cardId = requireString(body, "cardId");
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => squashInTx(tx, context, namespaceId, prepared));
+}
+export function squashInTx(
+  db: Tx,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const cardId = requireString(body, "cardId");
 
-  const result = await squashNamespaceCard({ db, namespaceId, cardId, ...context });
-  if (!result.ok) throw new ValidationError(FAILURE_MESSAGE[result.reason]);
+    const result = await squashNamespaceCardInTx({ db, namespaceId, cardId, ...context });
+    if (!result.ok) throw new ValidationError(FAILURE_MESSAGE[result.reason]);
 
-  // Return full stored rows so clients use the slots and return positions planned here. The
-  // pieces start unglued. `stacking` names the cards raised above them.
-  return {
-    inventory: result.inventory,
-    cards: result.cards.map(
-      (card) => ({ ...withCardInventory(card), glueId: null }) satisfies CardWithGlue,
-    ),
-    stacking: result.stacking,
-  };
+    // Return full stored rows so clients use the slots and return positions planned here. The
+    // pieces start unglued. `stacking` names the cards raised above them.
+    return {
+      inventory: result.inventory,
+      cards: result.cards.map(
+        (card) => ({ ...withCardInventory(card), glueId: null }) satisfies CardWithGlue,
+      ),
+      stacking: result.stacking,
+    };
+  });
 }
 
 export async function updatePositions(

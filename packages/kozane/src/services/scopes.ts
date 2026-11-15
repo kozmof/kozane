@@ -23,3 +23,4 @@ export const renameInTx: typeof service.renameInTx = service.renameInTx;
 export const createAreaInTx: typeof service.createAreaInTx = service.createAreaInTx;
 export const updateAreaInTx: typeof service.updateAreaInTx = service.updateAreaInTx;
 export const removeAreaInTx: typeof service.removeAreaInTx = service.removeAreaInTx;
+export const removeInTx = service.removeInTx;

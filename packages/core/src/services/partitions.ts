@@ -8,7 +8,7 @@ import { requireBoundedName } from "./validation.js";
 import { ConflictError } from "./errors.js";
 import { isUniqueConstraintError } from "../api/utils.js";
 import { addPartition, updatePartitionName } from "../api/partition.js";
-import { deletePartitionWithReassign } from "../api/composite.js";
+import { deletePartitionWithReassignInTx } from "../api/composite.js";
 export function createInTx(
   db: Tx,
   _context: ServiceContext,
@@ -50,12 +50,22 @@ export function renameInTx(
 }
 export async function remove(
   db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  partitionId: string,
+) {
+  return withTx(db, (tx) => removeInTx(tx, context, namespaceId, partitionId));
+}
+export function removeInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   partitionId: string,
 ) {
-  const result = await deletePartitionWithReassign({ db, namespaceId, partitionId });
-  return { ok: true as const, ...result };
+  return withActionService(db, async () => {
+    const result = await deletePartitionWithReassignInTx({ db, namespaceId, partitionId });
+    return { ok: true as const, ...result };
+  });
 }
 
 export async function create(

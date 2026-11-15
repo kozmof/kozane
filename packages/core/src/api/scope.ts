@@ -22,7 +22,7 @@ import {
 import { union } from "drizzle-orm/sqlite-core";
 import type { NeedsDB, NeedsReader, ReadsNamespace, NeedsScope, Scope } from "../database-types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
-import { withTx, type DB } from "../database.js";
+import { withTx, type DB, type Tx } from "../database.js";
 
 /**
  * List all workspace scopes for the CLI. Use {@link getScopesInNamespace} for a board's
@@ -198,71 +198,80 @@ export async function deleteScope({ db, scopeId }: DeleteScope): Promise<void> {
  */
 export async function deleteScopeFromNamespace({
   db,
-  namespaceId,
-  scopeId,
+  ...fields
 }: {
   db: DB;
   namespaceId: string;
   scopeId: string;
 }): Promise<boolean> {
-  return withTx(db, async (tx) => {
-    const scope = await tx
-      .select({ id: scopeTable.id })
-      .from(scopeTable)
-      .where(eq(scopeTable.id, scopeId))
-      .get();
-    if (!scope) return false;
+  return withTx(db, (tx) => deleteScopeFromNamespaceInTx({ ...fields, db: tx }));
+}
 
-    const namespaceCardSubq = tx
-      .select({ id: cardTable.id })
-      .from(cardTable)
-      .innerJoin(
-        partitionTable,
-        and(
-          eq(cardTable.partitionId, partitionTable.id),
-          eq(partitionTable.namespaceId, namespaceId),
-        ),
-      );
-    await tx
-      .delete(scopeRelTable)
-      .where(
-        and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, namespaceCardSubq)),
-      );
+export async function deleteScopeFromNamespaceInTx({
+  db: tx,
+  namespaceId,
+  scopeId,
+}: {
+  db: Tx;
+  namespaceId: string;
+  scopeId: string;
+}): Promise<boolean> {
+  const scope = await tx
+    .select({ id: scopeTable.id })
+    .from(scopeTable)
+    .where(eq(scopeTable.id, scopeId))
+    .get();
+  if (!scope) return false;
 
-    // Remove this board's frames with its memberships so polling does not return the scope
-    // again.
-    await tx
-      .delete(scopeAreaTable)
-      .where(and(eq(scopeAreaTable.scopeId, scopeId), eq(scopeAreaTable.namespaceId, namespaceId)));
+  const namespaceCardSubq = tx
+    .select({ id: cardTable.id })
+    .from(cardTable)
+    .innerJoin(
+      partitionTable,
+      and(
+        eq(cardTable.partitionId, partitionTable.id),
+        eq(partitionTable.namespaceId, namespaceId),
+      ),
+    );
+  await tx
+    .delete(scopeRelTable)
+    .where(
+      and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, namespaceCardSubq)),
+    );
 
-    const stillHasCards = await tx
-      .select({ cardId: scopeRelTable.cardId })
-      .from(scopeRelTable)
-      .where(eq(scopeRelTable.scopeId, scopeId))
-      .get();
+  // Remove this board's frames with its memberships so polling does not return the scope
+  // again.
+  await tx
+    .delete(scopeAreaTable)
+    .where(and(eq(scopeAreaTable.scopeId, scopeId), eq(scopeAreaTable.namespaceId, namespaceId)));
 
-    const stillHasTaskspaces = stillHasCards
+  const stillHasCards = await tx
+    .select({ cardId: scopeRelTable.cardId })
+    .from(scopeRelTable)
+    .where(eq(scopeRelTable.scopeId, scopeId))
+    .get();
+
+  const stillHasTaskspaces = stillHasCards
+    ? undefined
+    : await tx
+        .select({ id: taskspaceTable.id })
+        .from(taskspaceTable)
+        .where(eq(taskspaceTable.scopeId, scopeId))
+        .get();
+
+  // Frames on other boards keep the scope alive.
+  const stillHasAreas =
+    stillHasCards || stillHasTaskspaces
       ? undefined
       : await tx
-          .select({ id: taskspaceTable.id })
-          .from(taskspaceTable)
-          .where(eq(taskspaceTable.scopeId, scopeId))
+          .select({ id: scopeAreaTable.id })
+          .from(scopeAreaTable)
+          .where(eq(scopeAreaTable.scopeId, scopeId))
           .get();
 
-    // Frames on other boards keep the scope alive.
-    const stillHasAreas =
-      stillHasCards || stillHasTaskspaces
-        ? undefined
-        : await tx
-            .select({ id: scopeAreaTable.id })
-            .from(scopeAreaTable)
-            .where(eq(scopeAreaTable.scopeId, scopeId))
-            .get();
+  if (!stillHasCards && !stillHasTaskspaces && !stillHasAreas) {
+    await tx.delete(scopeTable).where(eq(scopeTable.id, scopeId));
+  }
 
-    if (!stillHasCards && !stillHasTaskspaces && !stillHasAreas) {
-      await tx.delete(scopeTable).where(eq(scopeTable.id, scopeId));
-    }
-
-    return true;
-  });
+  return true;
 }

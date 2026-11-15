@@ -53,7 +53,12 @@ export async function getInventoryCardCounts({
   return new Map(rows.map(({ inventoryId, cards }) => [inventoryId, cards]));
 }
 
-type AddInventory = NeedsNamespace & { name?: string; posX: number; posY: number };
+type AddInventory = NeedsNamespace & {
+  name?: string;
+  posX: number;
+  posY: number;
+  allocationPath?: readonly string[];
+};
 
 export async function addInventory({
   db,
@@ -61,11 +66,18 @@ export async function addInventory({
   name = "",
   posX,
   posY,
+  allocationPath = [],
 }: AddInventory): Promise<Inventory> {
   assertNameWithinLimit(name, "Inventory name");
   const [row] = await db
     .insert(inventoryTable)
-    .values({ id: boundEntityId(db, "inventory"), namespaceId, name, posX, posY })
+    .values({
+      id: boundEntityId(db, "inventory", ...allocationPath),
+      namespaceId,
+      name,
+      posX,
+      posY,
+    })
     .returning();
   return row;
 }
@@ -79,13 +91,26 @@ export async function addSquashInventoryInTx({
   namespaceId,
   posX,
   posY,
-}: NeedsTx & { namespaceId: string; posX: number; posY: number }): Promise<Inventory> {
+  sourceCardId,
+}: NeedsTx & {
+  namespaceId: string;
+  posX: number;
+  posY: number;
+  sourceCardId?: string;
+}): Promise<Inventory> {
   const existing = await tx
     .select({ name: inventoryTable.name })
     .from(inventoryTable)
     .where(eq(inventoryTable.namespaceId, namespaceId));
   const name = nextSquashInventoryName(existing.map(({ name }) => name));
-  return addInventory({ db: tx, namespaceId, name, posX, posY });
+  return addInventory({
+    db: tx,
+    namespaceId,
+    name,
+    posX,
+    posY,
+    allocationPath: sourceCardId === undefined ? [] : ["squash", sourceCardId],
+  });
 }
 
 type UpdateInventory = NeedsNamespaceInventory & {

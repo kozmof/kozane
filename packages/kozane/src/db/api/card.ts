@@ -61,6 +61,7 @@ export const reassignCardsToLayerInTx: typeof records.card.reassignCardsToLayerI
   records.card.reassignCardsToLayerInTx;
 export const reassignCardsStackOrder: typeof records.card.reassignCardsStackOrder =
   records.card.reassignCardsStackOrder;
+export const reassignCardsStackOrderInTx = records.card.reassignCardsStackOrderInTx;
 export type CardStacking = records.card.CardStacking;
 export type ReassignLayerResult = records.card.ReassignLayerResult;
 export type ReassignStackOrderResult = records.card.ReassignStackOrderResult;

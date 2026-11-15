@@ -54,6 +54,11 @@ and tracks the Promise returned to the caller. Ordinary transactions without an
 execution frame retain their existing behavior. Mandatory active-action checks
 for record APIs and complete service coverage remain separate integration work.
 
+Stacking, squash, layer and partition removal, board scope removal and namespace
+administration now expose service and record variants that reuse the caller's
+transaction. Their service wrappers share the current failure latch. The ordinary
+service entry points open one adapter transaction and call those same variants.
+
 ## Invocations and allocations
 
 The original root envelope and each execution's child envelope are copied and
@@ -88,6 +93,9 @@ invocation hierarchy.
 | One card's creation time | `["clock", "card", "create"]` |
 | A batch's shared creation time | `["clock", "card", "batch"]` |
 | A card's text update | `["clock", "card", "update", cardId]` |
+| A squash inventory | `["entity", "inventory", "squash", sourceCardId]` |
+| A squash piece | `["entity", "card", "squash", sourceCardId, segmentIndex]` |
+| A squash's shared creation time | `["clock", "card", "squash", sourceCardId]` |
 
 Keys are encoded as JSON tuples. Batch indexes identify the original supplied
 input before chunking and database reads. Use stable child action paths for
@@ -96,14 +104,17 @@ Creation reads the clock once for both timestamp columns, and once per batch.
 Text updates bind a clock even when the existing text matches, so replay can use
 that binding if the current row differs. The SQL comparison still preserves the
 old timestamp for unchanged text. Geometry-only updates allocate no clock.
+Squash segment indexes identify the text's segment roles for the selected source
+card. Replay may skip existing segment bindings but cannot add a segment or
+substitute a different source without a matching recorded binding.
 
 Bound card times must be nonzero and fit a JavaScript Date. Zero would invoke
 migration 0019's wall-clock fallback. Invalid times and unbound allocations latch
 the root failure even when a direct record caller catches the error. Valid
 historical timestamps before the Unix epoch remain supported.
 
-Taskspace writes, direct ORM inserts, composite squash writes and service paths
-that still own nested transactions need further integration. Migration 0019's
+Taskspace writes, direct ORM inserts and system import and repair handlers need
+further integration. Migration 0019's
 fallback also needs replacement before activation. These helpers do not enable
 mandatory action guards or install production handlers.
 
@@ -146,6 +157,8 @@ cleanup failure, overlapping roots, unfinished work and outer commit failure.
 Allocation tests call real record and service writes on both adapters. They cover
 stable IDs, creation and edit clocks, changed child order, SQL chunking, changed
 replay branches, retained handles and ordinary defaults outside action scopes.
+Composite service tests cover enclosing rollback, caught failures, namespace
+defaults and squash replay, including late SQL failures and changed segment counts.
 
 ```sh
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-execution.test.ts
@@ -154,6 +167,8 @@ pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-replay.test.ts
 pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-allocations.test.ts
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-allocations.test.ts
+pnpm exec vitest run --config vitest.source.config.ts packages/kozane/src/db/api/action-composite-services.test.ts
+pnpm exec vitest run --config scripts/database-parity/vitest.config.ts packages/kozane/src/db/api/action-composite-services.test.ts
 ```
 
 Production integration must supply persistent action/context hooks, route all

@@ -66,6 +66,14 @@ Scopes also expose `createAreaInTx`, `updateAreaInTx`, and `removeAreaInTx`.
 Use these variants inside a caller-owned transaction. Their ordinary service
 entry points open an adapter write transaction.
 
+Card stacking and squash expose `setStackingInTx` and `squashInTx`.
+Layers, partitions and scopes expose `removeInTx`, including each removal's
+reassignment or membership cleanup. Namespaces expose `createInTx`, `renameInTx`,
+`removeInTx` and `setDefaultInTx`. These variants reuse the caller's transaction.
+Ordinary service entry points open one adapter transaction and call the same
+implementation. Transaction-bound record variants are available through
+`records.card`, `records.composite`, `records.scope` and `records.namespace`.
+
 Scope membership helpers now separate database and transaction handles.
 `records.scopeRel.addScopeRel` and `addScopeRels` accept a `DB` and open one
 write transaction. Migrate callers that pass a `Tx` to `addScopeRelInTx` or

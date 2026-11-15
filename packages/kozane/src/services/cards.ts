@@ -28,3 +28,5 @@ export type CardSetStackingInput = service.CardSetStackingInput;
 export type CardSquashInput = service.CardSquashInput;
 
 export const removeOneInTx = service.removeOneInTx;
+export const setStackingInTx = service.setStackingInTx;
+export const squashInTx = service.squashInTx;

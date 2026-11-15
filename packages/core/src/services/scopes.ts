@@ -12,7 +12,7 @@ import { withTx } from "../database.js";
 import { prepareInput } from "./prepare-input.js";
 import type { DB, Tx } from "../database.js";
 import type { ServiceContext } from "./context.js";
-import { addScope, getScope, updateScopeName, deleteScopeFromNamespace } from "../api/scope.js";
+import { addScope, getScope, updateScopeName, deleteScopeFromNamespaceInTx } from "../api/scope.js";
 import { addScopeMembersInTx, removeScopeMembersFromNamespaceInTx } from "../api/scope-rel.js";
 import { addScopeArea, moveScopeArea, deleteScopeArea } from "../api/scope-area.js";
 import { isUniqueConstraintError } from "../api/utils.js";
@@ -86,13 +86,18 @@ export function renameInTx(
 
 export async function remove(
   db: DB,
-  _context: ServiceContext,
+  context: ServiceContext,
   namespaceId: string,
   scopeId: string,
 ) {
-  const ok = await deleteScopeFromNamespace({ db, namespaceId, scopeId });
-  if (!ok) throw missing("Scope not found in namespace");
-  return { ok: true };
+  return withTx(db, (tx) => removeInTx(tx, context, namespaceId, scopeId));
+}
+export function removeInTx(db: Tx, _context: ServiceContext, namespaceId: string, scopeId: string) {
+  return withActionService(db, async () => {
+    const ok = await deleteScopeFromNamespaceInTx({ db, namespaceId, scopeId });
+    if (!ok) throw missing("Scope not found in namespace");
+    return { ok: true };
+  });
 }
 
 export function addMembersInTx(
