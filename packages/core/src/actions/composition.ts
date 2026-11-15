@@ -2,11 +2,7 @@ import type { DB, Tx } from "../database.js";
 import { ValidationError } from "../errors.js";
 import { prepareInput } from "../services/prepare-input.js";
 import { createActionBindings, type ActionBindingMap, type ActionBindings } from "./bindings.js";
-import {
-  type ActionInputsV1,
-  type CompositionChildV1,
-  type SyncableActionKindV1,
-} from "./contracts.js";
+import { type ActionInputsV1, type SyncableActionKindV1 } from "./contracts.js";
 import {
   freezeActionInput,
   runActionGroup,
@@ -16,7 +12,11 @@ import {
   type ActionInvocation,
 } from "./execution.js";
 import { prepareActionInputV1 } from "./invocation.js";
-import { createActionRegistryV1, type ActionHandlersV1 } from "./registry.js";
+import {
+  createActionRegistryV1,
+  type ActionHandlersV1,
+  type defineActionRegistry,
+} from "./registry.js";
 import type { ActionReplaySession } from "./replay.js";
 import { withActionService } from "./service-frame.js";
 
@@ -30,23 +30,23 @@ export function defineCompositionReader<I, O>(
 ): CompositionReader<I, O> {
   return Object.freeze({ ...reader });
 }
-type Readers = Record<
+export type CompositionReaders = Record<
   string,
   {
     prepare(input: unknown): unknown;
     read(db: CompositionReadHandle, input: never): Promise<unknown>;
   }
 >;
-export interface CompositionAccess<R extends Readers> {
+export interface CompositionAccess<
+  R extends CompositionReaders,
+  Inputs extends object = ActionInputsV1,
+  Kind extends keyof Inputs & string = Extract<SyncableActionKindV1, keyof Inputs & string>,
+> {
   read<K extends keyof R & string>(
     kind: K,
     input: Parameters<R[K]["read"]>[1],
   ): Promise<Awaited<ReturnType<R[K]["read"]>>>;
-  dispatch<K extends SyncableActionKindV1>(
-    path: readonly string[],
-    kind: K,
-    input: ActionInputsV1[K],
-  ): Promise<unknown>;
+  dispatch<K extends Kind>(path: readonly string[], kind: K, input: Inputs[K]): Promise<unknown>;
 }
 export interface CompositionContext<C> {
   readonly value: C;
@@ -76,12 +76,35 @@ export function createCompositionRegistryV1<C>(
     },
   });
 }
-type Registry<C> = ReturnType<typeof createCompositionRegistryV1<C>>;
-interface Persistence {
+type Registry<C, Inputs extends object = ActionInputsV1> = ReturnType<
+  typeof defineActionRegistry<Inputs, CompositionContext<C>>
+>;
+export interface CompositionPersistence {
   readonly enter?: (db: Tx, execution: Omit<ActionExecutionRecord, "generated">) => Promise<void>;
   readonly leave?: (db: Tx, actionId: string, parentId: string | null) => Promise<void>;
   readonly complete?: (db: Tx, group: ActionGroupResult) => Promise<void>;
 }
+type RecordedChild = {
+  readonly id: string;
+  readonly path: readonly string[];
+  readonly kind: string;
+  readonly input: unknown;
+};
+export type CompositionOptions<
+  C,
+  R extends CompositionReaders,
+  Inputs extends object = ActionInputsV1,
+  Kind extends keyof Inputs & string = Extract<SyncableActionKindV1, keyof Inputs & string>,
+> = CompositionPersistence & {
+  readonly db: DB;
+  readonly id: string;
+  readonly schemaVersion: number;
+  readonly registry: Registry<C, Inputs>;
+  readonly bindings: ActionBindings;
+  readonly value: C;
+  readonly readers: R;
+  readonly operation: (access: CompositionAccess<R, Inputs, Kind>) => Promise<unknown>;
+};
 function readHandle(db: Tx, actions: ActionFrameAccess): CompositionReadHandle {
   const handle = Object.freeze({
     select: db.select.bind(db),
@@ -112,11 +135,10 @@ function readHandle(db: Tx, actions: ActionFrameAccess): CompositionReadHandle {
 }
 function finalizedGroup(
   group: ActionGroupResult,
-  children: readonly CompositionChildV1[],
+  children: readonly RecordedChild[],
+  prepareComposition: (input: unknown) => unknown,
 ): ActionGroupResult {
-  const input = freezeActionInput(
-    prepareActionInputV1("system.compose", { args: {}, body: { children } }),
-  );
+  const input = freezeActionInput(prepareComposition({ args: {}, body: { children } }));
   const invocation = Object.freeze({ ...group.invocation, input });
   const executions = Object.freeze(
     group.executions.map((entry) =>
@@ -127,17 +149,25 @@ function finalizedGroup(
 }
 
 /** Record the callback's direct calls once. The public facade never exposes a transaction handle. */
-export async function composeActions<C, R extends Readers>(
-  options: Persistence & {
-    readonly db: DB;
-    readonly id: string;
-    readonly schemaVersion: number;
-    readonly registry: Registry<C>;
-    readonly bindings: ActionBindings;
-    readonly value: C;
-    readonly readers: R;
-    readonly operation: (access: CompositionAccess<R>) => Promise<unknown>;
-  },
+export function composeActions<C, R extends CompositionReaders>(
+  options: CompositionOptions<C, R>,
+): Promise<ActionGroupResult> {
+  if (options.registry.contractVersion !== 1)
+    return Promise.reject(new TypeError("Composition requires action contract 1"));
+  return composeActionsForContract<C, R, ActionInputsV1, SyncableActionKindV1>(options, (input) =>
+    prepareActionInputV1("system.compose", input),
+  );
+}
+
+/** Shared execution machinery; each wrapper supplies its pinned envelope validator. */
+export async function composeActionsForContract<
+  C,
+  R extends CompositionReaders,
+  Inputs extends object,
+  Kind extends keyof Inputs & string,
+>(
+  options: CompositionOptions<C, R, Inputs, Kind>,
+  prepareComposition: (input: unknown) => unknown,
 ): Promise<ActionGroupResult> {
   const { db, id, schemaVersion, registry, bindings, value, operation, enter, leave, complete } =
     options;
@@ -150,7 +180,7 @@ export async function composeActions<C, R extends Readers>(
       return [name, Object.freeze({ ...reader })] as const;
     }),
   );
-  const children: CompositionChildV1[] = [];
+  const children: RecordedChild[] = [];
   let output: ActionGroupResult | undefined;
   await runActionGroup({
     db,
@@ -166,7 +196,7 @@ export async function composeActions<C, R extends Readers>(
     createContext: (actions, handle): CompositionContext<C> => {
       if (actions.id !== id) return Object.freeze({ value, db: handle, actions });
       let dispatching = false;
-      const methods: CompositionAccess<R> = Object.freeze({
+      const methods: CompositionAccess<R, Inputs, Kind> = Object.freeze({
         read: <K extends keyof R & string>(kind: K, input: Parameters<R[K]["read"]>[1]) =>
           withActionService<Awaited<ReturnType<R[K]["read"]>>>(
             handle,
@@ -180,11 +210,7 @@ export async function composeActions<C, R extends Readers>(
               >;
             },
           ),
-        dispatch: <K extends SyncableActionKindV1>(
-          path: readonly string[],
-          kind: K,
-          input: ActionInputsV1[K],
-        ) => {
+        dispatch: <K extends Kind>(path: readonly string[], kind: K, input: Inputs[K]) => {
           const work = withActionService(handle, async () => {
             actions.check();
             if (dispatching)
@@ -193,7 +219,7 @@ export async function composeActions<C, R extends Readers>(
             const keys = prepareInput([...path]);
             dispatching = true;
             const child = await actions.dispatch(keys, kind, copied);
-            children.push({ id: child.id, path: keys, kind, input: copied } as CompositionChildV1);
+            children.push({ id: child.id, path: keys, kind, input: copied });
             return child.result;
           });
           void work.then(
@@ -242,7 +268,7 @@ export async function composeActions<C, R extends Readers>(
     enter,
     leave,
     complete: async (handle, group) => {
-      const finalized = finalizedGroup(group, children);
+      const finalized = finalizedGroup(group, children, prepareComposition);
       await complete?.(handle, finalized);
       output = finalized;
     },
@@ -252,14 +278,14 @@ export async function composeActions<C, R extends Readers>(
 }
 
 /** Interpret the frozen list with no callback or recording-time read helper execution. */
-export function replayComposition<C>(
-  options: Persistence &
+export function replayComposition<C, Inputs extends object = ActionInputsV1>(
+  options: CompositionPersistence &
     (
       | { readonly db: DB; readonly session?: never }
       | { readonly session: ActionReplaySession; readonly db?: never }
     ) & {
       readonly schemaVersion: number;
-      readonly registry: Registry<C>;
+      readonly registry: Registry<C, Inputs>;
       readonly invocation: ActionInvocation;
       readonly generated: ActionBindingMap;
       readonly value: C;

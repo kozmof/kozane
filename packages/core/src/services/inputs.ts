@@ -65,3 +65,5 @@ export type InventoryTakeCardInput = { cardId: string } & (
 );
 export type InventoryTakeInput = { cards: readonly InventoryTakeCardInput[] };
 export type NamespaceCreateInput = NamedInput;
+export type TaskspaceCreateInput = NamedInput & { scopeId: string };
+export type TaskspaceRenameInput = NamedInput;

@@ -81,6 +81,7 @@ function validateEnvelope(
   kind: ActionKindV1,
   prepared: unknown,
   childIds: Set<string>,
+  contracts: Readonly<Record<ActionKindV1, "syncable" | "local-only">>,
 ): asserts prepared is PreparedActionInput {
   if (!Object.hasOwn(actionContractsV1, kind))
     throw new ValidationError(`Unknown action kind: ${kind}`);
@@ -119,20 +120,29 @@ function validateEnvelope(
     )
       throw new ValidationError("Invalid recorded composition child");
     const childKind = child.kind as ActionKindV1;
-    if (actionContractsV1[childKind] !== "syncable")
+    if (contracts[childKind] !== "syncable")
       throw new ValidationError(`Composition child is local-only: ${childKind}`);
     const path = JSON.stringify([childKind, ...child.path]);
     if (childIds.has(child.id) || paths.has(path))
       throw new ValidationError("Duplicate composition child ID or path");
     childIds.add(child.id);
     paths.add(path);
-    validateEnvelope(childKind, child.input, childIds);
+    validateEnvelope(childKind, child.input, childIds, contracts);
   }
 }
 
 /** Copy the original envelope before domain validation, preserving unresolved body values. */
 export function prepareActionInputV1(kind: ActionKindV1, input: unknown): PreparedActionInput {
+  return prepareActionInputForContracts(kind, input, actionContractsV1);
+}
+
+/** Shared envelope shapes with a version-pinned eligibility map for recursive compositions. */
+export function prepareActionInputForContracts(
+  kind: ActionKindV1,
+  input: unknown,
+  contracts: Readonly<Record<ActionKindV1, "syncable" | "local-only">>,
+): PreparedActionInput {
   const prepared = prepareInput(input);
-  validateEnvelope(kind, prepared, new Set());
+  validateEnvelope(kind, prepared, new Set(), contracts);
   return prepared;
 }

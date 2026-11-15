@@ -38,6 +38,43 @@ version 1. Incompatible service changes require a new registry version. This
 factory is an internal opt-in integration and does not install action history,
 route application writes or activate guards.
 
+## Replay shared taskspace actions with version 2
+
+`createServiceActionRegistryV2` supports schema 20 and action contract 2. It keeps
+the existing database handlers and adds shared taskspace creation, label changes
+and removal through `services/taskspaces.ts`. Supply `LocalRecoveryHandlersV2`
+with exactly the five file operation recovery handlers. Lifecycle recovery
+overrides are refused.
+
+The lifecycle envelopes keep their routing and body shapes. Creation requires
+`namespaceId`, a nonblank name and an existing workspace scope. Rename and removal
+require an existing namespace and a taskspace visible there. Unplaced taskspaces
+remain visible on each existing namespace. Shared service results contain identity,
+placement, label and timestamps without local attachment fields.
+
+Creation and label inputs refuse extra fields, including paths and observations.
+These handlers read and mutate only shared rows. They do not consult directory
+configuration, read local metadata or invoke host filesystem callbacks. A label
+may contain characters that would be invalid in a directory name. Removal clears
+card references through the existing foreign key and preserves local metadata.
+
+Version 1 retains all eight local-only taskspace lifecycle and file declarations.
+Version 2 classifies only its five file methods as local-only. The contract bump
+keeps earlier recorded lifecycle requests tied to their host recovery semantics.
+Select the contract explicitly through the registry catalog. Version 2 refuses
+schema 19 before entering handlers.
+
+Use `composeActionsV2` to record shared taskspace children. Both composition
+wrappers refuse the wrong registry version before running the callback.
+`replayComposition` accepts either matching registry and interprets its stored
+child list. Every descendant uses the root's contract and binding provider.
+
+Libsql and Node WASM tests cover local metadata independence, retained attachments,
+scope and namespace validation, cascades, caught failures, replay and nested
+compositions. Node HTTP and CLI lifecycle operations still own their current
+filesystem workflows. Migrating those callers, durable local recovery and
+production stamping remain pending.
+
 ## Request an inventory repair
 
 `system.repair` is a syncable version 1 action with an explicit repair target.
@@ -226,8 +263,9 @@ calls reuse their caller's handle, including on adapters that reuse a connection
 object. Core supplies a distinct transaction handle for each write callback.
 
 Filesystem handler separation and production action routing remain pending.
-Taskspace lifecycle kinds therefore remain local-only in the service
-registry. Raw SQL allocations and system import handlers also need integration.
+Taskspace lifecycle kinds remain local-only in the version 1 service registry.
+Version 2 shared lifecycle routing is opt-in. Raw SQL allocations and system
+import handlers also need integration.
 Migration 0019's fallback needs replacement before activation. These helpers do
 not enable mandatory SQL guards or route production writes.
 

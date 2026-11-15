@@ -67,9 +67,9 @@ export type ScopeArea = InferSelectModel<typeof scopeAreaTable>;
 export type Glue = InferSelectModel<typeof glueTable>;
 export type GlueRel = InferSelectModel<typeof glueRelTable>;
 export type TaskspaceLocal = InferSelectModel<typeof taskspaceLocalTable>;
+export type SharedTaskspace = InferSelectModel<typeof taskspaceTable>;
 /** Host view of shared taskspace identity and this device's optional attachment. */
-export type Taskspace = InferSelectModel<typeof taskspaceTable> &
-  Omit<TaskspaceLocal, "taskspaceId">;
+export type Taskspace = SharedTaskspace & Omit<TaskspaceLocal, "taskspaceId">;
 export type Warp = InferSelectModel<typeof warpTable>;
 export type Inventory = InferSelectModel<typeof inventoryTable>;
 

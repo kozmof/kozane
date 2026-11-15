@@ -10,6 +10,8 @@ import type {
   TakenCard,
   Footprint,
   SlotPlacement,
+  SharedTaskspace,
+  ActionInputsV2,
 } from "@kozane/core";
 import {
   planStow,
@@ -30,7 +32,7 @@ import {
   type TagHit,
 } from "@kozane/core";
 import { createServiceContext, withTx, withReadTx, records, type DB } from "@kozane/core/database";
-import { cards, namespaces } from "@kozane/core/services";
+import { cards, namespaces, taskspaces } from "@kozane/core/services";
 import { cardTable } from "@kozane/core/schema";
 import {
   migrations,
@@ -131,6 +133,19 @@ void cards.create(db, context, "n", input);
 void namespaces.list(db, context).then((rows: Namespace[]) => rows);
 void withTx(db, (tx) => cards.createInTx(tx, context, "n", input));
 void withTx(db, async (tx) => {
+  const shared: SharedTaskspace = await taskspaces.createInTx(tx, context, "n", {
+    name: "Shared label",
+    scopeId: "s",
+  });
+  // @ts-expect-error Shared taskspace service responses exclude device-local attachments.
+  void shared.path;
+  await taskspaces.renameInTx(tx, context, "n", shared.id, { name: "Renamed" });
+  await taskspaces.removeInTx(tx, context, "n", shared.id);
+  const envelope: ActionInputsV2["taskspaces.create"] = {
+    args: { namespaceId: "n" },
+    body: { name: "Shared", scopeId: "s" },
+  };
+  void envelope;
   const taskspaceId: string = await records.taskspace.addTaskspaceInTx({
     db: tx,
     namespaceId: "n",

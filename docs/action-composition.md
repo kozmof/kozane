@@ -33,6 +33,14 @@ runtime. Their recovery handlers are never invoked by composition. Registered
 read helpers remain trusted application code. Shared-table read footprints and
 production reader registration must be settled before sync activation.
 
+For shared taskspace lifecycle children, use `composeActionsV2` from
+`actions/composition-v2.ts` with `createServiceActionRegistryV2`. This pair uses
+contract 2 and requires schema 20. Creation, label changes and removal affect
+shared rows only. The five taskspace file methods remain excluded. Version 1
+continues to exclude all taskspace lifecycle and file methods. Each wrapper
+refuses the other contract's registry before running its callback.
+See the [version 2 services](action-execution-scopes.md#replay-shared-taskspace-actions-with-version-2).
+
 ## Freeze the root invocation
 
 The committed root input contains only direct children in invocation order.
@@ -70,6 +78,7 @@ All children use the root registry's contract version.
 ## Replay the frozen list
 
 `replayComposition` accepts the matching root invocation and recorded binding map.
+It supports both registry versions without rerunning a callback.
 It supplies no callback or recording-time reader functions. The registered handler
 interprets the list sequentially and checks each bound child ID before entering
 that child's handler. New allocations remain forbidden during replay.

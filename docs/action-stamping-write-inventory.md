@@ -69,6 +69,14 @@ handlers still combine filesystem work and shared rows. Before activation, split
 lifecycle handlers into syncable shared changes and separate local operations.
 Local-only handlers must then be prevented from changing shared rows.
 
+Those declarations remain unchanged in contract version 1. The opt-in version 2
+registry now routes taskspace lifecycle intents through shared database services
+on schema 20. Creation and label changes reject local path and observation fields.
+The five file methods still require explicit host recovery registrations. Node
+application lifecycle callers retain their existing filesystem workflows until
+their routing is migrated. See the
+[version 2 boundary](action-execution-scopes.md#replay-shared-taskspace-actions-with-version-2).
+
 ## Service and record writes
 
 All paths below are relative to `packages/core/src`. Record methods exported from
@@ -86,7 +94,7 @@ must be covered before mandatory guards are enabled. Application modules in
 | Warps | `services/warps.ts` create, update, remove | `api/warp.ts` | Existing transaction and `InTx` helpers need attribution |
 | Inventories | `services/inventories.ts` create, update, remove, stow, take, repair | `api/inventory/{rows,stow,slots,repair}.ts`. Moves other cards' slots, refits widths and clears placement on removal | The opt-in `system.repair` handler wraps requested inventory repair. Production CLI routing and action attribution remain pending |
 | Namespaces | `services/namespaces.ts` create, rename, remove, setDefault; administration also calls records | `api/namespace.ts` add, create, rename, setDefault, delete. Creation adds default partition and layer. Deletion cascades and dissolves surviving orphan glue groups | All listed service writes expose `InTx` variants. Low-level add and rename still accept DB handles. Action attribution remains pending |
-| Taskspaces | Node handlers described below | `api/taskspace.ts` add, update, delete. Shared identity and timestamps live in `taskspace`; paths and observations live in `taskspace_local`. Delete clears `card.taskspace_id` and retains local metadata | IDs and shared clocks bind in opt-in scopes. Location changes preserve shared timestamps. Filesystem handler separation remains pending |
+| Taskspaces | `services/taskspaces.ts` create, rename and remove for shared database operations; Node filesystem handlers described below | `api/taskspace.ts` add, update, delete. Shared identity and timestamps live in `taskspace`; paths and observations live in `taskspace_local`. Delete clears `card.taskspace_id` and retains local metadata | Shared services validate namespace visibility and use bound IDs and clocks. Application routing and durable filesystem separation remain pending |
 
 `services/snapshot.ts`, tags, map and warp-directory expose reads. Derived tag
 indexes are rebuilt and are not stamped application tables.
@@ -169,8 +177,9 @@ Taskspace creation and label clocks are also bound. Database creation and label
 APIs exclude local observation fields. Location updates and CLI scans preserve
 shared timestamps. The record methods share the root failure latch, including
 caught validation errors. Local metadata now has independent storage without
-cascading deletion and is excluded from shared capture. Taskspace lifecycle kinds
-remain local-only until filesystem work is separated from replay handlers.
+cascading deletion and is excluded from shared capture. Version 1 taskspace
+lifecycle kinds remain local-only. Version 2 adds the shared service handlers,
+and application filesystem workflows still need separate routing.
 
 Ordinary handles retain their creation defaults. Production application routing
 and raw SQL allocation coverage remain pending. The

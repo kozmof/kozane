@@ -1,3 +1,12 @@
+import * as taskspaces from "../services/taskspaces.js";
+import {
+  actionContractsV2,
+  type ActionInputsV2,
+  type ActionKindV2,
+  type SyncableActionKindV2,
+} from "./contracts-v2.js";
+import type { ActionHandlersV2 } from "./registry-v2.js";
+import { createCompositionRegistryV2 } from "./composition-v2.js";
 import * as cards from "../services/cards.js";
 import * as glues from "../services/glues.js";
 import * as layers from "../services/layers.js";
@@ -7,9 +16,14 @@ import * as warps from "../services/warps.js";
 import * as inventories from "../services/inventories.js";
 import * as namespaces from "../services/namespaces.js";
 import type { ServiceContext } from "../services/context.js";
-import { actionContractsV1, type ActionKindV1, type SyncableActionKindV1 } from "./contracts.js";
+import {
+  actionContractsV1,
+  type ActionInputsV1,
+  type ActionKindV1,
+  type SyncableActionKindV1,
+} from "./contracts.js";
 import { createCompositionRegistryV1, type CompositionContext } from "./composition.js";
-import type { ActionHandlersV1, ActionHandlerContext } from "./registry.js";
+import type { ActionHandlersV1, ActionHandlerContext, defineActionRegistry } from "./registry.js";
 import { runRequestedRepairInTx } from "./repair.js";
 import { requireActionAllocations } from "./allocations.js";
 import { withActionService } from "./service-frame.js";
@@ -24,18 +38,8 @@ type ServiceHandlers<C extends ServiceContext> = Pick<
   Exclude<SyncableActionKindV1, "system.compose">
 >;
 
-/** Internal opt-in registry for schemas 19 and 20. Hosts supply local recovery explicitly. */
-export function createServiceActionRegistryV1<C extends ServiceContext = ServiceContext>(
-  recoveryHandlers: LocalRecoveryHandlersV1<C>,
-) {
-  for (const kind of Object.keys(recoveryHandlers)) {
-    if (
-      !Object.hasOwn(actionContractsV1, kind) ||
-      actionContractsV1[kind as ActionKindV1] !== "local-only"
-    )
-      throw new TypeError(`Unexpected local recovery handler: ${kind}`);
-  }
-  const handlers: ServiceHandlers<C> = {
+function databaseHandlers<C extends ServiceContext>(): ServiceHandlers<C> {
+  return {
     "system.repair": {
       replay: ({ body }, { context }) => runRequestedRepairInTx(context.db, context.value, body),
     },
@@ -211,7 +215,29 @@ export function createServiceActionRegistryV1<C extends ServiceContext = Service
         namespaces.setDefaultInTx(context.db, context.value, args.namespaceId),
     },
   };
-  const registry = createCompositionRegistryV1<C>([19, 20], { ...recoveryHandlers, ...handlers });
+}
+
+/** Internal opt-in registry for schemas 19 and 20. Hosts supply local recovery explicitly. */
+export function createServiceActionRegistryV1<C extends ServiceContext = ServiceContext>(
+  recoveryHandlers: LocalRecoveryHandlersV1<C>,
+) {
+  for (const kind of Object.keys(recoveryHandlers)) {
+    if (
+      !Object.hasOwn(actionContractsV1, kind) ||
+      actionContractsV1[kind as ActionKindV1] !== "local-only"
+    )
+      throw new TypeError(`Unexpected local recovery handler: ${kind}`);
+  }
+  const registry = createCompositionRegistryV1<C>([19, 20], {
+    ...recoveryHandlers,
+    ...databaseHandlers<C>(),
+  });
+  return scopedServiceRegistry<C, ActionInputsV1>(registry);
+}
+
+function scopedServiceRegistry<C extends ServiceContext, Inputs extends object>(
+  registry: ReturnType<typeof defineActionRegistry<Inputs, ServiceActionContext<C>>>,
+) {
   const scoped = (
     execution: ActionHandlerContext<ServiceActionContext<C>>,
     operation: () => Promise<unknown>,
@@ -227,14 +253,14 @@ export function createServiceActionRegistryV1<C extends ServiceContext = Service
   };
   return Object.freeze({
     ...registry,
-    execute<K extends ActionKindV1>(
+    execute<K extends keyof Inputs & string>(
       kind: K,
       input: unknown,
       execution: ActionHandlerContext<ServiceActionContext<C>>,
     ) {
       return scoped(execution, () => registry.execute(kind, input, execution));
     },
-    replay<K extends ActionKindV1>(
+    replay<K extends keyof Inputs & string>(
       kind: K,
       input: unknown,
       execution: ActionHandlerContext<ServiceActionContext<C>>,
@@ -242,4 +268,38 @@ export function createServiceActionRegistryV1<C extends ServiceContext = Service
       return scoped(execution, () => registry.replay(kind, input, execution));
     },
   });
+}
+
+export type LocalRecoveryHandlersV2<C extends ServiceContext = ServiceContext> = Pick<
+  ActionHandlersV2<ServiceActionContext<C>>,
+  Exclude<ActionKindV2, SyncableActionKindV2>
+>;
+/** Version 2 taskspace lifecycle handlers read and change shared rows only. */
+export function createServiceActionRegistryV2<C extends ServiceContext = ServiceContext>(
+  recoveryHandlers: LocalRecoveryHandlersV2<C>,
+) {
+  for (const kind of Object.keys(recoveryHandlers)) {
+    if (
+      !Object.hasOwn(actionContractsV2, kind) ||
+      actionContractsV2[kind as ActionKindV2] !== "local-only"
+    )
+      throw new TypeError("Unexpected local recovery handler: " + kind);
+  }
+  const registry = createCompositionRegistryV2<C>({
+    ...recoveryHandlers,
+    ...databaseHandlers<C>(),
+    "taskspaces.create": {
+      replay: ({ args, body }, { context }) =>
+        taskspaces.createInTx(context.db, context.value, args.namespaceId, body),
+    },
+    "taskspaces.rename": {
+      replay: ({ args, body }, { context }) =>
+        taskspaces.renameInTx(context.db, context.value, args.namespaceId, args.taskspaceId, body),
+    },
+    "taskspaces.remove": {
+      replay: ({ args }, { context }) =>
+        taskspaces.removeInTx(context.db, context.value, args.namespaceId, args.taskspaceId),
+    },
+  });
+  return scopedServiceRegistry<C, ActionInputsV2>(registry);
 }

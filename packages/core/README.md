@@ -106,6 +106,13 @@ Deletion retains local metadata for absent taskspaces. Ordinary readers hide
 those attachments, and `getAllTaskspaceLocalMetadata` includes them for recovery.
 Legacy methods that change both tables use one adapter transaction.
 
+Use the `taskspaces` namespace from `@kozane/core/services` for validated shared
+lifecycle operations. `create` requires a namespace, a label and an existing
+workspace scope. `rename` and `remove` require namespace visibility. Their `InTx`
+variants reuse your transaction. Creation and rename return `SharedTaskspace`
+without local attachment fields, and reject path and observation inputs.
+These services change shared database rows, and your host owns filesystem work.
+
 ## Shared data and helpers
 
 Use the root entry to share domain behavior across application features.

@@ -103,12 +103,19 @@ only for present taskspaces, while local recovery readers retain absent rows.
 Shared capture, validation and replacement exclude that table. JSON version 10
 exports local rows separately, including absent taskspaces. Imports of versions
 7 through 9 split their inline values without changing the original dump.
-Filesystem handler separation remains pending, so lifecycle kinds remain local-only.
+Application lifecycle callers still use the version 1 local-only handlers.
 
 The schema-20 producer cohort now retains packed core output at migration
 `0020_taskspace_local`. Packed core and client checks pass eleven current-schema
 view outcomes and 26 earlier-schema envelope outcomes. All older cohorts remain
 unchanged. Browser execution of the new cohort remains pending.
+
+Contract version 2 now registers database-only taskspace creation, label changes
+and removal on schema 20. These shared services reject local metadata inputs,
+validate namespace visibility and return shared fields only. Version 1 retains
+its local-only lifecycle meanings. Version 2 compositions can record and replay
+shared taskspace children while the five file methods remain local-only.
+Application lifecycle routing and durable filesystem recovery remain pending.
 
 ## Version one
 
@@ -122,6 +129,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Inventory generated IDs, ORM defaults, SQL clock expressions, business triggers and conflict modes.
 - [x] Define the versioned core action registry and type-check coverage against client write classifications.
 - [x] Install real transaction-bound service handlers for the declared syncable database kinds and `system.compose` in an opt-in version 1 registry.
+- [x] Add version 2 shared taskspace lifecycle handlers for schema 20 while preserving version 1 lifecycle eligibility and recovery semantics.
 - [ ] Define complete invocation envelopes, including routing and target IDs, for every registered kind.
 - [ ] Classify each kind as `syncable` or `local-only` and define its replay or file recovery handler.
 - [ ] Define stable binding paths for entity IDs, child action IDs and clock readings. Preserve bindings when query ordering changes.
@@ -155,6 +163,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Wrap every service write in a stamped adapter transaction, including direct layer creation and rename.
 - [x] Add caller-owned transaction variants for stacking, squash, layer and partition removal, board scope removal and namespace administration.
 - [x] Add transaction-bound taskspace database APIs and separate label changes from local observations at the record API boundary.
+- [x] Expose database-only taskspace services with namespace validation and shared responses, and verify version 2 composition replay without local metadata or filesystem access.
 - [ ] Require active action groups in transaction-bound record and service methods.
 - [x] Require matching live execution scopes for real service registry dispatch and enforce ORM write restrictions through opted-in handles.
 - [x] Define and register the opt-in `system.repair` action for explicitly requested inventory repair.
