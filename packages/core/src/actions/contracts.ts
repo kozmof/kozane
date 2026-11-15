@@ -9,6 +9,7 @@ type EmptyArgs = Record<string, never>;
 
 /** Original caller arguments, including route IDs, before domain normalization. */
 export interface ActionInputsV1 {
+  "system.compose": Envelope<EmptyArgs, { children: readonly CompositionChildV1[] }>;
   "cards.create": Envelope<NamespaceArgs, Input.CardCreateInput>;
   "cards.update": Envelope<TargetArgs<"cardId">, Input.CardUpdateInput>;
   "cards.updatePositions": Envelope<NamespaceArgs, Input.CardUpdatePositionsInput>;
@@ -69,6 +70,7 @@ export type ActionKindV1 = keyof ActionInputsV1;
 
 /** Contract declarations only. Activation still requires registered handlers and proven capture. */
 export const actionContractsV1 = Object.freeze({
+  "system.compose": "syncable",
   "cards.create": "syncable",
   "cards.update": "syncable",
   "cards.updatePositions": "syncable",
@@ -119,3 +121,17 @@ export const actionContractsV1 = Object.freeze({
   "taskspaces.renameEntry": "local-only",
   "taskspaces.removeEntry": "local-only",
 } as const satisfies Record<ActionKindV1, "syncable" | "local-only">);
+
+export type SyncableActionKindV1 = {
+  [K in ActionKindV1]: (typeof actionContractsV1)[K] extends "syncable" ? K : never;
+}[ActionKindV1];
+
+/** Direct child invocations only. Named handlers own their descendants. */
+export type CompositionChildV1 = {
+  [K in SyncableActionKindV1]: {
+    readonly id: string;
+    readonly path: readonly string[];
+    readonly kind: K;
+    readonly input: ActionInputsV1[K];
+  };
+}[SyncableActionKindV1];

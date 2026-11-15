@@ -2,7 +2,8 @@
 
 Stamping is not active. This inventory records write paths and contract gaps
 for action stamping and restoration. Keep capture guards disabled until the
-adapter prototype and restoration checks pass.
+adapter prototype and restoration checks pass. Track progress in the
+[task list](action-stamping-tasks.md).
 
 ## Contract declarations
 
@@ -32,8 +33,12 @@ The [execution scope](action-execution-scopes.md) now provides an opt-in root
 transaction, sequential child dispatch, handler ownership and a failure latch.
 Core `InTx` services share that latch, including failures before SQL.
 
-Production handler installation, system import, repair, composition, config and
-taskspace observation envelopes remain pending. Contract version persistence and
+The [composition API](action-composition.md) now defines `system.compose` with
+registered read helpers, a sequential dispatcher and serialized direct child
+envelopes. Replay interprets the frozen list without rerunning the callback.
+
+Production handler installation, system import, repair, config and taskspace
+observation envelopes remain pending. Contract version persistence and
 group dispatch integration also remain pending. Do not submit work based only on
 a declaration's sync classification.
 

@@ -10,7 +10,9 @@ Production log tables, default handlers and guard activation remain pending.
 write transaction. It checks the root contract against the schema before entering
 handlers. The selected version applies to every descendant. Recording and intent
 replay use the same registered intent handler with different binding providers.
-File recovery remains a separate registry operation.
+File recovery remains a separate registry operation. The
+[composition API](action-composition.md) uses this scope to record direct child
+IDs and enforce callback and reader access.
 
 A root owns a failure latch outside SQLite. The first child dispatch, validation,
 service or SQL failure is retained even when a handler catches it. SQL savepoint

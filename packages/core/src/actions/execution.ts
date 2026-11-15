@@ -24,12 +24,24 @@ export interface ActionGroupResult {
   readonly generated: ActionBindingMap;
   readonly executions: readonly ActionExecutionRecord[];
 }
+export interface ActionChildResult {
+  readonly id: string;
+  readonly result: unknown;
+}
 export interface ActionFrameAccess {
   readonly id: string;
   readonly parentId: string | null;
   readonly kind: string;
   readonly contractVersion: number;
   child(path: readonly string[], kind: string, input: unknown): Promise<unknown>;
+  dispatch(
+    path: readonly string[],
+    kind: string,
+    input: unknown,
+    expectedId?: string,
+  ): Promise<ActionChildResult>;
+  check(): void;
+  fail(cause: unknown): never;
 }
 interface Frame {
   readonly invocation: ActionInvocation;
@@ -42,9 +54,9 @@ interface Frame {
   open: boolean;
   child: Promise<void> | null;
 }
-function freezeInput(input: unknown): unknown {
+export function freezeActionInput(input: unknown): unknown {
   if (input !== null && typeof input === "object") {
-    for (const value of Object.values(input)) freezeInput(value);
+    for (const value of Object.values(input)) freezeActionInput(value);
     Object.freeze(input);
   }
   return input;
@@ -65,7 +77,7 @@ export async function runActionGroup<Inputs extends object, C>(options: {
   const { registry, bindings, db, schemaVersion, createContext, enter, leave, complete } = options;
   const invocation = Object.freeze({
     ...options.invocation,
-    input: freezeInput(prepareInput(options.invocation.input)),
+    input: freezeActionInput(prepareInput(options.invocation.input)),
   });
   if (
     !registry.supportsSchema(schemaVersion) ||
@@ -217,18 +229,22 @@ export async function runActionGroup<Inputs extends object, C>(options: {
       path: readonly string[],
       kind: string,
       input: unknown,
+      withId = false,
+      expectedId?: string,
     ): Promise<unknown> {
       let promise: Promise<unknown>;
       try {
         assertOwner(parent);
         if (parent.sql.size)
           throw new ActionExecutionError("Cannot enter a child while parent SQL is outstanding");
-        const prepared = freezeInput(prepareInput(input));
+        const prepared = freezeActionInput(prepareInput(input));
         if (!path.length) throw new ActionExecutionError("Child action requires a stable path");
         const stablePath = [...parent.path, actionBindingPath(kind, ...path)];
         const bindingPath = actionBindingPath(kind, ...parent.path, "child", ...path);
         const id = bindings.childId(bindingPath);
         parent.generated.set(bindingPath, Object.freeze({ type: "child-id", value: id }));
+        if (expectedId !== undefined && id !== expectedId)
+          throw new ActionExecutionError("Child action ID differs from recorded composition");
         if (ids.has(id)) throw new ActionExecutionError("Child action path or ID was used twice");
         ids.add(id);
         promise = invoke(
@@ -236,6 +252,7 @@ export async function runActionGroup<Inputs extends object, C>(options: {
           parent,
           stablePath,
         );
+        if (withId) promise = promise.then((result) => Object.freeze({ id, result }));
         const settled = promise.then(
           () => {
             parent.child = null;
@@ -277,6 +294,12 @@ export async function runActionGroup<Inputs extends object, C>(options: {
         contractVersion: invocation.contractVersion,
         child: (keys: readonly string[], kind: string, input: unknown) =>
           dispatch(frame, keys, kind, input),
+        dispatch: (keys: readonly string[], kind: string, input: unknown, expectedId?: string) =>
+          dispatch(frame, keys, kind, input, true, expectedId) as Promise<ActionChildResult>,
+        check: () => assertOwner(frame),
+        fail: (cause: unknown): never => {
+          throw fail(cause);
+        },
       });
       let result: unknown;
       let unbind: (() => void) | undefined;

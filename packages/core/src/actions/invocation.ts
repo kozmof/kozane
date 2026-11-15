@@ -20,6 +20,7 @@ const taskspace = { ...namespace, taskspaceId: true } as const;
 
 /** Shape checks cover routing, independently of service body validation. */
 const inputShapes = {
+  "system.compose": { args: {}, body: true },
   "cards.create": { args: namespace, body: true },
   "cards.update": { args: card, body: true },
   "cards.updatePositions": { args: namespace, body: true },
@@ -72,31 +73,65 @@ const inputShapes = {
 
 export type PreparedActionInput = { args: Record<string, string>; body?: unknown };
 
-/** Copy the original envelope before domain validation, preserving unresolved body values. */
-export function prepareActionInputV1(kind: ActionKindV1, input: unknown): PreparedActionInput {
+const object = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+function validateEnvelope(
+  kind: ActionKindV1,
+  prepared: unknown,
+  childIds: Set<string>,
+): asserts prepared is PreparedActionInput {
   if (!Object.hasOwn(actionContractsV1, kind))
     throw new ValidationError(`Unknown action kind: ${kind}`);
-  const prepared = prepareInput(input);
-  const object = (value: unknown): value is Record<string, unknown> =>
-    value !== null && typeof value === "object" && !Array.isArray(value);
   if (!object(prepared) || !object(prepared.args))
     throw new ValidationError(`Action ${kind} requires an args object`);
+  const args = prepared.args;
   const shape = inputShapes[kind];
   const names = Object.keys(shape.args);
   if (
-    Object.keys(prepared.args).length !== names.length ||
-    names.some(
-      (key) =>
-        !Object.hasOwn(prepared.args as object, key) ||
-        typeof (prepared.args as Record<string, unknown>)[key] !== "string",
-    )
+    Object.keys(args).length !== names.length ||
+    names.some((key) => !Object.hasOwn(args, key) || typeof args[key] !== "string")
   )
     throw new ValidationError(`Action ${kind} requires routing arguments: ${names.join(", ")}`);
-  const hasBody = Object.hasOwn(prepared, "body");
   if (
-    shape.body !== hasBody ||
+    shape.body !== Object.hasOwn(prepared, "body") ||
     Object.keys(prepared).some((key) => key !== "args" && key !== "body")
   )
     throw new ValidationError(`Invalid invocation envelope for ${kind}`);
-  return prepared as PreparedActionInput;
+  if (kind !== "system.compose") return;
+  const body = prepared.body;
+  if (!object(body) || Object.keys(body).length !== 1 || !Array.isArray(body.children))
+    throw new ValidationError("Composition body requires an ordered children list");
+  const paths = new Set<string>();
+  for (const child of body.children) {
+    if (
+      !object(child) ||
+      Object.keys(child).length !== 4 ||
+      typeof child.id !== "string" ||
+      !child.id ||
+      typeof child.kind !== "string" ||
+      !Object.hasOwn(actionContractsV1, child.kind) ||
+      !Object.hasOwn(child, "input") ||
+      !Array.isArray(child.path) ||
+      !child.path.length ||
+      child.path.some((key: unknown) => typeof key !== "string" || !key)
+    )
+      throw new ValidationError("Invalid recorded composition child");
+    const childKind = child.kind as ActionKindV1;
+    if (actionContractsV1[childKind] !== "syncable")
+      throw new ValidationError(`Composition child is local-only: ${childKind}`);
+    const path = JSON.stringify([childKind, ...child.path]);
+    if (childIds.has(child.id) || paths.has(path))
+      throw new ValidationError("Duplicate composition child ID or path");
+    childIds.add(child.id);
+    paths.add(path);
+    validateEnvelope(childKind, child.input, childIds);
+  }
+}
+
+/** Copy the original envelope before domain validation, preserving unresolved body values. */
+export function prepareActionInputV1(kind: ActionKindV1, input: unknown): PreparedActionInput {
+  const prepared = prepareInput(input);
+  validateEnvelope(kind, prepared, new Set());
+  return prepared;
 }
