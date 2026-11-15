@@ -54,7 +54,8 @@
       "files": ["packages/core/src/**"],
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [{ "group": ["node:*", "@libsql/client", "@sveltejs/kit", "@sveltejs/kit/**", "$app/**", "$env/**", "**/lib/server/**", "**/db/internal/**", "**/routes/**", "**/cli/**"], "message": "Core runtime must stay driver-independent and browser-safe." }, { "group": ["**/src/lib/**", "**/src/db/**"], "message": "Core imports its owned helpers and records instead of application compatibility modules." }] }],
-        "eslint/no-restricted-globals": ["error", "process", "Buffer", "require", "__dirname", "__filename"]
+        "eslint/no-restricted-globals": ["error", "process", "Buffer", "require", "__dirname", "__filename"],
+        "eslint/no-restricted-properties": ["error", { "property": "onConflictDoNothing", "message": "Check for existing rows inside the serialized write transaction before inserting, so BEFORE capture records only real mutations." }]
       }
     },
     // ── Layer boundaries ────────────────────────────────────────────────────────────

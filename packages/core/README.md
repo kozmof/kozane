@@ -61,6 +61,17 @@ The `records` export provides table-level access through namespaces such as
 `records.namespace`, `records.partition`, and `records.card`. It supports reference
 lookups and Node compatibility, but does not apply configured service validation.
 
+Layer and partition creation and rename expose `createInTx` and `renameInTx`.
+Scopes also expose `createAreaInTx`, `updateAreaInTx`, and `removeAreaInTx`.
+Use these variants inside a caller-owned transaction. Their ordinary service
+entry points open an adapter write transaction.
+
+Scope membership helpers now separate database and transaction handles.
+`records.scopeRel.addScopeRel` and `addScopeRels` accept a `DB` and open one
+write transaction. Migrate callers that pass a `Tx` to `addScopeRelInTx` or
+`addScopeRelsInTx`. These helpers check for existing memberships before inserting,
+so duplicate requests do not run insert triggers.
+
 Input preparation accepts up to 64 nested object or array containers, counting the
 root. Deeper inputs fail with `ValidationError` before dispatch. JSON input preparation
 uses stricter prototype checks than the root `isPlainObject` helper, which accepts

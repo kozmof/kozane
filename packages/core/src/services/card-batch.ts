@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { Tx } from "../database.js";
 import { partitionTable, cardTable } from "../schema.js";
 import { addCardsInTx, onCanvas } from "../api/card.js";
-import { addScopeRels } from "../api/scope-rel.js";
+import { addScopeRelsInTx } from "../api/scope-rel.js";
 import { getPartition } from "../api/partition.js";
 import { getLayer } from "../api/layer.js";
 import { getScope } from "../api/scope.js";
@@ -74,6 +74,6 @@ export async function createInTx(
       inventory: { id: inventory.id, slot: slots[index] },
     })),
   });
-  if (scopeId) await addScopeRels({ db: tx, scopeId, cardIds: ids });
+  if (scopeId) await addScopeRelsInTx({ db: tx, scopeId, cardIds: ids });
   return { inventory, ids };
 }

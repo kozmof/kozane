@@ -7,3 +7,6 @@ export const reorder: typeof service.reorder = service.reorder;
 export type LayerCreateInput = service.LayerCreateInput;
 export type LayerRenameInput = service.LayerRenameInput;
 export type LayerReorderInput = service.LayerReorderInput;
+
+export const createInTx: typeof service.createInTx = service.createInTx;
+export const renameInTx: typeof service.renameInTx = service.renameInTx;

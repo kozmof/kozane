@@ -1,14 +1,15 @@
 export type { PartitionCreateInput, PartitionRenameInput } from "./inputs.js";
 import { prepareInput } from "./prepare-input.js";
-import type { DB } from "../database.js";
+import { withTx } from "../database.js";
+import type { DB, Tx } from "../database.js";
 import type { ServiceContext } from "./context.js";
 import { requireBoundedName } from "./validation.js";
 import { ConflictError } from "./errors.js";
 import { isUniqueConstraintError } from "../api/utils.js";
 import { addPartition, updatePartitionName } from "../api/partition.js";
 import { deletePartitionWithReassign } from "../api/composite.js";
-export async function create(
-  db: DB,
+export async function createInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -24,8 +25,8 @@ export async function create(
     throw error;
   }
 }
-export async function rename(
-  db: DB,
+export async function renameInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   partitionId: string,
@@ -50,4 +51,24 @@ export async function remove(
 ) {
   const result = await deletePartitionWithReassign({ db, namespaceId, partitionId });
   return { ok: true as const, ...result };
+}
+
+export async function create(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => createInTx(tx, context, namespaceId, prepared));
+}
+export async function rename(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  partitionId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => renameInTx(tx, context, namespaceId, partitionId, prepared));
 }

@@ -44,7 +44,7 @@ function clampRect(rect: BoardRect, context: ServiceContext): BoardRect {
   };
 }
 
-export async function create(db: DB, _context: ServiceContext, body: Record<string, unknown>) {
+export async function createInTx(db: Tx, _context: ServiceContext, body: Record<string, unknown>) {
   body = prepareInput(body);
   const name = requireBoundedName(body);
 
@@ -58,8 +58,8 @@ export async function create(db: DB, _context: ServiceContext, body: Record<stri
   }
 }
 
-export async function rename(
-  db: DB,
+export async function renameInTx(
+  db: Tx,
   _context: ServiceContext,
   _namespaceId: string,
   scopeId: string,
@@ -122,8 +122,8 @@ export async function removeMembersInTx(
   return { ok: true };
 }
 
-export async function createArea(
-  db: DB,
+export async function createAreaInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   scopeId: string,
@@ -137,8 +137,8 @@ export async function createArea(
   return await addScopeArea({ db, namespaceId, scopeId, ...clampRect(rect, context) });
 }
 
-export async function updateArea(
-  db: DB,
+export async function updateAreaInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   scopeId: string,
@@ -151,8 +151,8 @@ export async function updateArea(
   return await moveScopeArea({ db, namespaceId, scopeId, areaId, ...clampRect(rect, context) });
 }
 
-export async function removeArea(
-  db: DB,
+export async function removeAreaInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   scopeId: string,
@@ -191,4 +191,49 @@ export async function removeWorkspaceInTx(tx: Tx, _context: ServiceContext, scop
 }
 export async function removeWorkspace(db: DB, context: ServiceContext, scopeId: string) {
   return withTx(db, (tx) => removeWorkspaceInTx(tx, context, scopeId));
+}
+
+export async function create(db: DB, context: ServiceContext, body: Record<string, unknown>) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => createInTx(tx, context, prepared));
+}
+export async function rename(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  scopeId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => renameInTx(tx, context, namespaceId, scopeId, prepared));
+}
+export async function createArea(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  scopeId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => createAreaInTx(tx, context, namespaceId, scopeId, prepared));
+}
+export async function updateArea(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  scopeId: string,
+  areaId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => updateAreaInTx(tx, context, namespaceId, scopeId, areaId, prepared));
+}
+export async function removeArea(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  scopeId: string,
+  areaId: string,
+) {
+  return withTx(db, (tx) => removeAreaInTx(tx, context, namespaceId, scopeId, areaId));
 }

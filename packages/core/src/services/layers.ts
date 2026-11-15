@@ -8,8 +8,8 @@ import { ConflictError } from "./errors.js";
 import { isUniqueConstraintError } from "../api/utils.js";
 import { addLayer, updateLayerName } from "../api/layer.js";
 import { deleteLayerWithReassign } from "../api/composite.js";
-export async function create(
-  db: DB,
+export async function createInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -25,8 +25,8 @@ export async function create(
     throw error;
   }
 }
-export async function rename(
-  db: DB,
+export async function renameInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   layerId: string,
@@ -82,4 +82,24 @@ export async function reorder(
 ) {
   const prepared = prepareInput(body);
   return withTx(db, (tx) => reorderInTx(tx, context, namespaceId, prepared));
+}
+
+export async function create(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => createInTx(tx, context, namespaceId, prepared));
+}
+export async function rename(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  layerId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => renameInTx(tx, context, namespaceId, layerId, prepared));
 }

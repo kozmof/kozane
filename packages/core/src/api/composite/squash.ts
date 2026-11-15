@@ -158,8 +158,9 @@ export async function squashNamespaceCard({
     const scopeRels = scopeIds.flatMap((scopeId) =>
       cards.map(({ id }) => ({ scopeId, cardId: id })),
     );
-    for (const batch of chunked(scopeRels))
-      await tx.insert(scopeRelTable).values(batch).onConflictDoNothing();
+    // These card IDs were created in this transaction, so none has existing memberships.
+    for (const batch of chunked(scopeRels, { columnsPerRow: columnCount(scopeRelTable) }))
+      await tx.insert(scopeRelTable).values(batch);
 
     await unglueCardsInTx({ db: tx, cardIds: [cardId] });
     await tx.delete(cardTable).where(eq(cardTable.id, cardId));

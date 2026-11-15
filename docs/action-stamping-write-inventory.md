@@ -49,9 +49,9 @@ must be covered before mandatory guards are enabled. Application modules in
 | --- | --- | --- | --- |
 | Cards | `services/cards.ts` create, update, positions, remove, removeOne, move, layer, partition, stacking, squash | `api/card/{create,update,case-update,stacking,placement}.ts` and `api/composite/{cards,move,squash}.ts`. Includes glue cleanup, scope membership, inventory refits and split card creation | Preserve existing transaction wrappers and `InTx` composition paths. Squash and stacking also reach transaction-owning record helpers |
 | Glues | `services/glues.ts` create, remove | `api/glue.ts` creates glue IDs, replaces memberships and dissolves orphan groups | Existing transaction and `InTx` helpers need current-action attribution |
-| Layers | `services/layers.ts` create, rename, remove, reorder | `api/layer.ts`, `api/composite/reassign.ts`. Remove moves cards to the default layer | Create and rename currently write directly. Reorder and reassignment own transactions |
-| Partitions | `services/partitions.ts` create, rename, remove | `api/partition.ts`, `api/composite/reassign.ts`. Service removal moves cards to the default partition. The separate low-level cascading delete can delete cards | Create and rename currently write directly. Attribute reassignment and raw cascading deletion |
-| Scopes | `services/scopes.ts` create, rename, remove, addMembers, removeMembers, createArea, updateArea, removeArea, removeWorkspace | `api/{scope,scope-rel,scope-area}.ts`. Board removal differs from workspace deletion. Scope deletion can clear taskspace references and delete relations and areas | Create, rename and area writes currently use the DB directly. Other operations have transaction helpers |
+| Layers | `services/layers.ts` create, rename, remove, reorder | `api/layer.ts`, `api/composite/reassign.ts`. Remove moves cards to the default layer | Create and rename now use adapter transactions and expose `InTx` helpers. Action attribution remains pending |
+| Partitions | `services/partitions.ts` create, rename, remove | `api/partition.ts`, `api/composite/reassign.ts`. Service removal moves cards to the default partition. The separate low-level cascading delete can delete cards | Create and rename now use adapter transactions and expose `InTx` helpers. Attribute reassignment and raw cascading deletion |
+| Scopes | `services/scopes.ts` create, rename, remove, addMembers, removeMembers, createArea, updateArea, removeArea, removeWorkspace | `api/{scope,scope-rel,scope-area}.ts`. Board removal differs from workspace deletion. Scope deletion can clear taskspace references and delete relations and areas | Create, rename and area writes now use adapter transactions and expose `InTx` helpers. Action attribution remains pending |
 | Warps | `services/warps.ts` create, update, remove | `api/warp.ts` | Existing transaction and `InTx` helpers need attribution |
 | Inventories | `services/inventories.ts` create, update, remove, stow, take, repair | `api/inventory/{rows,stow,slots,repair}.ts`. Moves other cards' slots, refits widths and clears placement on removal | Wrap repair as an explicit system action and keep every slot shift in its root |
 | Namespaces | `services/namespaces.ts` create, setDefault; administration also calls records | `api/namespace.ts` add, create, rename, setDefault, delete. Creation adds default partition and layer. Deletion cascades and dissolves surviving orphan glue groups | Low-level add and rename accept DB handles. Default changes and create/delete use transactions |
@@ -96,9 +96,14 @@ through the low-level path separately.
 | `drizzle/0011_card_timestamps.sql` | Migration-time `unixepoch()` backfill | Allowed only during migration before baseline capture |
 | `drizzle/0005_layer.sql` | SQL random UUID backfill | Allowed only during migration before baseline capture |
 | `drizzle/0019_card_guards.sql` | `card_stamp_missing_timestamps` calls `unixepoch()` after insert | Replace with record-mode validation in a new migration. Bind import defaults and bypass validation in trusted restore mode |
-| `api/scope-rel.ts` | Three `.onConflictDoNothing()` sites | Check existence inside the serialized write transaction before insert |
-| `api/composite/squash.ts` | `.onConflictDoNothing()` on copied scope relations | Deduplicate/check existence inside the squash transaction |
+| `api/scope-rel.ts` | Membership creation | Existence checks now run in the same write transaction as ordinary inserts. Duplicate inputs are deduplicated before batching |
+| `api/composite/squash.ts` | Inherited scope relations for newly created cards | Ordinary inserts now run inside the squash transaction. Newly created card IDs cannot already have memberships |
 | Image upload in `lib/server/image-assets.ts` | `randomUUID()` for filenames | Durable staging name reservation outside the DB data transaction |
+
+The core lint rules now prohibit `onConflictDoNothing`. Membership idempotency
+uses existence checks, and tests verify that duplicate requests never reach
+`BEFORE INSERT` capture. A failure in a later batch rolls back earlier inserts
+and their captured attempts.
 
 The inspected runtime core writes contain no `INSERT OR IGNORE` or
 `RAISE(IGNORE)`. Migration copies and generated SQL remain a separate audit

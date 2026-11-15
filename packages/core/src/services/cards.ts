@@ -33,7 +33,7 @@ import { NotFoundError, ValidationError } from "./errors.js";
 import { getPartition } from "../api/partition.js";
 import { getDefaultLayer, getLayer } from "../api/layer.js";
 import { getScope } from "../api/scope.js";
-import { addScopeRel } from "../api/scope-rel.js";
+import { addScopeRelInTx } from "../api/scope-rel.js";
 import { withTx } from "../database.js";
 import { rejectBatch } from "./rejection.js";
 export type {
@@ -130,7 +130,7 @@ async function createPreparedInTx(
       zIndex: requestedZIndex,
     });
     const stored = { ...fields, zIndex };
-    if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
+    if (scopeId) await addScopeRelInTx({ db: tx, scopeId, cardId });
     if (!inventoryId) return { id: cardId, stored, inventory: null, placements: [] };
     // Throwing rolls the card back with the transaction, so a refused store leaves no card.
     const stowed = await stowCardsInTx({
