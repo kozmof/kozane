@@ -37,10 +37,14 @@ const directory = resolve(argument ?? join(root, "tmp", "releases", commit));
 const manifestPath = join(directory, "release.json");
 
 async function alreadyPublished(artifact) {
-  const integrity = "sha512-" + createHash("sha512")
-    .update(readFileSync(join(directory, artifact.file))).digest("base64");
+  const integrity =
+    "sha512-" +
+    createHash("sha512")
+      .update(readFileSync(join(directory, artifact.file)))
+      .digest("base64");
   const exists = await publishedVersion(artifact.name, artifact.version, integrity);
-  if (exists) console.log(artifact.name + "@" + artifact.version + " already matches the prepared archive");
+  if (exists)
+    console.log(artifact.name + "@" + artifact.version + " already matches the prepared archive");
   return exists;
 }
 if (mode === "prepare") {
