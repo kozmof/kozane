@@ -130,8 +130,10 @@ Migration 0021 now journals taskspace directory claims before disk work. Creatio
 publishes the local attachment and confirmation together, preserves pending
 evidence after interruption and reports it through `doctor` without retrying
 callbacks. Shared restoration preserves the journal, and JSON exports include
-records for absent shared identities. Other filesystem operations, startup
-reconciliation and explicit pending-operation resolution remain pending. See
+records for absent shared identities. Startup now reports pending claims without
+changing them. `taskspace recover` previews and explicitly confirms a verified
+attachment without retrying filesystem work. Other filesystem operations and
+explicit abandonment remain pending. See
 [local filesystem operation records](local-file-operations.md).
 
 ## Version one
@@ -232,6 +234,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Journal taskspace directory claims before disk work, atomically confirm local attachments, retain interrupted evidence and report it through `doctor` without retrying callbacks. See [local filesystem operation records](local-file-operations.md).
 - [ ] Extend journaling to taskspace file writes, directory moves and directory deletion.
 - [ ] Reconcile interrupted taskspace file operations against disk state on startup without automatically retrying external-effect callbacks.
+- [x] Inspect pending directory claims on authenticated server startup and provide explicit attachment confirmation with live marker, identity and attachment checks. Preserve blocked claims without repeating filesystem work.
 - [ ] Add asset manifests to baselines and effect sets, covering references in invocations and full before and after images.
 - [ ] Reserve image names with durable staging pins before files become visible, then write and verify their bytes.
 - [ ] Commit image references, manifests and staging completion together. Preserve staging pins after rollback.

@@ -127,7 +127,7 @@ kozane net ssg preview [--out <dir>] [--base <path>] [--host <host>] [--port <po
 ### `kozane doctor`
 
 Check workspace detection, config, database permissions, migrations, card timestamps, SQLite
-integrity and references, workspace limits, inventory consistency, taskspace layout,
+integrity and references, workspace limits, inventory consistency, pending directory claims, taskspace layout,
 `taskspace.namespacePaths` keys, and port availability. Exit 0 when all checks pass, otherwise 1.
 
 Database content checks require current migrations. Invalid timestamps, oversized text or
@@ -138,6 +138,10 @@ the UTF-16 limit through astral characters.
 
 For broken config, run `doctor config`. For database corruption, export readable data before
 restoring a backup.
+
+For interrupted directory creation, inspect the operation ID with
+`taskspace recover <operationId>`. Confirm verified attachments explicitly with `--apply`.
+`doctor --fix` leaves pending claims unchanged.
 
 `--fix` first fixes the taskspace layout, then runs the checks. It refuses while Kozane is
 running for the workspace.
@@ -845,6 +849,26 @@ kozane taskspace scan [--apply] [--reattach [--namespace <namespaceId>]] [--clea
 | `--reattach`       | Re-link orphan taskspaces found on disk but missing from DB (needs `--apply`)   |
 | `--cleanup`        | Delete DB records for taskspaces whose marker file is missing (needs `--apply`) |
 | `--namespace <id>` | Namespace for reattached taskspaces (needs `--reattach`)                        |
+
+### `kozane taskspace recover <operationId>`
+
+Inspect a local directory claim using the full operation ID printed by `kozane doctor`.
+The default is read-only. The output identifies the taskspace, stored path and whether
+the claim can be confirmed.
+
+| Option | Description |
+| --- | --- |
+| `--apply` | Confirm a verified directory attachment and journal entry together |
+
+Confirmation requires the exact intended marker bytes, an existing shared taskspace in
+the recorded namespace and no conflicting attachment. It refuses missing or changed
+markers, unsafe paths, symlinks, invalid intent and absent or reassigned taskspaces.
+It records the current local observation time and preserves shared timestamps.
+An already confirmed operation makes no changes.
+
+The command never recreates a directory, rewrites a marker, changes shared identity or
+retries filesystem work. Inspect blocked claims and preserve their files for manual
+recovery. `doctor --fix` does not confirm or retry claims.
 
 ### `kozane taskspace create <name>`
 

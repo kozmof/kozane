@@ -3,10 +3,9 @@ import { eq } from "drizzle-orm";
 import { withTx, type DB } from "../../../db/database.js";
 import { localFileOperationTable, taskspaceTable } from "../../../db/schema.js";
 import { addTaskspaceInTx, updateTaskspaceLocationInTx } from "../../../db/api/taskspace.js";
-import { taskspaceMarkerText } from "../../taskspace-marker.js";
 import { claimTaskspaceDirectory } from "../taskspace-directory.js";
 import { storedLocation } from "../taskspace-path.js";
-import { contentHash } from "../local-file-operations.js";
+import { localClaimIntent } from "../local-file-operations.js";
 
 type DirectoryInput = Omit<
   Parameters<typeof claimTaskspaceDirectory>[0],
@@ -42,12 +41,6 @@ export async function claimRecordedTaskspace(record: RecordInput, directory: Dir
       name: record.name,
       scopeId: record.scopeId,
     });
-    // Adoption determines ownership only after mkdir. Retain each legitimate byte hash.
-    const ownership = directory.ownIfCreated
-      ? directory.adoptExisting
-        ? [false, true]
-        : [true]
-      : [false];
     await db.insert(localFileOperationTable).values({
       id: operationId,
       kind: "taskspace.claim",
@@ -57,13 +50,10 @@ export async function claimRecordedTaskspace(record: RecordInput, directory: Dir
       path: location.storedPath,
       pathKind: location.pathKind,
       state: "pending",
-      intent: JSON.stringify({
+      intent: localClaimIntent(taskspaceId, record.namespaceId, {
         adoptExisting: directory.adoptExisting,
         parentsInside: directory.parentsInside,
         ownIfCreated: directory.ownIfCreated,
-        markerHashes: ownership.map((owned) =>
-          contentHash(taskspaceMarkerText(taskspaceId, record.namespaceId, owned)),
-        ),
       }),
       createdAt: new Date(),
     });

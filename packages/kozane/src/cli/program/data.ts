@@ -2,6 +2,7 @@
 import { Command } from "commander";
 
 import { taskspaceScan, taskspaceCreate, taskspaceList } from "../commands/taskspace.js";
+import { taskspaceRecover } from "../commands/taskspace-recover.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "../commands/db.js";
 
 export function registerDataCommands(program: Command): void {
@@ -52,6 +53,12 @@ export function registerDataCommands(program: Command): void {
       "Namespace for reattached taskspaces (default: each marker's namespace, or the workspace default if it was deleted; requires --reattach)",
     )
     .action((opts) => taskspaceScan(opts));
+
+  taskspace
+    .command("recover <operationId>")
+    .description("Inspect an interrupted directory claim (read-only by default)")
+    .option("--apply", "Confirm a verified directory attachment without changing files")
+    .action((operationId, opts) => taskspaceRecover(operationId, opts));
 
   taskspace
     .command("create <name>")

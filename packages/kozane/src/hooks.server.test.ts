@@ -10,6 +10,9 @@ vi.mock("./db/internal/config", () => ({
   getDBURL: () => ":memory:",
 }));
 vi.mock("./db/client", () => ({ getDb: vi.fn(async () => ({ ready: true })) }));
+vi.mock("./lib/server/local-claim-startup", () => ({
+  reportPendingLocalClaims: vi.fn(async () => undefined),
+}));
 
 import { handle } from "./hooks.server";
 import { AUTH_FAILURE_LIMIT, _resetAuthFailuresForTest } from "./lib/server/security";

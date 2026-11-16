@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { DROP_CARD_GUARDS_SQL } from "../test-utils/db.js";
+import { localClaimIntent } from "../lib/server/local-file-operations.js";
 
 /**
  * Test `kozane doctor` through the CLI, including SQLite integrity checks and reports of rows
@@ -89,9 +90,16 @@ describe("kozane doctor — integrity and limits", () => {
     const root = initWorkspace();
     await withRawDb(root, (client) =>
       client
-        .execute(
-          "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('interrupted','taskspace.claim',1,'absent','absent','pending-directory','workspace_relative','pending','{\"markerHashes\":[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}',1)",
-        )
+        .execute({
+          sql: "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('interrupted','taskspace.claim',1,'absent','absent','pending-directory','workspace_relative','pending',?,1)",
+          args: [
+            localClaimIntent("absent", "absent", {
+              adoptExisting: false,
+              parentsInside: true,
+              ownIfCreated: true,
+            }),
+          ],
+        })
         .then(() => undefined),
     );
     for (const args of [[], ["--fix"]]) {

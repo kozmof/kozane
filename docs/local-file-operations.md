@@ -33,8 +33,32 @@ observations. It distinguishes missing directories, missing markers, exact marke
 hash matches, different markers, unsafe paths, invalid intent and unreadable
 evidence. Inspection refuses symlinks and never changes the operation or directory.
 A matching marker alone does not confirm an operation. `doctor --fix` does not
-retry directory claims. Startup reconciliation and explicit resolution remain
-pending.
+confirm or retry directory claims. On the first authenticated request for an
+opened database, the server reports pending claims once per database handle and
+workspace. Static prerendering skips this check. Inspection failures produce a
+diagnostic without blocking service. Startup never attaches directories or
+repeats filesystem callbacks.
+
+Inspect a claim with the full operation ID printed by `doctor`.
+
+```sh
+kozane taskspace recover <operationId>
+kozane taskspace recover <operationId> --apply
+```
+
+The default is read-only. Applying repeats verification inside the database write
+transaction and serializes with this process's taskspace operations. It requires
+the exact marker bytes, hashes derived from the recorded identity and claim
+options, an existing taskspace in the original namespace and an absent or
+matching attachment. A different attachment, a missing shared identity or unsafe
+disk evidence blocks confirmation. The command does not recreate shared rows.
+
+Confirmation commits the attachment, current local observation time and journal
+completion together. It preserves shared timestamps and changes no files.
+Statement and commit failures retain the pending operation and prior attachment.
+Repeating confirmation of an already confirmed operation makes no changes.
+Blocked claims remain available for manual recovery. Explicit abandonment and
+reconciliation for other filesystem operations remain pending.
 
 The journal has no foreign keys to shared rows. Shared action capture, isolated
 validation and shared replacement exclude it alongside `taskspace_local`.
