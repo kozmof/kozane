@@ -106,11 +106,11 @@ operations. Imports of versions
 7 through 9 split their inline values without changing the original dump.
 Application lifecycle callers still use the version 1 local-only handlers.
 
-The schema-20 and schema-21 producer cohorts retain packed core output at
-`0020_taskspace_local` and `0021_local_file_operation`. Packed core and client
-checks pass eleven current-schema view outcomes and 37 earlier-schema envelope
-outcomes. All older cohorts remain unchanged. Browser execution of these cohorts
-remains pending.
+The schema-20, schema-21 and schema-22 producer cohorts retain packed core output
+at `0020_taskspace_local`, `0021_local_file_operation` and
+`0022_taskspace_file_operations`. Packed core and client checks pass eleven
+current-schema view outcomes and 48 earlier-schema envelope outcomes. All older
+cohorts remain unchanged. Browser execution of these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
 and removal on schemas 20–22. These shared services reject local metadata inputs,

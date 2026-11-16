@@ -29,16 +29,20 @@ no appended file padding. These four earlier cohorts retain twelve databases and
 The `core-0.2.0-migration20-wasm` cohort retains four new databases produced by the
 packed candidate at source revision `5e16037`. It uses migration
 `0020_taskspace_local` and records eleven view outcomes. Its manifest pins the
-producer archive and driver versions. The corpus now has sixteen databases.
+producer archive and driver versions.
 These eleven outcomes now join the earlier-ID checks.
 
 The `core-0.2.0-migration21-wasm` cohort retains four databases produced by the
 packed candidate at source revision `4ff3e6b`. It uses migration
-`0021_local_file_operation` and records eleven view outcomes. The corpus now has
-twenty databases. Packed core and client checks verify eleven current-ID outcomes
-and 37 earlier-ID envelope outcomes without changing older fixtures. The producer
-archive, database hashes and driver versions are pinned in the manifest.
-Chromium execution for the schema-20 and schema-21 cohorts remains pending.
+`0021_local_file_operation` and records eleven view outcomes.
+
+The `core-0.2.0-migration22-wasm` cohort retains four databases produced by the
+packed candidate at source revision `489f261`. It uses migration
+`0022_taskspace_file_operations` and records eleven view outcomes. The corpus now
+has twenty-four databases. Packed core and client checks verify eleven current-ID
+outcomes and 48 earlier-ID envelope outcomes without changing older fixtures.
+Each manifest pins its producer archive, database hashes and driver versions.
+Chromium execution for the schema-20, schema-21 and schema-22 cohorts remains pending.
 
 Add a new cohort explicitly after building the intended candidate.
 
