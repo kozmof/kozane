@@ -178,6 +178,15 @@ release leaves other owners and live references protected. JSON version 16 retai
 owner records and release decisions. Production workflow registration remains
 pending. See [local manifest retention](asset-manifest-retention.md).
 
+The capture prototype now publishes local baseline and effect-set ownership in
+the same transaction as captured history. Node integration tests verify actual
+files before transferring staging protection. Intermediate, deleted and
+invocation-only images survive cleanup, including after history is deselected.
+Upload completion rolls back with failed history publication. Native and WASM
+tests verify atomic owner publication and staging preservation after publication
+and commit failures. This remains a prototype integration rather than production
+action routing.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -291,6 +300,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Serialize local upload installation, card-reference pin transfer and cleanup with the database writer lock. Preserve pending files and deletion requests during contention and rollback.
 - [ ] Protect assets needed by live rows, uploads, staged transfers, pending work, retained history and recovery records.
 - [x] Add durable local manifest reservations, protected byte verification and explicit owner release. Make cleanup honor every registered owner and preserve local protection through shared restoration.
+- [x] Connect prototype baseline and effect-set publication to local manifest ownership. Verify protected files, atomic staging handoff and upload completion, cleanup contention and retained images after history is deselected.
 - [x] Recover verified published uploads or explicitly abandon reviewed pins without repeating filesystem work. Preserve intent, errors and decisions, and keep live references protected during cleanup.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.
 - [ ] Enable mandatory guards and ship version one only after phases 1–5 and their verification pass.

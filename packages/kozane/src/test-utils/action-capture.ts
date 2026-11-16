@@ -40,6 +40,13 @@ import { canonicalSchemaManifest } from "../../../core/src/generated/schema-mani
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 type Handle = DB | Tx | ReadTx;
 const noAssets: AssetManifest = Object.freeze({ version: 1, entries: Object.freeze([]) });
+/** Trusted host hook. Publish only local ownership bookkeeping in the capture transaction. */
+export type CaptureAssetPublisher = (
+  tx: Tx,
+  publication:
+    | { readonly kind: "baseline"; readonly manifest: AssetManifest }
+    | { readonly kind: "effect-set"; readonly id: string; readonly manifest: AssetManifest },
+) => Promise<void>;
 function attachment(value: unknown, required: readonly string[]) {
   const parsed = parseAssetManifest(value);
   const selected = selectAssetManifest(parsed, required);
@@ -156,7 +163,11 @@ function empty(context: Awaited<ReturnType<typeof marker>>): boolean {
   );
 }
 
-export async function installCapturePrototype(db: DB, catalog: AssetManifest = noAssets) {
+export async function installCapturePrototype(
+  db: DB,
+  catalog: AssetManifest = noAssets,
+  publishAssets?: CaptureAssetPublisher,
+) {
   const staged = parseAssetManifest(catalog);
   await withTx(db, async (tx) => {
     await configureActionConnection((statement) => tx.values(sql.raw(statement)));
@@ -223,12 +234,17 @@ export async function installCapturePrototype(db: DB, catalog: AssetManifest = n
         );
       }
     }
+    await publishAssets?.(tx, { kind: "baseline", manifest: assets });
   });
-  return openCapturePrototype(db, staged);
+  return openCapturePrototype(db, staged, publishAssets);
 }
 
 /** Reopen persisted test history without reinstalling capture guards or allocating a baseline. */
-export async function openCapturePrototype(db: DB, catalog: AssetManifest = noAssets) {
+export async function openCapturePrototype(
+  db: DB,
+  catalog: AssetManifest = noAssets,
+  publishAssets?: CaptureAssetPublisher,
+) {
   const staged = parseAssetManifest(catalog);
   const initial = await withReadTx(db, (tx) => storedBaseline(tx));
 
@@ -384,6 +400,7 @@ export async function openCapturePrototype(db: DB, catalog: AssetManifest = noAs
           sql`INSERT INTO capture_selection(position,run_id) SELECT coalesce(max(position)+1,0),${runId} FROM capture_selection`,
         );
         await verify(tx);
+        await publishAssets?.(tx, { kind: "effect-set", id: runId, manifest: assets });
       },
     };
   }

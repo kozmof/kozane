@@ -69,6 +69,13 @@ rollback and shared restoration. Node tests cover archived verification,
 publication failure, cross-connection locking and cleanup after the final live
 reference disappears.
 
+The capture prototype now uses these APIs through an optional host publication
+hook. Tests commit baseline and effect-set owners with captured history, verify
+actual files before releasing staging protection and preserve that protection
+after failed publication. They also verify application upload completion in the
+same action transaction. Cleanup contention cannot remove files during handoff.
+Restoring an earlier selection leaves owners for deselected origin history intact.
+
 This is a retention mechanism for trusted host workflows. Production action
 history, transfer queues and recovery-bundle builders still need to register
 their owners and release them under their retention policies. No new end-user

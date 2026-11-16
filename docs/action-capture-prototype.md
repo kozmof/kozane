@@ -137,7 +137,24 @@ effect-set manifest with its action. Reopening reads stored baseline data rather
 than recreating it. Restoration verifies selected manifests and bytes outside
 SQLite transactions, then refuses installation if history changed during those
 reads. Tests cover deleted intermediate images, failed commits and missing bytes.
-Production manifest persistence and asset retention remain pending.
+The optional `CaptureAssetPublisher` host hook receives each exact manifest and
+the capture transaction. Baseline installation calls it before committing guards
+and baseline data. Action completion calls it after reconstruction checks and
+before committing the completed run. Reopening accepts a new hook explicitly.
+The fixture does not persist callbacks or infer a host's ownership policy.
+
+Integration tests use the hook to reserve a local baseline or effect-set owner,
+verify live or archived bytes under the writer lock and release the earlier
+staging owner. These changes commit with the captured history and shared rows.
+Verification, statement and deferred commit failures preserve staging protection
+without publishing partial ownership. Application upload completion also rolls
+back with a failed captured action. Cleanup from another connection cannot pass
+the writer boundary during publication.
+
+Images referenced only by invocations or intermediate row images remain protected
+after the final card is deleted. Restoring an earlier selection preserves owners
+for all retained origin history, including deselected runs. Production action
+routing and automatic owner registration remain pending.
 
 ## Validate complete application projections
 

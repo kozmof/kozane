@@ -83,6 +83,19 @@ image referenced only by its invocation. Other tests cover reopening history,
 failed manifest commits, missing or corrupt bytes, changed catalogs and concurrent
 history changes. Failed verification preserves rows, local metadata and selection.
 
+The fixture's optional `CaptureAssetPublisher` hook publishes host bookkeeping
+inside baseline installation or action completion. It receives the exact attached
+manifest and the caller's transaction. The host integration tests reserve and
+verify a ledger owner before releasing the staging owner in that transaction.
+Failures roll back history, shared rows, upload completion and ownership transfer
+together. The earlier staging reservation remains available for review.
+
+Node tests use actual files and cleanup queues. They verify intermediate, deleted
+and invocation-only requirements after the last live reference disappears and
+after history is deselected. Native and WASM tests also cover atomic metadata
+publication and deferred commit failure. Deselection preserves ownership because
+the original history remains retained.
+
 These capture tables and guards exist only in test databases. The separate
 [local manifest ledger](asset-manifest-retention.md) now provides durable owner
 reservations and cleanup protection. The public core entry exports manifest
