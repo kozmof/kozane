@@ -32,6 +32,10 @@
     {
       "id": "core-0.2.0-migration23-wasm",
       "sha256": "5e98b964c431951458537fad9f9a1191ee3dcfbf1cb5fc227605c0bed532d127"
+    },
+    {
+      "id": "core-0.2.0-migration24-wasm",
+      "sha256": "6d75a6d31d84b53f22443c21cd48d3fc72d14d2ff255aa3c52f9c908b4fae0f1"
     }
   ]
 }

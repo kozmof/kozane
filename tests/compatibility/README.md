@@ -42,11 +42,15 @@ packed candidate at source revision `489f261`. It uses migration
 
 The `core-0.2.0-migration23-wasm` cohort retains four databases produced by the
 packed candidate at source revision `4d4737f`. It uses migration
-`0023_taskspace_directory_operations` and records eleven view outcomes. The corpus
-now has twenty-eight databases. Packed core and client checks verify eleven
-current-ID outcomes and 59 earlier-ID envelope outcomes without changing older fixtures.
+`0023_taskspace_directory_operations` and records eleven view outcomes.
+
+The `core-0.2.0-migration24-wasm` cohort retains four databases produced by the
+packed candidate at source revision `17b6269`. It uses migration
+`0024_local_operation_abandonment` and records eleven view outcomes. The corpus now
+has thirty-two databases. Packed core and client checks verify eleven current-ID
+outcomes and 70 earlier-ID envelope outcomes without changing older fixtures.
 Each manifest pins its producer archive, database hashes and driver versions.
-Chromium execution for the schema-20 through schema-23 cohorts remains pending.
+Chromium execution for the schema-20 through schema-24 cohorts remains pending.
 
 Add a new cohort explicitly after building the intended candidate.
 
