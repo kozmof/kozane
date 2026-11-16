@@ -232,7 +232,8 @@ it("builds and verifies manifests from real captured history including a deleted
     .insert(partitionTable)
     .values({ id: "p", namespaceId: "n", name: "Inbox", isDefault: true });
   await db.insert(cardTable).values({ id: "c", layerId: "l", partitionId: "p", content: ref(1) });
-  const capture = await installCapturePrototype(db);
+  const staged = await buildAssetManifest([name(1), name(2), name(3)], async () => bytes);
+  const capture = await installCapturePrototype(db, staged);
   const registry = defineActionRegistry<{ replace: unknown }, { db: Tx }>({
     contractVersion: 1,
     schemaVersions: [24],
@@ -292,6 +293,6 @@ it("builds and verifies manifests from real captured history including a deleted
   expect(await captureApplicationRows(db)).toEqual(before);
   storage.set(name(2), bytes);
   expect(await verifyAssetManifest(history, historyNames, read)).toEqual(history);
-  await capture.restore(async () => (await createTestDB()) as unknown as DB, []);
+  await capture.restore(async () => (await createTestDB()) as unknown as DB, [], read);
   expect(baselineAssetNames(await captureApplicationRows(db))).toEqual(baselineNames);
 });

@@ -132,6 +132,19 @@ export function parseAssetManifest(input: unknown): AssetManifest {
   return manifest(output);
 }
 
+/** Attach only required entries from a previously verified, pinned asset catalog. */
+export function selectAssetManifest(input: unknown, required: readonly string[]): AssetManifest {
+  const catalog = new Map(parseAssetManifest(input).entries.map((entry) => [entry.name, entry]));
+  return manifest(
+    names(required).map((name) => {
+      const entry = catalog.get(name);
+      if (!entry)
+        throw new AssetManifestError(`Required asset is missing from staged catalog: ${name}`);
+      return entry;
+    }),
+  );
+}
+
 async function describe(name: string, read: ReadAsset): Promise<AssetManifestEntry> {
   const loaded = await read(name);
   if (

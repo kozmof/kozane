@@ -130,11 +130,14 @@ trigger writes, repeated updates, alternate capture/business trigger creation
 orders, parent-first cascade capture, corrupt before images, composite keys,
 deferred commit failures and marker cleanup.
 
-The [image-manifest foundation](action-asset-manifests.md) also collects required
-images from captured baseline rows, original invocations and every full before
-and after image. Its tests retain deleted intermediate references and reject
-missing bytes before successful verification. Production manifest persistence
-and asset retention remain pending.
+The [image-manifest integration](action-asset-manifests.md) collects required images
+from baseline rows, original invocations and every full before and after image.
+The fixture stores baseline rows and their manifest together and commits each
+effect-set manifest with its action. Reopening reads stored baseline data rather
+than recreating it. Restoration verifies selected manifests and bytes outside
+SQLite transactions, then refuses installation if history changed during those
+reads. Tests cover deleted intermediate images, failed commits and missing bytes.
+Production manifest persistence and asset retention remain pending.
 
 ## Validate complete application projections
 

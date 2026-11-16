@@ -47,16 +47,45 @@ fields are copied before awaiting host reads.
 An identical entry may appear in several source manifests. Different lengths or
 hashes under one name are refused because image names identify immutable bytes.
 
+`selectAssetManifest` chooses the exact required subset of a staged catalog and
+refuses missing entries. It validates and copies metadata without reading files.
+The host must verify and protect the catalog's bytes before entering a database
+action. Selection alone does not establish that the files are available.
+
 ## Current integration
 
-Native and WASM tests collect manifests from real captured baseline rows and
-effects. They retain an image that was updated and deleted in one action, plus an
-image referenced only by its original invocation. Missing retained bytes fail
-verification without changing live rows. Baseline restoration preserves the
-original image requirement.
+The capture prototype stores tagged baseline rows, their encoding version and
+their manifest together in `capture_baseline`. Action completion attaches a
+manifest to `capture_run` in the same transaction as the shared changes, finalized
+effects, invocations and materialization selection. A completed run requires a
+manifest, including an explicit empty manifest when no images are needed.
 
-These helpers do not persist manifests, pin files or change cleanup. Production
-baseline and effect-set attachment, durable upload and transfer staging, serialized
-cleanup protection and recovery-bundle publication remain pending. Builders that
-use these helpers still need to protect files across collection, reading and
-publication. Verification alone does not provide that protection.
+Pass a staged catalog to `installCapturePrototype` or an individual `hooks` call.
+Completion chooses only the required entries and refuses missing metadata. It
+also rejects name collisions with the baseline or any retained completed run,
+including runs outside the current materialization selection. Statement and
+commit failures roll back the action and manifest together.
+
+`openCapturePrototype` reopens the stored baseline without reinstalling guards.
+Reconstruction reads the baseline and selected history from SQL. It independently
+collects required names and checks each attached manifest for exact coverage.
+Unsupported encodings and incomplete metadata prevent reconstruction.
+
+Restoration requires a host asset reader when selected data needs images. It
+checks all selected manifests and bytes before creating the validation database
+or replacing rows. Host reads run outside SQLite transactions. Before installing
+rows, it rechecks the stored baseline, history and current selection. Changes
+during asset preparation refuse installation and preserve the newer state.
+Assets used only by unselected history are not required for that restoration.
+
+Native and WASM tests retain an image updated and deleted in one action, plus an
+image referenced only by its invocation. Other tests cover reopening history,
+failed manifest commits, missing or corrupt bytes, changed catalogs and concurrent
+history changes. Failed verification preserves rows, local metadata and selection.
+
+These tables and guards exist only in test databases. Production baseline and
+effect-set attachment, durable upload and transfer staging, serialized cleanup
+protection and recovery-bundle publication remain pending. Hosts must protect
+files across collection, reading and publication. Verification alone does not
+provide that protection. The prototype does not enable production action logging
+or change image cleanup.

@@ -1,6 +1,6 @@
 /** Test-only integration fixture. These tables and triggers are not the production log schema. */
 import { sql } from "drizzle-orm";
-import { withTx, type DB, type Tx } from "../../../core/src/database.js";
+import { withReadTx, withTx, type DB, type Tx, type ReadTx } from "../../../core/src/database.js";
 import {
   configureActionConnection,
   verifyActionConnection,
@@ -13,7 +13,19 @@ import {
 import {
   createRowProjection,
   type ProjectionEffect,
+  type ProjectionRow,
 } from "../../../core/src/actions/projection.js";
+import { ROW_ENCODING_VERSION, parseTaggedRow } from "../../../core/src/actions/row-codec.js";
+import {
+  baselineAssetNames,
+  effectAssetNames,
+  parseAssetManifest,
+  selectAssetManifest,
+  mergeAssetManifests,
+  verifyAssetManifest,
+  type AssetManifest,
+  type ReadAsset,
+} from "../../../core/src/actions/asset-manifest.js";
 import type {
   ActionExecutionRecord,
   ActionGroupResult,
@@ -26,7 +38,43 @@ import { createRestorationPlan } from "../../../core/src/actions/restoration-pla
 import { canonicalSchemaManifest } from "../../../core/src/generated/schema-manifest.js";
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
-type Handle = DB | Tx;
+type Handle = DB | Tx | ReadTx;
+const noAssets: AssetManifest = Object.freeze({ version: 1, entries: Object.freeze([]) });
+function attachment(value: unknown, required: readonly string[]) {
+  const parsed = parseAssetManifest(value);
+  const selected = selectAssetManifest(parsed, required);
+  if (selected.entries.length !== parsed.entries.length)
+    throw new Error("Asset manifest has extra entries");
+  return selected;
+}
+async function storedBaseline(db: Handle) {
+  const rows = await db
+    .select({
+      encoding: sql<number>`row_encoding_ver`,
+      rows: sql<string>`rows`,
+      assets: sql<string>`asset_manifest`,
+    })
+    .from(sql`capture_baseline`);
+  if (rows.length !== 1 || rows[0].encoding !== ROW_ENCODING_VERSION)
+    throw new Error("Missing baseline or unsupported baseline row encoding");
+  const input = JSON.parse(rows[0].rows);
+  if (!Array.isArray(input)) throw new Error("Invalid stored baseline rows");
+  const baseline: readonly ProjectionRow[] = Object.freeze(
+    input.map((entry) => {
+      if (
+        !entry ||
+        typeof entry.table !== "string" ||
+        Object.keys(entry).length !== 2 ||
+        !Object.hasOwn(entry, "row")
+      )
+        throw new Error("Invalid stored baseline row");
+      return Object.freeze({ table: entry.table, row: parseTaggedRow(entry.row) });
+    }),
+  );
+  createRowProjection(capturedTables, baseline);
+  const assets = attachment(JSON.parse(rows[0].assets), baselineAssetNames(baseline));
+  return { baseline, assets, recorded: rows[0] };
+}
 export interface CapturedEffect extends ProjectionEffect {
   readonly actionId: string;
   readonly executionOrd: number;
@@ -77,6 +125,7 @@ async function runs(db: Handle) {
       complete: sql<number>`complete`,
       invocation: sql<string | null>`invocation`,
       generated: sql<string | null>`generated`,
+      assets: sql<string | null>`asset_manifest`,
     })
     .from(sql`capture_run`)
     .orderBy(sql`seq`);
@@ -107,16 +156,24 @@ function empty(context: Awaited<ReturnType<typeof marker>>): boolean {
   );
 }
 
-export async function installCapturePrototype(db: DB) {
-  const baseline = await withTx(db, async (tx) => {
+export async function installCapturePrototype(db: DB, catalog: AssetManifest = noAssets) {
+  const staged = parseAssetManifest(catalog);
+  await withTx(db, async (tx) => {
     await configureActionConnection((statement) => tx.values(sql.raw(statement)));
     const baseline = await captureApplicationRows(tx);
+    const assets = selectAssetManifest(staged, baselineAssetNames(baseline));
+    await tx.run(
+      sql`CREATE TABLE capture_baseline(singleton INTEGER PRIMARY KEY CHECK(singleton=1),row_encoding_ver INTEGER NOT NULL,rows TEXT NOT NULL,asset_manifest TEXT NOT NULL)`,
+    );
+    await tx.run(
+      sql`INSERT INTO capture_baseline VALUES(1,${ROW_ENCODING_VERSION},${JSON.stringify(baseline)},${JSON.stringify(assets)})`,
+    );
     await tx.run(
       sql`CREATE TABLE capture_context(singleton INTEGER PRIMARY KEY CHECK(singleton=1),mode TEXT NOT NULL DEFAULT 'record' CHECK(mode IN ('record','restore')),run_id TEXT,action_id TEXT,execution_ord INTEGER,next_effect_ord INTEGER NOT NULL DEFAULT 0)`,
     );
     await tx.run(sql`INSERT INTO capture_context(singleton) VALUES(1)`);
     await tx.run(
-      sql`CREATE TABLE capture_run(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,root_id TEXT NOT NULL,contract_ver INTEGER NOT NULL,complete INTEGER NOT NULL DEFAULT 0,invocation TEXT,generated TEXT)`,
+      sql`CREATE TABLE capture_run(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,root_id TEXT NOT NULL,contract_ver INTEGER NOT NULL,complete INTEGER NOT NULL DEFAULT 0,invocation TEXT,generated TEXT,asset_manifest TEXT,CHECK(complete=0 OR (complete=1 AND invocation IS NOT NULL AND generated IS NOT NULL AND asset_manifest IS NOT NULL)))`,
     );
     await tx.run(
       sql`CREATE TABLE capture_execution(run_id TEXT NOT NULL,action_id TEXT NOT NULL,parent_id TEXT,kind TEXT NOT NULL,contract_ver INTEGER NOT NULL,execution_ord INTEGER NOT NULL,input TEXT NOT NULL,generated TEXT,PRIMARY KEY(run_id,action_id),UNIQUE(run_id,execution_ord))`,
@@ -166,8 +223,14 @@ export async function installCapturePrototype(db: DB) {
         );
       }
     }
-    return baseline;
   });
+  return openCapturePrototype(db, staged);
+}
+
+/** Reopen persisted test history without reinstalling capture guards or allocating a baseline. */
+export async function openCapturePrototype(db: DB, catalog: AssetManifest = noAssets) {
+  const staged = parseAssetManifest(catalog);
+  const initial = await withReadTx(db, (tx) => storedBaseline(tx));
 
   async function selection(db: Handle) {
     return (
@@ -178,19 +241,55 @@ export async function installCapturePrototype(db: DB) {
     ).map(({ id }) => id);
   }
   async function reconstruct(db: Handle, selected: readonly string[]) {
-    let projection = createRowProjection(capturedTables, baseline);
-    const history = new Map((await runs(db)).map((run) => [run.id, run]));
+    const baseline = await storedBaseline(db);
+    let projection = createRowProjection(capturedTables, baseline.baseline);
+    const allRuns = await runs(db);
+    const history = new Map(allRuns.map((run) => [run.id, run]));
+    const manifests = [baseline.assets];
+    const records = [];
     if (new Set(selected).size !== selected.length)
       throw new Error("Duplicate selected capture run");
     for (const id of selected) {
-      if (history.get(id)?.complete !== 1)
+      const run = history.get(id);
+      if (run?.complete !== 1 || !run.invocation || !run.assets)
         throw new Error("Missing or incomplete selected capture run");
-      projection = projection.apply(await effects(db, id));
+      const captured = await effects(db, id);
+      const entries = await executions(db, id);
+      const assets = attachment(
+        JSON.parse(run.assets),
+        effectAssetNames(
+          [
+            JSON.parse(run.invocation),
+            ...entries.map((entry) => {
+              if (!entry.generated) throw new Error("Incomplete capture execution");
+              return {
+                ...entry,
+                input: JSON.parse(entry.input),
+                generated: JSON.parse(entry.generated),
+              };
+            }),
+          ],
+          captured,
+        ),
+      );
+      manifests.push(assets);
+      records.push({ run, captured, entries });
+      projection = projection.apply(captured);
     }
-    return projection;
+    const assets = mergeAssetManifests(manifests);
+    return {
+      projection,
+      assets,
+      stamp: JSON.stringify({
+        baseline: baseline.recorded,
+        allRuns,
+        selected: await selection(db),
+        records,
+      }),
+    };
   }
   async function verify(db: Handle) {
-    const projection = await reconstruct(db, await selection(db));
+    const { projection } = await reconstruct(db, await selection(db));
     const loaded = await captureApplicationRows(db);
     for (const table of capturedTables)
       projection.verifyInstalledRows(
@@ -200,7 +299,8 @@ export async function installCapturePrototype(db: DB) {
     return projection;
   }
 
-  function hooks(runId: string) {
+  function hooks(runId: string, catalog: AssetManifest = staged) {
+    const catalogSnapshot = parseAssetManifest(catalog);
     return {
       enter: async (tx: Tx, entry: Omit<ActionExecutionRecord, "generated">) => {
         const context = await marker(tx);
@@ -265,8 +365,20 @@ export async function installCapturePrototype(db: DB) {
             sql`UPDATE capture_execution SET input=${JSON.stringify(entry.input)},generated=${JSON.stringify(entry.generated)} WHERE run_id=${runId} AND action_id=${entry.id}`,
           );
         }
+        const assets = selectAssetManifest(
+          catalogSnapshot,
+          effectAssetNames([group.invocation, ...group.executions], captured),
+        );
+        const baseline = await storedBaseline(tx);
+        const retained = (await runs(tx))
+          .filter((run) => run.complete === 1)
+          .map((run) => {
+            if (!run.assets) throw new Error("Completed capture run has no asset manifest");
+            return parseAssetManifest(JSON.parse(run.assets));
+          });
+        mergeAssetManifests([baseline.assets, ...retained, assets]);
         await tx.run(
-          sql`UPDATE capture_run SET complete=1,invocation=${JSON.stringify(group.invocation)},generated=${JSON.stringify(group.generated)} WHERE id=${runId}`,
+          sql`UPDATE capture_run SET complete=1,invocation=${JSON.stringify(group.invocation)},generated=${JSON.stringify(group.generated)},asset_manifest=${JSON.stringify(assets)} WHERE id=${runId}`,
         );
         await tx.run(
           sql`INSERT INTO capture_selection(position,run_id) SELECT coalesce(max(position)+1,0),${runId} FROM capture_selection`,
@@ -276,15 +388,29 @@ export async function installCapturePrototype(db: DB) {
     };
   }
   return {
-    baseline,
+    baseline: initial.baseline,
+    baselineManifest: initial.assets,
     hooks,
     effects: (runId: string) => effects(db, runId),
     executions: (runId: string) => executions(db, runId),
     runs: () => runs(db),
     marker: () => marker(db),
     selection: () => selection(db),
-    restore: async (createDatabase: () => Promise<DB>, runIds: readonly string[]) => {
+    restore: async (
+      createDatabase: () => Promise<DB>,
+      runIds: readonly string[],
+      readAsset: ReadAsset = async () => {
+        throw new Error("Asset reader is required for restoration");
+      },
+    ) => {
       const selected = [...runIds];
+      const prepared = await withReadTx(db, (tx) => reconstruct(tx, selected));
+      // Host reads and transfers belong outside SQLite transactions. Staging pins remain a separate gate.
+      await verifyAssetManifest(
+        prepared.assets,
+        prepared.assets.entries.map((entry) => entry.name),
+        readAsset,
+      );
       const plan = createRestorationPlan(
         canonicalSchemaManifest,
         capturedTables.map(({ name }) => name),
@@ -293,7 +419,10 @@ export async function installCapturePrototype(db: DB) {
         await configureActionConnection((query) => tx.values(sql.raw(query)));
         if (!empty(await marker(tx)))
           throw new Error("Restoration requires an empty record marker");
-        const projection = await reconstruct(tx, selected);
+        const current = await reconstruct(tx, selected);
+        if (current.stamp !== prepared.stamp)
+          throw new Error("Capture history changed while staging restoration assets");
+        const { projection } = current;
         await validateApplicationProjection(createDatabase, projection);
         await tx.run(sql`UPDATE capture_context SET mode='restore' WHERE singleton=1`);
         for (const name of plan.deleteOrder) await tx.run(sql.raw(`DELETE FROM ${quote(name)}`));
@@ -311,6 +440,6 @@ export async function installCapturePrototype(db: DB) {
         await verifyActionConnection((query) => tx.values(sql.raw(query)));
       });
     },
-    verify: () => verify(db),
+    verify: () => withReadTx(db, (tx) => verify(tx)),
   };
 }

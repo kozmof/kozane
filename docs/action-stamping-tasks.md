@@ -153,8 +153,11 @@ still require manual review. See
 Internal image-manifest builders now collect requirements from tagged baselines,
 original invocations and full before and after images. They verify required byte
 lengths and hashes and reject conflicting bytes under one name. Native and WASM
-capture tests cover intermediate and deleted images. Durable manifest attachment,
-staging pins and cleanup protection remain pending. See
+capture tests cover intermediate and deleted images. The capture prototype now
+persists baseline rows and manifests, attaches manifests atomically to completed
+effect sets, and verifies selected bytes before restoration. It refuses history
+changes during asset preparation. Production manifest attachment, staging pins
+and cleanup protection remain pending. See
 [image manifests for retained action data](action-asset-manifests.md).
 
 ## Version one
@@ -262,6 +265,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Inspect pending directory claims on authenticated server startup and provide explicit attachment confirmation with live marker, identity and attachment checks. Preserve blocked claims without repeating filesystem work.
 - [ ] Add asset manifests to baselines and effect sets, covering references in invocations and full before and after images.
 - [x] Add internal image-manifest collection, canonical validation, byte verification and collision checks. Verify requirements from real captured history on native and WASM adapters.
+- [x] Persist manifests with prototype baselines and completed effect sets. Reopen stored history, verify selected bytes before restoration, and refuse changed history or failed manifest commits without replacing rows.
 - [ ] Reserve image names with durable staging pins before files become visible, then write and verify their bytes.
 - [ ] Commit image references, manifests and staging completion together. Preserve staging pins after rollback.
 - [ ] Serialize file installation, staging transitions and cleanup decisions so protection transfers without a gap.

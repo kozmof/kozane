@@ -3,7 +3,7 @@ import { is, sql } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../../../core/src/schema.js";
 import { localTableNames } from "../../../core/src/actions/local-tables.js";
-import type { DB, Tx } from "../../../core/src/database.js";
+import type { DB, Tx, ReadTx } from "../../../core/src/database.js";
 import type { ProjectionRow } from "../../../core/src/actions/projection.js";
 import { captureRowSql, decodeCapturedRow } from "../../../core/src/actions/sql-codec.js";
 const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"';
@@ -30,7 +30,7 @@ export const capturedTables = Object.freeze(
     .sort((a, b) => a.name.localeCompare(b.name)),
 );
 
-type Handle = DB | Tx;
+type Handle = DB | Tx | ReadTx;
 export async function captureApplicationRows(db: Handle): Promise<ProjectionRow[]> {
   const output: ProjectionRow[] = [];
   for (const table of capturedTables) {
