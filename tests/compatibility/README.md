@@ -46,11 +46,20 @@ packed candidate at source revision `4d4737f`. It uses migration
 
 The `core-0.2.0-migration24-wasm` cohort retains four databases produced by the
 packed candidate at source revision `17b6269`. It uses migration
-`0024_local_operation_abandonment` and records eleven view outcomes. The corpus now
-has thirty-two databases. Packed core and client checks verify eleven current-ID
-outcomes and 70 earlier-ID envelope outcomes without changing older fixtures.
+`0024_local_operation_abandonment` and records eleven view outcomes. These earlier
+cohorts retain thirty-two databases.
+
+The `core-0.2.0-migration25-wasm` cohort retains two boundary databases produced by
+the packed candidate at source revision `28c1e83`. It uses migration
+`0025_local_image_upload` and records two view outcomes. The fixtures preserve
+schema formatting and SQLite statistics and the exact recovery-size boundary.
+
+The `core-0.2.0-migration25-wasm-basic` cohort adds four databases from the same
+source revision with eleven service-scenario outcomes. The corpus now has
+thirty-eight databases. Packed core and client checks verify thirteen current-ID
+outcomes and 81 earlier-ID envelope outcomes without changing older fixtures.
 Each manifest pins its producer archive, database hashes and driver versions.
-Chromium execution for the schema-20 through schema-24 cohorts remains pending.
+Chromium execution for the schema-20 through schema-25 cohorts remains pending.
 
 Add a new cohort explicitly after building the intended candidate.
 
