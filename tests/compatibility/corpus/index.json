@@ -44,6 +44,10 @@
     {
       "id": "core-0.2.0-migration25-wasm-basic",
       "sha256": "1f1e8ce44499b2eb1c98fb597363f0ac99c8a0e510d22cabd4264edfb095cae3"
+    },
+    {
+      "id": "core-0.2.0-migration26-wasm",
+      "sha256": "51d528c731ec8a30c0efa1fd7d00ea00d6dde75317f84d5e3ae75667a70da2a6"
     }
   ]
 }

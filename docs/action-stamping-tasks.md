@@ -106,9 +106,9 @@ operations. Imports of versions
 7 through 9 split their inline values without changing the original dump.
 Application lifecycle callers still use the version 1 local-only handlers.
 
-The retained taskspace and upload cohorts cover migrations 20–25, through
-`0025_local_image_upload`. Packed core and client checks pass thirteen
-current-schema view outcomes and 81 earlier-schema envelope outcomes. All older
+The retained taskspace, upload and manifest cohorts cover migrations 20–26, through
+`0026_local_asset_manifest`. Packed core and client checks pass eleven
+current-schema view outcomes and 94 earlier-schema envelope outcomes. All older
 cohorts remain unchanged. Browser execution of these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes

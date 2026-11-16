@@ -56,10 +56,15 @@ schema formatting and SQLite statistics and the exact recovery-size boundary.
 
 The `core-0.2.0-migration25-wasm-basic` cohort adds four databases from the same
 source revision with eleven service-scenario outcomes. The corpus now has
-thirty-eight databases. Packed core and client checks verify thirteen current-ID
-outcomes and 81 earlier-ID envelope outcomes without changing older fixtures.
+thirty-eight databases at migration 25.
+
+The `core-0.2.0-migration26-wasm` cohort adds four databases produced by the
+packed candidate at source revision `1504311`. It uses migration
+`0026_local_asset_manifest` and records eleven service-scenario outcomes. The
+corpus now has forty-two databases. Packed core and client checks verify eleven
+current-ID outcomes and 94 earlier-ID envelope outcomes without changing older fixtures.
 Each manifest pins its producer archive, database hashes and driver versions.
-Chromium execution for the schema-20 through schema-25 cohorts remains pending.
+Chromium execution for the schema-20 through schema-26 cohorts remains pending.
 
 Add a new cohort explicitly after building the intended candidate.
 
