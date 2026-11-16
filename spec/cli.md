@@ -147,7 +147,8 @@ For interrupted directory creation, inspect the operation ID with
 Pending file and managed-directory mutations are reported with operation IDs and disk
 observations. A matching hash, marker or missing entry does not confirm an operation.
 Inspect disk state before repeating a change. `doctor --fix` does not retry these
-operations, and `taskspace recover` accepts directory claims only.
+operations. `taskspace recover` can explicitly confirm a completed directory mutation
+after verifying its recorded taskspace snapshot and disk evidence.
 
 `--fix` first fixes the taskspace layout, then runs the checks. It refuses while Kozane is
 running for the workspace.
@@ -192,10 +193,12 @@ destination paths before the first move. A failed step or database commit leaves
 completed disk changes and pending evidence for inspection. It does not move directories
 back automatically. Later layout runs leave pending operations alone.
 
-Review the recorded paths and repair any attachment with `kozane taskspace scan --apply`.
+Review completed moves with `taskspace recover <operationId>` and explicitly confirm
+verified database changes with `--apply`. For other disk states, inspect the recorded
+paths and repair attachments with `kozane taskspace scan --apply` after manual repair.
 Use `taskspace abandon <operationId>` to preview abandonment of reviewed tracking records.
-Only applying that decision removes the operation from pending diagnostics. Its original
-intent and errors remain in the journal. Abandonment does not repair or reverse a move.
+Applying abandonment removes the operation from pending diagnostics while retaining its
+original intent and errors. Abandonment does not repair or reverse a move.
 
 Moves run in dependency order. If `c` goes into `b` and `b` goes into `a`, `a` moves
 first, followed by `b` and `c`. Circular dependencies, such as `a` going into `b` while
@@ -864,23 +867,34 @@ kozane taskspace scan [--apply] [--reattach [--namespace <namespaceId>]] [--clea
 
 ### `kozane taskspace recover <operationId>`
 
-Inspect a local directory claim using the full operation ID printed by `kozane doctor`.
-The default is read-only. The output identifies the taskspace, stored path and whether
-the claim can be confirmed.
+Inspect a local directory claim or mutation using the full operation ID printed by
+`kozane doctor`. The default is read-only. The output identifies the taskspace, stored
+path and whether the operation can be confirmed. Completed mutation previews also
+show the action and any destination or new label.
 
 | Option | Description |
 | --- | --- |
-| `--apply` | Confirm a verified directory attachment and journal entry together |
+| `--apply` | Finish verified database changes and confirm the journal entry together |
 
-Confirmation requires the exact intended marker bytes, an existing shared taskspace in
+Claim confirmation requires the exact intended marker bytes, an existing shared taskspace in
 the recorded namespace and no conflicting attachment. It refuses missing or changed
 markers, unsafe paths, symlinks, invalid intent and absent or reassigned taskspaces.
 It records the current local observation time and preserves shared timestamps.
 An already confirmed operation makes no changes.
 
-The command never recreates a directory, rewrites a marker, changes shared identity or
-retries filesystem work. Inspect blocked claims and preserve their files for manual
-recovery. `doctor --fix` does not confirm or retry claims.
+Mutation confirmation requires unchanged shared fields and attachment from the recorded
+snapshot and an existing invoking namespace. A move or layout operation requires the
+recorded marker and directory identity at the destination only. Removal requires an
+absent source. Applying a move commits its recorded label and local path. Layout
+recovery changes only the local path. Removal deletes the shared taskspace, clears
+card links and retains local metadata. Confirmation commits atomically with these
+changes and preserves creation and local observation timestamps.
+
+Changed taskspaces, unsafe or ambiguous disk states, recorded filesystem errors,
+abandoned operations and file mutations are refused. Inspect blocked operations and
+preserve their evidence for manual recovery. The command never repeats filesystem
+work or rewrites markers. `doctor --fix` does not confirm operations. Run it after
+layout confirmation to finish any pending configuration update.
 
 ### `kozane taskspace abandon <operationId>`
 

@@ -20,6 +20,7 @@ import { taskspaceMarkerText, TASKSPACE_MARKER_FILE } from "../../lib/taskspace-
 import * as disk from "../../lib/server/taskspace-directory.js";
 import { inspectTaskspaceDirectoryOperation } from "../../lib/server/taskspace-directory-operations.js";
 import { abandonLocalOperation } from "../../lib/server/taskspace-service/abandon-operation.js";
+import { recoverTaskspaceOperation } from "../../lib/server/taskspace-service/recover-operation.js";
 import { captureApplicationRows } from "../../test-utils/action-tables.js";
 import type { DB as CoreDB } from "../../../../core/src/database.js";
 import { applyTaskspaceLayout, planTaskspaceLayout } from "./taskspace-layout.js";
@@ -63,6 +64,49 @@ const plan = () => planTaskspaceLayout(db, root, readConfig(root));
 const rows = () => db.select().from(localFileOperationTable);
 // Source aliases share this adapter with the host package during filesystem integration tests.
 const shared = () => captureApplicationRows(db as unknown as CoreDB);
+
+it.each(["notes", "taskspaces"])(
+  "recovers completed %s layout without repeating direct or temporary moves",
+  async (path) => {
+    const id = await owned(path);
+    const before = await shared();
+    const original = (await getTaskspace({ db, taskspaceId: id }))!;
+    const config = readFileSync(join(root, ".kozane", "config.json"));
+    const planned = await plan();
+    await db.run(
+      sql`CREATE TRIGGER reject_confirmation BEFORE UPDATE ON local_file_operation BEGIN SELECT RAISE(ABORT,'interrupted'); END`,
+    );
+    expect((await applyTaskspaceLayout(db, root, planned)).failed).toHaveLength(1);
+    await db.run(sql`DROP TRIGGER reject_confirmation`);
+    const [pending] = await rows();
+    const marker = readFileSync(join(root, planned.moves[0].to, TASKSPACE_MARKER_FILE));
+    const callback = vi.spyOn(disk, "moveTaskspaceDirectory");
+    expect((await recoverTaskspaceOperation(db, root, pending.id)).status).toBe("confirmable");
+    expect(await getTaskspace({ db, taskspaceId: id })).toEqual(original);
+    expect(await rows()).toEqual([pending]);
+    await db.run(
+      sql`CREATE TRIGGER reject_recovery BEFORE UPDATE ON local_file_operation BEGIN SELECT RAISE(ABORT,'recovery interrupted'); END`,
+    );
+    await expect(recoverTaskspaceOperation(db, root, pending.id, true)).rejects.toThrow();
+    expect(await getTaskspace({ db, taskspaceId: id })).toEqual(original);
+    expect(await rows()).toEqual([pending]);
+    expect(await shared()).toEqual(before);
+    await db.run(sql`DROP TRIGGER reject_recovery`);
+    expect((await recoverTaskspaceOperation(db, root, pending.id, true)).status).toBe("confirmed");
+    expect(await getTaskspace({ db, taskspaceId: id })).toEqual({
+      ...original,
+      path: planned.moves[0].to,
+    });
+    expect(await shared()).toEqual(before);
+    expect(readFileSync(join(root, planned.moves[0].to, TASKSPACE_MARKER_FILE))).toEqual(marker);
+    expect(readFileSync(join(root, planned.moves[0].to, "notes.txt"), "utf8")).toBe(
+      "Original content",
+    );
+    expect(readFileSync(join(root, ".kozane", "config.json"))).toEqual(config);
+    expect((await applyTaskspaceLayout(db, root, await plan())).config).toBe("updated");
+    expect(callback).not.toHaveBeenCalled();
+  },
+);
 
 it.each(["notes", "taskspaces"])(
   "journals every planned path for %s and changes only local attachment",

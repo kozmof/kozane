@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import { isStrictlyInside } from "../fs-paths.js";
 
 type Snapshot = NonNullable<Awaited<ReturnType<typeof getTaskspace>>>;
-function snapshot(record: Snapshot) {
+export function taskspaceDirectorySnapshot(record: Snapshot) {
   if (
     !Number.isSafeInteger(record.createdAt.getTime()) ||
     !Number.isSafeInteger(record.updatedAt.getTime())
@@ -37,7 +37,8 @@ async function guard(tx: Tx | ReadTx, namespaceId: string, original: Snapshot) {
   if (
     !(await getNamespace({ db: tx, namespaceId })) ||
     !current ||
-    JSON.stringify(snapshot(current)) !== JSON.stringify(snapshot(original))
+    JSON.stringify(taskspaceDirectorySnapshot(current)) !==
+      JSON.stringify(taskspaceDirectorySnapshot(original))
   )
     throw new TaskspaceFilesError(
       "stale",
@@ -86,7 +87,7 @@ export async function journalTaskspaceDirectoryChange<T, R>(
   }
   const intent = JSON.stringify({
     ...request,
-    before: snapshot(original),
+    before: taskspaceDirectorySnapshot(original),
     directory: evidence.identity,
     ...(request.operation === "move" && { targetPath: join(dirname(path), request.name) }),
     ...(request.operation === "layout" && {

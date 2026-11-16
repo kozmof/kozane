@@ -94,9 +94,7 @@ function change(operation: "move" | "remove") {
 }
 
 it("refuses unrepresentable shared timestamps before recording intent or touching disk", async () => {
-  await db.run(
-    sql`UPDATE taskspace SET created_at=8640000000001 WHERE id=${params.taskspaceId}`,
-  );
+  await db.run(sql`UPDATE taskspace SET created_at=8640000000001 WHERE id=${params.taskspaceId}`);
   const callback = vi.spyOn(disk, "removeTaskspaceDirectory");
   await expect(change("remove")).rejects.toMatchObject({ status: 409 });
   expect(await rows()).toEqual([]);
@@ -230,6 +228,7 @@ it.each([
     await createLocalClaimStartupCheck(warn)(db, root);
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0][0]).toContain("pending taskspace directory operation");
+    expect(warn.mock.calls[0][0]).toContain("kozane taskspace recover <operationId>");
     expect(callback).toHaveBeenCalledOnce();
     expect(await rows()).toEqual(pending);
     await expect(recoverLocalClaim(db, root, pending[0].id, true)).rejects.toThrow(

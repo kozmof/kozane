@@ -191,7 +191,7 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
         const pending = await pendingTaskspaceDirectoryOperations(connection.db, root);
         complete = pending.total === 0;
         if (!complete)
-          detail = `${plural(pending.total, "pending directory operation")}: ${pending.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}; inspect directories before repeating changes; --fix does not retry directory operations`;
+          detail = `${plural(pending.total, "pending directory operation")}: ${pending.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}; inspect with kozane taskspace recover <operationId>; --fix does not retry directory operations`;
       } finally {
         connection.close();
       }

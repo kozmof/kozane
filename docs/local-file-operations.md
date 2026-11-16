@@ -88,7 +88,7 @@ changing them. File hashes distinguish matching bytes from changed content.
 Directory creation reports whether a directory is present. Rename inspection
 reports source and destination presence. Removal inspection reports entry
 presence. These observations do not prove which process changed a file and do not
-confirm an operation. `doctor --fix` does not retry file work. The directory-claim
+confirm an operation. `doctor --fix` does not retry file work. The directory
 recovery command refuses file mutations. Explicit resolution for these operations
 remains pending.
 
@@ -113,10 +113,8 @@ that all original contents survived a partial deletion.
 
 `doctor` and authenticated startup inspect pending directory operations without
 changing them. Inspection reports source and destination presence, marker and
-directory identity mismatches, unsafe paths and unreadable evidence. The claim
-recovery command refuses these operations. Completed-state recovery remains
-pending. Database-only changes that keep or
-already lack a directory do not create a directory journal entry.
+directory identity mismatches, unsafe paths and unreadable evidence. Database-only
+changes that keep or already lack a directory do not create a directory journal entry.
 
 CLI layout repair records the source and destination before its first move. When
 the destination is inside the source, the intent also records the temporary path.
@@ -133,6 +131,28 @@ A later layout invocation leaves pre-existing pending work alone. This also
 prevents layout moves from invalidating evidence for pending claims or file changes.
 Known collisions discovered before intent creation require no filesystem callback.
 
+`taskspace recover <operationId>` also previews completed directory mutations.
+Applying recovery requires the original shared fields and attachment to match
+the recorded snapshot. The invoking namespace must still exist. A move or layout
+operation requires the exact recorded directory and marker at its destination.
+A removal requires the source to be absent. Source-only, intermediate, ambiguous
+or unsafe disk states block recovery.
+
+`--apply` commits the recorded label and attachment change, layout attachment
+change or shared deletion with journal confirmation in one transaction. Deletion
+clears linked card references and retains local metadata. Recovery preserves
+creation and local observation timestamps. Layout recovery preserves all shared
+fields. It never moves, removes, creates or restores files. Concurrent attempts
+serialize on the taskspace queue, and a failed confirmation rolls back database
+changes while retaining pending evidence.
+
+An operation with a recorded filesystem error requires manual review and cannot
+be confirmed this way. The error may describe partial work that completed-state
+inspection cannot establish. Abandoned operations and file mutations are also
+refused. Repeating confirmation of an already confirmed operation changes nothing.
+After confirming a completed layout, run `doctor --fix` to finish its configuration
+update. Configuration changes are outside the recovery transaction.
+
 Inspect and repair disk state before retrying layout maintenance. Use
 `taskspace scan --apply` to align an attachment after a manual repair. Explicitly
 abandon a reviewed pending tracking record when it no longer needs reconciliation.
@@ -146,8 +166,8 @@ The default is read-only. Applying abandonment records a separate state, reason
 and timestamp while preserving the original intent and error. It changes no files,
 attachments or shared rows and does not cancel running work. Confirmed operations
 cannot be abandoned. Repeating the same decision is idempotent, and a different
-reason cannot replace the recorded one. An abandoned claim cannot be confirmed
-by the claim recovery command. Abandoned records stay in recovery exports and
+reason cannot replace the recorded one. Abandoned operations cannot be confirmed
+by the recovery command. Abandoned records stay in recovery exports and
 shared restoration preserves them. Pending diagnostics exclude them.
 
 The journal has no foreign keys to shared rows. Shared action capture, isolated

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -65,3 +65,66 @@ it("inspects and explicitly confirms a real interrupted CLI creation without ret
     client.close();
   }
 }, 30000);
+
+it("recovers an interrupted doctor layout commit and then finishes configuration without moving files again", async () => {
+  const root = mkdtempSync(join(tmpdir(), "kozane-cli-layout-recover-"));
+  roots.push(root);
+  expect(run(root, "init").status).toBe(0);
+  const configPath = join(root, ".kozane", "config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  config.server.port = 0;
+  config.taskspace.defaultDir = ".";
+  config.taskspace.namespaceDirs = false;
+  writeFileSync(configPath, JSON.stringify(config));
+  expect(run(root, "taskspace", "create", "notes", "--no-scope").status).toBe(0);
+  writeFileSync(join(root, "notes", "a.txt"), "Retained content");
+  delete config.taskspace.namespaceDirs;
+  writeFileSync(configPath, JSON.stringify(config));
+  const client = createClient({ url: `file:${join(root, ".kozane", "kozane.db")}` });
+  try {
+    const shared = (await client.execute("SELECT * FROM taskspace")).rows;
+    const attachment = (await client.execute("SELECT * FROM taskspace_local")).rows;
+    await client.execute(
+      "CREATE TRIGGER interrupt_layout BEFORE UPDATE ON local_file_operation BEGIN SELECT RAISE(ABORT,'interrupted'); END",
+    );
+    const failed = run(root, "doctor", "--fix");
+    expect(failed.stdout).toContain("needs recovery");
+    await client.execute("DROP TRIGGER interrupt_layout");
+    const pending = (
+      await client.execute("SELECT * FROM local_file_operation WHERE kind='taskspace.directory'")
+    ).rows[0];
+    expect(pending.state).toBe("pending");
+    const intent = JSON.parse(String(pending.intent));
+    const markerPath = join(root, intent.targetPath, ".taskspace.json");
+    const marker = readFileSync(markerPath);
+    const preview = run(root, "taskspace", "recover", String(pending.id));
+    expect(preview.status).toBe(0);
+    expect(preview.stdout).toContain("action    : layout");
+    expect(preview.stdout).toContain("Rerun with --apply");
+    expect((await client.execute("SELECT * FROM taskspace_local")).rows).toEqual(attachment);
+    expect(
+      (
+        await client.execute(
+          "SELECT state FROM local_file_operation WHERE kind='taskspace.directory'",
+        )
+      ).rows[0].state,
+    ).toBe("pending");
+    const applied = run(root, "taskspace", "recover", String(pending.id), "--apply");
+    expect(applied.status).toBe(0);
+    expect(applied.stdout).toContain("database changes confirmed. No files changed.");
+    expect((await client.execute("SELECT * FROM taskspace")).rows).toEqual(shared);
+    expect((await client.execute("SELECT * FROM taskspace_local")).rows).toEqual([
+      { ...attachment[0], path: intent.targetPath },
+    ]);
+    expect(readFileSync(markerPath)).toEqual(marker);
+    expect(readFileSync(join(root, intent.targetPath, "a.txt"), "utf8")).toBe("Retained content");
+    const operations = (await client.execute("SELECT * FROM local_file_operation")).rows;
+    const fixed = run(root, "doctor", "--fix");
+    expect(fixed.status).toBe(0);
+    expect(JSON.parse(readFileSync(configPath, "utf8")).taskspace.defaultDir).toBe("taskspaces");
+    expect((await client.execute("SELECT * FROM local_file_operation")).rows).toEqual(operations);
+    expect(readFileSync(markerPath)).toEqual(marker);
+  } finally {
+    client.close();
+  }
+}, 60000);

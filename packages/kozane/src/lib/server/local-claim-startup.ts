@@ -31,7 +31,7 @@ export function createLocalClaimStartupCheck(
         const directories = await pendingTaskspaceDirectoryOperations(db, root);
         if (directories.total > 0)
           warn(
-            `[kozane] ${directories.total} pending taskspace directory operation(s): ${directories.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}. Run 'kozane doctor' before repeating them. Directory work was not retried.`,
+            `[kozane] ${directories.total} pending taskspace directory operation(s): ${directories.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}. Run 'kozane doctor' and 'kozane taskspace recover <operationId>' to inspect them. Directory work was not retried.`,
           );
       })
       .catch(() => {

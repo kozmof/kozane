@@ -141,7 +141,10 @@ confirmation commit together. Completed disk changes and pending evidence surviv
 a failed final transaction. CLI layout journals now include temporary paths and
 leave interrupted work for inspection. Migration 0024 retains explicit abandonment
 decisions, including their reasons and timestamps, without changing files or shared
-rows. Completed-state recovery for file and directory operations remains pending. See
+rows. Explicit recovery now confirms completed directory moves, layout changes and
+removals after verifying the original taskspace snapshot and disk evidence. It commits
+database changes and confirmation together without repeating filesystem work.
+Recorded filesystem errors still require manual review. File recovery remains pending. See
 [local filesystem operation records](local-file-operations.md).
 
 ## Version one
@@ -244,6 +247,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Journal managed-directory deletion and legacy combined rename, retain marker and directory identity evidence, and commit shared changes and confirmation atomically.
 - [x] Journal CLI layout moves and intermediate paths, atomically confirm attachment updates, and retain completed disk changes instead of unrecorded compensating moves.
 - [x] Add explicit abandonment of reviewed pending operations while retaining intent, errors, reason and timestamp. Refuse automatic retries of pending layout work.
+- [x] Recover completed directory moves, layout changes and removals with snapshot and disk checks, atomic database confirmation and no filesystem retries. Preserve blocked and failed recovery evidence.
 - [ ] Reconcile interrupted taskspace file operations against disk state on startup without automatically retrying external-effect callbacks.
 - [x] Inspect pending directory claims on authenticated server startup and provide explicit attachment confirmation with live marker, identity and attachment checks. Preserve blocked claims without repeating filesystem work.
 - [ ] Add asset manifests to baselines and effect sets, covering references in invocations and full before and after images.

@@ -57,8 +57,8 @@ export function registerDataCommands(program: Command): void {
 
   taskspace
     .command("recover <operationId>")
-    .description("Inspect an interrupted directory claim (read-only by default)")
-    .option("--apply", "Confirm a verified directory attachment without changing files")
+    .description("Inspect a directory claim or completed directory mutation (read-only by default)")
+    .option("--apply", "Finish verified database changes without changing files")
     .action((operationId, opts) => taskspaceRecover(operationId, opts));
 
   taskspace

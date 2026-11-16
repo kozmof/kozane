@@ -108,6 +108,7 @@ describe("kozane doctor — integrity and limits", () => {
       expect(result.status).toBe(1);
       expect(result.stdout).toContain("Taskspace directory operations complete");
       expect(result.stdout).toContain("pending-directory (source-present)");
+      expect(result.stdout).toContain("inspect with kozane taskspace recover <operationId>");
       expect(result.stdout).toContain("--fix does not retry directory operations");
       expect(readFileSync(marker, "utf8")).toBe(contents);
     }
