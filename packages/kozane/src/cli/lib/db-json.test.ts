@@ -262,11 +262,15 @@ describe("db JSON export/import", () => {
       await client.execute(
         "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at,confirmed_at) VALUES('confirmed','taskspace.claim',1,'missing','missing','local/confirmed','workspace_relative','confirmed','{}',1,2)",
       );
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('file','taskspace.file',1,'missing','missing','local/file.txt','workspace_relative','pending','{}',1)",
+      );
     } finally {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(2);
+    expect(source.version).toBe(12);
+    expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_file_operation[0].path = "../escape";
     await expect(importDbJson(targetUrl, source)).rejects.toThrow("leaves the workspace");
@@ -285,6 +289,25 @@ describe("db JSON export/import", () => {
     const legacy = { ...source, version: 10, tables };
     const original = JSON.stringify(legacy);
     expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(0);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(JSON.stringify(legacy)).toBe(original);
+  });
+
+  it("imports version 11 claim records unchanged without running them", async () => {
+    const sourceUrl = await migratedDbUrl("v11-source.db");
+    const targetUrl = await migratedDbUrl("v11-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('claim','taskspace.claim',1,'missing','missing','local/pending','workspace_relative','pending','{}',1)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    const legacy = { ...source, version: 11 };
+    const original = JSON.stringify(legacy);
+    expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(1);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     expect(JSON.stringify(legacy)).toBe(original);
   });

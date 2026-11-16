@@ -6,6 +6,8 @@ import { getWorkspaceRoot } from "../../../db/internal/config.js";
 import { resolveTaskspacePath } from "../taskspace-path.js";
 import { TASKSPACE_FILES_STATUS, TaskspaceFilesError } from "../taskspace-files.js";
 import { oneAtATime } from "./queue.js";
+import { journalTaskspaceFileChange, TaskspaceFileOperationError } from "./file-operation.js";
+import type { TaskspaceFileChange } from "../taskspace-file-operations.js";
 /**
  * Resolve the request's trusted taskspace root from its database record and workspace root.
  * Require a taskspace visible in the requested namespace.
@@ -45,13 +47,37 @@ export function queuedFilesChange<T>(
     taskspaceId: string;
   },
   whatFailed: string,
+  request: TaskspaceFileChange,
   change: (baseDir: string) => T,
 ): Promise<T> {
   return oneAtATime(params.taskspaceId, async () => {
     const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
     try {
-      return change(baseDir);
+      const root = getWorkspaceRoot();
+      if (!root)
+        throw new TaskspaceServiceError(503, "No Kozane workspace found. Run 'kozane init' first.");
+      return await journalTaskspaceFileChange(
+        {
+          ...locals,
+          ...params,
+          root,
+          baseDir,
+          request,
+          currentBaseDir: () => taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId),
+        },
+        change,
+      );
     } catch (e) {
+      if (e instanceof TaskspaceFileOperationError) {
+        if (e.phase === "confirm")
+          throw new TaskspaceServiceError(
+            500,
+            "File change needs recovery. Run 'kozane doctor' before repeating it.",
+          );
+        if (e.cause instanceof TaskspaceServiceError) throw e.cause;
+        rethrowFilesError(e.cause, whatFailed);
+      }
+      if (e instanceof TaskspaceServiceError) throw e;
       rethrowFilesError(e, whatFailed);
     }
   });

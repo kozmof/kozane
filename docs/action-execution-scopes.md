@@ -10,7 +10,7 @@ Production log tables, application routing and guard activation remain pending.
 It installs handlers for every declared syncable database service kind and
 the built-in `system.compose` interpreter. Each database handler forwards its
 complete routing arguments and body to the corresponding `InTx` service.
-The registry currently supports schemas 19–21.
+The registry currently supports schemas 19–22.
 
 Supply a complete `LocalRecoveryHandlersV1` map when constructing the registry.
 Missing handlers, wrong handler roles, unknown kinds and attempts to replace a
@@ -40,7 +40,7 @@ route application writes or activate guards.
 
 ## Replay shared taskspace actions with version 2
 
-`createServiceActionRegistryV2` supports schemas 20 and 21 and action contract 2. It keeps
+`createServiceActionRegistryV2` supports schemas 20–22 and action contract 2. It keeps
 the existing database handlers and adds shared taskspace creation, label changes
 and removal through `services/taskspaces.ts`. Supply `LocalRecoveryHandlersV2`
 with exactly the five file operation recovery handlers. Lifecycle recovery
@@ -271,7 +271,10 @@ the attachment in a second transaction. Migration 0021 keeps this journal outsid
 the shared projection, without foreign keys to shared identities. See
 [local filesystem operation records](local-file-operations.md) for failure
 boundaries, `doctor` inspection and local recovery exports. Other filesystem
-handlers and production action routing remain pending.
+handlers and production action routing remain pending. Migration 0022 now journals
+the five file mutation methods with affected paths and intended content hashes.
+These local operations leave shared application rows unchanged and retain pending
+evidence after statement and commit failures.
 Taskspace lifecycle kinds remain local-only in the version 1 service registry.
 Version 2 shared lifecycle routing is opt-in. Raw SQL allocations and system
 import handlers also need integration.

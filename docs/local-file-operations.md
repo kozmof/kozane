@@ -2,7 +2,9 @@
 
 Migration `0021_local_file_operation` adds a device-local journal. Its first
 supported operation is `taskspace.claim`, version 1, used by HTTP and CLI taskspace
-creation. File writes, directory moves and directory deletion still need journals.
+creation. Migration `0022_taskspace_file_operations` adds `taskspace.file`, version
+1, for the five file mutation methods. Whole-taskspace directory moves and
+directory deletion still need journals.
 
 Creation uses three phases:
 
@@ -60,13 +62,41 @@ Repeating confirmation of an already confirmed operation makes no changes.
 Blocked claims remain available for manual recovery. Explicit abandonment and
 reconciliation for other filesystem operations remain pending.
 
+The five file mutations use the same pending and confirmed states. File creation,
+saves, directory creation, entry renames and entry removal commit their local
+intent before invoking filesystem work. The intent records the actual affected
+path, operation and requested path. Renames include their destination. File
+creation and saves include a SHA-256 hash of the intended bytes. Saves also retain
+the caller's signature. File contents are not stored in the journal.
+
+Each mutation remains inside the taskspace queue through confirmation. The host
+rechecks visibility, attachment and resolved path after the intent commits. It
+then invokes the filesystem callback once and waits for it to settle before
+confirming completion. Shared application rows and local attachments are unchanged.
+
+Callback failures retain pending intent and attempt to record the error. If error
+recording fails too, both failures are reported. A failed confirmation leaves disk
+as the callback left it and keeps the operation pending. The HTTP response directs
+the caller to `doctor` before repeating the change. There is no compensating file
+write, rename or deletion after publication.
+
+`doctor` and authenticated server startup inspect pending file operations without
+changing them. File hashes distinguish matching bytes from changed content.
+Directory creation reports whether a directory is present. Rename inspection
+reports source and destination presence. Removal inspection reports entry
+presence. These observations do not prove which process changed a file and do not
+confirm an operation. `doctor --fix` does not retry file work. The directory-claim
+recovery command refuses file mutations. Explicit resolution for these operations
+remains pending.
+
 The journal has no foreign keys to shared rows. Shared action capture, isolated
 validation and shared replacement exclude it alongside `taskspace_local`.
-Recovery JSON version 11 includes both tables, including records for absent
-shared identities. Versions 7–10 import with an empty journal. Operation paths
+Recovery JSON version 12 includes both tables, including records for absent
+shared identities and file mutation intents. Versions 7–10 import with an empty
+journal. Version 11 claim records are retained unchanged. Operation paths
 receive the same containment checks and explicit absolute-path opt-in as local
 attachments. Importing a journal does not run its operations.
 
-The opt-in action registries accept schema 21 with their existing versioned
+The opt-in action registries accept schema 22 with their existing versioned
 semantics. Production action attribution and mandatory capture guards remain
 disabled; the journal does not activate them.

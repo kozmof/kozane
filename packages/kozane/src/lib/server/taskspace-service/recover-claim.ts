@@ -18,6 +18,8 @@ async function inspect(db: DB | ReadTx | Tx, root: string, operationId: string) 
     .where(eq(localFileOperationTable.id, operationId))
     .get();
   if (!operation) throw new Error("Local directory claim not found");
+  if (operation.kind !== "taskspace.claim")
+    throw new Error("This operation is not a directory claim");
   if (operation.state === "confirmed")
     return { operation, status: "already-confirmed" as const, reason: null };
   const observation = inspectLocalClaim(operation, root);

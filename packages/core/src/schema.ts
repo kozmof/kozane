@@ -207,7 +207,7 @@ export const localFileOperationTable = sqliteTable(
   "local_file_operation",
   {
     id: text("id").primaryKey().notNull(),
-    kind: text("kind", { enum: ["taskspace.claim"] }).notNull(),
+    kind: text("kind", { enum: ["taskspace.claim", "taskspace.file"] }).notNull(),
     version: integer("version").notNull(),
     taskspaceId: text("taskspace_id").notNull(),
     namespaceId: text("namespace_id").notNull(),
@@ -221,7 +221,10 @@ export const localFileOperationTable = sqliteTable(
   },
   (t) => [
     index("local_file_operation_state").on(t.state),
-    check("local_file_operation_kind", sql`${t.kind} = 'taskspace.claim' AND ${t.version} = 1`),
+    check(
+      "local_file_operation_kind",
+      sql`${t.kind} IN ('taskspace.claim', 'taskspace.file') AND ${t.version} = 1`,
+    ),
     check(
       "local_file_operation_path_kind",
       sql`${t.pathKind} IN ('workspace_relative', 'absolute')`,

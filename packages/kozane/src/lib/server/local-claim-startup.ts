@@ -1,6 +1,7 @@
 /** Report recovery evidence once per served database and workspace, without changing it. */
 import type { DB } from "../../db/database.js";
 import { pendingLocalClaims } from "./local-file-operations.js";
+import { pendingTaskspaceFileOperations } from "./taskspace-file-operations.js";
 
 export function createLocalClaimStartupCheck(
   warn: (message: string) => void = (message) => console.warn(message),
@@ -20,6 +21,11 @@ export function createLocalClaimStartupCheck(
         if (pending.total > 0)
           warn(
             `[kozane] ${pending.total} pending directory claim(s): ${pending.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}. Run 'kozane doctor' and 'kozane taskspace recover <operationId>' to inspect them.`,
+          );
+        const files = await pendingTaskspaceFileOperations(db, root);
+        if (files.total > 0)
+          warn(
+            `[kozane] ${files.total} pending taskspace file operation(s): ${files.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}. Run 'kozane doctor' before repeating them. Filesystem work was not retried.`,
           );
       })
       .catch(() => {

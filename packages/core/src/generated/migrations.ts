@@ -221,6 +221,16 @@ const records = [
     sql: 'CREATE TABLE `local_file_operation` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`kind` text NOT NULL,\n\t`version` integer NOT NULL,\n\t`taskspace_id` text NOT NULL,\n\t`namespace_id` text NOT NULL,\n\t`path` text NOT NULL,\n\t`path_kind` text NOT NULL,\n\t`state` text NOT NULL,\n\t`intent` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`confirmed_at` integer,\n\t`error` text,\n\tCONSTRAINT "local_file_operation_kind" CHECK("local_file_operation"."kind" = \'taskspace.claim\' AND "local_file_operation"."version" = 1),\n\tCONSTRAINT "local_file_operation_path_kind" CHECK("local_file_operation"."path_kind" IN (\'workspace_relative\', \'absolute\')),\n\tCONSTRAINT "local_file_operation_state" CHECK(("local_file_operation"."state" = \'pending\' AND "local_file_operation"."confirmed_at" IS NULL) OR ("local_file_operation"."state" = \'confirmed\' AND "local_file_operation"."confirmed_at" IS NOT NULL AND "local_file_operation"."error" IS NULL))\n);\n--> statement-breakpoint\nCREATE INDEX `local_file_operation_state` ON `local_file_operation` (`state`);',
     hash: "d4e4d2d6e58bd03f904b729584bd352dea2b50206e8097aa78d46ed1eeba6a39",
   },
+  {
+    id: "0022_taskspace_file_operations",
+    tag: "0022_taskspace_file_operations",
+    idx: 22,
+    version: "6",
+    when: 1794821138462,
+    breakpoints: true,
+    sql: 'CREATE TABLE `__new_local_file_operation` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`kind` text NOT NULL,\n\t`version` integer NOT NULL,\n\t`taskspace_id` text NOT NULL,\n\t`namespace_id` text NOT NULL,\n\t`path` text NOT NULL,\n\t`path_kind` text NOT NULL,\n\t`state` text NOT NULL,\n\t`intent` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`confirmed_at` integer,\n\t`error` text,\n\tCONSTRAINT "local_file_operation_kind" CHECK("__new_local_file_operation"."kind" IN (\'taskspace.claim\', \'taskspace.file\') AND "__new_local_file_operation"."version" = 1),\n\tCONSTRAINT "local_file_operation_path_kind" CHECK("__new_local_file_operation"."path_kind" IN (\'workspace_relative\', \'absolute\')),\n\tCONSTRAINT "local_file_operation_state" CHECK(("__new_local_file_operation"."state" = \'pending\' AND "__new_local_file_operation"."confirmed_at" IS NULL) OR ("__new_local_file_operation"."state" = \'confirmed\' AND "__new_local_file_operation"."confirmed_at" IS NOT NULL AND "__new_local_file_operation"."error" IS NULL))\n);\n--> statement-breakpoint\nINSERT INTO `__new_local_file_operation`("id", "kind", "version", "taskspace_id", "namespace_id", "path", "path_kind", "state", "intent", "created_at", "confirmed_at", "error") SELECT "id", "kind", "version", "taskspace_id", "namespace_id", "path", "path_kind", "state", "intent", "created_at", "confirmed_at", "error" FROM `local_file_operation`;--> statement-breakpoint\nDROP TABLE `local_file_operation`;--> statement-breakpoint\nALTER TABLE `__new_local_file_operation` RENAME TO `local_file_operation`;--> statement-breakpoint\nCREATE INDEX `local_file_operation_state` ON `local_file_operation` (`state`);',
+    hash: "3f59733567d076aca373258e201f40523f4427d93747a4465ab7d50640438dbd",
+  },
 ];
 export const migrations: readonly MigrationRecord[] = Object.freeze(
   records.map((record) =>

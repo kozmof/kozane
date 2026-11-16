@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { DROP_CARD_GUARDS_SQL } from "../test-utils/db.js";
-import { localClaimIntent } from "../lib/server/local-file-operations.js";
+import { contentHash, localClaimIntent } from "../lib/server/local-file-operations.js";
 
 /**
  * Test `kozane doctor` through the CLI, including SQLite integrity checks and reports of rows
@@ -86,6 +86,36 @@ afterEach(() => {
 });
 
 describe("kozane doctor — integrity and limits", () => {
+  it("reports pending file work without confirming or repeating it with --fix", async () => {
+    const root = initWorkspace();
+    const file = join(root, "pending-file.txt");
+    writeFileSync(file, "");
+    await withRawDb(root, async (client) => {
+      await client.execute({
+        sql: "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('pending-file','taskspace.file',1,'absent','absent','pending-file.txt','workspace_relative','pending',?,1)",
+        args: [
+          JSON.stringify({
+            operation: "create-file",
+            requestedPath: "pending-file.txt",
+            contentHash: contentHash(""),
+          }),
+        ],
+      });
+    });
+    for (const args of [[], ["--fix"]]) {
+      const result = runCli(root, "doctor", ...args);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("Taskspace file operations complete");
+      expect(result.stdout).toContain("pending-file (matching-content)");
+      expect(result.stdout).toContain("--fix does not retry file operations");
+      expect(readFileSync(file, "utf8")).toBe("");
+    }
+    await withRawDb(root, async (client) => {
+      expect((await client.execute("SELECT state FROM local_file_operation")).rows[0].state).toBe(
+        "pending",
+      );
+    });
+  });
   it("reports interrupted directory claims without retrying them with --fix", async () => {
     const root = initWorkspace();
     await withRawDb(root, (client) =>

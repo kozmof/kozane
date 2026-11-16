@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import type { DB } from "../../db/database.js";
 import { localFileOperationTable } from "../../db/schema.js";
 import { TASKSPACE_MARKER_FILE, taskspaceMarkerText } from "../taskspace-marker.js";
@@ -114,7 +114,10 @@ export function inspectLocalClaim(operation: Operation, workspaceRoot: string): 
 
 /** Bounded diagnostics; a matching marker remains pending until explicitly reconciled. */
 export async function pendingLocalClaims(db: DB, workspaceRoot: string) {
-  const pending = eq(localFileOperationTable.state, "pending");
+  const pending = and(
+    eq(localFileOperationTable.state, "pending"),
+    eq(localFileOperationTable.kind, "taskspace.claim"),
+  );
   const [row] = await db.select({ total: count() }).from(localFileOperationTable).where(pending);
   const operations = await db
     .select()
