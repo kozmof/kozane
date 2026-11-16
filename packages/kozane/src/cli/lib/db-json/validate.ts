@@ -160,5 +160,12 @@ export function validateDumpPaths(
       throw new Error(`directory operation ${row.id}: targetPath must be a string`);
     const issue = taskspacePathIssue(intent.targetPath, String(row.path_kind));
     if (issue) throw new Error(`directory operation ${row.id}: ${issue}`);
+    if ("paths" in intent && Array.isArray(intent.paths))
+      for (const path of intent.paths) {
+        if (typeof path !== "string")
+          throw new Error(`directory operation ${row.id}: paths must contain strings`);
+        const pathIssue = taskspacePathIssue(path, String(row.path_kind));
+        if (pathIssue) throw new Error(`directory operation ${row.id}: ${pathIssue}`);
+      }
   }
 }

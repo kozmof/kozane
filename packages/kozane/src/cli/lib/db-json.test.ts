@@ -269,7 +269,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(13);
+    expect(source.version).toBe(14);
     expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_file_operation[0].path = "../escape";
@@ -361,6 +361,66 @@ describe("db JSON export/import", () => {
     expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(1);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     expect(JSON.stringify(legacy)).toBe(original);
+  });
+
+  it("imports version 13 journals with empty abandonment fields without mutating the dump", async () => {
+    const sourceUrl = await migratedDbUrl("v13-source.db");
+    const targetUrl = await migratedDbUrl("v13-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('pending','taskspace.directory',1,'missing','missing','local/path','workspace_relative','pending','{}',1)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    const legacy = {
+      ...source,
+      version: 13,
+      tables: {
+        ...source.tables,
+        local_file_operation: source.tables.local_file_operation.map(
+          ({ abandoned_at: _at, abandon_reason: _reason, ...row }) => row,
+        ),
+      },
+    };
+    const original = JSON.stringify(legacy);
+    expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(1);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(JSON.stringify(legacy)).toBe(original);
+  });
+
+  it("round-trips abandonment evidence and rejects unsafe intermediate layout paths before import", async () => {
+    const sourceUrl = await migratedDbUrl("abandoned-source.db");
+    const targetUrl = await migratedDbUrl("abandoned-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute({
+        sql: "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at,error,abandoned_at,abandon_reason) VALUES('reviewed','taskspace.directory',1,'missing','missing','local/path','workspace_relative','abandoned',?,1,'Original failure',2,'Reviewed on disk')",
+        args: [
+          JSON.stringify({
+            operation: "layout",
+            targetPath: "local/target",
+            paths: ["local/path", "local/intermediate", "local/target"],
+            before: {},
+            directory: {},
+          }),
+        ],
+      });
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(1);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const intent = JSON.parse(String(source.tables.local_file_operation[0].intent));
+    intent.paths[1] = "../outside";
+    source.tables.local_file_operation[0].intent = JSON.stringify(intent);
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow("leaves the workspace");
+    expect((await exportDbJson(targetUrl)).tables.local_file_operation[0].abandon_reason).toBe(
+      "Reviewed on disk",
+    );
   });
 
   it("reads a version 7 dump, which predates scope_area, as having no frames", async () => {

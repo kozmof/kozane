@@ -174,6 +174,21 @@ it("preserves current local metadata for present and absent taskspaces through s
     intent: "{}",
     createdAt: new Date(1000),
   });
+  await f.db.insert(tables.localFileOperationTable).values({
+    id: "abandoned-local",
+    kind: "taskspace.directory",
+    version: 1,
+    taskspaceId: "absent",
+    namespaceId: "absent-namespace",
+    path: "local/reviewed",
+    pathKind: "workspace_relative",
+    state: "abandoned",
+    intent: "{}",
+    error: "Original failure",
+    createdAt: new Date(1000),
+    abandonedAt: new Date(2000),
+    abandonReason: "Reviewed evidence",
+  });
   const operations = await f.db.select().from(tables.localFileOperationTable);
   await f.capture.restore(createDatabase, []);
   expect(await getTaskspace({ db: f.db, taskspaceId: "t" })).toMatchObject({

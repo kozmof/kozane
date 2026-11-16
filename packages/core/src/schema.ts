@@ -215,11 +215,13 @@ export const localFileOperationTable = sqliteTable(
     namespaceId: text("namespace_id").notNull(),
     path: text("path").notNull(),
     pathKind: text("path_kind", { enum: PATH_KINDS }).notNull(),
-    state: text("state", { enum: ["pending", "confirmed"] }).notNull(),
+    state: text("state", { enum: ["pending", "confirmed", "abandoned"] }).notNull(),
     intent: text("intent").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     confirmedAt: integer("confirmed_at", { mode: "timestamp" }),
     error: text("error"),
+    abandonedAt: integer("abandoned_at", { mode: "timestamp" }),
+    abandonReason: text("abandon_reason"),
   },
   (t) => [
     index("local_file_operation_state").on(t.state),
@@ -233,7 +235,7 @@ export const localFileOperationTable = sqliteTable(
     ),
     check(
       "local_file_operation_state",
-      sql`(${t.state} = 'pending' AND ${t.confirmedAt} IS NULL) OR (${t.state} = 'confirmed' AND ${t.confirmedAt} IS NOT NULL AND ${t.error} IS NULL)`,
+      sql`(${t.state} = 'pending' AND ${t.confirmedAt} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state} = 'confirmed' AND ${t.confirmedAt} IS NOT NULL AND ${t.error} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state} = 'abandoned' AND ${t.confirmedAt} IS NULL AND ${t.abandonedAt} IS NOT NULL AND ${t.abandonReason} IS NOT NULL AND length(trim(${t.abandonReason})) > 0)`,
     ),
   ],
 );

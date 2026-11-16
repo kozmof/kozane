@@ -187,9 +187,15 @@ The fix updates a legacy config only after all planned moves succeed. Until then
 `kozane open` continues to refuse startup.
 
 A directory whose target is inside itself, such as a taskspace named `taskspaces` at the
-root, moves to a temporary location first. If updating a record fails after a move,
-Kozane tries to restore the directory. If restoration also fails, the report directs you
-to run `kozane taskspace scan --apply`.
+root, moves to a temporary location first. The journal retains source, temporary and
+destination paths before the first move. A failed step or database commit leaves the
+completed disk changes and pending evidence for inspection. It does not move directories
+back automatically. Later layout runs leave pending operations alone.
+
+Review the recorded paths and repair any attachment with `kozane taskspace scan --apply`.
+Use `taskspace abandon <operationId>` to preview abandonment of reviewed tracking records.
+Only applying that decision removes the operation from pending diagnostics. Its original
+intent and errors remain in the journal. Abandonment does not repair or reverse a move.
 
 Moves run in dependency order. If `c` goes into `b` and `b` goes into `a`, `a` moves
 first, followed by `b` and `c`. Circular dependencies, such as `a` going into `b` while
@@ -875,6 +881,22 @@ An already confirmed operation makes no changes.
 The command never recreates a directory, rewrites a marker, changes shared identity or
 retries filesystem work. Inspect blocked claims and preserve their files for manual
 recovery. `doctor --fix` does not confirm or retry claims.
+
+### `kozane taskspace abandon <operationId>`
+
+Preview abandonment of a reviewed pending local filesystem operation. Use the full
+operation ID printed by `doctor`. Finish reviewing disk state and any running work before
+applying this decision.
+
+| Option | Description |
+| --- | --- |
+| `--reason <reason>` | Required reason of 1–1000 characters, without NUL. Surrounding whitespace is removed |
+| `--apply` | Mark abandoned and retain the reason, timestamp, original intent and error |
+
+The default is read-only. Abandonment leaves files, shared rows and attachments unchanged.
+It does not complete, retry, reverse or cancel filesystem work. Confirmed operations are
+refused. Repeating the same abandonment reason makes no changes. A different reason for an
+already abandoned operation is refused.
 
 ### `kozane taskspace create <name>`
 

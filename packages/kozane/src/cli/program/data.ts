@@ -3,6 +3,7 @@ import { Command } from "commander";
 
 import { taskspaceScan, taskspaceCreate, taskspaceList } from "../commands/taskspace.js";
 import { taskspaceRecover } from "../commands/taskspace-recover.js";
+import { taskspaceAbandon } from "../commands/taskspace-abandon.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "../commands/db.js";
 
 export function registerDataCommands(program: Command): void {
@@ -59,6 +60,13 @@ export function registerDataCommands(program: Command): void {
     .description("Inspect an interrupted directory claim (read-only by default)")
     .option("--apply", "Confirm a verified directory attachment without changing files")
     .action((operationId, opts) => taskspaceRecover(operationId, opts));
+
+  taskspace
+    .command("abandon <operationId>")
+    .description("Preview abandonment of a reviewed local filesystem operation")
+    .requiredOption("--reason <reason>", "Record why tracking can be abandoned")
+    .option("--apply", "Mark abandoned while retaining evidence and leaving files unchanged")
+    .action((operationId, opts) => taskspaceAbandon(operationId, opts));
 
   taskspace
     .command("create <name>")

@@ -5,7 +5,9 @@ supported operation is `taskspace.claim`, version 1, used by HTTP and CLI tasksp
 creation. Migration `0022_taskspace_file_operations` adds `taskspace.file`, version
 1, for the five file mutation methods. Migration `0023_taskspace_directory_operations`
 adds `taskspace.directory`, version 1, for managed directory removal and the legacy
-combined rename endpoint. CLI layout maintenance still needs journaling.
+combined rename endpoint. Migration `0024_local_operation_abandonment` adds durable
+abandonment metadata. CLI layout moves now use directory intents that include
+all planned paths.
 
 Creation uses three phases:
 
@@ -60,8 +62,8 @@ Confirmation commits the attachment, current local observation time and journal
 completion together. It preserves shared timestamps and changes no files.
 Statement and commit failures retain the pending operation and prior attachment.
 Repeating confirmation of an already confirmed operation makes no changes.
-Blocked claims remain available for manual recovery. Explicit abandonment and
-reconciliation for other filesystem operations remain pending.
+Blocked claims remain available for manual recovery. Explicit abandonment records
+an operator's reviewed decision without claiming that the filesystem work completed.
 
 The five file mutations use the same pending and confirmed states. File creation,
 saves, directory creation, entry renames and entry removal commit their local
@@ -112,19 +114,52 @@ that all original contents survived a partial deletion.
 `doctor` and authenticated startup inspect pending directory operations without
 changing them. Inspection reports source and destination presence, marker and
 directory identity mismatches, unsafe paths and unreadable evidence. The claim
-recovery command refuses these operations. Explicit resolution and journaling
-for CLI layout maintenance remain pending. Database-only changes that keep or
+recovery command refuses these operations. Completed-state recovery remains
+pending. Database-only changes that keep or
 already lack a directory do not create a directory journal entry.
+
+CLI layout repair records the source and destination before its first move. When
+the destination is inside the source, the intent also records the temporary path.
+Each step checks the original directory identity and marker. Attachment updates
+and confirmation commit together after all steps finish. Shared fields and local
+observation timestamps remain unchanged.
+
+A failed step or final commit keeps completed disk changes and pending evidence.
+Inspection can identify the directory at its source, temporary path or destination.
+Layout repair does not move it back automatically. Independent moves in the same
+batch may finish, but dependent moves stop when their predecessor fails. The
+legacy configuration stays unchanged after a failure.
+A later layout invocation leaves pre-existing pending work alone. This also
+prevents layout moves from invalidating evidence for pending claims or file changes.
+Known collisions discovered before intent creation require no filesystem callback.
+
+Inspect and repair disk state before retrying layout maintenance. Use
+`taskspace scan --apply` to align an attachment after a manual repair. Explicitly
+abandon a reviewed pending tracking record when it no longer needs reconciliation.
+
+```sh
+kozane taskspace abandon <operationId> --reason "Reviewed disk and repaired attachment"
+kozane taskspace abandon <operationId> --reason "Reviewed disk and repaired attachment" --apply
+```
+
+The default is read-only. Applying abandonment records a separate state, reason
+and timestamp while preserving the original intent and error. It changes no files,
+attachments or shared rows and does not cancel running work. Confirmed operations
+cannot be abandoned. Repeating the same decision is idempotent, and a different
+reason cannot replace the recorded one. An abandoned claim cannot be confirmed
+by the claim recovery command. Abandoned records stay in recovery exports and
+shared restoration preserves them. Pending diagnostics exclude them.
 
 The journal has no foreign keys to shared rows. Shared action capture, isolated
 validation and shared replacement exclude it alongside `taskspace_local`.
-Recovery JSON version 13 includes both tables, including records for absent
-shared identities, file mutations and directory operations. Versions 7–10 import
-with an empty journal. Version 11 claim records and version 12 file intents are
-retained unchanged. Operation paths and directory move destinations
+Recovery JSON version 14 includes both tables, including records for absent
+shared identities, file mutations, directory operations and abandonment evidence.
+Versions 7–10 import with an empty journal. Version 11–13 records are retained with
+empty abandonment fields. Operation paths, directory move destinations and
+intermediate layout paths
 receive the same containment checks and explicit absolute-path opt-in as local
 attachments. Importing a journal does not run its operations.
 
-The opt-in action registries accept schema 23 with their existing versioned
+The opt-in action registries accept schema 24 with their existing versioned
 semantics. Production action attribution and mandatory capture guards remain
 disabled; the journal does not activate them.

@@ -17,6 +17,7 @@ import { taskspaceNameIssue } from "../constants.js";
 import { contentHash } from "./local-file-operations.js";
 import { errorCode, isStrictlyInside } from "./fs-paths.js";
 import { taskspacePathIssue } from "./taskspace-path.js";
+import { taskspaceLayoutPaths } from "./taskspace-layout-paths.js";
 
 export type DirectoryIdentity = { dev: string; ino: string; markerHash: string };
 type Evidence =
@@ -117,6 +118,7 @@ export type DirectoryObservation =
   | "source-absent"
   | "source-only"
   | "target-only"
+  | "intermediate-only"
   | "both-present"
   | "both-absent";
 
@@ -136,7 +138,7 @@ export function inspectTaskspaceDirectoryOperation(
       !intent ||
       typeof intent !== "object" ||
       Array.isArray(intent) ||
-      !["move", "remove"].includes(intent.operation) ||
+      !["move", "remove", "layout"].includes(intent.operation) ||
       !intent.before ||
       typeof intent.before !== "object" ||
       !intent.directory ||
@@ -156,6 +158,45 @@ export function inspectTaskspaceDirectoryOperation(
         intent.targetPath !== join(dirname(operation.path), intent.name))
     )
       return "invalid-intent";
+    if (intent.operation === "layout") {
+      if (
+        typeof intent.targetPath !== "string" ||
+        taskspacePathIssue(intent.targetPath, "workspace_relative") ||
+        JSON.stringify(intent.paths) !==
+          JSON.stringify(
+            taskspaceLayoutPaths(root, operation.path, intent.targetPath, operation.taskspaceId),
+          )
+      )
+        return "invalid-intent";
+      const fields = ["operation", "before", "directory", "targetPath", "paths"];
+      if (
+        Object.keys(intent).length !== fields.length ||
+        fields.some((field) => !Object.hasOwn(intent, field))
+      )
+        return "invalid-intent";
+      const states = (intent.paths as string[]).map((path) =>
+        directoryEvidence(root, path, operation.taskspaceId),
+      );
+      if (states.some((evidence) => evidence.state === "unsafe-path")) return "unsafe-path";
+      const matches = states.flatMap((evidence, index) =>
+        evidence.state === "owned" &&
+        evidence.identity.dev === intent.directory.dev &&
+        evidence.identity.ino === intent.directory.ino &&
+        evidence.identity.markerHash === intent.directory.markerHash
+          ? [index]
+          : [],
+      );
+      if (matches.length > 1) return "both-present";
+      if (matches.length === 1)
+        return matches[0] === 0
+          ? "source-only"
+          : matches[0] === states.length - 1
+            ? "target-only"
+            : "intermediate-only";
+      if (states.some((evidence) => evidence.state === "owned")) return "different-directory";
+      if (states.some((evidence) => evidence.state === "foreign-marker")) return "foreign-marker";
+      return "both-absent";
+    }
     const fields =
       intent.operation === "move"
         ? ["operation", "before", "directory", "name", "targetPath"]

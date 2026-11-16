@@ -10,6 +10,8 @@ it.each([
   [22, true],
   [23, false],
   [23, true],
+  [24, false],
+  [24, true],
 ] as const)(
   "widens local operation kinds at migration %s without changing retained evidence (rollback=%s)",
   async (target, failFirst) => {
@@ -33,11 +35,23 @@ it.each([
         args: [],
       },
     ]);
-    if (target === 23)
+    if (target >= 23)
       await db.run(
         sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('retained-file','taskspace.file',1,'absent','absent','local/file','workspace_relative','pending','{}',1)`,
       );
-    const kind = target === 23 ? "taskspace.directory" : "taskspace.file";
+    if (target === 24)
+      await db.run(
+        sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('retained-directory','taskspace.directory',1,'absent','absent','local/directory','workspace_relative','pending','{}',1)`,
+      );
+    const kind = target >= 23 ? "taskspace.directory" : "taskspace.file";
+    const insertNew = () =>
+      target === 24
+        ? db.run(
+            sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at,error,abandoned_at,abandon_reason) VALUES('new-kind',${kind},1,'absent','absent','local/file','workspace_relative','abandoned','{}',1,'retained error',9007199254740993,'Reviewed')`,
+          )
+        : db.run(
+            sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('new-kind',${kind},1,'absent','absent','local/file','workspace_relative','pending','{}',1)`,
+          );
     const read = async () =>
       (
         await db.values(
@@ -53,20 +67,22 @@ it.each([
       );
       await expect(applyMigrations(db)).rejects.toThrow();
       expect(await read()).toEqual(original);
-      await expect(
-        db.run(
-          sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('new-kind',${kind},1,'absent','absent','local/file','workspace_relative','pending','{}',1)`,
-        ),
-      ).rejects.toThrow();
+      await expect(insertNew()).rejects.toThrow();
       await db.run(sql`DROP TRIGGER reject_widen`);
     }
     expect((await applyMigrations(db)).appliedIds).toEqual(
       migrations.slice(index).map(({ id }) => id),
     );
     expect(await read()).toEqual(original);
-    await db.run(
-      sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('new-kind',${kind},1,'absent','absent','local/file','workspace_relative','pending','{}',1)`,
-    );
+    await insertNew();
+    if (target === 24)
+      expect(
+        (
+          await db.values(
+            sql`SELECT CAST(abandoned_at AS TEXT) FROM local_file_operation WHERE id='new-kind'`,
+          )
+        )[0][0],
+      ).toBe("9007199254740993");
     expect(await db.values(sql`PRAGMA foreign_key_check`)).toEqual([]);
     expect((await db.values(sql`PRAGMA foreign_keys`))[0][0]).toBe(1);
   },

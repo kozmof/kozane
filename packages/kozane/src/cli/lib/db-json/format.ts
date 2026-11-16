@@ -5,7 +5,7 @@ import * as schema from "../../../db/schema.js";
 
 export const EXPORT_KIND = "kozane.db.export";
 
-export const EXPORT_VERSION = 13;
+export const EXPORT_VERSION = 14;
 
 /**
  * Oldest supported dump version. Version 7 uses the `namespace` and `partition` table names.
@@ -23,6 +23,7 @@ export const EXPORT_VERSION = 13;
  * Version 11 adds retained local filesystem operation records.
  * Version 12 includes taskspace file mutation intents in the same local journal.
  * Version 13 adds managed taskspace directory move and removal intents.
+ * Version 14 adds explicit abandonment metadata and planned CLI layout paths.
  *
  * Dumps before version 7 are rejected. Migrate an old workspace database in place before
  * exporting it. Migration 0014 renames the tables without discarding rows.
@@ -61,6 +62,7 @@ const TABLE_ORDER = [
  */
 export const COLUMNS_SINCE: Partial<Record<string, Record<string, number>>> = {
   card: { inventory_id: 9, inventory_slot: 9 },
+  local_file_operation: { abandoned_at: 14, abandon_reason: 14 },
 };
 
 /** Every table in the Drizzle schema, by its SQL name, with the columns it declares. */
