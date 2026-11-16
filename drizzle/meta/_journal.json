@@ -176,6 +176,13 @@
       "when": 1794824189513,
       "tag": "0024_local_operation_abandonment",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794862900302,
+      "tag": "0025_local_image_upload",
+      "breakpoints": true
     }
   ]
 }

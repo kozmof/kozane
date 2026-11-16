@@ -5,7 +5,7 @@ import * as schema from "../../../db/schema.js";
 
 export const EXPORT_KIND = "kozane.db.export";
 
-export const EXPORT_VERSION = 14;
+export const EXPORT_VERSION = 15;
 
 /**
  * Oldest supported dump version. Version 7 uses the `namespace` and `partition` table names.
@@ -24,6 +24,7 @@ export const EXPORT_VERSION = 14;
  * Version 12 includes taskspace file mutation intents in the same local journal.
  * Version 13 adds managed taskspace directory move and removal intents.
  * Version 14 adds explicit abandonment metadata and planned CLI layout paths.
+ * Version 15 includes local image upload pins and their installation evidence.
  *
  * Dumps before version 7 are rejected. Migrate an old workspace database in place before
  * exporting it. Migration 0014 renames the tables without discarding rows.
@@ -49,6 +50,7 @@ const TABLE_ORDER = [
   { name: "taskspace", orderBy: ["id"] },
   { name: "taskspace_local", orderBy: ["taskspace_id"], since: 10 },
   { name: "local_file_operation", orderBy: ["id"], since: 11 },
+  { name: "local_image_upload", orderBy: ["filename"], since: 15 },
   { name: "card", orderBy: ["id"] },
   { name: "glue", orderBy: ["id"] },
   // Keep glue members beside their groups in the dump.

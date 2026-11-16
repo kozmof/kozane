@@ -149,6 +149,7 @@ describe("db JSON export/import", () => {
       taskspace: 1,
       taskspace_local: 1,
       local_file_operation: 0,
+      local_image_upload: 0,
       card: 2,
       glue: 1,
       glue_rel: 2,
@@ -251,6 +252,45 @@ describe("db JSON export/import", () => {
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
   });
 
+  it("round-trips image staging evidence without reading or installing files", async () => {
+    const sourceUrl = await migratedDbUrl("uploads-source.db");
+    const targetUrl = await migratedDbUrl("uploads-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, state] of ["pending", "installed", "completed", "abandoned"].entries())
+        await client.execute({
+          sql: "INSERT INTO local_image_upload(filename,byte_length,sha256,state,created_at,installed_at,completed_at,error,abandoned_at,abandon_reason) VALUES(?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            `00000000-0000-4000-8000-00000000000${index}.svg`,
+            3,
+            "a".repeat(64),
+            state,
+            1,
+            state === "installed" || state === "completed" ? 2 : null,
+            state === "completed" ? 3 : null,
+            state === "abandoned" ? "Original failure" : null,
+            state === "abandoned" ? 4 : null,
+            state === "abandoned" ? "Reviewed" : null,
+          ],
+        });
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(15);
+    expect((await importDbJson(targetUrl, source)).local_image_upload).toBe(4);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    source.tables.local_image_upload[0].filename = "../outside.svg";
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow(
+      "Invalid local image upload metadata",
+    );
+    expect((await exportDbJson(targetUrl)).tables.local_image_upload).toHaveLength(4);
+    const { local_image_upload: _uploads, ...tables } = source.tables;
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 14, tables })).local_image_upload,
+    ).toBe(0);
+  });
+
   it("round-trips local file operations whose shared identities are absent", async () => {
     const sourceUrl = await migratedDbUrl("operations-source.db");
     const targetUrl = await migratedDbUrl("operations-target.db");
@@ -269,7 +309,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(14);
+    expect(source.version).toBe(15);
     expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_file_operation[0].path = "../escape";

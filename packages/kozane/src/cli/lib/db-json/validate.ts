@@ -3,6 +3,7 @@ import { INVENTORY_SLOT_MAX } from "../../../lib/constants.js";
 import { plural } from "../plural.js";
 import { taskspacePathIssue } from "../../../lib/server/taskspace-path.js";
 import { type TableRows } from "./format.js";
+import { imagePath, IMAGE_MAX_BYTES } from "@kozane/core";
 import { type ImportDbJsonOptions } from "./import.js";
 
 /**
@@ -10,6 +11,19 @@ import { type ImportDbJsonOptions } from "./import.js";
  * during import, but this check identifies the offending row.
  */
 export function validateDumpRefs(tables: TableRows): void {
+  for (const row of tables.local_image_upload) {
+    if (
+      typeof row.filename !== "string" ||
+      !imagePath("kozane-image:/api/images/" + row.filename) ||
+      typeof row.byte_length !== "number" ||
+      !Number.isSafeInteger(row.byte_length) ||
+      row.byte_length < 1 ||
+      row.byte_length > IMAGE_MAX_BYTES ||
+      typeof row.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(row.sha256)
+    )
+      throw new Error("Invalid local image upload metadata");
+  }
   const namespaceIds = new Set(tables.namespace.map((r) => r.id as string));
   const partitionIds = new Set(tables.partition.map((r) => r.id as string));
   const layerIds = new Set(tables.layer.map((r) => r.id as string));

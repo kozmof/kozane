@@ -240,6 +240,38 @@ export const localFileOperationTable = sqliteTable(
   ],
 );
 
+/** Local upload pins survive failed publication and shared row restoration. */
+export const localImageUploadTable = sqliteTable(
+  "local_image_upload",
+  {
+    filename: text("filename").primaryKey().notNull(),
+    byteLength: integer("byte_length").notNull(),
+    sha256: text("sha256").notNull(),
+    state: text("state", { enum: ["pending", "installed", "completed", "abandoned"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    installedAt: integer("installed_at", { mode: "timestamp" }),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    error: text("error"),
+    abandonedAt: integer("abandoned_at", { mode: "timestamp" }),
+    abandonReason: text("abandon_reason"),
+  },
+  (t) => [
+    index("local_image_upload_state").on(t.state),
+    check(
+      "local_image_upload_name",
+      sql`length(${t.filename}) IN (40,41) AND substr(${t.filename},37,1)='.' AND substr(${t.filename},1,36) NOT GLOB '*[^a-f0-9-]*' AND substr(${t.filename},38) IN ('jpg','jpeg','png','svg')`,
+    ),
+    check(
+      "local_image_upload_bytes",
+      sql`typeof(${t.byteLength})='integer' AND ${t.byteLength} BETWEEN 1 AND 10485760 AND length(${t.sha256})=64 AND ${t.sha256} NOT GLOB '*[^a-f0-9]*'`,
+    ),
+    check(
+      "local_image_upload_state",
+      sql`(${t.state}='pending' AND ${t.installedAt} IS NULL AND ${t.completedAt} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state}='installed' AND ${t.installedAt} IS NOT NULL AND ${t.completedAt} IS NULL AND ${t.error} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state}='completed' AND ${t.installedAt} IS NOT NULL AND ${t.completedAt} IS NOT NULL AND ${t.error} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state}='abandoned' AND ${t.completedAt} IS NULL AND ${t.abandonedAt} IS NOT NULL AND ${t.abandonReason} IS NOT NULL AND length(trim(${t.abandonReason})) > 0)`,
+    ),
+  ],
+);
+
 export const cardTable = sqliteTable(
   "card",
   {

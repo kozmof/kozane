@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–24 and requires
+syncable database kind and `system.compose`. It supports schemas 19–25 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -100,7 +100,7 @@ API. Creation and label clocks use scoped bindings, and caught record failures
 abort their root. Migration 0020 now moves paths and observations to
 `taskspace_local` without a foreign key to shared rows. Readers join metadata
 only for present taskspaces, while local recovery readers retain absent rows.
-Shared capture, validation and replacement exclude that table. JSON version 14
+Shared capture, validation and replacement exclude that table. JSON version 15
 exports local rows separately, including absent taskspaces, and retains local file
 operations. Imports of versions
 7 through 9 split their inline values without changing the original dump.
@@ -112,7 +112,7 @@ current-schema view outcomes and 70 earlier-schema envelope outcomes. All older
 cohorts remain unchanged. Browser execution of these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–24. These shared services reject local metadata inputs,
+and removal on schemas 20–25. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -156,9 +156,17 @@ lengths and hashes and reject conflicting bytes under one name. Native and WASM
 capture tests cover intermediate and deleted images. The capture prototype now
 persists baseline rows and manifests, attaches manifests atomically to completed
 effect sets, and verifies selected bytes before restoration. It refuses history
-changes during asset preparation. Production manifest attachment, staging pins
-and cleanup protection remain pending. See
+changes during asset preparation. Production manifest attachment and protection
+for retained history remain pending. See
 [image manifests for retained action data](action-asset-manifests.md).
+
+Migration 0025 now reserves local image upload names and byte metadata before disk
+publication. Installation verifies synced bytes and retains interrupted evidence.
+Application card create and update commit staging completion with the reference.
+Cleanup checks live references and unfinished pins under the same writer lock.
+JSON version 15 retains upload records without installing files. Explicit upload
+recovery and abandonment, production history manifests and transfer pins remain
+pending. See [local image upload staging](image-upload-staging.md).
 
 ## Version one
 
@@ -266,9 +274,11 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Add asset manifests to baselines and effect sets, covering references in invocations and full before and after images.
 - [x] Add internal image-manifest collection, canonical validation, byte verification and collision checks. Verify requirements from real captured history on native and WASM adapters.
 - [x] Persist manifests with prototype baselines and completed effect sets. Reopen stored history, verify selected bytes before restoration, and refuse changed history or failed manifest commits without replacing rows.
-- [ ] Reserve image names with durable staging pins before files become visible, then write and verify their bytes.
+- [x] Reserve image names with durable staging pins before files become visible, then write and verify their bytes.
 - [ ] Commit image references, manifests and staging completion together. Preserve staging pins after rollback.
+- [x] Complete installed upload pins with application card create and update transactions. Preserve immutable metadata and pin protection after statement or commit failures.
 - [ ] Serialize file installation, staging transitions and cleanup decisions so protection transfers without a gap.
+- [x] Serialize local upload installation, card-reference pin transfer and cleanup with the database writer lock. Preserve pending files and deletion requests during contention and rollback.
 - [ ] Protect assets needed by live rows, uploads, staged transfers, pending work, retained history and recovery records.
 - [ ] Recover or explicitly abandon interrupted uploads before releasing staging pins.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.

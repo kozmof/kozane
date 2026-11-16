@@ -5,6 +5,7 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it } from "vitest";
 import { CONTENT_MAX } from "../lib/constants.js";
+import { DatabaseSync } from "node:sqlite";
 
 /** Verify that CLI card writes enforce the same text limit and workspace bounds as HTTP writes. */
 
@@ -297,6 +298,27 @@ describe("card move", () => {
 });
 
 describe("card add --type image", () => {
+  it("retains an installed upload pin and bytes when card creation fails", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const source = join(root, "drawing.svg");
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"/>';
+    writeFileSync(source, svg);
+    const result = run(root, ["card", "add", "--type", "image", source, "--namespace", "missing"]);
+    expect(result.status).toBe(1);
+    const database = new DatabaseSync(join(root, ".kozane", "kozane.db"), { readOnly: true });
+    try {
+      const row = database.prepare("SELECT * FROM local_image_upload").get()!;
+      expect(row.state).toBe("installed");
+      expect(database.prepare("SELECT count(*) AS n FROM card").get()!.n).toBe(0);
+      expect(
+        readFileSync(join(root, ".kozane", "assets", "images", String(row.filename)), "utf8"),
+      ).toBe(svg);
+      expect(readFileSync(source, "utf8")).toBe(svg);
+    } finally {
+      database.close();
+    }
+  });
   it("copies an image into workspace assets and creates a card reference", () => {
     const root = tempWorkspace();
     cli(root, "init");

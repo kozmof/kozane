@@ -4,14 +4,13 @@ import { validPng, validJpeg } from "./raster-validation.js";
 import { activeServerProcess } from "./runtime-state.js";
 import { mkdir, readFile, writeFile, readdir, stat, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { imagePath, IMAGE_MAX_BYTES } from "@kozane/core";
 import type { DB, Tx } from "../../db/tx.js";
 import { cardTable, partitionTable } from "../../db/schema.js";
 
-export function imageDirectory(root: string): string {
-  return join(root, ".kozane", "assets", "images");
-}
+import { imageDirectory, installImageUpload } from "./image-upload.js";
+import { lockImageAssetWork, pinnedImageNames } from "../../db/api/image-upload.js";
+export { imageDirectory } from "./image-upload.js";
 export class ImageValidationError extends Error {}
 
 export async function validateImage(name: string, bytes: Uint8Array): Promise<string> {
@@ -98,41 +97,48 @@ function validSvg(source: string): boolean {
   }
   return roots === 1 && stack.length === 0 && clean.slice(offset).trim() === "";
 }
-export async function storeImage(root: string, name: string, bytes: Uint8Array): Promise<string> {
-  const extension = await validateImage(name, bytes);
-  const filename = randomUUID() + "." + extension;
-  await mkdir(imageDirectory(root), { recursive: true });
-  await writeFile(join(imageDirectory(root), filename), bytes, { flag: "wx" });
-  return "/api/images/" + filename;
+export async function storeImage(
+  root: string,
+  db: DB,
+  name: string,
+  bytes: Uint8Array,
+): Promise<string> {
+  const owned = new Uint8Array(bytes);
+  const extension = await validateImage(name, owned);
+  return installImageUpload(root, db, extension, owned);
 }
 /** Keep fresh uploads for a day so concurrent card creation cannot lose its image. */
 export async function collectUnusedImages(root: string, db: DB, now = Date.now()): Promise<void> {
   if (process.env.KOZANE_MEMORY_MODE === "1" || activeServerProcess(root)?.memory) return;
-  const referenced = new Set(
-    (await db.select({ content: cardTable.content }).from(cardTable)).map((row) =>
-      imagePath(row.content),
-    ),
-  );
-  let names: string[];
-  try {
-    names = await readdir(imageDirectory(root));
-  } catch {
-    return;
-  }
-  for (const name of names) {
-    const path = "/api/images/" + name;
-    if (!imagePath("kozane-image:" + path) || referenced.has(path)) continue;
-    const filename = join(imageDirectory(root), name);
+  await composeWrite(db, async (tx) => {
+    await lockImageAssetWork(tx);
+    const pins = await pinnedImageNames(tx);
+    const referenced = new Set(
+      (await tx.select({ content: cardTable.content }).from(cardTable)).map((row) =>
+        imagePath(row.content),
+      ),
+    );
+    let names: string[];
     try {
-      if ((await stat(filename)).mtimeMs < now - 86400000) {
-        const archive = join(imageDirectory(root), ".retained");
-        await mkdir(archive, { recursive: true });
-        await rename(filename, join(archive, name));
-      }
+      names = await readdir(imageDirectory(root));
     } catch {
-      /* Another collector may have removed it. */
+      return;
     }
-  }
+    for (const name of names) {
+      const path = "/api/images/" + name;
+      if (!imagePath("kozane-image:" + path) || referenced.has(path) || pins.has(name)) continue;
+      const filename = join(imageDirectory(root), name);
+      try {
+        if ((await stat(filename)).mtimeMs < now - 86400000) {
+          const archive = join(imageDirectory(root), ".retained");
+          await mkdir(archive, { recursive: true });
+          await rename(filename, join(archive, name));
+        }
+      } catch {
+        /* Another collector may have removed it. */
+      }
+    }
+  });
 }
 export async function readImage(root: string, name: string): Promise<Uint8Array> {
   if (!imagePath("kozane-image:/api/images/" + name)) throw new Error("Invalid image name");
@@ -252,6 +258,8 @@ export async function retryImageDeletions(root: string, db: DB): Promise<void> {
   for (let offset = 0; offset < candidates.length; offset += 400) {
     const batch = candidates.slice(offset, offset + 400);
     await composeWrite(db, async (tx) => {
+      await lockImageAssetWork(tx);
+      const pins = await pinnedImageNames(tx);
       const referenced = new Set(
         (
           await tx
@@ -266,7 +274,7 @@ export async function retryImageDeletions(root: string, db: DB): Promise<void> {
         ).map((row) => row.content),
       );
       for (const name of batch) {
-        if (referenced.has("kozane-image:/api/images/" + name)) continue;
+        if (referenced.has("kozane-image:/api/images/" + name) || pins.has(name)) continue;
         try {
           await rm(join(imageDirectory(root), name), { force: true });
           await rm(join(imageDirectory(root), ".retained", name), { force: true });

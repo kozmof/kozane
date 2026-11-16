@@ -431,6 +431,9 @@ Use `--type image` to interpret `<content>` as a local JPEG, PNG, or SVG file pa
 Extensions are checked without regard to case. Files must contain between 1 byte
 and 10 MiB. The image is copied to `.kozane/assets/images` with a unique filename.
 The source file is preserved. Other type values are rejected.
+The host records a staging pin before publishing the image and completes it with
+the card transaction. Failed card creation retains the pin and uploaded bytes for
+review. Cleanup leaves unfinished pins alone.
 Image signatures must match the extension. SVG files must have balanced tags and
 quoted attributes. Scripts, event handlers, embedded HTML, and external resource links are rejected. Local fragment references are allowed.
 

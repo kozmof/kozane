@@ -199,13 +199,15 @@ shared restoration preserves them. Pending diagnostics exclude them.
 
 The journal has no foreign keys to shared rows. Shared action capture, isolated
 validation and shared replacement exclude it alongside `taskspace_local`.
-Recovery JSON version 14 includes both tables, including records for absent
+Recovery JSON version 15 includes both tables and local image upload staging,
+including records for absent
 shared identities, file mutations, directory operations and abandonment evidence.
 Versions 7–10 import with an empty journal. Version 11–13 records are retained with
 empty abandonment fields. Operation paths, directory move destinations and
 intermediate layout paths
 receive the same containment checks and explicit absolute-path opt-in as local
 attachments. Importing a journal does not run its operations.
+See [local image upload staging](image-upload-staging.md) for pin and cleanup behavior.
 
 The opt-in action registries accept schema 24 with their existing versioned
 semantics. Production action attribution and mandatory capture guards remain

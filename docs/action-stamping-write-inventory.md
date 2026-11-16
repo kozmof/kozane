@@ -40,7 +40,7 @@ envelopes. Replay interprets the frozen list without rerunning the callback.
 `actions/service-registry.ts` now installs every declared syncable database kind
 through its real `InTx` service, together with `system.compose`. The factory
 requires complete host recovery registrations for local-only kinds and refuses
-attempts to replace database handlers. Version 1 currently supports schemas 19–24.
+attempts to replace database handlers. Version 1 currently supports schemas 19–25.
 Tests record and replay each database kind, check namespace ownership and apply
 the executing host's limits. See the
 [service registry](action-execution-scopes.md#dispatch-real-service-actions).
@@ -71,7 +71,7 @@ Local-only handlers must then be prevented from changing shared rows.
 
 Those declarations remain unchanged in contract version 1. The opt-in version 2
 registry now routes taskspace lifecycle intents through shared database services
-on schemas 20–24. Creation and label changes reject local path and observation fields.
+on schemas 20–25. Creation and label changes reject local path and observation fields.
 The five file methods still require explicit host recovery registrations. Node
 application lifecycle callers retain their existing filesystem workflows until
 their routing is migrated. See the
@@ -114,7 +114,7 @@ indexes are rebuilt and are not stamped application tables.
 | `cli/lib/db-json/import.ts` | Validates dump, opens DB, deletes rows in reverse table order and inserts rows inside `withTx` | `system.import` must retain original input and bind missing timestamps. Exact restoration needs a separate path |
 | `cli/commands/init.ts` | Creates config, migrates, then seeds a default namespace, partition and layer | Run migration/initialization before baseline activation, with restartable progress |
 | `cli/commands/config.ts`, workspace config and config-editor handlers | Write config files | Local-only records and file recovery where needed |
-| `lib/server/image-assets.ts` and upload route | Writes UUID-named image files. Deletion wrappers and cleanup remove unused images | Reserve names with staging pins, then commit references/manifests and transfer protection atomically |
+| `lib/server/{image-assets,image-upload}.ts`, upload route and card adapters | Reserve local upload names and byte metadata before disk publication. Verify installation and retain unfinished pins. Card create/update commit reference and pin completion together. Cleanup checks pins and references under the same writer lock | Attach production action manifests, retain history/transfer protections and add explicit upload recovery and abandonment |
 | `packages/core/src/migrations/apply.ts` and Node migration hooks | Driver-owned batch applies SQL and migration history | Trusted migrate mode and durable transition gate before capture activation |
 | Database JSON export, DB backup/restore and standalone restoration harness | Export/read snapshots or replace database files | Keep exact recovery distinct from import, preserve local metadata and verify complete recovery bookkeeping |
 

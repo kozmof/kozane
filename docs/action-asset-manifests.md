@@ -84,8 +84,9 @@ failed manifest commits, missing or corrupt bytes, changed catalogs and concurre
 history changes. Failed verification preserves rows, local metadata and selection.
 
 These tables and guards exist only in test databases. Production baseline and
-effect-set attachment, durable upload and transfer staging, serialized cleanup
-protection and recovery-bundle publication remain pending. Hosts must protect
+effect-set attachment, transfer staging, protection for retained history and
+recovery-bundle publication remain pending. Local upload reservation and cleanup
+now use [staging pins](image-upload-staging.md). Hosts must protect
 files across collection, reading and publication. Verification alone does not
 provide that protection. The prototype does not enable production action logging
 or change image cleanup.

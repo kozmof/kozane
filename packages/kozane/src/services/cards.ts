@@ -1,14 +1,26 @@
 import { cards as service } from "@kozane/core/services";
-export const create: typeof service.create = service.create;
-export const createInTx: typeof service.createInTx = service.createInTx;
+import { composeWrite } from "../db/database.js";
+import { completeImageUploadsInTx } from "../db/api/image-upload.js";
+export const createInTx: typeof service.createInTx = async (tx, ...args) => {
+  const result = await service.createInTx(tx, ...args);
+  await completeImageUploadsInTx(tx);
+  return result;
+};
+export const create: typeof service.create = (db, ...args) =>
+  composeWrite(db, (tx) => createInTx(tx, ...args));
 export const updatePositionsInTx: typeof service.updatePositionsInTx = service.updatePositionsInTx;
 export const removeInTx: typeof service.removeInTx = service.removeInTx;
 export const moveInTx: typeof service.moveInTx = service.moveInTx;
 export const setLayerInTx: typeof service.setLayerInTx = service.setLayerInTx;
 export const setPartitionInTx: typeof service.setPartitionInTx = service.setPartitionInTx;
 export const setStacking: typeof service.setStacking = service.setStacking;
-export const update: typeof service.update = service.update;
-export const updateInTx: typeof service.updateInTx = service.updateInTx;
+export const updateInTx: typeof service.updateInTx = async (tx, ...args) => {
+  const result = await service.updateInTx(tx, ...args);
+  await completeImageUploadsInTx(tx);
+  return result;
+};
+export const update: typeof service.update = (db, ...args) =>
+  composeWrite(db, (tx) => updateInTx(tx, ...args));
 export const removeOne: typeof service.removeOne = service.removeOne;
 export const squash: typeof service.squash = service.squash;
 export const updatePositions: typeof service.updatePositions = service.updatePositions;

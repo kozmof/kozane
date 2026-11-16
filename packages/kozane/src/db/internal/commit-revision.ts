@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Client, InStatement, Transaction } from "@libsql/client";
+import { configureActionConnection } from "../database.js";
+import { classifyLibsqlFailure } from "./classify-failure.js";
 export interface CommitRevision {
   readonly nonce: string;
   revision: number;
@@ -41,7 +43,29 @@ export function trackedClient(client: Client, state: CommitRevision): Client {
         };
       if (key === "transaction")
         return async (mode?: "write" | "read" | "deferred") => {
-          const transaction = await target.transaction(mode);
+          let transaction: Transaction;
+          try {
+            transaction = await target.transaction(mode);
+          } catch (cause) {
+            if (target.protocol === "file" && classifyLibsqlFailure(cause).kind === "transient") {
+              // A failed prepared BEGIN can leave a busy VM on the idle libsql connection.
+              // Replace that connection, without entering or retrying the application callback.
+              try {
+                await target.reconnect();
+                await configureActionConnection(
+                  async (statement) => (await target.execute(statement)).rows,
+                );
+              } catch (reconnectError) {
+                target.close();
+                throw new AggregateError(
+                  [cause, reconnectError],
+                  "Transaction start and connection recovery failed",
+                  { cause: reconnectError },
+                );
+              }
+            }
+            throw cause;
+          }
           let committed = false;
           return new Proxy(transaction, {
             get(tx, prop) {
