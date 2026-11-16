@@ -3,6 +3,7 @@ import { withReadTx, type DB } from "../../../db/database.js";
 import { localFileOperationTable } from "../../../db/schema.js";
 import { recoverLocalClaim } from "./recover-claim.js";
 import { recoverDirectoryOperation } from "./recover-directory.js";
+import { recoverFileOperation } from "./recover-file.js";
 
 /** Select a known recovery procedure; each procedure rechecks its own operation kind. */
 export async function recoverTaskspaceOperation(
@@ -24,9 +25,7 @@ export async function recoverTaskspaceOperation(
       return { ...(await recoverLocalClaim(db, root, operationId, apply)), intent: null };
     case "taskspace.directory":
       return recoverDirectoryOperation(db, root, operationId, apply);
-    default:
-      throw new Error(
-        "File-operation recovery is not supported. Inspect disk state and abandon reviewed tracking",
-      );
+    case "taskspace.file":
+      return recoverFileOperation(db, root, operationId, apply);
   }
 }

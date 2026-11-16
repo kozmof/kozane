@@ -57,7 +57,7 @@ export function registerDataCommands(program: Command): void {
 
   taskspace
     .command("recover <operationId>")
-    .description("Inspect a directory claim or completed directory mutation (read-only by default)")
+    .description("Inspect a local filesystem operation (read-only by default)")
     .option("--apply", "Finish verified database changes without changing files")
     .action((operationId, opts) => taskspaceRecover(operationId, opts));
 

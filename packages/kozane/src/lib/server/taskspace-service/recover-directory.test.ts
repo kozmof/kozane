@@ -35,6 +35,7 @@ import { TASKSPACE_MARKER_FILE, taskspaceMarkerText } from "../../taskspace-mark
 import * as disk from "../taskspace-directory.js";
 import { removeTaskspace, renameTaskspace } from "./mutate.js";
 import { recoverTaskspaceOperation } from "./recover-operation.js";
+import { recoverDirectoryOperation } from "./recover-directory.js";
 import { oneAtATime } from "./queue.js";
 
 let db: DB;
@@ -288,7 +289,7 @@ it("confirms once when two recovery attempts race", async () => {
   expect(results.map((result) => result.status).sort()).toEqual(["already-confirmed", "confirmed"]);
 });
 
-it("refuses abandoned operations and file recovery without discarding evidence", async () => {
+it("refuses abandoned operations and directory recovery of another kind without discarding evidence", async () => {
   const pending = await interrupted();
   await db
     .update(localFileOperationTable)
@@ -296,8 +297,8 @@ it("refuses abandoned operations and file recovery without discarding evidence",
   await expect(recover(pending.id, true)).rejects.toThrow("abandoned");
   await db.update(localFileOperationTable).set({ kind: "taskspace.file" });
   const evidence = await rows();
-  await expect(recover(pending.id, true)).rejects.toThrow(
-    "File-operation recovery is not supported",
+  await expect(recoverDirectoryOperation(db, root, pending.id, true)).rejects.toThrow(
+    "not a directory mutation",
   );
   expect(await rows()).toEqual(evidence);
   await expect(recover("missing")).rejects.toThrow("not found");

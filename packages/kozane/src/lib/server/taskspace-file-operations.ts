@@ -18,6 +18,13 @@ export type TaskspaceFileChange = { subPath: string } & (
   | { operation: "rename-entry"; name: string }
 );
 type Operation = typeof localFileOperationTable.$inferSelect;
+export type TaskspaceFileIntent = { requestedPath: string } & (
+  | { operation: "create-file"; contentHash: string }
+  | { operation: "save-file"; contentHash: string; signature: string | null }
+  | { operation: "create-directory" }
+  | { operation: "remove-entry" }
+  | { operation: "rename-entry"; name: string; targetPath: string }
+);
 
 export function prepareTaskspaceFileChange(
   root: string,
@@ -63,7 +70,7 @@ export type FileObservation =
   | "both-absent";
 
 /** Validate relative rename destinations before any path from an imported intent is read. */
-function parseIntent(operation: Operation) {
+export function parseTaskspaceFileIntent(operation: Operation): TaskspaceFileIntent | null {
   if (operation.kind !== "taskspace.file" || operation.version !== 1) return null;
   try {
     const intent = JSON.parse(operation.intent);
@@ -109,11 +116,7 @@ function parseIntent(operation: Operation) {
       fields.some((field) => !Object.hasOwn(intent, field))
     )
       return null;
-    return intent as {
-      operation: TaskspaceFileChange["operation"];
-      contentHash?: string;
-      targetPath?: string;
-    };
+    return intent as TaskspaceFileIntent;
   } catch {
     return null;
   }
@@ -144,7 +147,7 @@ function entry(path: string) {
 }
 
 export function inspectTaskspaceFileOperation(operation: Operation, root: string): FileObservation {
-  const intent = parseIntent(operation);
+  const intent = parseTaskspaceFileIntent(operation);
   if (!intent) return "invalid-intent";
   const path = resolveTaskspacePath(operation.path, operation.pathKind, root);
   if (!path) return "unsafe-path";
@@ -200,6 +203,34 @@ export function inspectTaskspaceFileOperation(operation: Operation, root: string
     }
   } catch {
     return "unreadable";
+  }
+}
+
+/** Bind recorded evidence to the current attachment before inspecting affected entries. */
+export function inspectTaskspaceFileRecovery(operation: Operation, root: string, baseDir: string) {
+  const intent = parseTaskspaceFileIntent(operation);
+  if (!intent) return "invalid-intent" as const;
+  try {
+    const base = entry(baseDir);
+    if (!base || base === "unsafe-path" || !base.isDirectory()) return "unsafe-path" as const;
+    const location = resolveTaskspaceEntry(baseDir, intent.requestedPath);
+    const stored = storedLocation(root, location.real);
+    if (stored.storedPath !== operation.path || stored.pathKind !== operation.pathKind)
+      return "attachment-mismatch" as const;
+    // Creation/removal and rename observations alone do not establish entry identity.
+    // Refuse symbolic links during explicit confirmation rather than following them.
+    const source = entry(location.real);
+    if (source === "unsafe-path" || source?.isSymbolicLink()) return "unsafe-path" as const;
+    if (intent.operation === "rename-entry") {
+      const target = resolveTaskspacePath(intent.targetPath, operation.pathKind, root);
+      if (!target) return "unsafe-path" as const;
+      const destination = entry(target);
+      if (destination === "unsafe-path" || destination?.isSymbolicLink())
+        return "unsafe-path" as const;
+    }
+    return inspectTaskspaceFileOperation(operation, root);
+  } catch {
+    return "unreadable" as const;
   }
 }
 

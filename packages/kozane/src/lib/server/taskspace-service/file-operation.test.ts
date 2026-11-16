@@ -193,6 +193,7 @@ it.each(cases)(
     await createLocalClaimStartupCheck(warn)(db, root);
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0][0]).toContain("pending taskspace file operation");
+    expect(warn.mock.calls[0][0]).toContain("kozane taskspace recover <operationId>");
     expect(await operations()).toEqual(rows);
     expect(await shared()).toEqual(before);
     await expect(recoverLocalClaim(db, root, rows[0].id, true)).rejects.toThrow(

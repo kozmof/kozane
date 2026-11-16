@@ -5,6 +5,9 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { createClient } from "@libsql/client";
 import { afterEach, expect, it } from "vitest";
+import { openDb } from "../db/client.js";
+import { journalTaskspaceFileChange } from "../lib/server/taskspace-service/file-operation.js";
+import { readTaskspaceFile, writeTaskspaceFile } from "../lib/server/taskspace-files.js";
 
 const cliEntry = resolve("packages/kozane/src/cli/index.ts");
 const loader = createRequire(join(process.cwd(), "package.json")).resolve("tsx");
@@ -124,6 +127,82 @@ it("recovers an interrupted doctor layout commit and then finishes configuration
     expect(JSON.parse(readFileSync(configPath, "utf8")).taskspace.defaultDir).toBe("taskspaces");
     expect((await client.execute("SELECT * FROM local_file_operation")).rows).toEqual(operations);
     expect(readFileSync(markerPath)).toEqual(marker);
+  } finally {
+    client.close();
+  }
+}, 60000);
+
+it("previews and confirms a real interrupted file save through the CLI without rewriting its bytes", async () => {
+  const root = mkdtempSync(join(tmpdir(), "kozane-cli-file-recover-"));
+  roots.push(root);
+  expect(run(root, "init").status).toBe(0);
+  expect(run(root, "taskspace", "create", "Notes", "--no-scope").status).toBe(0);
+  const url = `file:${join(root, ".kozane", "kozane.db")}`;
+  const client = createClient({ url });
+  try {
+    const taskspace = (await client.execute("SELECT * FROM taskspace")).rows[0];
+    const baseDir = join(
+      root,
+      String((await client.execute("SELECT path FROM taskspace_local")).rows[0].path),
+    );
+    writeFileSync(join(baseDir, "note.txt"), "Original");
+    const content = "Saved 日本語 🪁\n";
+    const signature = readTaskspaceFile({ baseDir, subPath: "note.txt" }).signature;
+    await client.execute(
+      "CREATE TRIGGER interrupt_save BEFORE UPDATE ON local_file_operation BEGIN SELECT RAISE(ABORT,'interrupted'); END",
+    );
+    const connection = await openDb(url);
+    try {
+      await expect(
+        journalTaskspaceFileChange(
+          {
+            db: connection.db,
+            namespaceId: String(taskspace.namespace_id),
+            taskspaceId: String(taskspace.id),
+            root,
+            baseDir,
+            request: { operation: "save-file", subPath: "note.txt", content, signature },
+            currentBaseDir: async () => baseDir,
+          },
+          () => writeTaskspaceFile({ baseDir, subPath: "note.txt", content, signature }),
+        ),
+      ).rejects.toMatchObject({ phase: "confirm" });
+    } finally {
+      connection.close();
+    }
+    await client.execute("DROP TRIGGER interrupt_save");
+    const pending = (
+      await client.execute("SELECT * FROM local_file_operation WHERE kind='taskspace.file'")
+    ).rows[0];
+    const shared = (await client.execute("SELECT * FROM taskspace")).rows;
+    const attachment = (await client.execute("SELECT * FROM taskspace_local")).rows;
+    const preview = run(root, "taskspace", "recover", String(pending.id));
+    expect(preview.status).toBe(0);
+    expect(preview.stdout).toContain("action    : save-file");
+    expect(preview.stdout).toContain(JSON.parse(String(pending.intent)).contentHash);
+    expect(preview.stdout).toContain("Review disk state");
+    expect(
+      (await client.execute("SELECT * FROM local_file_operation WHERE kind='taskspace.file'")).rows,
+    ).toEqual([pending]);
+    writeFileSync(join(baseDir, "note.txt"), "Newer edit");
+    const blocked = run(root, "taskspace", "recover", String(pending.id), "--apply");
+    expect(blocked.status).toBe(1);
+    expect(blocked.stderr).toContain("different-content");
+    expect(readFileSync(join(baseDir, "note.txt"), "utf8")).toBe("Newer edit");
+    writeFileSync(join(baseDir, "note.txt"), content);
+    const applied = run(root, "taskspace", "recover", String(pending.id), "--apply");
+    expect(applied.status).toBe(0);
+    expect(applied.stdout).toContain("File operation tracking confirmed. No files changed.");
+    expect(readFileSync(join(baseDir, "note.txt"), "utf8")).toBe(content);
+    expect((await client.execute("SELECT * FROM taskspace")).rows).toEqual(shared);
+    expect((await client.execute("SELECT * FROM taskspace_local")).rows).toEqual(attachment);
+    expect(
+      (await client.execute("SELECT state FROM local_file_operation WHERE kind='taskspace.file'"))
+        .rows[0].state,
+    ).toBe("confirmed");
+    const repeated = run(root, "taskspace", "recover", String(pending.id), "--apply");
+    expect(repeated.status).toBe(0);
+    expect(repeated.stdout).toContain("already confirmed");
   } finally {
     client.close();
   }

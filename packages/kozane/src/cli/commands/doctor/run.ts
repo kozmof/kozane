@@ -172,7 +172,7 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
         const pending = await pendingTaskspaceFileOperations(connection.db, root);
         complete = pending.total === 0;
         if (!complete)
-          detail = `${plural(pending.total, "pending file operation")}: ${pending.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}; inspect files before repeating changes; --fix does not retry file operations`;
+          detail = `${plural(pending.total, "pending file operation")}: ${pending.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}; inspect with kozane taskspace recover <operationId>; --fix does not retry file operations`;
       } finally {
         connection.close();
       }

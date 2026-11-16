@@ -88,9 +88,36 @@ changing them. File hashes distinguish matching bytes from changed content.
 Directory creation reports whether a directory is present. Rename inspection
 reports source and destination presence. Removal inspection reports entry
 presence. These observations do not prove which process changed a file and do not
-confirm an operation. `doctor --fix` does not retry file work. The directory
-recovery command refuses file mutations. Explicit resolution for these operations
-remains pending.
+confirm an operation. `doctor --fix` does not retry file work.
+
+`taskspace recover <operationId>` previews file outcomes without changing files or
+database rows. It requires an existing taskspace visible in the recorded namespace
+and an existing namespace. The requested path must resolve through the current
+attachment to the exact recorded affected path and path kind. Unsafe paths,
+symbolic links and malformed intents block confirmation. Existing absolute
+attachments are supported under the same checks.
+
+Each operation requires its recorded outcome.
+
+| Operation | Required disk state |
+| --- | --- |
+| Create or save a file | Regular file with the exact intended content hash |
+| Create a directory | Directory at the recorded path |
+| Rename an entry | Destination present and source absent |
+| Remove an entry | Recorded entry absent |
+
+Review disk state before applying confirmation. These observations establish the
+current outcome, not which process produced it. Version 1 file intents do not
+retain entry identity or directory contents. A recorded filesystem error may
+describe partial work and blocks confirmation even when disk state now matches.
+Inspect and repair that work manually, then abandon reviewed tracking.
+
+`--apply` rechecks visibility, attachment and disk state inside a write transaction
+after acquiring the taskspace queue. It confirms only the journal entry. Files,
+shared rows, attachments and observation timestamps remain unchanged. A failed
+statement or commit retains pending evidence. Repeated confirmation is idempotent.
+Abandoned operations cannot be confirmed. Startup and `doctor` only report evidence
+and never apply confirmation automatically.
 
 Managed directory removal and legacy combined rename commit intent before changing
 disk. Their intent retains the original shared fields and attachment, the exact
@@ -148,8 +175,8 @@ changes while retaining pending evidence.
 
 An operation with a recorded filesystem error requires manual review and cannot
 be confirmed this way. The error may describe partial work that completed-state
-inspection cannot establish. Abandoned operations and file mutations are also
-refused. Repeating confirmation of an already confirmed operation changes nothing.
+inspection cannot establish. Abandoned operations are also refused. Repeating
+confirmation of an already confirmed operation changes nothing.
 After confirming a completed layout, run `doctor --fix` to finish its configuration
 update. Configuration changes are outside the recovery transaction.
 

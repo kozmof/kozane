@@ -144,7 +144,10 @@ decisions, including their reasons and timestamps, without changing files or sha
 rows. Explicit recovery now confirms completed directory moves, layout changes and
 removals after verifying the original taskspace snapshot and disk evidence. It commits
 database changes and confirmation together without repeating filesystem work.
-Recorded filesystem errors still require manual review. File recovery remains pending. See
+File recovery now explicitly confirms matching outcomes for all five file methods
+after binding the requested path to the current attachment. Confirmation changes
+only tracking and never repeats filesystem callbacks. Recorded filesystem errors
+still require manual review. See
 [local filesystem operation records](local-file-operations.md).
 
 ## Version one
@@ -248,7 +251,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Journal CLI layout moves and intermediate paths, atomically confirm attachment updates, and retain completed disk changes instead of unrecorded compensating moves.
 - [x] Add explicit abandonment of reviewed pending operations while retaining intent, errors, reason and timestamp. Refuse automatic retries of pending layout work.
 - [x] Recover completed directory moves, layout changes and removals with snapshot and disk checks, atomic database confirmation and no filesystem retries. Preserve blocked and failed recovery evidence.
-- [ ] Reconcile interrupted taskspace file operations against disk state on startup without automatically retrying external-effect callbacks.
+- [x] Inspect interrupted taskspace file operations against disk state on startup and explicitly confirm reviewed outcomes without repeating filesystem callbacks. Preserve recorded errors and blocked evidence.
 - [x] Inspect pending directory claims on authenticated server startup and provide explicit attachment confirmation with live marker, identity and attachment checks. Preserve blocked claims without repeating filesystem work.
 - [ ] Add asset manifests to baselines and effect sets, covering references in invocations and full before and after images.
 - [ ] Reserve image names with durable staging pins before files become visible, then write and verify their bytes.

@@ -149,6 +149,7 @@ observations. A matching hash, marker or missing entry does not confirm an opera
 Inspect disk state before repeating a change. `doctor --fix` does not retry these
 operations. `taskspace recover` can explicitly confirm a completed directory mutation
 after verifying its recorded taskspace snapshot and disk evidence.
+File outcomes can also be reviewed and explicitly confirmed without repeating disk work.
 
 `--fix` first fixes the taskspace layout, then runs the checks. It refuses while Kozane is
 running for the workspace.
@@ -867,10 +868,11 @@ kozane taskspace scan [--apply] [--reattach [--namespace <namespaceId>]] [--clea
 
 ### `kozane taskspace recover <operationId>`
 
-Inspect a local directory claim or mutation using the full operation ID printed by
+Inspect a local filesystem operation using the full operation ID printed by
 `kozane doctor`. The default is read-only. The output identifies the taskspace, stored
 path and whether the operation can be confirmed. Completed mutation previews also
-show the action and any destination or new label.
+show the action and any destination or new label. File previews include the action
+and any intended content hash or destination.
 
 | Option | Description |
 | --- | --- |
@@ -882,7 +884,7 @@ markers, unsafe paths, symlinks, invalid intent and absent or reassigned taskspa
 It records the current local observation time and preserves shared timestamps.
 An already confirmed operation makes no changes.
 
-Mutation confirmation requires unchanged shared fields and attachment from the recorded
+Directory mutation confirmation requires unchanged shared fields and attachment from the recorded
 snapshot and an existing invoking namespace. A move or layout operation requires the
 recorded marker and directory identity at the destination only. Removal requires an
 absent source. Applying a move commits its recorded label and local path. Layout
@@ -890,9 +892,22 @@ recovery changes only the local path. Removal deletes the shared taskspace, clea
 card links and retains local metadata. Confirmation commits atomically with these
 changes and preserves creation and local observation timestamps.
 
-Changed taskspaces, unsafe or ambiguous disk states, recorded filesystem errors,
-abandoned operations and file mutations are refused. Inspect blocked operations and
-preserve their evidence for manual recovery. The command never repeats filesystem
+File confirmation requires a taskspace visible in the recorded namespace and a valid
+current attachment. The requested path must resolve to the exact recorded affected
+path and path kind. Creates and saves require matching content hashes. Directory
+creation requires a directory. Renames require only the destination to exist, and
+removal requires the recorded entry to be absent. Unsafe paths and symbolic links
+are refused. Existing absolute attachments are supported.
+
+Review disk state before confirming file tracking. These checks establish the current
+outcome and do not prove which process produced it. File intents do not retain entry
+identity or directory contents. Applying changes only the journal entry, preserving
+all shared rows, attachments and timestamps. Failed confirmation retains pending
+evidence, and repeated confirmation makes no changes.
+
+Unsafe or ambiguous disk states, recorded filesystem errors and abandoned operations
+are refused. Directory mutations also refuse changed taskspace snapshots. Inspect
+blocked operations and preserve their evidence for manual recovery. The command never repeats filesystem
 work or rewrites markers. `doctor --fix` does not confirm operations. Run it after
 layout confirmation to finish any pending configuration update.
 

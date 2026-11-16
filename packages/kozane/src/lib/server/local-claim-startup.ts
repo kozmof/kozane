@@ -26,7 +26,7 @@ export function createLocalClaimStartupCheck(
         const files = await pendingTaskspaceFileOperations(db, root);
         if (files.total > 0)
           warn(
-            `[kozane] ${files.total} pending taskspace file operation(s): ${files.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}. Run 'kozane doctor' before repeating them. Filesystem work was not retried.`,
+            `[kozane] ${files.total} pending taskspace file operation(s): ${files.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}. Run 'kozane doctor' and 'kozane taskspace recover <operationId>' to inspect them. Filesystem work was not retried.`,
           );
         const directories = await pendingTaskspaceDirectoryOperations(db, root);
         if (directories.total > 0)
