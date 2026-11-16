@@ -5,8 +5,26 @@ import { taskspaceScan, taskspaceCreate, taskspaceList } from "../commands/tasks
 import { taskspaceRecover } from "../commands/taskspace-recover.js";
 import { taskspaceAbandon } from "../commands/taskspace-abandon.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "../commands/db.js";
+import { imageUploads, imageRecover, imageAbandon } from "../commands/image-upload.js";
 
 export function registerDataCommands(program: Command): void {
+  const image = program.command("image").description("Image upload recovery");
+  image
+    .command("uploads")
+    .description("List unfinished local image uploads")
+    .option("--all", "Include completed and abandoned upload records")
+    .action((opts) => imageUploads(opts));
+  image
+    .command("recover <filename>")
+    .description("Inspect an image upload without repeating filesystem work")
+    .option("--apply", "Confirm verified upload metadata without changing files")
+    .action((filename, opts) => imageRecover(filename, opts));
+  image
+    .command("abandon <filename>")
+    .description("Preview release of a reviewed image upload pin")
+    .requiredOption("--reason <reason>", "Record why upload tracking can be abandoned")
+    .option("--apply", "Release this upload pin while retaining its evidence")
+    .action((filename, opts) => imageAbandon(filename, opts));
   const db = program.command("db").description("Database management");
 
   db.command("status")

@@ -6,6 +6,7 @@ import { openDb } from "../../../db/client.js";
 import { pendingLocalClaims } from "../../../lib/server/local-file-operations.js";
 import { pendingTaskspaceFileOperations } from "../../../lib/server/taskspace-file-operations.js";
 import { pendingTaskspaceDirectoryOperations } from "../../../lib/server/taskspace-directory-operations.js";
+import { pendingImageUploads } from "../../../lib/server/image-upload-recovery.js";
 import { getAllNamespaces } from "../../../db/api/namespace.js";
 import type { DB } from "../../../db/tx.js";
 import { errorMessage } from "../../../lib/error-message.js";
@@ -199,6 +200,25 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
       detail = errorMessage(error);
     }
     checks.push(check("Taskspace directory operations complete", complete, detail));
+  }
+
+  if (dbOk && migrationOk) {
+    let complete = false;
+    let detail: string | undefined;
+    try {
+      const connection = await openDb(workspaceDbUrl);
+      try {
+        const pending = await pendingImageUploads(connection.db, root);
+        complete = pending.total === 0;
+        if (!complete)
+          detail = `${plural(pending.total, "unfinished image upload")}: ${pending.named.map(({ filename, state, evidence }) => `${filename} (${state}, ${evidence.published}; temporary ${evidence.temporary})`).join(", ")}; inspect with kozane image recover <filename>; --fix does not retry uploads`;
+      } finally {
+        connection.close();
+      }
+    } catch (error) {
+      detail = errorMessage(error);
+    }
+    checks.push(check("Image uploads resolved", complete, detail));
   }
 
   if (dbOk && migrationOk) {

@@ -627,7 +627,10 @@ directories when the last card reference is deleted. CLI namespace deletion uses
 the same cleanup. The database deletion commits before file removal. Unfinished
 upload pins prevent removal even when no card refers to the file. Installation,
 pin transfer and cleanup share the database writer lock. Upload pins have no
-automatic expiry. Explicit upload recovery and abandonment remain pending.
+automatic expiry. The [image recovery commands](cli.md#kozane-image-uploads)
+preview verification and explicit release of reviewed upload pins. Abandonment
+leaves files and card references unchanged. Unreferenced abandoned temporary
+files become eligible for normal cleanup after 24 hours.
 
 Failed file removals are recorded in `.kozane/assets/images/.pending-delete`.
 Subsequent deletions and maintenance retry them. Maintenance failures do not fail

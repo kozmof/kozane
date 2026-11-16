@@ -37,15 +37,19 @@ async function syncDirectory(path: string) {
   }
 }
 
-async function verify(path: string, length: number, sha256: string) {
+export class ImageUploadVerificationError extends Error {
+  override readonly name = "ImageUploadVerificationError";
+}
+
+export async function verifyImageUploadFile(path: string, length: number, sha256: string) {
   const handle = await fs.open(
     path,
     constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
   );
   try {
-    const stat = await handle.stat();
-    if (!stat.isFile() || stat.size !== length)
-      throw new Error("Installed image length differs from intent");
+    const stat = await handle.stat({ bigint: true });
+    if (!stat.isFile() || stat.size !== BigInt(length))
+      throw new ImageUploadVerificationError("Installed image length differs from intent");
     const buffer = Buffer.alloc(length + 1);
     let size = 0;
     while (size < buffer.length) {
@@ -53,7 +57,7 @@ async function verify(path: string, length: number, sha256: string) {
       if (!bytesRead) break;
       size += bytesRead;
     }
-    const current = await fs.lstat(path);
+    const current = await fs.lstat(path, { bigint: true });
     if (
       !current.isFile() ||
       current.dev !== stat.dev ||
@@ -61,7 +65,7 @@ async function verify(path: string, length: number, sha256: string) {
       size !== length ||
       createHash("sha256").update(buffer.subarray(0, size)).digest("hex") !== sha256
     )
-      throw new Error("Installed image bytes differ from intent");
+      throw new ImageUploadVerificationError("Installed image bytes differ from intent");
   } finally {
     await handle.close();
   }
@@ -125,7 +129,7 @@ export async function installImageUpload(
       await fs.link(temporary, target);
       await fs.unlink(temporary);
       await syncDirectory(dir);
-      await verify(target, bytes.byteLength, sha256);
+      await verifyImageUploadFile(target, bytes.byteLength, sha256);
       diskComplete = true;
       const [installed] = await tx
         .update(localImageUploadTable)

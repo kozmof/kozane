@@ -3,6 +3,7 @@ import type { DB } from "../../db/database.js";
 import { pendingLocalClaims } from "./local-file-operations.js";
 import { pendingTaskspaceFileOperations } from "./taskspace-file-operations.js";
 import { pendingTaskspaceDirectoryOperations } from "./taskspace-directory-operations.js";
+import { pendingImageUploads } from "./image-upload-recovery.js";
 
 export function createLocalClaimStartupCheck(
   warn: (message: string) => void = (message) => console.warn(message),
@@ -32,6 +33,11 @@ export function createLocalClaimStartupCheck(
         if (directories.total > 0)
           warn(
             `[kozane] ${directories.total} pending taskspace directory operation(s): ${directories.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}. Run 'kozane doctor' and 'kozane taskspace recover <operationId>' to inspect them. Directory work was not retried.`,
+          );
+        const uploads = await pendingImageUploads(db, root);
+        if (uploads.total > 0)
+          warn(
+            `[kozane] ${uploads.total} unfinished image upload(s): ${uploads.named.map(({ filename, state, evidence }) => `${filename} (${state}, ${evidence.published}; temporary ${evidence.temporary})`).join(", ")}. Run 'kozane image uploads' and 'kozane image recover <filename>' to inspect them. Upload work was not retried.`,
           );
       })
       .catch(() => {

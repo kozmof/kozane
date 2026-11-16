@@ -164,8 +164,10 @@ Migration 0025 now reserves local image upload names and byte metadata before di
 publication. Installation verifies synced bytes and retains interrupted evidence.
 Application card create and update commit staging completion with the reference.
 Cleanup checks live references and unfinished pins under the same writer lock.
-JSON version 15 retains upload records without installing files. Explicit upload
-recovery and abandonment, production history manifests and transfer pins remain
+JSON version 15 retains upload records without installing files. Image commands
+now preview and explicitly recover verified installation or abandon a reviewed
+pin while preserving evidence. Startup and doctor inspect unfinished records
+without retrying work. Production history manifests and transfer pins remain
 pending. See [local image upload staging](image-upload-staging.md).
 
 ## Version one
@@ -280,7 +282,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Serialize file installation, staging transitions and cleanup decisions so protection transfers without a gap.
 - [x] Serialize local upload installation, card-reference pin transfer and cleanup with the database writer lock. Preserve pending files and deletion requests during contention and rollback.
 - [ ] Protect assets needed by live rows, uploads, staged transfers, pending work, retained history and recovery records.
-- [ ] Recover or explicitly abandon interrupted uploads before releasing staging pins.
+- [x] Recover verified published uploads or explicitly abandon reviewed pins without repeating filesystem work. Preserve intent, errors and decisions, and keep live references protected during cleanup.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.
 - [ ] Enable mandatory guards and ship version one only after phases 1–5 and their verification pass.
 

@@ -18,3 +18,10 @@ export async function pinnedImageNames(tx: Tx): Promise<Set<string>> {
   );
   return new Set(rows.map((row) => row.filename));
 }
+
+export async function abandonedImageNames(tx: Tx): Promise<Set<string>> {
+  const rows = await tx.all<{ filename: string }>(
+    sql`SELECT filename FROM local_image_upload WHERE state='abandoned'`,
+  );
+  return new Set(rows.map((row) => row.filename));
+}

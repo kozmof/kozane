@@ -42,9 +42,55 @@ Temporary files or published bytes remain available for review. If installation
 finished but its confirmation failed, the pending record and verified file remain.
 CLI card creation no longer deletes an uploaded file after a failed card write.
 
-Unfinished pins have no automatic expiry. Explicit recovery and abandonment are
-still pending, so an unused or interrupted upload may remain pinned. No startup
-or maintenance path repeats its installation work or clears its evidence.
+Unfinished pins have no automatic expiry. List them and preview recovery with
+the full filename printed by `doctor` or authenticated startup.
+
+```sh
+kozane image uploads
+kozane image recover <filename>
+kozane image recover <filename> --apply
+```
+
+Recovery requires matching published bytes, an absent temporary file and no
+recorded filesystem error. Unsafe paths, symlinks, unreadable or changed files
+and unrepresentable timestamps block confirmation. Applying rechecks evidence
+under the installer and cleanup writer lock. Contention may refuse a concurrent
+command without entering its callback. Recovery never changes files or shared rows.
+
+A pending record becomes installed after confirmation. If a card already refers
+to that image, recovery completes only that upload's bookkeeping in the same
+transaction. An unreferenced installation keeps its pin. Repeating confirmation
+is idempotent. Historical completed records need no new filesystem work.
+Abandoned uploads cannot be recovered. Create an image card from a verified URL
+to complete its installed pin with the card transaction.
+
+```sh
+kozane card add "kozane-image:/api/images/<filename>"
+```
+
+Review blocked or unused uploads before abandoning their pin.
+
+```sh
+kozane image abandon <filename> --reason "Reviewed unused upload"
+kozane image abandon <filename> --reason "Reviewed unused upload" --apply
+```
+
+The default is read-only. Applying preserves the filename, length, hash, error
+and installation time and records a separate decision time and reason. Repeating
+the same decision makes no changes. Another reason cannot replace it. Completed
+records cannot be abandoned. Failed statements or commits retain the prior state
+and pin. The shared writer lock prevents release during an active installation.
+
+Abandonment changes no files or card references and does not run cleanup. Live
+references still protect abandoned files. Normal maintenance can collect
+unreferenced published files and abandoned regular temporary files after 24 hours.
+A queued deletion may remove both after references and pins are gone. Untracked
+temporary names are left alone. Evidence and decision records remain.
+
+`image uploads --all` includes completed and abandoned records. Startup and
+`doctor` report at most five unfinished filenames and their published and
+temporary file observations. They never confirm, abandon or retry upload work.
+`doctor --fix` also leaves upload records unchanged.
 
 Shared capture, projection validation and restoration exclude upload records.
 Version 15 recovery exports retain all states, including errors and abandoned

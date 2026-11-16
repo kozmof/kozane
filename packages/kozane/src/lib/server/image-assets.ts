@@ -2,14 +2,18 @@ import { and, eq, inArray, like } from "drizzle-orm";
 import { composeWrite } from "../../db/database.js";
 import { validPng, validJpeg } from "./raster-validation.js";
 import { activeServerProcess } from "./runtime-state.js";
-import { mkdir, readFile, writeFile, readdir, stat, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile, readdir, stat, lstat, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { imagePath, IMAGE_MAX_BYTES } from "@kozane/core";
 import type { DB, Tx } from "../../db/tx.js";
 import { cardTable, partitionTable } from "../../db/schema.js";
 
 import { imageDirectory, installImageUpload } from "./image-upload.js";
-import { lockImageAssetWork, pinnedImageNames } from "../../db/api/image-upload.js";
+import {
+  lockImageAssetWork,
+  pinnedImageNames,
+  abandonedImageNames,
+} from "../../db/api/image-upload.js";
 export { imageDirectory } from "./image-upload.js";
 export class ImageValidationError extends Error {}
 
@@ -113,6 +117,7 @@ export async function collectUnusedImages(root: string, db: DB, now = Date.now()
   await composeWrite(db, async (tx) => {
     await lockImageAssetWork(tx);
     const pins = await pinnedImageNames(tx);
+    const abandoned = await abandonedImageNames(tx);
     const referenced = new Set(
       (await tx.select({ content: cardTable.content }).from(cardTable)).map((row) =>
         imagePath(row.content),
@@ -125,6 +130,23 @@ export async function collectUnusedImages(root: string, db: DB, now = Date.now()
       return;
     }
     for (const name of names) {
+      if (name.startsWith(".upload-")) {
+        const filename = name.slice(".upload-".length);
+        if (
+          !abandoned.has(filename) ||
+          pins.has(filename) ||
+          referenced.has("/api/images/" + filename)
+        )
+          continue;
+        try {
+          const path = join(imageDirectory(root), name);
+          const entry = await lstat(path);
+          if (entry.isFile() && entry.mtimeMs < now - 86400000) await rm(path);
+        } catch {
+          /* Leave unreadable or concurrently removed temporary entries alone. */
+        }
+        continue;
+      }
       const path = "/api/images/" + name;
       if (!imagePath("kozane-image:" + path) || referenced.has(path) || pins.has(name)) continue;
       const filename = join(imageDirectory(root), name);
@@ -260,6 +282,7 @@ export async function retryImageDeletions(root: string, db: DB): Promise<void> {
     await composeWrite(db, async (tx) => {
       await lockImageAssetWork(tx);
       const pins = await pinnedImageNames(tx);
+      const abandoned = await abandonedImageNames(tx);
       const referenced = new Set(
         (
           await tx
@@ -278,6 +301,8 @@ export async function retryImageDeletions(root: string, db: DB): Promise<void> {
         try {
           await rm(join(imageDirectory(root), name), { force: true });
           await rm(join(imageDirectory(root), ".retained", name), { force: true });
+          if (abandoned.has(name))
+            await rm(join(imageDirectory(root), `.upload-${name}`), { force: true });
           await rm(join(queue, name), { force: true });
         } catch (cause) {
           console.warn("Pending image deletion failed:", cause);

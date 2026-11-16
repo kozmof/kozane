@@ -144,6 +144,10 @@ For interrupted directory creation, inspect the operation ID with
 `taskspace recover <operationId>`. Confirm verified attachments explicitly with `--apply`.
 `doctor --fix` leaves pending claims unchanged.
 
+Unfinished image uploads are reported with up to five full filenames and disk observations.
+Inspect them with `image recover <filename>` or list all with `image uploads`. Recovery
+and abandonment require an explicit command. `--fix` does not retry upload work.
+
 Pending file and managed-directory mutations are reported with operation IDs and disk
 observations. A matching hash, marker or missing entry does not confirm an operation.
 Inspect disk state before repeating a change. `doctor --fix` does not retry these
@@ -762,6 +766,58 @@ Results are capped at 200 card hits and 200 file hits, with notices when shorten
 kozane tag show <tag> [--namespace <namespaceId>] [--no-files]
 ```
 
+### `kozane image uploads`
+
+List unfinished local image upload records by full filename and state. Recorded errors
+are included. `--all` also includes completed and abandoned records. The command is read-only.
+
+```sh
+kozane image uploads [--all]
+```
+
+### `kozane image recover <filename>`
+
+Preview an upload using the full filename from `image uploads` or `doctor`. The output
+shows byte length, hash, published and temporary file observations, and whether a card
+references the image. The default is read-only.
+
+| Option | Description |
+| --- | --- |
+| `--apply` | Confirm verified local upload bookkeeping without changing files or cards |
+
+Recovery requires matching published bytes, no temporary file and no recorded filesystem
+error. Unsafe paths, symlinks, unreadable or changed files and abandoned uploads are refused.
+Applying repeats verification under the installer and cleanup writer lock. A pending
+upload becomes installed. If a card already references the image, the upload becomes
+completed. An unreferenced installed upload keeps its pin. Repeated confirmation makes
+no changes. Historical completed records do not require the file to remain present.
+
+The command returns the verified URL. Create an image card from it with
+`kozane card add "kozane-image:/api/images/<filename>"`. Recovery never recreates,
+copies, renames or removes files. Interrupted temporary-only or ambiguous publication
+requires manual review. Failed database confirmation retains pending evidence.
+
+### `kozane image abandon <filename>`
+
+Preview release of a reviewed image upload pin. The default is read-only.
+
+| Option | Description |
+| --- | --- |
+| `--reason <reason>` | Required reason of 1–1000 characters without NUL, trimmed before recording |
+| `--apply` | Release only this upload pin and retain its evidence and decision |
+
+Applying records an abandonment time and reason while preserving intent, errors and
+installation evidence. It changes no files or card references and does not run cleanup.
+Live references still protect the bytes. Completed uploads cannot be abandoned.
+Repeating the same decision is idempotent. Another reason cannot replace it. Applying
+shares the installation writer lock and may refuse during contention without retrying
+callbacks. A failed statement or commit leaves the pin intact.
+
+Unreferenced abandoned files become normal cleanup candidates. Regular temporary
+files belonging to abandoned uploads are collected after 24 hours. Queued deletion
+can remove published and temporary files after all references and upload pins are gone.
+`doctor --fix` never applies recovery or abandonment.
+
 ### `kozane db status`
 
 Report migration status and exit 0 only when current.
@@ -791,8 +847,9 @@ kozane db migrate
 ### `kozane db export [file]`
 
 Export database data as JSON to a file or stdout. Requires current migrations. `--compact`
-removes formatting. Writes format version 8. Import also accepts version 7, which has no scope
-frames. Image bytes are not included. Back up `.kozane/assets/images` separately.
+removes formatting. Writes format version 15, including local filesystem operations and
+image upload staging evidence. Import accepts versions 7 through 15. Image bytes are
+not included. Back up `.kozane/assets/images` separately.
 
 Older formats use `project` and `bundle` tables and are refused. Import them with Kozane 0.10
 or earlier, then migrate.
