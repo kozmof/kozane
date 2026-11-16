@@ -23,6 +23,7 @@ export class AssetManifestError extends Error {
 function validName(name: unknown): name is string {
   return (
     typeof name === "string" &&
+    name.trim() === name &&
     name.startsWith(directory) &&
     imagePath("kozane-image:/api/images/" + name.slice(directory.length)) !== null
   );
@@ -116,6 +117,7 @@ export function parseAssetManifest(input: unknown): AssetManifest {
       (entry.byteLength as number) < 1 ||
       (entry.byteLength as number) > IMAGE_MAX_BYTES ||
       typeof entry.sha256 !== "string" ||
+      entry.sha256.length !== 64 ||
       !/^[a-f0-9]{64}$/.test(entry.sha256)
     )
       throw new AssetManifestError("Invalid asset manifest entry");

@@ -21,6 +21,7 @@ it.each([
     const latest = migrations[index];
     const start = migrations.findIndex(({ tag }) => tag === "0021_local_file_operation");
     await withMigration(db, async () => [
+      { sql: "DROP TABLE local_asset_manifest", args: [] },
       { sql: "DROP TABLE local_image_upload", args: [] },
       { sql: "DROP TABLE local_file_operation", args: [] },
       ...migrations

@@ -3,4 +3,5 @@ export const localTableNames: readonly string[] = Object.freeze([
   "taskspace_local",
   "local_file_operation",
   "local_image_upload",
+  "local_asset_manifest",
 ]);

@@ -272,6 +272,36 @@ export const localImageUploadTable = sqliteTable(
   ],
 );
 
+/** Device-local owners retain manifests independently of shared rows and selections. */
+export const localAssetManifestTable = sqliteTable(
+  "local_asset_manifest",
+  {
+    ownerKind: text("owner_kind", {
+      enum: ["baseline", "effect-set", "pending-work", "transfer", "recovery"],
+    }).notNull(),
+    ownerId: text("owner_id").notNull(),
+    manifest: text("manifest").notNull(),
+    state: text("state", { enum: ["pending", "retained", "released"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    verifiedAt: integer("verified_at", { mode: "timestamp" }),
+    releasedAt: integer("released_at", { mode: "timestamp" }),
+    releaseReason: text("release_reason"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerKind, t.ownerId] }),
+    index("local_asset_manifest_state").on(t.state),
+    check(
+      "local_asset_manifest_owner",
+      sql`${t.ownerKind} IN ('baseline','effect-set','pending-work','transfer','recovery') AND length(trim(${t.ownerId})) BETWEEN 1 AND 1000 AND instr(${t.ownerId},char(0))=0`,
+    ),
+    check("local_asset_manifest_json", sql`json_valid(${t.manifest})`),
+    check(
+      "local_asset_manifest_state",
+      sql`(${t.state}='pending' AND ${t.verifiedAt} IS NULL AND ${t.releasedAt} IS NULL AND ${t.releaseReason} IS NULL) OR (${t.state}='retained' AND ${t.verifiedAt} IS NOT NULL AND ${t.releasedAt} IS NULL AND ${t.releaseReason} IS NULL) OR (${t.state}='released' AND ${t.releasedAt} IS NOT NULL AND ${t.releaseReason} IS NOT NULL AND length(trim(${t.releaseReason})) > 0)`,
+    ),
+  ],
+);
+
 export const cardTable = sqliteTable(
   "card",
   {

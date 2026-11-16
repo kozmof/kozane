@@ -199,7 +199,8 @@ shared restoration preserves them. Pending diagnostics exclude them.
 
 The journal has no foreign keys to shared rows. Shared action capture, isolated
 validation and shared replacement exclude it alongside `taskspace_local`.
-Recovery JSON version 15 includes both tables and local image upload staging,
+Recovery JSON version 16 includes both tables, local image upload staging and
+manifest owner records,
 including records for absent
 shared identities, file mutations, directory operations and abandonment evidence.
 Versions 7–10 import with an empty journal. Version 11–13 records are retained with

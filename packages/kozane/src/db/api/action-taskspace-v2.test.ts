@@ -134,7 +134,9 @@ it("pins changed taskspace lifecycle semantics to version 2 and schema 20", asyn
   expect(catalog.select(2, 24)).toBe(f.registry);
   expect(catalog.select(1, 25)).toBe(f.v1);
   expect(catalog.select(2, 25)).toBe(f.registry);
-  expect(() => catalog.select(2, 26)).toThrow();
+  expect(catalog.select(1, 26)).toBe(f.v1);
+  expect(catalog.select(2, 26)).toBe(f.registry);
+  expect(() => catalog.select(2, 27)).toThrow();
   expect(() => catalog.select(2, 19)).toThrow();
   for (const kind of ["taskspaces.create", "taskspaces.rename", "taskspaces.remove"] as const) {
     expect(actionContractsV1[kind]).toBe("local-only");

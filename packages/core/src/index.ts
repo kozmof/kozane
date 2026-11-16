@@ -221,6 +221,13 @@ export { entryNameIssue } from "./entry-name.js";
 export { errorMessage } from "./error-message.js";
 
 export { IMAGE_MAX_BYTES, imagePath, imageReference } from "./images.js";
+export {
+  ASSET_MANIFEST_VERSION,
+  AssetManifestError,
+  parseAssetManifest,
+  mergeAssetManifests,
+} from "./actions/asset-manifest.js";
+export type { AssetManifest, AssetManifestEntry } from "./actions/asset-manifest.js";
 
 export type { ActionInputsV1, ActionKindV1 } from "./actions/contracts.js";
 export type { ActionInputsV2, ActionKindV2 } from "./actions/contracts-v2.js";

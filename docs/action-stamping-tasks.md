@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–25 and requires
+syncable database kind and `system.compose`. It supports schemas 19–26 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -100,7 +100,7 @@ API. Creation and label clocks use scoped bindings, and caught record failures
 abort their root. Migration 0020 now moves paths and observations to
 `taskspace_local` without a foreign key to shared rows. Readers join metadata
 only for present taskspaces, while local recovery readers retain absent rows.
-Shared capture, validation and replacement exclude that table. JSON version 15
+Shared capture, validation and replacement exclude that table. JSON version 16
 exports local rows separately, including absent taskspaces, and retains local file
 operations. Imports of versions
 7 through 9 split their inline values without changing the original dump.
@@ -112,7 +112,7 @@ current-schema view outcomes and 81 earlier-schema envelope outcomes. All older
 cohorts remain unchanged. Browser execution of these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–25. These shared services reject local metadata inputs,
+and removal on schemas 20–26. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -169,6 +169,14 @@ now preview and explicitly recover verified installation or abandon a reviewed
 pin while preserving evidence. Startup and doctor inspect unfinished records
 without retrying work. Production history manifests and transfer pins remain
 pending. See [local image upload staging](image-upload-staging.md).
+
+Migration 0026 adds a durable local manifest ledger. Pending and retained owners
+protect registered baseline, effect-set, pending-work, transfer and recovery images
+from cleanup. The host verifies live or archived bytes under the image writer lock
+before publication and preserves reservations after failed commits. Explicit
+release leaves other owners and live references protected. JSON version 16 retains
+owner records and release decisions. Production workflow registration remains
+pending. See [local manifest retention](asset-manifest-retention.md).
 
 ## Version one
 
@@ -282,6 +290,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Serialize file installation, staging transitions and cleanup decisions so protection transfers without a gap.
 - [x] Serialize local upload installation, card-reference pin transfer and cleanup with the database writer lock. Preserve pending files and deletion requests during contention and rollback.
 - [ ] Protect assets needed by live rows, uploads, staged transfers, pending work, retained history and recovery records.
+- [x] Add durable local manifest reservations, protected byte verification and explicit owner release. Make cleanup honor every registered owner and preserve local protection through shared restoration.
 - [x] Recover verified published uploads or explicitly abandon reviewed pins without repeating filesystem work. Preserve intent, errors and decisions, and keep live references protected during cleanup.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.
 - [ ] Enable mandatory guards and ship version one only after phases 1–5 and their verification pass.

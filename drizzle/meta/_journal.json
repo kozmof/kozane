@@ -183,6 +183,13 @@
       "when": 1794862900302,
       "tag": "0025_local_image_upload",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1794866045865,
+      "tag": "0026_local_asset_manifest",
+      "breakpoints": true
     }
   ]
 }

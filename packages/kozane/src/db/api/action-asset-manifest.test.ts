@@ -160,6 +160,7 @@ it.each([
   { version: 1, entries: [{ ...entry(), byteLength: 0 }] },
   { version: 1, entries: [{ ...entry(), byteLength: 1.5 }] },
   { version: 1, entries: [{ ...entry(), sha256: hash.toUpperCase() }] },
+  { version: 1, entries: [{ ...entry(), sha256: hash + "\n" }] },
   { version: 1, entries: [{ ...entry(), extra: true }] },
   { version: 1, entries: [{ ...entry(), name: "../image.png" }] },
   { version: 1, entries: new Array(1) },

@@ -847,8 +847,8 @@ kozane db migrate
 ### `kozane db export [file]`
 
 Export database data as JSON to a file or stdout. Requires current migrations. `--compact`
-removes formatting. Writes format version 15, including local filesystem operations and
-image upload staging evidence. Import accepts versions 7 through 15. Image bytes are
+removes formatting. Writes format version 16, including local filesystem operations,
+image upload staging and manifest owner records. Import accepts versions 7 through 16. Image bytes are
 not included. Back up `.kozane/assets/images` separately.
 
 Older formats use `project` and `bundle` tables and are refused. Import them with Kozane 0.10

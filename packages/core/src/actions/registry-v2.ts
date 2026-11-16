@@ -28,7 +28,7 @@ export function createActionRegistryV2<C>(handlers: ActionHandlersV2<C>) {
     throw new TypeError("Unknown version 2 action handler");
   return defineActionRegistry<ActionInputsV2, C>({
     contractVersion: ACTION_CONTRACT_VERSION_V2,
-    schemaVersions: [20, 21, 22, 23, 24, 25],
+    schemaVersions: [20, 21, 22, 23, 24, 25, 26],
     definitions: Object.fromEntries(entries) as ActionDefinitions<ActionInputsV2, C>,
   });
 }

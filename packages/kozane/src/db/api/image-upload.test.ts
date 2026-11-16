@@ -22,6 +22,7 @@ it.each([false, true])(
     const db = (await createTestDB()) as unknown as DB;
     const migration = migrations.find((migration) => migration.tag === "0025_local_image_upload")!;
     await withMigration(db, async () => [
+      { sql: "DROP TABLE local_asset_manifest", args: [] },
       { sql: "DROP TABLE local_image_upload", args: [] },
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },
       {
@@ -42,7 +43,9 @@ it.each([false, true])(
       await expect(db.select().from(localImageUploadTable)).rejects.toThrow();
       await db.run(sql`DROP TRIGGER reject_upgrade`);
     }
-    expect((await applyMigrations(db)).appliedIds).toEqual([migration.id]);
+    expect((await applyMigrations(db)).appliedIds).toEqual(
+      migrations.filter((row) => row.when >= migration.when).map((row) => row.id),
+    );
     expect(
       Array.from(
         (await db.values(sql`SELECT CAST(created_at AS TEXT),error FROM local_file_operation`))[0],

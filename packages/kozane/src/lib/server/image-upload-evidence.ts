@@ -72,3 +72,21 @@ export async function inspectImageUpload(root: string, record: Intent) {
     temporary: await entry(join(directory, `.upload-${record.filename}`), record),
   };
 }
+
+/** A retained logical image may already live in the readable archive. Never hide corrupt live bytes. */
+export async function inspectRetainedImage(
+  root: string,
+  record: Intent,
+): Promise<ImageUploadEvidence> {
+  const evidence = await inspectImageUpload(root, record);
+  if (evidence.published !== "absent") return evidence.published;
+  try {
+    const directory = imageDirectory(await realpath(root));
+    const archive = join(directory, ".retained");
+    const stat = await lstat(archive);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) return "unsafe-path";
+    return entry(join(archive, record.filename), record);
+  } catch (error) {
+    return code(error) === "ENOENT" ? "absent" : "unreadable";
+  }
+}

@@ -28,18 +28,23 @@ it.each([false, true])(
             "taskspace_local",
             "local_file_operation",
             "local_image_upload",
+            "local_asset_manifest",
           ].includes(name),
       )
       .map(({ name }) => name);
     const plan = createRestorationPlan(canonicalSchemaManifest, names);
     // Rebuild this empty test database with the exact retained schema-19 migration prefix.
     await withMigration(db, async () => [
-      ...["local_image_upload", "local_file_operation", "taskspace_local", ...plan.deleteOrder].map(
-        (name) => ({
-          sql: `DROP TABLE "${name}"`,
-          args: [],
-        }),
-      ),
+      ...[
+        "local_asset_manifest",
+        "local_image_upload",
+        "local_file_operation",
+        "taskspace_local",
+        ...plan.deleteOrder,
+      ].map((name) => ({
+        sql: `DROP TABLE "${name}"`,
+        args: [],
+      })),
       { sql: "DELETE FROM __drizzle_migrations", args: [] },
       ...migrations.slice(0, splitIndex).flatMap((migration) => [
         ...migration.statements.map((text) => ({ sql: text, args: [] })),

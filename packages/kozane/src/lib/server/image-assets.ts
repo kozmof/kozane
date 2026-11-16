@@ -9,6 +9,7 @@ import type { DB, Tx } from "../../db/tx.js";
 import { cardTable, partitionTable } from "../../db/schema.js";
 
 import { imageDirectory, installImageUpload } from "./image-upload.js";
+import { retainedImageNames } from "../../db/api/asset-manifest.js";
 import {
   lockImageAssetWork,
   pinnedImageNames,
@@ -117,6 +118,7 @@ export async function collectUnusedImages(root: string, db: DB, now = Date.now()
   await composeWrite(db, async (tx) => {
     await lockImageAssetWork(tx);
     const pins = await pinnedImageNames(tx);
+    for (const filename of await retainedImageNames(tx)) pins.add(filename);
     const abandoned = await abandonedImageNames(tx);
     const referenced = new Set(
       (await tx.select({ content: cardTable.content }).from(cardTable)).map((row) =>
@@ -282,6 +284,7 @@ export async function retryImageDeletions(root: string, db: DB): Promise<void> {
     await composeWrite(db, async (tx) => {
       await lockImageAssetWork(tx);
       const pins = await pinnedImageNames(tx);
+      for (const filename of await retainedImageNames(tx)) pins.add(filename);
       const abandoned = await abandonedImageNames(tx);
       const referenced = new Set(
         (

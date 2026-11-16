@@ -631,6 +631,9 @@ automatic expiry. The [image recovery commands](cli.md#kozane-image-uploads)
 preview verification and explicit release of reviewed upload pins. Abandonment
 leaves files and card references unchanged. Unreferenced abandoned temporary
 files become eligible for normal cleanup after 24 hours.
+Pending and retained manifest owners also protect their images. Releasing an
+upload pin does not release independent history or recovery ownership. Cleanup
+refuses malformed active manifests before changing files.
 
 Failed file removals are recorded in `.kozane/assets/images/.pending-delete`.
 Subsequent deletions and maintenance retry them. Maintenance failures do not fail

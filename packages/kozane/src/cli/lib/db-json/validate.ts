@@ -3,7 +3,7 @@ import { INVENTORY_SLOT_MAX } from "../../../lib/constants.js";
 import { plural } from "../plural.js";
 import { taskspacePathIssue } from "../../../lib/server/taskspace-path.js";
 import { type TableRows } from "./format.js";
-import { imagePath, IMAGE_MAX_BYTES } from "@kozane/core";
+import { imagePath, IMAGE_MAX_BYTES, mergeAssetManifests, parseAssetManifest } from "@kozane/core";
 import { type ImportDbJsonOptions } from "./import.js";
 
 /**
@@ -24,6 +24,20 @@ export function validateDumpRefs(tables: TableRows): void {
     )
       throw new Error("Invalid local image upload metadata");
   }
+  mergeAssetManifests([
+    ...tables.local_asset_manifest.map((row) => {
+      if (typeof row.manifest !== "string") throw new Error("Invalid local asset manifest");
+      return parseAssetManifest(JSON.parse(row.manifest));
+    }),
+    {
+      version: 1,
+      entries: tables.local_image_upload.map((row) => ({
+        name: `.kozane/assets/images/${row.filename}`,
+        byteLength: row.byte_length,
+        sha256: row.sha256,
+      })),
+    },
+  ]);
   const namespaceIds = new Set(tables.namespace.map((r) => r.id as string));
   const partitionIds = new Set(tables.partition.map((r) => r.id as string));
   const layerIds = new Set(tables.layer.map((r) => r.id as string));

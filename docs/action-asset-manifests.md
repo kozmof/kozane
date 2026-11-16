@@ -83,10 +83,13 @@ image referenced only by its invocation. Other tests cover reopening history,
 failed manifest commits, missing or corrupt bytes, changed catalogs and concurrent
 history changes. Failed verification preserves rows, local metadata and selection.
 
-These tables and guards exist only in test databases. Production baseline and
-effect-set attachment, transfer staging, protection for retained history and
-recovery-bundle publication remain pending. Local upload reservation and cleanup
-now use [staging pins](image-upload-staging.md). Hosts must protect
-files across collection, reading and publication. Verification alone does not
-provide that protection. The prototype does not enable production action logging
-or change image cleanup.
+These capture tables and guards exist only in test databases. The separate
+[local manifest ledger](asset-manifest-retention.md) now provides durable owner
+reservations and cleanup protection. The public core entry exports manifest
+parsing and merging for host bookkeeping. Local upload reservation also uses
+[staging pins](image-upload-staging.md).
+
+Production baseline and effect-set attachment, transfer staging and recovery-bundle
+publication still need to register their owners. Hosts must protect files across
+collection, reading and publication. Verification alone does not provide that
+protection. The prototype does not enable production action logging.

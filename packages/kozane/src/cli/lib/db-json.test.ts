@@ -150,6 +150,7 @@ describe("db JSON export/import", () => {
       taskspace_local: 1,
       local_file_operation: 0,
       local_image_upload: 0,
+      local_asset_manifest: 0,
       card: 2,
       glue: 1,
       glue_rel: 2,
@@ -252,6 +253,56 @@ describe("db JSON export/import", () => {
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
   });
 
+  it("round-trips retained manifest owners, refuses unsafe or conflicting identity and imports earlier dumps without pins", async () => {
+    const sourceUrl = await migratedDbUrl("manifest-source.db");
+    const targetUrl = await migratedDbUrl("manifest-target.db");
+    const entry = {
+      name: ".kozane/assets/images/00000000-0000-4000-8000-000000000001.svg",
+      byteLength: 3,
+      sha256: "a".repeat(64),
+    };
+    const manifest = JSON.stringify({ version: 1, entries: [entry] });
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const state of ["pending", "retained", "released"])
+        await client.execute({
+          sql: "INSERT INTO local_asset_manifest(owner_kind,owner_id,manifest,state,created_at,verified_at,released_at,release_reason) VALUES('baseline',?,?,?,?,?,?,?)",
+          args: [
+            state,
+            manifest,
+            state,
+            1,
+            state === "retained" ? 2 : null,
+            state === "released" ? 3 : null,
+            state === "released" ? "History expired" : null,
+          ],
+        });
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(16);
+    expect((await importDbJson(targetUrl, source)).local_asset_manifest).toBe(3);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const unsafe = structuredClone(source);
+    unsafe.tables.local_asset_manifest[0].manifest = JSON.stringify({
+      version: 1,
+      entries: [{ ...entry, name: "../outside.svg" }],
+    });
+    await expect(importDbJson(targetUrl, unsafe)).rejects.toThrow("Invalid asset manifest entry");
+    const conflict = structuredClone(source);
+    conflict.tables.local_asset_manifest[0].manifest = JSON.stringify({
+      version: 1,
+      entries: [{ ...entry, sha256: "b".repeat(64) }],
+    });
+    await expect(importDbJson(targetUrl, conflict)).rejects.toThrow("Conflicting asset bytes");
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const { local_asset_manifest: _manifests, ...tables } = source.tables;
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 15, tables })).local_asset_manifest,
+    ).toBe(0);
+  });
+
   it("round-trips image staging evidence without reading or installing files", async () => {
     const sourceUrl = await migratedDbUrl("uploads-source.db");
     const targetUrl = await migratedDbUrl("uploads-target.db");
@@ -277,7 +328,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(15);
+    expect(source.version).toBe(16);
     expect((await importDbJson(targetUrl, source)).local_image_upload).toBe(4);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_image_upload[0].filename = "../outside.svg";
@@ -309,7 +360,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(15);
+    expect(source.version).toBe(16);
     expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_file_operation[0].path = "../escape";

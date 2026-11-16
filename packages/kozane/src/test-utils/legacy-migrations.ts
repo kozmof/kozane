@@ -1,5 +1,6 @@
 /** Undo schema 20 only when building historical migration fixtures. */
 export const UNDO_TASKSPACE_LOCAL_SQL = [
+  "DROP TABLE local_asset_manifest",
   "DROP TABLE local_image_upload",
   "DROP TABLE local_file_operation",
   "ALTER TABLE taskspace ADD COLUMN path text",

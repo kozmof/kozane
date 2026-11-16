@@ -1,12 +1,13 @@
 /** Reserve and verify local image bytes before publishing a usable upload URL. */
 import * as fs from "node:fs/promises";
 import { constants } from "node:fs";
-import { createHash, randomUUID } from "node:crypto";
+import * as crypto from "node:crypto";
 import { dirname, join } from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
 import { withTx, type DB } from "../../db/database.js";
 import { localImageUploadTable } from "../../db/schema.js";
 import { lockImageAssetWork } from "../../db/api/image-upload.js";
+import { assertImageAssetIdentityInTx } from "../../db/api/asset-manifest.js";
 
 export const imageDirectory = (root: string) => join(root, ".kozane", "assets", "images");
 
@@ -63,7 +64,7 @@ export async function verifyImageUploadFile(path: string, length: number, sha256
       current.dev !== stat.dev ||
       current.ino !== stat.ino ||
       size !== length ||
-      createHash("sha256").update(buffer.subarray(0, size)).digest("hex") !== sha256
+      crypto.createHash("sha256").update(buffer.subarray(0, size)).digest("hex") !== sha256
     )
       throw new ImageUploadVerificationError("Installed image bytes differ from intent");
   } finally {
@@ -78,8 +79,8 @@ export async function installImageUpload(
   extension: string,
   bytes: Uint8Array,
 ) {
-  const filename = `${randomUUID()}.${extension}`;
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const filename = `${crypto.randomUUID()}.${extension}`;
+  const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
   const record = {
     filename,
     sha256,
@@ -89,6 +90,13 @@ export async function installImageUpload(
   };
   // The pin is committed before any directory or file is created.
   await withTx(db, async (tx) => {
+    await lockImageAssetWork(tx);
+    await assertImageAssetIdentityInTx(tx, {
+      version: 1,
+      entries: [
+        { name: `.kozane/assets/images/${filename}`, byteLength: record.byteLength, sha256 },
+      ],
+    });
     await tx.insert(localImageUploadTable).values(record);
   });
   let attempted = false;

@@ -99,6 +99,7 @@ Imports validate filenames and metadata and never install files. Image bytes sti
 need a separate backup. Memory sessions keep their database ephemeral and skip
 persistent image cleanup.
 
-This staging does not yet protect production baselines, effect sets, transfers or
-recovery bundles. Those owners need their own retained manifests and pins before
-cleanup can account for them. Mandatory action capture remains disabled.
+Upload staging does not infer history or transfer references. The separate
+[manifest ledger](asset-manifest-retention.md) protects registered owners alongside
+upload pins. Production workflows must register their manifests before relying
+on that protection. Mandatory action capture remains disabled.
