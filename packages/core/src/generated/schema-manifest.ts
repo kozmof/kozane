@@ -861,6 +861,8 @@ export const canonicalSchemaManifest: SchemaManifest = freezeSchema([
       "'taskspace.claim'",
       ",",
       "'taskspace.file'",
+      ",",
+      "'taskspace.directory'",
       ")",
       "AND",
       '"local_file_operation"',

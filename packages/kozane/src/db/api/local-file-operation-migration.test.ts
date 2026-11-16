@@ -5,16 +5,24 @@ import { withMigration, type DB } from "../../../../core/src/database.js";
 import { migrations } from "../../../../core/src/generated/migrations.js";
 import { applyMigrations } from "../../../../core/src/migrations/apply.js";
 
-it.each([false, true])(
-  "widens local operation kinds without changing retained schema-21 evidence (rollback=%s)",
-  async (failFirst) => {
+it.each([
+  [22, false],
+  [22, true],
+  [23, false],
+  [23, true],
+] as const)(
+  "widens local operation kinds at migration %s without changing retained evidence (rollback=%s)",
+  async (target, failFirst) => {
     // Test adapters share this runtime handle while their published declarations are built separately.
     const db = (await createTestDB()) as unknown as DB;
-    const latest = migrations.find(({ tag }) => tag === "0022_taskspace_file_operations")!;
-    const previous = migrations.find(({ tag }) => tag === "0021_local_file_operation")!;
+    const index = migrations.findIndex(({ tag }) => tag.startsWith(`00${target}_`));
+    const latest = migrations[index];
+    const start = migrations.findIndex(({ tag }) => tag === "0021_local_file_operation");
     await withMigration(db, async () => [
       { sql: "DROP TABLE local_file_operation", args: [] },
-      ...previous.statements.map((text) => ({ sql: text, args: [] })),
+      ...migrations
+        .slice(start, index)
+        .flatMap((migration) => migration.statements.map((text) => ({ sql: text, args: [] }))),
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [latest.when] },
       {
         sql: "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at,error) VALUES('pending','taskspace.claim',1,'absent','absent','local/日本語','workspace_relative','pending','{}',9007199254740993,'retained error')",
@@ -25,6 +33,11 @@ it.each([false, true])(
         args: [],
       },
     ]);
+    if (target === 23)
+      await db.run(
+        sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('retained-file','taskspace.file',1,'absent','absent','local/file','workspace_relative','pending','{}',1)`,
+      );
+    const kind = target === 23 ? "taskspace.directory" : "taskspace.file";
     const read = async () =>
       (
         await db.values(
@@ -42,15 +55,17 @@ it.each([false, true])(
       expect(await read()).toEqual(original);
       await expect(
         db.run(
-          sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('file','taskspace.file',1,'absent','absent','local/file','workspace_relative','pending','{}',1)`,
+          sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('new-kind',${kind},1,'absent','absent','local/file','workspace_relative','pending','{}',1)`,
         ),
       ).rejects.toThrow();
       await db.run(sql`DROP TRIGGER reject_widen`);
     }
-    expect((await applyMigrations(db)).appliedIds).toEqual([latest.id]);
+    expect((await applyMigrations(db)).appliedIds).toEqual(
+      migrations.slice(index).map(({ id }) => id),
+    );
     expect(await read()).toEqual(original);
     await db.run(
-      sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('file','taskspace.file',1,'absent','absent','local/file','workspace_relative','pending','{}',1)`,
+      sql`INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('new-kind',${kind},1,'absent','absent','local/file','workspace_relative','pending','{}',1)`,
     );
     expect(await db.values(sql`PRAGMA foreign_key_check`)).toEqual([]);
     expect((await db.values(sql`PRAGMA foreign_keys`))[0][0]).toBe(1);

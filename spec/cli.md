@@ -128,7 +128,7 @@ kozane net ssg preview [--out <dir>] [--base <path>] [--host <host>] [--port <po
 
 Check workspace detection, config, database permissions, migrations, card timestamps, SQLite
 integrity and references, workspace limits, inventory consistency, pending directory claims
-and file operations, taskspace layout,
+and file or directory operations, taskspace layout,
 `taskspace.namespacePaths` keys, and port availability. Exit 0 when all checks pass, otherwise 1.
 
 Database content checks require current migrations. Invalid timestamps, oversized text or
@@ -144,10 +144,10 @@ For interrupted directory creation, inspect the operation ID with
 `taskspace recover <operationId>`. Confirm verified attachments explicitly with `--apply`.
 `doctor --fix` leaves pending claims unchanged.
 
-Pending file mutations are reported with operation IDs and disk observations. A matching
-hash or missing entry does not confirm an operation. Inspect files before repeating a
-change. `doctor --fix` does not retry these operations, and `taskspace recover` accepts
-directory claims only.
+Pending file and managed-directory mutations are reported with operation IDs and disk
+observations. A matching hash, marker or missing entry does not confirm an operation.
+Inspect disk state before repeating a change. `doctor --fix` does not retry these
+operations, and `taskspace recover` accepts directory claims only.
 
 `--fix` first fixes the taskspace layout, then runs the checks. It refuses while Kozane is
 running for the workspace.

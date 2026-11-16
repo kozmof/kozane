@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–22 and requires
+syncable database kind and `system.compose`. It supports schemas 19–23 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -100,7 +100,7 @@ API. Creation and label clocks use scoped bindings, and caught record failures
 abort their root. Migration 0020 now moves paths and observations to
 `taskspace_local` without a foreign key to shared rows. Readers join metadata
 only for present taskspaces, while local recovery readers retain absent rows.
-Shared capture, validation and replacement exclude that table. JSON version 12
+Shared capture, validation and replacement exclude that table. JSON version 13
 exports local rows separately, including absent taskspaces, and retains local file
 operations. Imports of versions
 7 through 9 split their inline values without changing the original dump.
@@ -113,7 +113,7 @@ current-schema view outcomes and 48 earlier-schema envelope outcomes. All older
 cohorts remain unchanged. Browser execution of these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–22. These shared services reject local metadata inputs,
+and removal on schemas 20–23. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -137,8 +137,11 @@ explicit abandonment remain pending. Migration 0022 now journals the five file
 mutations, retaining affected paths and intended content hashes before disk work.
 `doctor` and startup inspect pending file work without retrying callbacks. File
 mutations leave shared rows unchanged, and shared restoration preserves their
-local evidence. Whole-directory lifecycle journals and explicit file-operation
-resolution remain pending. See
+local evidence. Migration 0023 journals managed-directory deletion and legacy
+combined rename. Their shared changes, attachment updates and journal
+confirmation commit together. Completed disk changes and pending evidence survive
+a failed final transaction. CLI layout journals and explicit file and directory
+operation resolution remain pending. See
 [local filesystem operation records](local-file-operations.md).
 
 ## Version one
@@ -238,7 +241,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Add pending and confirmed local file-operation records with affected paths and intended content hashes where applicable.
 - [x] Journal taskspace directory claims before disk work, atomically confirm local attachments, retain interrupted evidence and report it through `doctor` without retrying callbacks. See [local filesystem operation records](local-file-operations.md).
 - [x] Journal all five file mutation methods with intended hashes where applicable, preserve evidence after statement and commit failures, and inspect disk state without retrying callbacks.
-- [ ] Journal whole-taskspace directory moves and directory deletion.
+- [x] Journal managed-directory deletion and legacy combined rename, retain marker and directory identity evidence, and commit shared changes and confirmation atomically.
+- [ ] Journal CLI taskspace layout moves and their intermediate and compensating steps.
 - [ ] Reconcile interrupted taskspace file operations against disk state on startup without automatically retrying external-effect callbacks.
 - [x] Inspect pending directory claims on authenticated server startup and provide explicit attachment confirmation with live marker, identity and attachment checks. Preserve blocked claims without repeating filesystem work.
 - [ ] Add asset manifests to baselines and effect sets, covering references in invocations and full before and after images.

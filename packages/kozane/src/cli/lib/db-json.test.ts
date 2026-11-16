@@ -269,7 +269,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(12);
+    expect(source.version).toBe(13);
     expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_file_operation[0].path = "../escape";
@@ -306,6 +306,57 @@ describe("db JSON export/import", () => {
     }
     const source = await exportDbJson(sourceUrl);
     const legacy = { ...source, version: 11 };
+    const original = JSON.stringify(legacy);
+    expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(1);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(JSON.stringify(legacy)).toBe(original);
+  });
+
+  it("round-trips orphan directory intents and validates their destination before import", async () => {
+    const sourceUrl = await migratedDbUrl("directory-source.db");
+    const targetUrl = await migratedDbUrl("directory-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute({
+        sql: "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('directory','taskspace.directory',1,'missing','missing','local/source','workspace_relative','pending',?,1)",
+        args: [
+          JSON.stringify({
+            operation: "move",
+            name: "target",
+            targetPath: "local/target",
+            before: {},
+            directory: { dev: "0", ino: "0", markerHash: "a".repeat(64) },
+          }),
+        ],
+      });
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(1);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    source.tables.local_file_operation[0].intent = JSON.stringify({ targetPath: "../outside" });
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow("leaves the workspace");
+    const retained = await exportDbJson(targetUrl);
+    expect(retained.tables.local_file_operation).toHaveLength(1);
+    expect(JSON.parse(String(retained.tables.local_file_operation[0].intent)).targetPath).toBe(
+      "local/target",
+    );
+  });
+
+  it("imports version 12 file journals without executing their callbacks", async () => {
+    const sourceUrl = await migratedDbUrl("file-v12-source.db");
+    const targetUrl = await migratedDbUrl("file-v12-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('file','taskspace.file',1,'missing','missing','local/file.txt','workspace_relative','pending','{}',1)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    const legacy = { ...source, version: 12 };
     const original = JSON.stringify(legacy);
     expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(1);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);

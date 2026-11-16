@@ -10,7 +10,7 @@ Production log tables, application routing and guard activation remain pending.
 It installs handlers for every declared syncable database service kind and
 the built-in `system.compose` interpreter. Each database handler forwards its
 complete routing arguments and body to the corresponding `InTx` service.
-The registry currently supports schemas 19–22.
+The registry currently supports schemas 19–23.
 
 Supply a complete `LocalRecoveryHandlersV1` map when constructing the registry.
 Missing handlers, wrong handler roles, unknown kinds and attempts to replace a
@@ -40,7 +40,7 @@ route application writes or activate guards.
 
 ## Replay shared taskspace actions with version 2
 
-`createServiceActionRegistryV2` supports schemas 20–22 and action contract 2. It keeps
+`createServiceActionRegistryV2` supports schemas 20–23 and action contract 2. It keeps
 the existing database handlers and adds shared taskspace creation, label changes
 and removal through `services/taskspaces.ts`. Supply `LocalRecoveryHandlersV2`
 with exactly the five file operation recovery handlers. Lifecycle recovery

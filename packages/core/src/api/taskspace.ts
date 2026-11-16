@@ -232,7 +232,7 @@ async function writeTaskspace({
   }
 }
 
-type GetTaskspace = NeedsTaskspace;
+type GetTaskspace = NeedsReader & { taskspaceId: string };
 export async function getTaskspace({
   db,
   taskspaceId,

@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { writeFileSync, readFileSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -7,6 +7,8 @@ import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { DROP_CARD_GUARDS_SQL } from "../test-utils/db.js";
 import { contentHash, localClaimIntent } from "../lib/server/local-file-operations.js";
+import { directoryEvidence } from "../lib/server/taskspace-directory-operations.js";
+import { TASKSPACE_MARKER_FILE, taskspaceMarkerText } from "../lib/taskspace-marker.js";
 
 /**
  * Test `kozane doctor` through the CLI, including SQLite integrity checks and reports of rows
@@ -86,6 +88,35 @@ afterEach(() => {
 });
 
 describe("kozane doctor — integrity and limits", () => {
+  it("reports interrupted directory work without retrying it with --fix", async () => {
+    const root = initWorkspace();
+    mkdirSync(join(root, "pending-directory"));
+    const marker = join(root, "pending-directory", TASKSPACE_MARKER_FILE);
+    const contents = taskspaceMarkerText("missing", "missing", true);
+    writeFileSync(marker, contents);
+    const evidence = directoryEvidence(root, "pending-directory", "missing");
+    expect(evidence.state).toBe("owned");
+    if (evidence.state !== "owned") throw new Error("Expected an owned fixture directory");
+    await withRawDb(root, async (client) => {
+      await client.execute({
+        sql: "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('pending-directory','taskspace.directory',1,'missing','missing','pending-directory','workspace_relative','pending',?,1)",
+        args: [JSON.stringify({ operation: "remove", before: {}, directory: evidence.identity })],
+      });
+    });
+    for (const args of [[], ["--fix"]]) {
+      const result = runCli(root, "doctor", ...args);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("Taskspace directory operations complete");
+      expect(result.stdout).toContain("pending-directory (source-present)");
+      expect(result.stdout).toContain("--fix does not retry directory operations");
+      expect(readFileSync(marker, "utf8")).toBe(contents);
+    }
+    await withRawDb(root, async (client) => {
+      expect((await client.execute("SELECT state FROM local_file_operation")).rows[0].state).toBe(
+        "pending",
+      );
+    });
+  });
   it("reports pending file work without confirming or repeating it with --fix", async () => {
     const root = initWorkspace();
     const file = join(root, "pending-file.txt");

@@ -3,8 +3,9 @@
 Migration `0021_local_file_operation` adds a device-local journal. Its first
 supported operation is `taskspace.claim`, version 1, used by HTTP and CLI taskspace
 creation. Migration `0022_taskspace_file_operations` adds `taskspace.file`, version
-1, for the five file mutation methods. Whole-taskspace directory moves and
-directory deletion still need journals.
+1, for the five file mutation methods. Migration `0023_taskspace_directory_operations`
+adds `taskspace.directory`, version 1, for managed directory removal and the legacy
+combined rename endpoint. CLI layout maintenance still needs journaling.
 
 Creation uses three phases:
 
@@ -89,14 +90,41 @@ confirm an operation. `doctor --fix` does not retry file work. The directory-cla
 recovery command refuses file mutations. Explicit resolution for these operations
 remains pending.
 
+Managed directory removal and legacy combined rename commit intent before changing
+disk. Their intent retains the original shared fields and attachment, the exact
+marker hash and directory device and inode IDs. Moves also record the new label
+and destination. Device and inode IDs are decimal strings so identity checks
+preserve their full values.
+
+The host rechecks shared fields, attachment, management rules, directory identity
+and marker before invoking the filesystem callback. It repeats shared record and
+attachment checks in the final transaction. That transaction commits shared
+deletion or label changes, any attachment update and journal confirmation together.
+A concurrent edit prevents the final transaction from overwriting newer state.
+Local observation timestamps remain unchanged.
+
+If the final transaction fails, the completed move or removal remains on disk and
+the intent stays pending. The legacy rename endpoint no longer moves a directory
+back automatically after a database failure. Partial deletion retains the marker
+when the existing filesystem helper can do so. A matching marker does not prove
+that all original contents survived a partial deletion.
+
+`doctor` and authenticated startup inspect pending directory operations without
+changing them. Inspection reports source and destination presence, marker and
+directory identity mismatches, unsafe paths and unreadable evidence. The claim
+recovery command refuses these operations. Explicit resolution and journaling
+for CLI layout maintenance remain pending. Database-only changes that keep or
+already lack a directory do not create a directory journal entry.
+
 The journal has no foreign keys to shared rows. Shared action capture, isolated
 validation and shared replacement exclude it alongside `taskspace_local`.
-Recovery JSON version 12 includes both tables, including records for absent
-shared identities and file mutation intents. Versions 7–10 import with an empty
-journal. Version 11 claim records are retained unchanged. Operation paths
+Recovery JSON version 13 includes both tables, including records for absent
+shared identities, file mutations and directory operations. Versions 7–10 import
+with an empty journal. Version 11 claim records and version 12 file intents are
+retained unchanged. Operation paths and directory move destinations
 receive the same containment checks and explicit absolute-path opt-in as local
 attachments. Importing a journal does not run its operations.
 
-The opt-in action registries accept schema 22 with their existing versioned
+The opt-in action registries accept schema 23 with their existing versioned
 semantics. Production action attribution and mandatory capture guards remain
 disabled; the journal does not activate them.

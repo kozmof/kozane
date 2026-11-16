@@ -147,4 +147,18 @@ export function validateDumpPaths(
       `Export has ${plural(absolute.length, "taskspace")} with an absolute path outside the workspace: ${absolute.join(", ")}. ` +
         "Kozane serves files from these directories. Rerun with --allow-absolute-paths if you trust them.",
     );
+  for (const row of tables.local_file_operation) {
+    if (row.kind !== "taskspace.directory" || typeof row.intent !== "string") continue;
+    let intent: unknown;
+    try {
+      intent = JSON.parse(row.intent);
+    } catch {
+      continue;
+    }
+    if (!intent || typeof intent !== "object" || !("targetPath" in intent)) continue;
+    if (typeof intent.targetPath !== "string")
+      throw new Error(`directory operation ${row.id}: targetPath must be a string`);
+    const issue = taskspacePathIssue(intent.targetPath, String(row.path_kind));
+    if (issue) throw new Error(`directory operation ${row.id}: ${issue}`);
+  }
 }

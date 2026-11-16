@@ -40,7 +40,7 @@ envelopes. Replay interprets the frozen list without rerunning the callback.
 `actions/service-registry.ts` now installs every declared syncable database kind
 through its real `InTx` service, together with `system.compose`. The factory
 requires complete host recovery registrations for local-only kinds and refuses
-attempts to replace database handlers. Version 1 currently supports schemas 19–22.
+attempts to replace database handlers. Version 1 currently supports schemas 19–23.
 Tests record and replay each database kind, check namespace ownership and apply
 the executing host's limits. See the
 [service registry](action-execution-scopes.md#dispatch-real-service-actions).
@@ -71,7 +71,7 @@ Local-only handlers must then be prevented from changing shared rows.
 
 Those declarations remain unchanged in contract version 1. The opt-in version 2
 registry now routes taskspace lifecycle intents through shared database services
-on schemas 20–22. Creation and label changes reject local path and observation fields.
+on schemas 20–23. Creation and label changes reject local path and observation fields.
 The five file methods still require explicit host recovery registrations. Node
 application lifecycle callers retain their existing filesystem workflows until
 their routing is migrated. See the
@@ -108,7 +108,7 @@ indexes are rebuilt and are not stamped application tables.
 | CLI namespace commands | Create/default use services. Delete calls `deleteNamespaceInTx` inside `withImageDeletion` | Register namespace administration and preserve image history protection |
 | CLI taskspace scan, prune and create in `cli/commands/taskspace.ts` | Scan updates local metadata. Reattachment inserts shared identity and updates retained metadata atomically. Prune deletes shared rows while retaining local metadata. Create also calls filesystem claim code | Attribute shared identity/placement separately from local observations and file recovery |
 | `lib/server/taskspace-service/label.ts` and the `/label` route | Rename a shared label and assemble the existing attachment reply in one transaction. Current clients use this route | Install production action attribution after capture activation |
-| `lib/server/taskspace-service/{create,claim,recover-claim,mutate}.ts` | Create commits shared identity and pending local intent, claims the directory once, then confirms its attachment. Startup reports pending claims. CLI recovery verifies and explicitly confirms local attachment without repeating disk work. Remove still combines disk work and taskspace records. The legacy combined rename endpoint may move a directory for earlier clients | Add journals and reconciliation for removal, directory moves and file writes, plus explicit abandonment of blocked claims. Install production action attribution |
+| `lib/server/taskspace-service/{create,claim,recover-claim,mutate,directory-operation}.ts` | Create commits shared identity and pending local intent before claiming its directory. Managed deletion and legacy combined rename journal marker and directory identity before disk work, then commit shared changes, attachment updates and confirmation together. Startup and doctor inspect pending work. Claim recovery confirms verified local attachment without repeating disk work | Journal CLI layout moves. Add explicit resolution and abandonment for pending file and directory operations. Install production action attribution |
 | `lib/server/taskspace-service/{file,files,file-operation}.ts` and `taskspace-files.ts` | File create/save, directory create, entry rename/remove commit local intent before disk work and confirm afterward. Paths and intended content hashes survive interruption. Shared rows and local attachments are unchanged | Explicit resolution of pending file work and asset-history protection remain pending |
 | `cli/lib/db-json/import.ts` | Validates dump, opens DB, deletes rows in reverse table order and inserts rows inside `withTx` | `system.import` must retain original input and bind missing timestamps. Exact restoration needs a separate path |
 | `cli/commands/init.ts` | Creates config, migrates, then seeds a default namespace, partition and layer | Run migration/initialization before baseline activation, with restartable progress |

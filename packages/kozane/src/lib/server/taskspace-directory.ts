@@ -517,6 +517,15 @@ export function restoreTaskspaceDirectory(
   renameSync(from, to);
 }
 
+/** The ownership error shared by removal preflight and its filesystem callback. */
+export function directoryRemovalError(taskspaceId: string): TaskspaceFilesError {
+  return new TaskspaceFilesError(
+    "exists",
+    "The directory's .taskspace.json does not name this taskspace, so it was not deleted. " +
+      `Move the directory aside or restore its .taskspace.json (taskspace ID ${taskspaceId}), then delete again.`,
+  );
+}
+
 /**
  * Delete an owned taskspace directory and everything in it. Check the marker again right
  * before deleting and check directory identity between removals to detect replacement.
@@ -534,12 +543,7 @@ export function removeTaskspaceDirectory({
   const dir = resolve(workspaceRoot, storedPath);
   if (!assertOwnDirectory(dir, workspaceRoot)) return "missing";
   const checked = lstatSync(dir);
-  if (readClaim(dir, taskspaceId) !== "owned")
-    throw new TaskspaceFilesError(
-      "exists",
-      "The directory's .taskspace.json does not name this taskspace, so it was not deleted. " +
-        `Move the directory aside or restore its .taskspace.json (taskspace ID ${taskspaceId}), then delete again.`,
-    );
+  if (readClaim(dir, taskspaceId) !== "owned") throw directoryRemovalError(taskspaceId);
   /**
    * Stop when the path no longer holds the directory checked above. If another process
    * swapped in a symlink, `join(dir, name)` would follow it out of the workspace. Node has

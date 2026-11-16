@@ -2,6 +2,7 @@
 import type { DB } from "../../db/database.js";
 import { pendingLocalClaims } from "./local-file-operations.js";
 import { pendingTaskspaceFileOperations } from "./taskspace-file-operations.js";
+import { pendingTaskspaceDirectoryOperations } from "./taskspace-directory-operations.js";
 
 export function createLocalClaimStartupCheck(
   warn: (message: string) => void = (message) => console.warn(message),
@@ -27,9 +28,14 @@ export function createLocalClaimStartupCheck(
           warn(
             `[kozane] ${files.total} pending taskspace file operation(s): ${files.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}. Run 'kozane doctor' before repeating them. Filesystem work was not retried.`,
           );
+        const directories = await pendingTaskspaceDirectoryOperations(db, root);
+        if (directories.total > 0)
+          warn(
+            `[kozane] ${directories.total} pending taskspace directory operation(s): ${directories.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}. Run 'kozane doctor' before repeating them. Directory work was not retried.`,
+          );
       })
       .catch(() => {
-        warn("[kozane] Could not inspect local directory claims. Run 'kozane doctor'.");
+        warn("[kozane] Could not inspect local filesystem operations. Run 'kozane doctor'.");
       });
     roots.set(root, inspection);
     return inspection;

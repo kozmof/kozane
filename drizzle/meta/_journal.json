@@ -162,6 +162,13 @@
       "when": 1794821138462,
       "tag": "0022_taskspace_file_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1794822491134,
+      "tag": "0023_taskspace_directory_operations",
+      "breakpoints": true
     }
   ]
 }
