@@ -130,6 +130,12 @@ trigger writes, repeated updates, alternate capture/business trigger creation
 orders, parent-first cascade capture, corrupt before images, composite keys,
 deferred commit failures and marker cleanup.
 
+The [image-manifest foundation](action-asset-manifests.md) also collects required
+images from captured baseline rows, original invocations and every full before
+and after image. Its tests retain deleted intermediate references and reject
+missing bytes before successful verification. Production manifest persistence
+and asset retention remain pending.
+
 ## Validate complete application projections
 
 `actions/restoration-plan.ts` derives a deterministic load order from a trusted

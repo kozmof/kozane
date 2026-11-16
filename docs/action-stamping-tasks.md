@@ -150,6 +150,13 @@ only tracking and never repeats filesystem callbacks. Recorded filesystem errors
 still require manual review. See
 [local filesystem operation records](local-file-operations.md).
 
+Internal image-manifest builders now collect requirements from tagged baselines,
+original invocations and full before and after images. They verify required byte
+lengths and hashes and reject conflicting bytes under one name. Native and WASM
+capture tests cover intermediate and deleted images. Durable manifest attachment,
+staging pins and cleanup protection remain pending. See
+[image manifests for retained action data](action-asset-manifests.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -254,6 +261,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Inspect interrupted taskspace file operations against disk state on startup and explicitly confirm reviewed outcomes without repeating filesystem callbacks. Preserve recorded errors and blocked evidence.
 - [x] Inspect pending directory claims on authenticated server startup and provide explicit attachment confirmation with live marker, identity and attachment checks. Preserve blocked claims without repeating filesystem work.
 - [ ] Add asset manifests to baselines and effect sets, covering references in invocations and full before and after images.
+- [x] Add internal image-manifest collection, canonical validation, byte verification and collision checks. Verify requirements from real captured history on native and WASM adapters.
 - [ ] Reserve image names with durable staging pins before files become visible, then write and verify their bytes.
 - [ ] Commit image references, manifests and staging completion together. Preserve staging pins after rollback.
 - [ ] Serialize file installation, staging transitions and cleanup decisions so protection transfers without a gap.
