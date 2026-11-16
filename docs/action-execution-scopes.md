@@ -266,7 +266,12 @@ commit shared and local changes in one adapter transaction. Explicit `InTx`
 calls reuse their caller's handle, including on adapters that reuse a connection
 object. Core supplies a distinct transaction handle for each write callback.
 
-Filesystem handler separation and production action routing remain pending.
+Host creation now records a local directory claim before disk work and confirms
+the attachment in a second transaction. Migration 0021 keeps this journal outside
+the shared projection, without foreign keys to shared identities. See
+[local filesystem operation records](local-file-operations.md) for failure
+boundaries, `doctor` inspection and local recovery exports. Other filesystem
+handlers and production action routing remain pending.
 Taskspace lifecycle kinds remain local-only in the version 1 service registry.
 Version 2 shared lifecycle routing is opt-in. Raw SQL allocations and system
 import handlers also need integration.

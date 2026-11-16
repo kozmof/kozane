@@ -93,7 +93,9 @@ service errors, malformed trigger-generated text, corrupt before images, phantom
 capture from skipped inserts, failed commits and replay root isolation. Later
 groups preserve earlier run, execution and effect rows. Local taskspace paths and
 observations live in `taskspace_local` after migration 0020 and are excluded from
-shared capture and projection validation.
+shared capture and projection validation. Migration 0021 adds
+`local_file_operation` with the same exclusion. Shared restoration preserves
+pending local operations even when their taskspace and namespace are absent.
 
 The local Node libsql adapter executes transaction commits through the driver's
 `executeMultiple` method. In the installed driver, a failed prepared `COMMIT`

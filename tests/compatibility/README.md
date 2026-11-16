@@ -30,9 +30,15 @@ The `core-0.2.0-migration20-wasm` cohort retains four new databases produced by 
 packed candidate at source revision `5e16037`. It uses migration
 `0020_taskspace_local` and records eleven view outcomes. Its manifest pins the
 producer archive and driver versions. The corpus now has sixteen databases.
-Packed core and client checks verify the eleven current-ID outcomes and the
-26 earlier-ID envelope outcomes without changing older fixtures. Chromium
-execution for this new cohort remains pending.
+These eleven outcomes now join the earlier-ID checks.
+
+The `core-0.2.0-migration21-wasm` cohort retains four databases produced by the
+packed candidate at source revision `4ff3e6b`. It uses migration
+`0021_local_file_operation` and records eleven view outcomes. The corpus now has
+twenty databases. Packed core and client checks verify eleven current-ID outcomes
+and 37 earlier-ID envelope outcomes without changing older fixtures. The producer
+archive, database hashes and driver versions are pinned in the manifest.
+Chromium execution for the schema-20 and schema-21 cohorts remains pending.
 
 Add a new cohort explicitly after building the intended candidate.
 
