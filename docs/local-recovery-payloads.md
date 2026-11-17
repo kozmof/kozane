@@ -79,11 +79,54 @@ rows are rolled back. The result provides no installation receipt or destination
 activation. Installation still needs a durable boundary that rechecks its
 requirements.
 
+## Protect checkpoint images
+
+`reserveRegisteredLocalRecoveryImages` in `lib/server/local-recovery-images.ts`
+combines the bounded payload reader with the local manifest ledger. Supply the
+reader's inputs and a `history` object containing a baseline and an ordered
+`effectSets` list. Each history entry has an `id` and an image `manifest`. Obtain
+these manifests from complete retained history records and keep their earlier
+pins until the reservation commits.
+
+The helper copies history metadata before reading the saved payload. It checks
+the baseline and ordered effect-set IDs against the trusted checkpoint selection.
+It combines their manifests with required local snapshot images and checks
+immutable names against active and inactive identity records. Matching IDs do
+not prove that history records are complete. The host must establish that before
+calling this helper.
+
+The helper derives a recovery owner from the workspace, device, epoch and
+checkpoint key. It rechecks the catalog binding under the image writer lock and
+commits a pending reservation without reading image bytes. Repeating the same
+reservation preserves its timestamps. Changed image requirements cannot replace
+the owner's manifest. `registeredLocalRecoveryImageOwner` returns this stable
+owner for inspection through the ledger APIs.
+
+`retainRegisteredLocalRecoveryImages` prepares the same requirements and commits
+the reservation before verifying files in a separate writer transaction. It
+accepts matching live or archived image bytes and rechecks the catalog binding
+before success. Missing, unsafe or changed bytes refuse verification while
+leaving the earlier protection committed. New owners remain pending after failed
+verification or commit. Previously retained owners keep their earlier
+verification record and protection after a failed recheck. Neither helper
+installs files or releases earlier owners.
+
+Both pending and retained reservations protect images during cleanup. Retire
+the owner only through the ledger's explicit release API and a retention decision
+that no longer requires the checkpoint. Released owner IDs cannot be reused.
+Verification always checks bytes again, including retries of a retained owner.
+
+These helpers protect image requirements. They do not retain baseline or
+effect-set files, establish their completeness, copy image bytes into a bundle
+or publish a complete bundle. Later publication must verify those requirements
+and the saved payload under its own durable boundary.
+
 ## Current scope
 
 This file stores only the local snapshot payload. It does not contain shared
 baseline or action history files, image bytes, taskspace file contents or config.
-Saving it does not pin images or retain history. A complete bundle still needs
-those requirements and a durable publication boundary. One-time installation,
+Saving it alone does not pin images or retain history. The separate image
+workflow protects required local bytes. A complete bundle still needs retained
+history and a durable publication boundary. One-time installation,
 destination activation, payload retention policy and end-user recovery commands
 remain pending. Startup does not retry these writes.

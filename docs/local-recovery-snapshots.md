@@ -231,6 +231,13 @@ transfer protection to a recovery owner and run cleanup before and after byte
 verification. They also preserve pending protection when a required file is
 missing. These checks exercise asset retention without publishing a bundle.
 
+The Node host also provides a
+[registered checkpoint image workflow](local-recovery-payloads.md#protect-checkpoint-images).
+It reads a saved payload, checks selected history IDs and commits a stable
+recovery owner before image verification. The host remains responsible for
+obtaining manifests from complete retained history. Missing bytes or a failed
+verification commit leave the pending reservation protected.
+
 ## Remaining recovery work
 
 Durable workspace and epoch enrollment, complete bundle assembly and installation

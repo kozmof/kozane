@@ -239,8 +239,8 @@ The host validates the trusted catalog and SQL snapshot before disk work, writes
 and syncs temporary bytes, publishes exclusively and preserves evidence after
 filesystem or commit failures. Inspection is read-only and temporary data is not
 retried automatically. A public `@kozane/core/recovery` entry exposes the trusted
-preparation helpers. Complete bundle publication, image and history retention,
-and destination activation remain pending. See
+preparation helpers. Complete bundle publication, history retention and
+destination activation remain pending. See
 [saved local snapshot payloads](local-recovery-payloads.md).
 
 The host can now read published payloads with an explicit byte limit and trusted
@@ -248,6 +248,14 @@ identity. It verifies canonical bytes and exact SQL values, refuses temporary
 evidence, and checks the file and catalog again after isolated validation.
 Preparation leaves saved files unchanged and installs no local rows. One-time
 installation and complete bundle retention remain pending.
+
+Registered saved checkpoints can now reserve and verify image requirements under
+a stable recovery owner. The host supplies manifests from complete retained
+history, and the workflow checks their IDs against the checkpoint selection.
+Pending protection commits before file verification and survives missing bytes
+or failed verification commits. Cleanup and competing owner releases share its
+writer lock. Retaining history records and publishing complete bundles remain
+pending.
 
 ## Version one
 
@@ -339,6 +347,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Resolve snapshot validation expectations from the trusted catalog and recheck their binding after isolated validation. Refuse transport-supplied expectations, missing registrations and changed bindings without installing local rows.
 - [x] Save original registered local snapshot payloads with synced temporary files, exclusive immutable publication and read-only interruption evidence. Refuse unsafe paths and changed contents, serialize catalog binding checks and preserve files after failed outer commits.
 - [x] Read published registered payloads with an explicit host byte limit and expected identity. Verify canonical bytes and exact SQL values, refuse temporary evidence and recheck file identity and catalog binding after isolated validation without installing rows.
+- [x] Connect saved registered payloads to stable recovery image owners. Check selected history IDs, commit pending protection before byte verification and preserve it after missing files or failed verification commits. Verify cleanup handoff and competing releases without publishing incomplete bundles.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

@@ -83,6 +83,14 @@ manifests. Tests reserve the result under a recovery owner before releasing
 earlier pins. Missing required bytes preserve the pending recovery reservation
 and prevent successful verification. Complete bundle publication remains pending.
 
+The Node
+[registered checkpoint image workflow](local-recovery-payloads.md#protect-checkpoint-images)
+now connects saved payload validation to recovery reservation and verification.
+It checks selected baseline and effect-set identities, derives one owner per
+catalog key and commits pending protection before reading image bytes. Failed
+verification preserves that reservation. The workflow does not retain history
+records or publish bundles.
+
 This is a retention mechanism for trusted host workflows. Production action
 history, transfer queues and recovery-bundle builders still need to register
 their owners and release them under their retention policies. No new end-user
