@@ -187,6 +187,15 @@ tests verify atomic owner publication and staging preservation after publication
 and commit failures. This remains a prototype integration rather than production
 action routing.
 
+An internal local recovery snapshot now captures all four local tables and the
+shared baseline and effect-set selection in one adapter read transaction. It
+preserves tagged SQLite values and absent taskspace metadata, requires complete
+table coverage and checks workspace, device, epoch, checkpoint and schema identity.
+Native and WASM tests cover exact values and malformed input. A native concurrent
+writer test verifies checkpoint consistency. Durable identity enrollment, bundle
+publication and one-time installation remain pending. See
+[local recovery snapshots](local-recovery-snapshots.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -269,6 +278,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Implement replacement of shared rows inside one reconciliation transaction while preserving local metadata and log tables.
 - [ ] Rebuild derived data after installation. Keep requested repair separate from exact restoration.
 - [ ] Capture full local recovery snapshots and shared checkpoint selections from one consistent database read transaction.
+- [x] Add an internal versioned local snapshot format and capture helper with complete table coverage, exact tagged values, checkpoint selection and identity checks. Verify concurrent checkpoint reads and refuse malformed transport without changing source data.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

@@ -51,7 +51,11 @@ export function parseTaggedValue(input: unknown): TaggedValue {
   const [tag, value] = values as [unknown, string];
   switch (tag) {
     case "integer": {
-      if (!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value) || value.length > 20)
+      if (
+        !/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value) ||
+        value.length > 20 ||
+        value.trim() !== value
+      )
         throw new RowEncodingError("Invalid canonical integer");
       const integer = BigInt(value);
       if (integer < MIN_INTEGER || integer > MAX_INTEGER)
@@ -59,7 +63,8 @@ export function parseTaggedValue(input: unknown): TaggedValue {
       return Object.freeze(["integer", value]);
     }
     case "real": {
-      if (!/^[0-9a-f]{16}$/.test(value)) throw new RowEncodingError("Invalid REAL bits");
+      if (value.length !== 16 || !/^[0-9a-f]{16}$/.test(value))
+        throw new RowEncodingError("Invalid REAL bits");
       const bytes = unhex(value);
       if (!Number.isFinite(new DataView(bytes.buffer).getFloat64(0, false)))
         throw new RowEncodingError("Non-finite REAL is unsupported");
@@ -69,7 +74,7 @@ export function parseTaggedValue(input: unknown): TaggedValue {
       if (!value.isWellFormed()) throw new RowEncodingError("TEXT is not well-formed Unicode");
       return Object.freeze(["text", value]);
     case "blob":
-      if (!/^(?:[0-9a-f]{2})*$/.test(value))
+      if (value.length % 2 !== 0 || !/^(?:[0-9a-f]{2})*$/.test(value))
         throw new RowEncodingError("Invalid canonical BLOB bytes");
       return Object.freeze(["blob", value]);
     default:
