@@ -243,6 +243,12 @@ preparation helpers. Complete bundle publication, image and history retention,
 and destination activation remain pending. See
 [saved local snapshot payloads](local-recovery-payloads.md).
 
+The host can now read published payloads with an explicit byte limit and trusted
+identity. It verifies canonical bytes and exact SQL values, refuses temporary
+evidence, and checks the file and catalog again after isolated validation.
+Preparation leaves saved files unchanged and installs no local rows. One-time
+installation and complete bundle retention remain pending.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -332,6 +338,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Persist trusted checkpoint descriptors in a local catalog with immutable identity bindings and idempotent registration. Preserve historical metadata through shared restoration and recovery exports, and verify competing registrations, rollback and migration.
 - [x] Resolve snapshot validation expectations from the trusted catalog and recheck their binding after isolated validation. Refuse transport-supplied expectations, missing registrations and changed bindings without installing local rows.
 - [x] Save original registered local snapshot payloads with synced temporary files, exclusive immutable publication and read-only interruption evidence. Refuse unsafe paths and changed contents, serialize catalog binding checks and preserve files after failed outer commits.
+- [x] Read published registered payloads with an explicit host byte limit and expected identity. Verify canonical bytes and exact SQL values, refuse temporary evidence and recheck file identity and catalog binding after isolated validation without installing rows.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

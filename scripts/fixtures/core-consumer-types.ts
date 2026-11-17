@@ -41,6 +41,8 @@ import {
   captureLocalRecoveryCheckpoint,
   validateStoredLocalRecoveryCheckpoint,
   rememberLocalRecoveryCheckpoint,
+  parseLocalRecoveryIdentity,
+  type LocalRecoveryIdentity,
   type LocalRecoverySnapshot,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
@@ -224,6 +226,9 @@ const checkpointKey: LocalRecoveryCheckpointKey = {
   checkpointId: "checkpoint",
 };
 void parseLocalRecoveryCheckpoint(checkpoint).sha256;
+const parsedIdentity: LocalRecoveryIdentity = parseLocalRecoveryIdentity(checkpoint.identity);
+// @ts-expect-error Parsed host identities are immutable.
+parsedIdentity.deviceId = "other";
 void captureLocalRecoveryCheckpoint(db, checkpoint.identity, async () => checkpoint.selection).then(
   ({ snapshot, checkpoint }) => {
     const captured: LocalRecoverySnapshot = snapshot;

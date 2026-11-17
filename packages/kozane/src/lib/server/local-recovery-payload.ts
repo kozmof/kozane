@@ -1,6 +1,6 @@
 /** Immutable local snapshot files. Catalog registration is required before filesystem publication. */
 import * as fs from "node:fs/promises";
-import { constants } from "node:fs";
+import { constants, type BigIntStats } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { sql } from "drizzle-orm";
@@ -10,9 +10,11 @@ import {
   inspectLocalRecoveryCheckpoint,
   readLocalRecoveryCheckpoint,
   validateStoredLocalRecoveryCheckpoint,
+  parseLocalRecoveryIdentity,
   type LocalRecoveryIdentity,
   type LocalRecoveryCheckpoint,
   type LocalRecoveryCheckpointKey,
+  type LocalRecoverySnapshot,
 } from "@kozane/core/recovery";
 
 export class LocalRecoveryPayloadError extends Error {
@@ -63,15 +65,35 @@ async function directory(root: string, create: boolean) {
   }
   return path;
 }
-async function entry(
+type FileIdentity = Pick<BigIntStats, "dev" | "ino" | "size" | "mtimeNs" | "ctimeNs">;
+type FileRead = {
+  evidence: LocalRecoveryPayloadEvidence;
+  content?: Buffer;
+  identity?: FileIdentity;
+};
+const fileIdentity = (stat: BigIntStats): FileIdentity => ({
+  dev: stat.dev,
+  ino: stat.ino,
+  size: stat.size,
+  mtimeNs: stat.mtimeNs,
+  ctimeNs: stat.ctimeNs,
+});
+const sameFile = (left: FileIdentity, right: FileIdentity) =>
+  left.dev === right.dev &&
+  left.ino === right.ino &&
+  left.size === right.size &&
+  left.mtimeNs === right.mtimeNs &&
+  left.ctimeNs === right.ctimeNs;
+async function readEntry(
   path: string,
   checkpoint: LocalRecoveryCheckpoint,
-): Promise<LocalRecoveryPayloadEvidence> {
+  collect = false,
+): Promise<FileRead> {
   try {
     const before = await fs.lstat(path, { bigint: true });
-    if (before.isSymbolicLink()) return "unsafe-path";
+    if (before.isSymbolicLink()) return { evidence: "unsafe-path" };
     if (!before.isFile() || before.size !== BigInt(checkpoint.byteLength))
-      return "different-content";
+      return { evidence: "different-content" };
     const handle = await fs.open(
       path,
       constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
@@ -84,8 +106,10 @@ async function entry(
         opened.ino !== before.ino ||
         opened.size !== before.size
       )
-        return "different-content";
+        return { evidence: "different-content" };
       const buffer = Buffer.alloc(65536);
+      // Only the bounded loader collects bytes, after checking its caller-supplied size limit.
+      const content = collect ? Buffer.alloc(checkpoint.byteLength) : undefined;
       const hash = createHash("sha256");
       let total = 0;
       while (total <= checkpoint.byteLength) {
@@ -97,27 +121,36 @@ async function entry(
         );
         if (!bytesRead) break;
         hash.update(buffer.subarray(0, bytesRead));
+        if (content) buffer.copy(content, total, 0, Math.min(bytesRead, content.length - total));
         total += bytesRead;
       }
       const after = await fs.lstat(path, { bigint: true });
-      return after.isFile() &&
+      const matching =
+        after.isFile() &&
         after.dev === opened.dev &&
         after.ino === opened.ino &&
         after.size === opened.size &&
         after.mtimeNs === opened.mtimeNs &&
         after.ctimeNs === opened.ctimeNs &&
         total === checkpoint.byteLength &&
-        hash.digest("hex") === checkpoint.sha256
-        ? "matching-content"
-        : "different-content";
+        hash.digest("hex") === checkpoint.sha256;
+      return matching
+        ? { evidence: "matching-content", content, identity: fileIdentity(after) }
+        : { evidence: "different-content" };
     } finally {
       await handle.close();
     }
   } catch (error) {
-    if (code(error) === "ENOENT") return "absent";
-    if (code(error) === "ELOOP") return "unsafe-path";
-    return "unreadable";
+    if (code(error) === "ENOENT") return { evidence: "absent" };
+    if (code(error) === "ELOOP") return { evidence: "unsafe-path" };
+    return { evidence: "unreadable" };
   }
+}
+async function entry(
+  path: string,
+  checkpoint: LocalRecoveryCheckpoint,
+): Promise<LocalRecoveryPayloadEvidence> {
+  return (await readEntry(path, checkpoint)).evidence;
 }
 async function observe(root: string, checkpoint: LocalRecoveryCheckpoint) {
   try {
@@ -159,6 +192,81 @@ async function requireBinding(tx: Tx, expected: LocalRecoveryCheckpoint) {
     throw new LocalRecoveryPayloadError(
       "Trusted checkpoint binding changed before payload publication",
     );
+}
+
+async function requireNoTemporary(path: string) {
+  try {
+    await fs.lstat(path);
+  } catch (error) {
+    if (code(error) === "ENOENT") return;
+    throw error;
+  }
+  throw new LocalRecoveryPayloadError("Temporary checkpoint payload needs review");
+}
+
+/** Read a published checkpoint without installing rows, following links or consuming temporary data. */
+export async function loadRegisteredLocalRecoveryPayload(options: {
+  root: string;
+  db: DB;
+  expected: LocalRecoveryIdentity;
+  maxBytes: number;
+  createValidationDatabase: () => Promise<DB>;
+}): Promise<Readonly<{ snapshot: LocalRecoverySnapshot; checkpoint: LocalRecoveryCheckpoint }>> {
+  const { root, db, maxBytes, createValidationDatabase } = options;
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1)
+    throw new LocalRecoveryPayloadError("Payload read limit must be a positive safe integer");
+  const expected = parseLocalRecoveryIdentity(options.expected);
+  const { workspaceId, deviceId, epochId, checkpointId } = expected;
+  const checkpoint = await inspectLocalRecoveryCheckpoint(db, {
+    workspaceId,
+    deviceId,
+    epochId,
+    checkpointId,
+  });
+  if (!checkpoint) throw new LocalRecoveryPayloadError("Trusted checkpoint is not registered");
+  if (JSON.stringify(checkpoint.identity) !== JSON.stringify(expected))
+    throw new LocalRecoveryPayloadError("Registered checkpoint identity mismatch");
+  if (checkpoint.byteLength > maxBytes)
+    throw new LocalRecoveryPayloadError("Registered payload exceeds read limit");
+  const loaded = await withTx(db, async (tx) => {
+    await tx.run(sql`UPDATE local_recovery_checkpoint SET descriptor=descriptor WHERE 0`);
+    await requireBinding(tx, checkpoint);
+    const files = paths(await directory(root, false), checkpoint);
+    await requireNoTemporary(files.temporary);
+    const file = await readEntry(files.published, checkpoint, true);
+    if (file.evidence !== "matching-content" || !file.content || !file.identity)
+      throw new LocalRecoveryPayloadError(`Registered checkpoint payload is ${file.evidence}`);
+    await requireNoTemporary(files.temporary);
+    return { bytes: file.content, identity: file.identity };
+  });
+  let input: unknown;
+  try {
+    input = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(loaded.bytes),
+    );
+  } catch (cause) {
+    throw new LocalRecoveryPayloadError("Registered checkpoint payload is not valid UTF-8 JSON", {
+      cause,
+    });
+  }
+  const snapshot = await validateStoredLocalRecoveryCheckpoint(
+    db,
+    createValidationDatabase,
+    input,
+    expected,
+  );
+  await withTx(db, async (tx) => {
+    await tx.run(sql`UPDATE local_recovery_checkpoint SET descriptor=descriptor WHERE 0`);
+    await requireBinding(tx, checkpoint);
+    const files = paths(await directory(root, false), checkpoint);
+    await requireNoTemporary(files.temporary);
+    const current = await fs.lstat(files.published, { bigint: true });
+    if (!current.isFile() || !sameFile(current, loaded.identity))
+      throw new LocalRecoveryPayloadError(
+        "Registered checkpoint payload changed during validation",
+      );
+  });
+  return Object.freeze({ snapshot, checkpoint });
 }
 
 /** Explicit publication of the original registered payload. Never retry callbacks or replace evidence. */

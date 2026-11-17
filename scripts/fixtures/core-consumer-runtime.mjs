@@ -58,6 +58,11 @@ const checkpoint = {
   sha256: "a".repeat(64),
 };
 assert.deepEqual(core.parseLocalRecoveryCheckpoint(checkpoint), checkpoint);
+assert.deepEqual(recovery.parseLocalRecoveryIdentity(checkpoint.identity), checkpoint.identity);
+assert.throws(
+  () => recovery.parseLocalRecoveryIdentity({ ...checkpoint.identity, schemaId: "unknown" }),
+  core.LocalRecoveryError,
+);
 assert.deepEqual(
   core.parseLocalRecoveryCheckpointRecord(checkpointKey, JSON.stringify(checkpoint)),
   checkpoint,

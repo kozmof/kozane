@@ -51,6 +51,34 @@ Node tests cover committed intent before publication, canonical bytes,
 idempotency, partial writes, sync and link failures, temporary unlink failure,
 unsafe paths, competing catalog removal and failed outer commits.
 
+## Read a saved payload
+
+Call `loadRegisteredLocalRecoveryPayload` with the root, trusted catalog database,
+host's expected identity, `maxBytes` and a separate validation database factory.
+The size limit must be a positive safe integer. The reader rejects a registered
+length above that limit before opening a file or allocating its byte buffer.
+The limit bounds input bytes, while JSON parsing and validation need additional
+memory.
+
+The reader accepts only the published file. Any temporary entry requires review,
+even when its bytes match the descriptor. Missing files, unsafe paths, different
+bytes and files that change while being read refuse loading. Strict UTF-8
+decoding and canonical JSON hash checks precede isolated SQL validation. Exact
+tagged read-back verifies that SQL storage preserves the snapshot values.
+
+Catalog binding checks surround the file read and run again before returning.
+The final check also verifies that the published file's identity, length and
+modification metadata still match. Canonical snapshot validation runs outside
+these catalog writer boundaries, so unrelated checkpoint registration can
+continue. Changed bindings, replaced or rewritten files and new temporary data
+refuse success.
+
+The result contains the immutable snapshot and trusted descriptor. Reading
+creates no directories and does not alter or remove files. Temporary validation
+rows are rolled back. The result provides no installation receipt or destination
+activation. Installation still needs a durable boundary that rechecks its
+requirements.
+
 ## Current scope
 
 This file stores only the local snapshot payload. It does not contain shared

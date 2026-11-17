@@ -4,6 +4,7 @@ export {
   LocalRecoveryError,
   captureLocalRecoverySnapshot,
   parseLocalRecoverySnapshot,
+  parseLocalRecoveryIdentity,
   requireLocalRecoveryIdentity,
   type LocalRecoveryIdentity,
   type LocalRecoverySelection,
