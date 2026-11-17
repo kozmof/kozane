@@ -101,3 +101,9 @@ baseline and intermediate row-image coverage against saved shared history. It
 validates both local and shared payloads and preserves extra host requirements
 from complete invocations. Both payload files and catalog bindings are rechecked
 under the image writer lock before reservation and around byte verification.
+
+With `assetMaxBytes`, that workflow loads registered saved manifests and carries
+their original asset descriptor through reservation and verification. All three
+catalog bindings and saved files are checked under the image lock. Existing
+owners remain protected after changed payloads or failed verification, and a
+different manifest cannot replace an earlier reservation.

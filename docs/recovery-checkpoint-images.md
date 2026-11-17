@@ -1,6 +1,6 @@
 # Images for saved recovery checkpoints
 
-The Node host can protect images required by both saved checkpoint payloads.
+The Node host can protect images required by saved recovery payloads and manifests.
 Use `reserveRegisteredRecoveryCheckpointImages` and
 `retainRegisteredRecoveryCheckpointImages` in
 `lib/server/recovery-checkpoint-images.ts` after saving the matching
@@ -13,6 +13,42 @@ Supply `root`, the trusted catalog `db`, the host's `expected` checkpoint identi
 and a separate `createValidationDatabase` factory. Set `localMaxBytes` and
 `sharedMaxBytes` to positive safe integers. Each limit bounds its payload's input
 bytes. Parsing and validation require additional memory.
+
+Choose either registered saved manifests or host-supplied history manifests.
+Supplying both `assetMaxBytes` and `history` is refused.
+
+## Use registered saved manifests
+
+Save the matching [asset payload](recovery-asset-payloads.md) and supply
+`assetMaxBytes` as a positive safe integer. The workflow resolves its expectation
+from the trusted asset catalog and loads its published bytes within that limit.
+
+```ts
+const retained = await retainRegisteredRecoveryCheckpointImages({
+  root,
+  db,
+  expected,
+  localMaxBytes,
+  sharedMaxBytes,
+  assetMaxBytes,
+  createValidationDatabase,
+});
+```
+
+Loading verifies the asset descriptor and both saved source payloads, including
+isolated SQL validation and exact manifest coverage. The result adds the
+original trusted `assetCheckpoint` beside the shared/local `binding`. Per-record
+requirements remain covered by the asset payload hash even when their combined
+image manifest would be unchanged.
+
+The original asset, shared and local catalog bindings and all three saved files
+are checked under the image writer lock before and after reservation. The same
+checks surround image verification. Missing files, changed bytes, temporary
+evidence and changed bindings refuse success. A new reservation rolls back if
+owner publication changes a required binding. Earlier protection survives
+failed loading or verification.
+
+## Supply host manifests
 
 Supply `history` with a baseline and an ordered `effectSets` array. Each entry
 contains an `id` and an image `manifest`. Obtain these manifests from complete
@@ -42,10 +78,10 @@ conflicting immutable names when merging requirements.
 
 `reserveRegisteredRecoveryCheckpointImages` returns the original shared/local
 `binding`, stable recovery `owner`, combined `manifest`, owner `state` and a
-`changed` flag. It checks both catalog bindings and both published payload files
-under the image writer lock before committing protection. Missing or changed
-payload bytes and any temporary evidence refuse reservation. This operation
-does not read image bytes.
+`changed` flag. The saved-manifest path also returns `assetCheckpoint`. It checks
+the required catalog bindings and published files under the image writer lock
+before and after owner publication. Missing or changed payload bytes and any
+temporary evidence refuse reservation. This operation does not read image bytes.
 
 The owner uses the same checkpoint key as the
 [local payload image workflow](local-recovery-payloads.md#protect-checkpoint-images).
@@ -55,8 +91,8 @@ and released owner IDs cannot be reused.
 
 `retainRegisteredRecoveryCheckpointImages` first commits that reservation. A
 separate writer transaction verifies every required live or archived image.
-Archived bytes are accepted without reinstalling them. Catalog bindings and both
-payload files are checked before and after image verification. Cleanup and
+Archived bytes are accepted without reinstalling them. Required catalog bindings
+and payload files are checked before and after image verification. Cleanup and
 competing owner releases serialize with verification through the same lock.
 
 Missing, unsafe or changed image bytes refuse success. Failed verification or
@@ -67,17 +103,19 @@ installs images or releases earlier owners.
 
 ## Retain the checkpoint
 
-Core also provides [content-bound recovery image requirements](recovery-asset-checkpoints.md)
-for later manifest storage. They bind per-record requirements and the combined
-manifest to the exact local/shared descriptor pair. This Node workflow continues
-to receive host manifests directly and does not yet load those asset payloads.
+Core [content-bound recovery image requirements](recovery-asset-checkpoints.md)
+bind per-record requirements and the combined manifest to the exact local/shared
+descriptor pair. The saved-manifest path carries that expectation through image
+reservation and verification. An earlier host reservation can be reused only
+when its combined manifest matches exactly. Changed requirements preserve the
+earlier owner and refuse replacement.
 
 Pending and retained recovery owners both protect their manifests during cleanup.
 Release an owner only through an explicit ledger retirement decision after the
 checkpoint is no longer needed. Earlier staging owners can be released after
 the new reservation commits.
 
-These operations protect image requirements for two saved payloads. Complete
-action and execution retention, durable asset-manifest storage, complete bundle
-publication and one-time installation remain pending. A retained image owner
+These operations protect image requirements for saved recovery payloads. Complete
+action and execution retention, complete bundle publication and one-time
+installation remain pending. A retained image owner
 does not serve as a bundle publication or activation receipt.

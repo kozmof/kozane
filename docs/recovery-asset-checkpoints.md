@@ -130,6 +130,7 @@ that they are complete.
 The Node host provides [saved recovery manifests](recovery-asset-payloads.md)
 with immutable publication, read-only interruption inspection and bounded reads.
 Both source payloads are validated before saving or returning manifests. The
-image workflow still receives host manifests directly and does not yet consume
-these saved payloads. Complete action and execution retention, complete bundle
+image workflow accepts `assetMaxBytes` to load the registered saved manifests,
+reserve their requirements and verify protected bytes while rechecking all three
+bindings and files. Complete action and execution retention, complete bundle
 publication, one-time installation and activation remain pending.

@@ -132,8 +132,8 @@ saved files and catalog bindings around protected image verification.
 
 [Saved asset manifests](recovery-asset-payloads.md) retain canonical requirements
 bound to both original payload descriptors. Their separate publication and
-bounded reads validate both source files. The image workflow still receives
-host manifests directly.
+bounded reads validate both source files. Supply `assetMaxBytes` to the saved
+checkpoint image workflow to reserve and verify their registered requirements.
 
 ## Current scope
 

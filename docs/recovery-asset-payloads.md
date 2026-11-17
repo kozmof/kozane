@@ -89,8 +89,10 @@ do not read image bytes or create image reservations. Missing required images
 can remain in a saved manifest. Keep earlier pins until a recovery image owner
 has committed protection and verified its required bytes.
 
-The [saved checkpoint image workflow](recovery-checkpoint-images.md) still accepts
-host manifests directly. Connecting it to these saved asset payloads remains
-pending. Complete action and execution retention, complete bundle publication,
-one-time installation and activation also remain pending. A saved manifest is
-not a bundle publication or installation receipt.
+The [saved checkpoint image workflow](recovery-checkpoint-images.md#use-registered-saved-manifests)
+accepts `assetMaxBytes` to load these manifests and commit their image protection
+before byte verification. It carries all three original catalog expectations and
+saved files through the image writer boundary. Complete action and execution
+retention, complete bundle publication, one-time installation and activation
+remain pending. A saved manifest is not a bundle publication or installation
+receipt.
