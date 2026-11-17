@@ -131,6 +131,30 @@ Registration records the host's trusted expectation. It does not verify image
 availability, pin files, enroll a workspace or publish a complete bundle. Do not
 register a descriptor solely because it accompanied received snapshot data.
 
+## Validate against a retained catalog binding
+
+`validateStoredLocalRecoveryCheckpoint` accepts the trusted catalog database, a
+separate validation database factory, the snapshot and the host's expected
+identity. It copies snapshot rows and identity before reading the registered
+descriptor. Missing registrations, mismatched identities and changed payloads
+refuse preparation before the factory is called. Catalog rows carried inside the
+snapshot never establish that expectation.
+
+Hash verification and isolated SQL validation run after the catalog read
+transaction closes. The helper then reads the registered binding again. Removing
+or replacing it during preparation refuses success. Unrelated registrations and
+equivalent descriptor JSON formatting do not change the expected binding.
+No temporary validation rows are retained on either outcome.
+
+Native and WASM tests cover missing or malformed expectations, forged transport
+catalog rows, identity and content changes, source binding changes and caller
+mutation while catalog reads are pending. A matching stored descriptor still
+requires SQL constraint and exact read-back checks.
+
+This is a preparation boundary. It does not install local rows or record an
+installation receipt. Future activation must enforce its durable gate inside the
+installation transaction and preserve required history and image protection.
+
 ## Validate rows in an isolated database
 
 `validateLocalRecoverySnapshot` in `actions/local-recovery-validation.ts` checks

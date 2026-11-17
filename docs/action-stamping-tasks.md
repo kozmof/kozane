@@ -227,6 +227,13 @@ without authorizing old-schema snapshot loading. Registration does not store
 payload bytes, retain history or pin images. Bundle publication and one-time
 installation remain pending.
 
+Catalog-backed validation now resolves expectations from trusted local records
+rather than received snapshot data. It verifies the saved descriptor before SQL
+allocation and rechecks the binding after isolated validation. Missing records,
+changed contents and bindings removed or replaced during preparation refuse
+success. Unrelated registrations remain allowed. Installation and activation
+still require their own durable boundary.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -314,6 +321,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Collect local checkpoint image requirements and merge selected shared-history manifests. Reject malformed active or inactive metadata and immutable name conflicts before SQL validation. Verify recovery-owner pins through cleanup and missing-file verification.
 - [x] Bind local checkpoints to canonical snapshot hashes and UTF-8 byte lengths. Verify separately retained descriptors before SQL allocation, preserve exact TEXT and materialization order, and hash captured snapshots after the consistent read boundary closes.
 - [x] Persist trusted checkpoint descriptors in a local catalog with immutable identity bindings and idempotent registration. Preserve historical metadata through shared restoration and recovery exports, and verify competing registrations, rollback and migration.
+- [x] Resolve snapshot validation expectations from the trusted catalog and recheck their binding after isolated validation. Refuse transport-supplied expectations, missing registrations and changed bindings without installing local rows.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

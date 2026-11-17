@@ -7,6 +7,7 @@ import { readSchemaManifest } from "../migrations/schema-reader.js";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import { localTableNames } from "./local-tables.js";
 import { localRecoveryAssetManifest } from "./local-recovery-assets.js";
+import { inspectLocalRecoveryCheckpoint } from "./local-recovery-store.js";
 import {
   requireLocalRecoveryCheckpoint,
   parseLocalRecoveryCheckpointRecord,
@@ -28,6 +29,32 @@ import {
 
 const plan = createRestorationPlan(canonicalSchemaManifest, localTableNames);
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
+
+/** Resolve expectations from the trusted source catalog, then refuse changes during preparation. */
+export async function validateStoredLocalRecoveryCheckpoint(
+  trustedCatalog: DB,
+  createDatabase: () => Promise<DB>,
+  input: unknown,
+  expected: LocalRecoveryIdentity,
+): Promise<LocalRecoverySnapshot> {
+  // Own identity and row data before the first catalog read can yield.
+  const snapshot = requireLocalRecoveryIdentity(input, expected);
+  const { workspaceId, deviceId, epochId, checkpointId } = snapshot.identity;
+  const key = { workspaceId, deviceId, epochId, checkpointId };
+  const checkpoint = await inspectLocalRecoveryCheckpoint(trustedCatalog, key);
+  if (!checkpoint)
+    throw new LocalRecoveryError("Trusted local recovery checkpoint is not registered");
+  const validated = await validateLocalRecoveryCheckpoint(
+    createDatabase,
+    snapshot,
+    checkpoint,
+    snapshot.identity,
+  );
+  const current = await inspectLocalRecoveryCheckpoint(trustedCatalog, key);
+  if (!current || JSON.stringify(current) !== JSON.stringify(checkpoint))
+    throw new LocalRecoveryError("Trusted local recovery checkpoint changed during validation");
+  return validated;
+}
 
 /** Verify a separately retained content descriptor and trusted identity before SQL validation. */
 export async function validateLocalRecoveryCheckpoint(
