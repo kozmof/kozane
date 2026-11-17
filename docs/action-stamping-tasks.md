@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–27 and requires
+syncable database kind and `system.compose`. It supports schemas 19–28 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -100,19 +100,20 @@ API. Creation and label clocks use scoped bindings, and caught record failures
 abort their root. Migration 0020 now moves paths and observations to
 `taskspace_local` without a foreign key to shared rows. Readers join metadata
 only for present taskspaces, while local recovery readers retain absent rows.
-Shared capture, validation and replacement exclude that table. JSON version 17
+Shared capture, validation and replacement exclude that table. JSON version 18
 exports local rows separately, including absent taskspaces, and retains local file
 operations. Imports of versions
 7 through 9 split their inline values without changing the original dump.
 Application lifecycle callers still use the version 1 local-only handlers.
 
 The retained taskspace, upload, manifest and checkpoint cohorts cover migrations
-20–27, through `0027_local_recovery_checkpoint`. Packed core and client checks pass
-eleven current-schema view outcomes and 105 earlier-schema envelope outcomes. All older
-cohorts remain unchanged. Browser execution of these cohorts remains pending.
+20–27, through `0027_local_recovery_checkpoint`. All older cohorts remain unchanged.
+Migration 0028 adds shared-history descriptor bindings. A retained schema-28
+producer is required before release. Browser execution of these cohorts remains
+pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–27. These shared services reject local metadata inputs,
+and removal on schemas 20–28. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -187,7 +188,7 @@ tests verify atomic owner publication and staging preservation after publication
 and commit failures. This remains a prototype integration rather than production
 action routing.
 
-An internal local recovery snapshot now captures all five local tables and the
+An internal local recovery snapshot now captures all six local tables and the
 shared baseline and effect-set selection in one adapter read transaction. It
 preserves tagged SQLite values and absent taskspace metadata, requires complete
 table coverage and checks workspace, device, epoch, checkpoint and schema identity.
@@ -222,7 +223,7 @@ mutation while hashing. Installation receipts remain pending.
 Migration 0027 adds a durable local descriptor catalog. Registration is idempotent
 for the same contents and refuses reuse of an identity with another descriptor.
 The catalog survives shared restoration and is included in local snapshots and
-version 17 JSON exports. Historical descriptors remain readable as metadata
+version 18 JSON exports. Historical descriptors remain readable as metadata
 without authorizing old-schema snapshot loading. Registration does not store
 payload bytes, retain history or pin images. Bundle publication and one-time
 installation remain pending.
@@ -261,7 +262,7 @@ A public shared projection validator now checks complete reconstructed rows in
 an isolated empty database. It preserves exact tagged values under canonical
 constraints, rolls back temporary rows and business-trigger changes before
 returning, and refuses cleanup or commit failures. Native and Node WASM checks
-cover the preparation boundary. Durable history bindings, installation and
+cover the preparation boundary. Complete history retention, installation and
 activation remain pending. See
 [shared recovery projections](shared-recovery-projections.md).
 
@@ -270,14 +271,21 @@ baseline in memory. A separate trusted selection supplies IDs, order and expecte
 effect counts. Missing, duplicate or unselected records, truncation, ordinal gaps
 and mismatched full before images refuse a result. Native and Node WASM tests
 cover real captured cascades without changing local paths or retained origin
-history. Durable descriptor storage and complete history retention remain pending.
+history. Complete history retention remains pending.
 
 Shared row history now has a canonical payload and content descriptor bound to
 the originating checkpoint identity, selected IDs and expected counts. Hashes
 cover the baseline and every intermediate effect, even when different histories
 produce the same final projection. Verification checks separately retained
-expectations before allocating isolated SQL validation. Durable catalogs,
-complete action and execution retention, and bundle publication remain pending.
+expectations before allocating isolated SQL validation. Complete action and
+execution retention and bundle publication remain pending.
+
+Migration 0028 now persists trusted shared-history descriptors together with the
+original registered local snapshot expectation. Registration checks identity and
+selected IDs, is idempotent for the same pair and refuses replacement. Both
+catalog bindings are rechecked after shared hash and SQL validation. Local
+snapshots and version 18 JSON exports preserve this sixth local table. History
+file retention, bundle publication and installation remain pending.
 
 ## Version one
 
@@ -355,6 +363,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.
+- [x] Persist shared-history descriptors with their original registered local checkpoint expectations. Serialize immutable registration, recheck both trusted catalog bindings after isolated validation, preserve records through local snapshots and version 18 JSON exports, and verify rollback, migration and competing connections.
 - [ ] Validate target rows in an isolated database with the epoch's constraints, foreign keys and trigger-enforced invariants.
 - [x] Expose complete shared projection parsing and isolated SQL validation for the bundled schema. Keep validation constraints active, compare exact tagged read-back and roll back temporary rows and business-trigger changes before success on native and Node WASM adapters.
 - [ ] Read back loaded validation rows with the tagged codec and compare them with the target projection, including storage classes and exact REAL bits. Refuse installation or activation on any mismatch.

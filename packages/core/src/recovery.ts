@@ -22,6 +22,15 @@ export {
   type SharedRecoveryHistoryPayload,
 } from "./actions/shared-recovery-checkpoint.js";
 export {
+  parseSharedRecoveryCheckpointRecord,
+  rememberSharedRecoveryCheckpoint,
+  rememberSharedRecoveryCheckpointInTx,
+  readSharedRecoveryCheckpoint,
+  inspectSharedRecoveryCheckpoint,
+  validateStoredSharedRecoveryCheckpoint,
+  type SharedRecoveryCheckpointBinding,
+} from "./actions/shared-recovery-store.js";
+export {
   LOCAL_RECOVERY_VERSION,
   LocalRecoveryError,
   captureLocalRecoverySnapshot,

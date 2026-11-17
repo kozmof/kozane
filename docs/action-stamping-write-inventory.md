@@ -40,7 +40,7 @@ envelopes. Replay interprets the frozen list without rerunning the callback.
 `actions/service-registry.ts` now installs every declared syncable database kind
 through its real `InTx` service, together with `system.compose`. The factory
 requires complete host recovery registrations for local-only kinds and refuses
-attempts to replace database handlers. Version 1 currently supports schemas 19–27.
+attempts to replace database handlers. Version 1 currently supports schemas 19–28.
 Tests record and replay each database kind, check namespace ownership and apply
 the executing host's limits. See the
 [service registry](action-execution-scopes.md#dispatch-real-service-actions).
@@ -71,7 +71,7 @@ Local-only handlers must then be prevented from changing shared rows.
 
 Those declarations remain unchanged in contract version 1. The opt-in version 2
 registry now routes taskspace lifecycle intents through shared database services
-on schemas 20–27. Creation and label changes reject local path and observation fields.
+on schemas 20–28. Creation and label changes reject local path and observation fields.
 The five file methods still require explicit host recovery registrations. Node
 application lifecycle callers retain their existing filesystem workflows until
 their routing is migrated. See the
@@ -123,6 +123,7 @@ indexes are rebuilt and are not stamped application tables.
 | `packages/core/src/actions/local-recovery*.ts` | Capture all local rows and the host-read baseline and effect-set selection in one read transaction. Bind canonical snapshot contents to checkpoint descriptors after the read boundary closes. Collect active image requirements and check every immutable local identity against selected history manifests. Verify descriptors and identities before isolated SQL allocation, compare exact tagged read-back and remove temporary validation rows before success | Persist enrolled identities and checkpoints, retain complete bundle history and assets, and implement validated one-time local installation |
 | `packages/core/src/actions/shared-recovery.ts` | Reconstruct selected shared effect sets against a complete baseline in memory using separately trusted IDs, order and expected counts. Check full before images, refuse local tables and validate exact final rows in a separate empty database. Roll back temporary rows and mutating trigger removal before success, including cleanup and outer commit failure handling | Retain complete history, bind reconstructed rows to trusted workspace and checkpoint identities, then implement durable installation and activation |
 | `packages/core/src/actions/shared-recovery-checkpoint.ts` | Canonicalize shared row-history payloads and bind checkpoint identities, selected IDs, counts, the complete baseline and intermediate effects to content descriptors. Verify separately retained expectations before isolated SQL validation, without storing descriptors or history | Persist trusted descriptor bindings, retain complete action and execution records with assets, and publish complete bundles before installation |
+| `packages/core/src/actions/shared-recovery-store.ts` | Persist an immutable shared descriptor and its original local snapshot descriptor under one checkpoint key. Check matching identity and selected IDs under the writer lock. Resolve trusted expectations and recheck both live bindings after hash and SQL validation without converting registration timestamps | Retain history files and required assets, publish complete bundles and enforce durable installation and activation |
 
 The `cli/lib/db-json/import.ts` helper does not call inventory repair. The CLI
 command in `cli/commands/db.ts` performs a separate post-import repair after the

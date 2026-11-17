@@ -11,12 +11,24 @@ import {
   parseLocalRecoveryCheckpointRecord,
 } from "@kozane/core";
 import { type ImportDbJsonOptions } from "./import.js";
+import { parseSharedRecoveryCheckpointRecord } from "@kozane/core/recovery";
 
 /**
  * Validate every foreign key before inserting rows. SQLite also enforces these constraints
  * during import, but this check identifies the offending row.
  */
 export function validateDumpRefs(tables: TableRows): void {
+  for (const row of tables.local_recovery_shared_history)
+    parseSharedRecoveryCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+      row.local_descriptor,
+    );
   for (const row of tables.local_recovery_checkpoint)
     parseLocalRecoveryCheckpointRecord(
       {

@@ -326,6 +326,35 @@ export const localRecoveryCheckpointTable = sqliteTable(
   ],
 );
 
+/** Trusted shared-history descriptors retain the original local checkpoint binding. */
+export const localRecoverySharedHistoryTable = sqliteTable(
+  "local_recovery_shared_history",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    localDescriptor: text("local_descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_shared_history_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_shared_history_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_extract(${t.descriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.identity.checkpointId') IS ${t.checkpointId}`,
+    ),
+    check(
+      "local_recovery_shared_history_local_descriptor",
+      sql`json_valid(${t.localDescriptor}) AND json_type(${t.localDescriptor},'$.version') IS 'integer' AND json_extract(${t.localDescriptor},'$.version') IS 1 AND json_extract(${t.localDescriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.localDescriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.localDescriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.localDescriptor},'$.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.localDescriptor},'$.identity.schemaId') IS json_extract(${t.descriptor},'$.identity.schemaId')`,
+    ),
+  ],
+);
+
 export const cardTable = sqliteTable(
   "card",
   {

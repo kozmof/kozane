@@ -102,8 +102,49 @@ accessors are refused.
 The descriptor covers this shared row-history payload. Complete action and
 execution records, asset manifests and image bytes need their own retained
 bindings. Describing received data does not establish a trusted expectation.
-Durable descriptor catalogs, history retention, bundle publication and
-installation remain pending.
+History retention, bundle publication and installation remain pending.
+
+## Retain trusted shared descriptors
+
+Migration 0028 adds the device-local `local_recovery_shared_history` catalog.
+`rememberSharedRecoveryCheckpoint` registers a trusted shared descriptor under
+its workspace, device, epoch and checkpoint key. Registration requires an
+existing local snapshot descriptor with matching full identity, baseline ID and
+ordered effect-set IDs.
+
+Each record retains both the shared descriptor and the exact original local
+descriptor. The transaction-bound variant shares a host-owned commit. Both take
+the writer lock before reading or inserting a binding. Repeating the same pair
+preserves its registration timestamp. Another hash, length, count, selection or
+local binding cannot replace it under the same key.
+
+Read helpers return validated immutable metadata without converting timestamps
+to JavaScript dates. The table has no foreign keys to shared data or the local
+catalog. Removing a local descriptor through external SQL therefore preserves
+the shared record as evidence. Reading that record does not authorize loading
+its payload.
+
+`validateStoredSharedRecoveryCheckpoint` copies the payload and expected identity
+before reading the trusted catalog. It requires the shared record and a live
+local descriptor that still matches its retained original. It verifies the
+shared digest and validates final rows in a separate empty database. Hashing and
+SQL validation run after the source read transaction closes. The helper then
+rechecks both bindings before returning.
+
+Missing or replaced records, changed local contents and malformed stored pairs
+refuse success. Unrelated registrations and equivalent descriptor JSON
+formatting remain allowed. Temporary validation rows are rolled back on either
+outcome. These reads provide no installation receipt or activation permission.
+
+Local snapshots capture this sixth local table with exact tagged values. Shared
+capture and reconstruction exclude it. JSON version 18 exports both descriptor
+catalogs, and earlier supported dumps import with an empty shared catalog when
+it is absent. Import validates each retained pair and row identity without
+installing history or image files.
+
+Only trusted host capture should register expectations. Receiving a descriptor
+with a payload does not make it trusted. Registration stores metadata and does
+not retain history files, pin images, enroll identities or publish a bundle.
 
 ## Validate in a separate database
 

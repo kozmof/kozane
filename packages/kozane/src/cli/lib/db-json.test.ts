@@ -153,6 +153,7 @@ describe("db JSON export/import", () => {
       local_image_upload: 0,
       local_asset_manifest: 0,
       local_recovery_checkpoint: 0,
+      local_recovery_shared_history: 0,
       card: 2,
       glue: 1,
       glue_rel: 2,
@@ -283,7 +284,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(17);
+    expect(source.version).toBe(18);
     expect((await importDbJson(targetUrl, source)).local_asset_manifest).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     const unsafe = structuredClone(source);
@@ -343,7 +344,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(17);
+    expect(source.version).toBe(18);
     expect((await importDbJson(targetUrl, source)).local_recovery_checkpoint).toBe(2);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     const wrongIdentity = structuredClone(source);
@@ -358,6 +359,79 @@ describe("db JSON export/import", () => {
     const { local_recovery_checkpoint: _catalog, ...tables } = source.tables;
     expect(
       (await importDbJson(targetUrl, { ...source, version: 16, tables })).local_recovery_checkpoint,
+    ).toBe(0);
+  });
+
+  it("round-trips shared descriptor pairs and preserves historical metadata without installing history", async () => {
+    const sourceUrl = await migratedDbUrl("shared-checkpoint-source.db");
+    const targetUrl = await migratedDbUrl("shared-checkpoint-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [
+        "0027_local_recovery_checkpoint",
+        migrations.at(-1)!.id,
+      ].entries()) {
+        const identity = {
+          workspaceId: "workspace",
+          deviceId: "device",
+          epochId: "epoch",
+          checkpointId: `shared-${index}`,
+          schemaId,
+        };
+        const local = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSetIds: ["a"] },
+          byteLength: 697,
+          sha256: "a".repeat(64),
+        };
+        const shared = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSets: [{ id: "a", effectCount: 0 }] },
+          byteLength: 800,
+          sha256: "b".repeat(64),
+        };
+        const values = [
+          identity.workspaceId,
+          identity.deviceId,
+          identity.epochId,
+          identity.checkpointId,
+        ];
+        await client.execute({
+          sql: "INSERT INTO local_recovery_checkpoint VALUES(?,?,?,?,?,?)",
+          args: [...values, JSON.stringify(local), 1],
+        });
+        await client.execute({
+          sql: "INSERT INTO local_recovery_shared_history VALUES(?,?,?,?,?,?,?)",
+          args: [...values, JSON.stringify(shared), JSON.stringify(local), 1],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(18);
+    expect((await importDbJson(targetUrl, source)).local_recovery_shared_history).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    for (const change of ["identity", "hash", "local-selection"] as const) {
+      const invalid = structuredClone(source);
+      const row = invalid.tables.local_recovery_shared_history[0];
+      if (change === "identity") row.checkpoint_id = "other";
+      if (change === "hash")
+        row.descriptor = JSON.stringify({ ...JSON.parse(String(row.descriptor)), sha256: "bad" });
+      if (change === "local-selection")
+        row.local_descriptor = JSON.stringify({
+          ...JSON.parse(String(row.local_descriptor)),
+          selection: { baselineId: "other", effectSetIds: ["a"] },
+        });
+      await expect(importDbJson(targetUrl, invalid)).rejects.toThrow();
+      expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    }
+    const { local_recovery_shared_history: _shared, ...tables } = source.tables;
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 17, tables }))
+        .local_recovery_shared_history,
     ).toBe(0);
   });
 
@@ -386,7 +460,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(17);
+    expect(source.version).toBe(18);
     expect((await importDbJson(targetUrl, source)).local_image_upload).toBe(4);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_image_upload[0].filename = "../outside.svg";
@@ -418,7 +492,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(17);
+    expect(source.version).toBe(18);
     expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_file_operation[0].path = "../escape";

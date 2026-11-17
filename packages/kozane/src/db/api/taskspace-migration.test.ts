@@ -30,6 +30,7 @@ it.each([false, true])(
             "local_image_upload",
             "local_asset_manifest",
             "local_recovery_checkpoint",
+            "local_recovery_shared_history",
           ].includes(name),
       )
       .map(({ name }) => name);
@@ -37,6 +38,7 @@ it.each([false, true])(
     // Rebuild this empty test database with the exact retained schema-19 migration prefix.
     await withMigration(db, async () => [
       ...[
+        "local_recovery_shared_history",
         "local_asset_manifest",
         "local_recovery_checkpoint",
         "local_image_upload",

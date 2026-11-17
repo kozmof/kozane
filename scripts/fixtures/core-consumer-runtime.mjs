@@ -81,6 +81,29 @@ const sharedDescription = await recovery.describeSharedRecoveryHistory(
 );
 assert.equal(sharedDescription.checkpoint.version, recovery.SHARED_RECOVERY_CHECKPOINT_VERSION);
 assert.equal(sharedDescription.payload.version, recovery.SHARED_RECOVERY_HISTORY_VERSION);
+const sharedLocalDescriptor = {
+  version: 1,
+  identity: sharedIdentity,
+  selection: {
+    baselineId: sharedSelection.baselineId,
+    effectSetIds: sharedSelection.effectSets.map(({ id }) => id),
+  },
+  byteLength: 697,
+  sha256: "a".repeat(64),
+};
+assert.deepEqual(
+  recovery.parseSharedRecoveryCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(sharedDescription.checkpoint),
+    JSON.stringify(sharedLocalDescriptor),
+  ),
+  { checkpoint: sharedDescription.checkpoint, localCheckpoint: sharedLocalDescriptor },
+);
 assert.deepEqual(
   recovery.parseSharedRecoveryCheckpoint(sharedDescription.checkpoint),
   sharedDescription.checkpoint,
@@ -305,7 +328,13 @@ try {
   for (const record of migrations)
     for (const statement of record.statements) sqlite.exec(statement);
   sqlite.exec("COMMIT; PRAGMA foreign_keys=ON");
-  for (const name of ["namespace", "scope_area", "inventory", "local_recovery_checkpoint"])
+  for (const name of [
+    "namespace",
+    "scope_area",
+    "inventory",
+    "local_recovery_checkpoint",
+    "local_recovery_shared_history",
+  ])
     assert.ok(sqlite.prepare("SELECT name FROM sqlite_schema WHERE name=?").get(name));
   assert.ok(
     sqlite

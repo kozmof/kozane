@@ -58,6 +58,10 @@ import {
   validateSharedRecoveryCheckpoint,
   type SharedRecoveryCheckpoint,
   type SharedRecoveryHistoryPayload,
+  rememberSharedRecoveryCheckpoint,
+  inspectSharedRecoveryCheckpoint,
+  validateStoredSharedRecoveryCheckpoint,
+  type SharedRecoveryCheckpointBinding,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -287,6 +291,11 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
       parsedIdentity,
     );
     const target: SharedRecoveryProjection = validated.projection;
+    const remembered = await rememberSharedRecoveryCheckpoint(db, descriptor);
+    const binding: SharedRecoveryCheckpointBinding = remembered.binding;
+    void inspectSharedRecoveryCheckpoint(db, checkpointKey);
+    void validateStoredSharedRecoveryCheckpoint(db, async () => db, savedPayload, parsedIdentity);
+    void binding;
     void projection;
     void prepared;
     void target;

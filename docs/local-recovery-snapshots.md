@@ -27,6 +27,7 @@ tables, including explicit empty tables.
 | `local_image_upload` | Upload intent, installation evidence, errors and decisions |
 | `local_asset_manifest` | Pending, retained and released owners and their manifests |
 | `local_recovery_checkpoint` | Previously registered checkpoint descriptors and registration timestamps |
+| `local_recovery_shared_history` | Shared-history descriptors, their original local descriptor bindings and registration timestamps |
 
 SQL encodes values before driver conversion. The version 1 tagged row codec keeps
 signed 64-bit integers as decimal strings and preserves finite REAL bits, TEXT,
@@ -122,7 +123,7 @@ Complete bundle publication and activation remain pending.
 Known historical schema descriptors remain readable as metadata. Loading their
 snapshot rows still requires explicit schema compatibility. Unknown schema IDs
 and malformed stored descriptors are refused. The public core entry exports the
-descriptor parsers and types for host bookkeeping. JSON version 17 includes
+descriptor parsers and types for host bookkeeping. JSON version 18 includes
 catalog records, and older supported dumps import with an empty catalog when it
 is absent. Import validates descriptor shape and row identity without installing
 snapshots.
@@ -136,6 +137,14 @@ A native test covers competing registrations and reopening a committed record.
 Registration records the host's trusted expectation. It does not verify image
 availability, pin files, enroll a workspace or publish a complete bundle. Do not
 register a descriptor solely because it accompanied received snapshot data.
+
+Migration 0028 also retains
+[shared-history descriptor bindings](shared-recovery-projections.md#retain-trusted-shared-descriptors).
+Registration checks the local descriptor's identity and selected history IDs,
+then preserves its original contents beside the shared expectation. This sixth
+local table remains outside shared reconstruction and survives shared row
+replacement. Local SQL validation checks every nested descriptor pair before
+allocating its isolated database.
 
 ## Validate against a retained catalog binding
 
