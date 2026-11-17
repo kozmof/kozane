@@ -196,6 +196,14 @@ writer test verifies checkpoint consistency. Durable identity enrollment, bundle
 publication and one-time installation remain pending. See
 [local recovery snapshots](local-recovery-snapshots.md).
 
+Local snapshots now have an isolated SQL validation boundary. It rejects identity
+mismatches before database allocation, refuses populated or incompatible
+validation databases and compares loaded rows with the exact tagged snapshot.
+Temporary rows are removed before success. Native and WASM tests cover SQL
+constraints, affinity changes, changed read-back and connection flags, savepoint
+cleanup failures and failed commits. Production local installation remains
+pending.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -279,6 +287,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Rebuild derived data after installation. Keep requested repair separate from exact restoration.
 - [ ] Capture full local recovery snapshots and shared checkpoint selections from one consistent database read transaction.
 - [x] Add an internal versioned local snapshot format and capture helper with complete table coverage, exact tagged values, checkpoint selection and identity checks. Verify concurrent checkpoint reads and refuse malformed transport without changing source data.
+- [x] Validate local snapshot rows in a separate empty database under canonical SQL constraints. Compare exact tagged read-back, roll back temporary rows and refuse success after connection, cleanup or commit failures.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

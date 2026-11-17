@@ -54,11 +54,42 @@ checkpoint. A different device, workspace, epoch, checkpoint or schema is refuse
 The current format accepts only the bundled schema. There is no implicit snapshot
 migration or device reassignment.
 
-These checks validate transport shape and exact row encoding. They do not run the
-destination's SQL constraints, validate operation intent or authorize local path
-use. A future installation boundary must validate those conditions before loading
-the snapshot once on its originating device. Shared-only restoration and joining
-another device must continue to omit source attachments.
+Parsing validates transport shape and exact row encoding. SQL validation uses the
+separate isolated boundary below. Neither step validates operation intent or
+authorizes local path use. A future installation boundary must check those
+conditions before loading the snapshot once on its originating device.
+Shared-only restoration and joining another device must continue to omit source
+attachments.
+
+## Validate rows in an isolated database
+
+`validateLocalRecoverySnapshot` in `actions/local-recovery-validation.ts` checks
+identity and copies transport before calling a trusted database factory. The
+factory supplies a separate empty database and owns its disposal. The helper
+configures and verifies foreign keys and recursive triggers, checks the complete
+bundled schema and refuses existing shared or local application rows.
+
+Validation loads the tagged rows under the database's SQL constraints. It leaves
+constraints and triggers installed, checks foreign keys and reads every local row
+back through the tagged codec. Storage classes and exact REAL bits must match.
+An INTEGER column converting an integral REAL value to INTEGER therefore refuses
+validation, even when the value satisfies SQL constraints.
+
+The helper rolls temporary rows back to its savepoint after validation. Success
+returns an immutable snapshot only after savepoint cleanup and the outer
+transaction commit succeed. The validation database retains no attachments,
+operations or pins. Failures roll back temporary writes as well. Existing rows in
+a refused database remain intact. The source database is never passed to this
+write boundary.
+
+Native and WASM tests cover constraints, affinity changes, altered read-back,
+changed connection flags, cleanup failures and failed commits. They also verify
+that mismatched identities refuse validation before allocating a database and
+that existing validation rows are preserved when the destination is refused.
+
+SQL validation does not publish a recovery bundle or establish that image bytes
+are available. It does not replace the host's operation, manifest and path
+validation or the future one-time installation boundary.
 
 ## Remaining recovery work
 
