@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import * as core from "@kozane/core";
 import * as recovery from "@kozane/core/recovery";
 import {
@@ -111,6 +112,59 @@ const sharedLocalDescriptor = {
   byteLength: 697,
   sha256: "a".repeat(64),
 };
+const assetLocal = await recovery.describeLocalRecoverySnapshot({
+  version: 1,
+  rowEncodingVersion: 1,
+  identity: sharedIdentity,
+  selection: sharedLocalDescriptor.selection,
+  tables: [
+    "taskspace_local",
+    "local_file_operation",
+    "local_image_upload",
+    "local_asset_manifest",
+    "local_recovery_checkpoint",
+    "local_recovery_shared_history",
+  ].map((name) => ({ name, rows: [] })),
+});
+const assetSources = {
+  localSnapshot: assetLocal.snapshot,
+  sharedHistory: sharedDescription.payload,
+};
+const assets = await recovery.describeRecoveryAssets({
+  ...assetSources,
+  binding: { checkpoint: sharedDescription.checkpoint, localCheckpoint: assetLocal.checkpoint },
+  history: sharedHistoryImages,
+});
+assert.equal(assets.payload.version, recovery.RECOVERY_ASSET_PAYLOAD_VERSION);
+assert.equal(assets.checkpoint.version, recovery.RECOVERY_ASSET_CHECKPOINT_VERSION);
+assert.equal(
+  assets.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(assets.payload), "utf8").digest("hex"),
+);
+assert.equal(
+  assets.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(assets.payload), "utf8"),
+);
+assert.deepEqual(recovery.parseRecoveryAssetPayload(assets.payload), assets.payload);
+assert.deepEqual(recovery.parseRecoveryAssetCheckpoint(assets.checkpoint), assets.checkpoint);
+assert.deepEqual(
+  await recovery.requireRecoveryAssetCheckpoint(
+    assets.payload,
+    assets.checkpoint,
+    sharedIdentity,
+    assetSources,
+  ),
+  assets.payload,
+);
+await assert.rejects(
+  recovery.requireRecoveryAssetCheckpoint(
+    assets.payload,
+    { ...assets.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    assetSources,
+  ),
+  recovery.SharedRecoveryError,
+);
 assert.deepEqual(
   recovery.parseSharedRecoveryCheckpointRecord(
     {

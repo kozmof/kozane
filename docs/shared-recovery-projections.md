@@ -124,6 +124,11 @@ coverage or authenticate the supplied manifests. It reads no image bytes. The
 Node [saved checkpoint image workflow](recovery-checkpoint-images.md) combines
 this check with both saved payloads and protected byte verification.
 
+[Recovery asset checkpoints](recovery-asset-checkpoints.md) bind the supplied
+per-record manifests and combined requirements to both exact source descriptors.
+Their verification checks both source hashes and exact coverage before returning
+owned metadata for later storage.
+
 ## Retain trusted shared descriptors
 
 Migration 0028 adds the device-local `local_recovery_shared_history` catalog.

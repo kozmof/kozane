@@ -67,6 +67,11 @@ installs images or releases earlier owners.
 
 ## Retain the checkpoint
 
+Core also provides [content-bound recovery image requirements](recovery-asset-checkpoints.md)
+for later manifest storage. They bind per-record requirements and the combined
+manifest to the exact local/shared descriptor pair. This Node workflow continues
+to receive host manifests directly and does not yet load those asset payloads.
+
 Pending and retained recovery owners both protect their manifests during cleanup.
 Release an owner only through an explicit ledger retirement decision after the
 checkpoint is no longer needed. Earlier staging owners can be released after

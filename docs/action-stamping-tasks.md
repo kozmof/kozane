@@ -304,6 +304,13 @@ commits before image reads and survives failed verification or commits. Complete
 action and execution retention and bundle publication remain pending. See
 [saved checkpoint images](recovery-checkpoint-images.md).
 
+Core now describes canonical asset payloads bound to both original checkpoint
+descriptors. The content hash covers per-record manifest associations, including
+invocation-only requirements, and the combined image requirements. Verification
+checks both source payload hashes and recomputes exact coverage. Durable asset
+descriptor registration and manifest payload storage remain pending. See
+[recovery asset checkpoints](recovery-asset-checkpoints.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -401,6 +408,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Read published registered payloads with an explicit host byte limit and expected identity. Verify canonical bytes and exact SQL values, refuse temporary evidence and recheck file identity and catalog binding after isolated validation without installing rows.
 - [x] Connect saved registered payloads to stable recovery image owners. Check selected history IDs, commit pending protection before byte verification and preserve it after missing files or failed verification commits. Verify cleanup handoff and competing releases without publishing incomplete bundles.
 - [x] Check shared manifests against baseline and full effect images while preserving extra invocation requirements. Validate both saved payloads before image reservation, recheck both files and catalog bindings under the image writer lock, and preserve earlier protection after verification or commit failures.
+- [x] Bind per-record history manifests and combined image requirements to the original shared/local descriptor pair with canonical asset payloads. Verify independently retained content expectations, both source hashes and exact coverage while owning inputs before hashing.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
