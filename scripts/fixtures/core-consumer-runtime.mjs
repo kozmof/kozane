@@ -39,6 +39,39 @@ assert.equal(ValidationError, services.ValidationError);
 assert.equal(recovery.LocalRecoveryError, core.LocalRecoveryError);
 assert.equal(recovery.parseLocalRecoveryCheckpoint, core.parseLocalRecoveryCheckpoint);
 assert.equal(typeof recovery.validateStoredLocalRecoveryCheckpoint, "function");
+assert.equal(typeof recovery.validateSharedRecoveryProjection, "function");
+assert.equal(recovery.SHARED_RECOVERY_PROJECTION_VERSION, 1);
+const sharedProjection = recovery.parseSharedRecoveryProjection({
+  version: 1,
+  rowEncodingVersion: 1,
+  schemaId: migrations.at(-1).id,
+  tables: [
+    "namespace",
+    "partition",
+    "layer",
+    "scope",
+    "taskspace",
+    "inventory",
+    "card",
+    "glue",
+    "glue_rel",
+    "scope_rel",
+    "scope_area",
+    "warp",
+  ].map((name) => ({ name, rows: [] })),
+});
+assert.equal(sharedProjection.tables.length, 12);
+assert.ok(Object.isFrozen(sharedProjection.tables[0].rows));
+assert.throws(
+  () =>
+    recovery.parseSharedRecoveryProjection({
+      version: 1,
+      rowEncodingVersion: 1,
+      schemaId: "unknown",
+      tables: [],
+    }),
+  recovery.SharedRecoveryError,
+);
 assert.equal(domainErrorCode(new ValidationError("invalid")), "validation");
 assert.equal(createServiceContext, services.createServiceContext);
 assert.throws(() => createServiceContext({ contentMax: 1 }), ValidationError);

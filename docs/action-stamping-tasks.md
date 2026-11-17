@@ -257,6 +257,14 @@ or failed verification commits. Cleanup and competing owner releases share its
 writer lock. Retaining history records and publishing complete bundles remain
 pending.
 
+A public shared projection validator now checks complete reconstructed rows in
+an isolated empty database. It preserves exact tagged values under canonical
+constraints, rolls back temporary rows and business-trigger changes before
+returning, and refuses cleanup or commit failures. Native and Node WASM checks
+cover the preparation boundary. Trusted history reconstruction, installation
+and activation remain pending. See
+[shared recovery projections](shared-recovery-projections.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -332,6 +340,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Implement restartable initial baseline capture for populated and seeded databases with application writes blocked until activation.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [ ] Validate target rows in an isolated database with the epoch's constraints, foreign keys and trigger-enforced invariants.
+- [x] Expose complete shared projection parsing and isolated SQL validation for the bundled schema. Keep validation constraints active, compare exact tagged read-back and roll back temporary rows and business-trigger changes before success on native and Node WASM adapters.
 - [ ] Read back loaded validation rows with the tagged codec and compare them with the target projection, including storage classes and exact REAL bits. Refuse installation or activation on any mismatch.
 - [ ] Define the epoch's acyclic foreign-key load order and refuse unsupported schemas before changing live rows.
 - [ ] Implement trusted restore mode with active guards and suppressed capture, mutating business triggers and timestamp normalization.

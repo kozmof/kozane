@@ -240,6 +240,12 @@ verification commit leave the pending reservation protected.
 
 ## Remaining recovery work
 
+Shared target rows can be prepared through the separate
+[shared projection validator](shared-recovery-projections.md). It excludes all
+local tables and validates exact values without retaining temporary rows. The
+host must still reconstruct the correct selected history and bind both
+projections to the same trusted checkpoint before installation.
+
 Durable workspace and epoch enrollment, complete bundle assembly and installation
 remain pending. The current selection records a
 baseline and ordered effect sets. Sync queues and cursors still need a compatible

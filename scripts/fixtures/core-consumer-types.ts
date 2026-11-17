@@ -44,6 +44,9 @@ import {
   parseLocalRecoveryIdentity,
   type LocalRecoveryIdentity,
   type LocalRecoverySnapshot,
+  parseSharedRecoveryProjection,
+  validateSharedRecoveryProjection,
+  type SharedRecoveryProjection,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -227,6 +230,17 @@ const checkpointKey: LocalRecoveryCheckpointKey = {
 };
 void parseLocalRecoveryCheckpoint(checkpoint).sha256;
 const parsedIdentity: LocalRecoveryIdentity = parseLocalRecoveryIdentity(checkpoint.identity);
+const sharedProjection: SharedRecoveryProjection = parseSharedRecoveryProjection({
+  version: 1,
+  rowEncodingVersion: 1,
+  schemaId: migrations.at(-1)!.id,
+  tables: [],
+});
+void validateSharedRecoveryProjection(async () => db, sharedProjection).then(
+  (validated: SharedRecoveryProjection) => validated,
+);
+// @ts-expect-error Parsed shared projections are immutable.
+sharedProjection.schemaId = "other";
 // @ts-expect-error Parsed host identities are immutable.
 parsedIdentity.deviceId = "other";
 void captureLocalRecoveryCheckpoint(db, checkpoint.identity, async () => checkpoint.selection).then(

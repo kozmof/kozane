@@ -184,6 +184,13 @@ incompatible validation destinations are refused before loading.
 These checks pass on libsql and Node WASM. Epoch selection, production restore
 mode and live installation remain pending.
 
+The public core
+[shared projection validator](shared-recovery-projections.md) now provides a
+separate preparation boundary. It accepts complete tagged target tables and
+rolls back temporary rows and trigger changes before returning. The prototype's
+validator still retains rows in its test database for installation assertions.
+Neither helper activates a workspace or finalizes production history storage.
+
 ## Replace populated rows in the fixture
 
 The capture fixture's `restore` method accepts a fresh validation database factory

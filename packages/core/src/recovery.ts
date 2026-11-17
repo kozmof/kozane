@@ -1,5 +1,12 @@
 /** Trusted recovery preparation. These helpers do not enroll or activate a workspace. */
 export {
+  SHARED_RECOVERY_PROJECTION_VERSION,
+  SharedRecoveryError,
+  parseSharedRecoveryProjection,
+  validateSharedRecoveryProjection,
+  type SharedRecoveryProjection,
+} from "./actions/shared-recovery.js";
+export {
   LOCAL_RECOVERY_VERSION,
   LocalRecoveryError,
   captureLocalRecoverySnapshot,
