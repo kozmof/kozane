@@ -60,8 +60,50 @@ immutable projection ready for isolated SQL validation.
 
 This preparation helper does not establish authenticity, authorize action
 eligibility or persist history. The host supplies the correct completed shared
-records from the matching workspace and epoch. Production log storage and
-durable checkpoint bindings remain pending.
+records from the matching workspace and epoch. Production log storage remains
+pending.
+
+## Bind history to a checkpoint
+
+`describeSharedRecoveryHistory(history, identity, selection)` returns a canonical
+history `payload`, its content `checkpoint` descriptor and the reconstructed
+`projection`. Supply the originating workspace, device, epoch, checkpoint and
+current schema identity. The selection includes the independently established
+expected counts described above.
+
+The version 1 payload contains its identity, selection and canonical history.
+The descriptor records the same identity and selection, the UTF-8 byte length and
+SHA-256 digest of `JSON.stringify(payload)` with no added newline. Field, table,
+row and column ordering differences normalize to the same bytes. Transported
+effect-set records normalize to selection order. Effect ordinals and selected
+materialization order remain significant.
+
+The hash covers the baseline and every selected effect, including intermediate
+images. Two histories that reconstruct the same final rows can therefore have
+different descriptors. Tagged values stay exact, including TEXT that itself
+contains JSON. Reformatting such a TEXT cell changes the hash.
+
+Keep the expected descriptor independently from received payload data.
+`requireSharedRecoveryCheckpoint(payload, descriptor, expectedIdentity)` copies
+all inputs, checks identity and selection before hashing, then compares byte
+length and digest. Input mutation while hashing cannot alter the owned result.
+The returned immutable payload and projection are preparation data.
+
+`validateSharedRecoveryCheckpoint` performs those checks before calling a
+separate database factory, then runs the isolated SQL validation below. A matching
+digest does not establish that SQL constraints or storage classes are valid.
+Successful validation leaves no temporary rows or trigger changes behind.
+
+`parseSharedRecoveryCheckpoint` accepts known historical schema descriptors as
+metadata. Parsing or requiring an actual history payload accepts only the
+current bundled schema. Unknown schema IDs, malformed descriptors and untrusted
+accessors are refused.
+
+The descriptor covers this shared row-history payload. Complete action and
+execution records, asset manifests and image bytes need their own retained
+bindings. Describing received data does not establish a trusted expectation.
+Durable descriptor catalogs, history retention, bundle publication and
+installation remain pending.
 
 ## Validate in a separate database
 

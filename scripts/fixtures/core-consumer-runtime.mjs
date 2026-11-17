@@ -66,6 +66,45 @@ const sharedHistory = {
   baseline: { id: "baseline", projection: sharedProjection },
   effectSets: [{ id: "empty", effects: [] }],
 };
+const sharedIdentity = {
+  workspaceId: "workspace",
+  deviceId: "device",
+  epochId: "epoch",
+  checkpointId: "shared-checkpoint",
+  schemaId: migrations.at(-1).id,
+};
+const sharedSelection = { baselineId: "baseline", effectSets: [{ id: "empty", effectCount: 0 }] };
+const sharedDescription = await recovery.describeSharedRecoveryHistory(
+  sharedHistory,
+  sharedIdentity,
+  sharedSelection,
+);
+assert.equal(sharedDescription.checkpoint.version, recovery.SHARED_RECOVERY_CHECKPOINT_VERSION);
+assert.equal(sharedDescription.payload.version, recovery.SHARED_RECOVERY_HISTORY_VERSION);
+assert.deepEqual(
+  recovery.parseSharedRecoveryCheckpoint(sharedDescription.checkpoint),
+  sharedDescription.checkpoint,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryHistoryPayload(sharedDescription.payload),
+  sharedDescription.payload,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryCheckpoint(
+    sharedDescription.payload,
+    sharedDescription.checkpoint,
+    sharedIdentity,
+  ),
+  { payload: sharedDescription.payload, projection: sharedProjection },
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryCheckpoint(
+    sharedDescription.payload,
+    { ...sharedDescription.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+  ),
+  recovery.SharedRecoveryError,
+);
 assert.deepEqual(
   recovery.reconstructSharedRecoveryProjection(sharedHistory, {
     baselineId: "baseline",

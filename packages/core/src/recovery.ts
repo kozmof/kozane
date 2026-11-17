@@ -11,6 +11,17 @@ export {
   type SharedRecoveryHistory,
 } from "./actions/shared-recovery.js";
 export {
+  SHARED_RECOVERY_HISTORY_VERSION,
+  SHARED_RECOVERY_CHECKPOINT_VERSION,
+  parseSharedRecoveryCheckpoint,
+  parseSharedRecoveryHistoryPayload,
+  describeSharedRecoveryHistory,
+  requireSharedRecoveryCheckpoint,
+  validateSharedRecoveryCheckpoint,
+  type SharedRecoveryCheckpoint,
+  type SharedRecoveryHistoryPayload,
+} from "./actions/shared-recovery-checkpoint.js";
+export {
   LOCAL_RECOVERY_VERSION,
   LocalRecoveryError,
   captureLocalRecoverySnapshot,

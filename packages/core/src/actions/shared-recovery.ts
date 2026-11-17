@@ -80,6 +80,16 @@ function array(input: unknown): unknown[] {
     return field.value;
   });
 }
+function canonicalRow(input: unknown): TaggedRow {
+  const parsed = parseTaggedRow(input);
+  return Object.freeze(
+    Object.fromEntries(
+      Object.keys(parsed)
+        .sort()
+        .map((column) => [column, parsed[column]]),
+    ),
+  );
+}
 
 /** Complete shared table coverage is mandatory. Device-local tables never belong to this projection. */
 export function parseSharedRecoveryProjection(input: unknown): SharedRecoveryProjection {
@@ -95,19 +105,7 @@ export function parseSharedRecoveryProjection(input: unknown): SharedRecoveryPro
     const table = fields(entry, ["name", "rows"]);
     if (typeof table.name !== "string" || !sharedTables.has(table.name) || tables.has(table.name))
       throw new SharedRecoveryError("Unknown or duplicate shared recovery table");
-    tables.set(
-      table.name,
-      array(table.rows).map((row) => {
-        const parsed = parseTaggedRow(row);
-        return Object.freeze(
-          Object.fromEntries(
-            Object.keys(parsed)
-              .sort()
-              .map((column) => [column, parsed[column]]),
-          ),
-        );
-      }),
-    );
+    tables.set(table.name, array(table.rows).map(canonicalRow));
   }
   if (tables.size !== plan.loadOrder.length)
     throw new SharedRecoveryError("Incomplete shared recovery tables");
@@ -149,7 +147,7 @@ function historyId(input: unknown): string {
     throw new SharedRecoveryError("Invalid shared recovery history identity");
   return input;
 }
-function selectedHistory(input: unknown): SharedRecoverySelection {
+export function parseSharedRecoverySelection(input: unknown): SharedRecoverySelection {
   const value = fields(input, ["baselineId", "effectSets"]);
   const seen = new Set<string>();
   const effectSets = array(value.effectSets).map((input) => {
@@ -168,12 +166,9 @@ function selectedHistory(input: unknown): SharedRecoverySelection {
   });
 }
 
-/** Pure reconstruction. The trusted host owns identity, completeness and retention of the selected records. */
-export function reconstructSharedRecoveryProjection(
-  input: unknown,
-  expected: SharedRecoverySelection,
-): SharedRecoveryProjection {
-  const selected = selectedHistory(expected);
+/** Internal owned history view for reconstruction and content binding. */
+export function prepareSharedRecoveryHistory(input: unknown, expected: SharedRecoverySelection) {
+  const selected = parseSharedRecoverySelection(expected);
   const value = fields(input, ["baseline", "effectSets"]);
   const baseline = fields(value.baseline, ["id", "projection"]);
   if (historyId(baseline.id) !== selected.baselineId)
@@ -201,7 +196,7 @@ export function reconstructSharedRecoveryProjection(
           const table = plan.loadOrder.find((table) => table.name === effect.table);
           if (!table || !["I", "U", "D"].includes(effect.op as string))
             throw new SharedRecoveryError("Invalid shared recovery effect table or operation");
-          const key = parseTaggedRow(effect.key);
+          const key = canonicalRow(effect.key);
           if (table.primaryKey.some((column) => key[column]?.[0] === "null"))
             throw new SharedRecoveryError("Shared recovery effect primary key is NULL");
           return Object.freeze({
@@ -209,8 +204,8 @@ export function reconstructSharedRecoveryProjection(
             table: table.name,
             key,
             op: effect.op as "I" | "U" | "D",
-            before: effect.before === null ? null : parseTaggedRow(effect.before),
-            after: effect.after === null ? null : parseTaggedRow(effect.after),
+            before: effect.before === null ? null : canonicalRow(effect.before),
+            after: effect.after === null ? null : canonicalRow(effect.after),
           });
         }),
       ),
@@ -223,10 +218,27 @@ export function reconstructSharedRecoveryProjection(
     initial.tables.flatMap((table) => table.rows.map((row) => ({ table: table.name, row }))),
   );
   for (const { id } of selected.effectSets) projection = projection.apply(sets.get(id)!);
-  return parseSharedRecoveryProjection({
-    ...initial,
-    tables: plan.loadOrder.map(({ name }) => ({ name, rows: projection.rows(name) })),
+  return Object.freeze({
+    history: Object.freeze({
+      baseline: Object.freeze({ id: selected.baselineId, projection: initial }),
+      effectSets: Object.freeze(
+        selected.effectSets.map(({ id }) => Object.freeze({ id, effects: sets.get(id)! })),
+      ),
+    }),
+    selection: selected,
+    projection: parseSharedRecoveryProjection({
+      ...initial,
+      tables: plan.loadOrder.map(({ name }) => ({ name, rows: projection.rows(name) })),
+    }),
   });
+}
+
+/** Pure reconstruction. The trusted host owns identity, completeness and retention of the selected records. */
+export function reconstructSharedRecoveryProjection(
+  input: unknown,
+  expected: SharedRecoverySelection,
+): SharedRecoveryProjection {
+  return prepareSharedRecoveryHistory(input, expected).projection;
 }
 function statement(value: InstallationValue) {
   const parts = value.sql.split("?");

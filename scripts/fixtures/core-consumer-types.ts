@@ -51,6 +51,13 @@ import {
   type SharedRecoveryHistory,
   type SharedRecoverySelection,
   type SharedRecoveryEffect,
+  describeSharedRecoveryHistory,
+  parseSharedRecoveryCheckpoint,
+  parseSharedRecoveryHistoryPayload,
+  requireSharedRecoveryCheckpoint,
+  validateSharedRecoveryCheckpoint,
+  type SharedRecoveryCheckpoint,
+  type SharedRecoveryHistoryPayload,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -264,6 +271,31 @@ const sharedEffect: SharedRecoveryEffect = {
   after: null,
 };
 void reconstructed;
+void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelection).then(
+  async ({ payload, checkpoint, projection }) => {
+    const savedPayload: SharedRecoveryHistoryPayload = parseSharedRecoveryHistoryPayload(payload);
+    const descriptor: SharedRecoveryCheckpoint = parseSharedRecoveryCheckpoint(checkpoint);
+    const prepared = await requireSharedRecoveryCheckpoint(
+      savedPayload,
+      descriptor,
+      parsedIdentity,
+    );
+    const validated = await validateSharedRecoveryCheckpoint(
+      async () => db,
+      savedPayload,
+      descriptor,
+      parsedIdentity,
+    );
+    const target: SharedRecoveryProjection = validated.projection;
+    void projection;
+    void prepared;
+    void target;
+    // @ts-expect-error Shared content descriptors are immutable.
+    descriptor.sha256 = "b".repeat(64);
+    // @ts-expect-error Shared history payloads are immutable.
+    savedPayload.history.effectSets.push({ id: "extra", effects: [] });
+  },
+);
 // @ts-expect-error Reconstruction effects are immutable.
 sharedEffect.ord = 1;
 // @ts-expect-error Materialization selections are immutable.

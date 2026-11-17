@@ -270,7 +270,14 @@ baseline in memory. A separate trusted selection supplies IDs, order and expecte
 effect counts. Missing, duplicate or unselected records, truncation, ordinal gaps
 and mismatched full before images refuse a result. Native and Node WASM tests
 cover real captured cascades without changing local paths or retained origin
-history. Durable history storage and checkpoint binding remain pending.
+history. Durable descriptor storage and complete history retention remain pending.
+
+Shared row history now has a canonical payload and content descriptor bound to
+the originating checkpoint identity, selected IDs and expected counts. Hashes
+cover the baseline and every intermediate effect, even when different histories
+produce the same final projection. Verification checks separately retained
+expectations before allocating isolated SQL validation. Durable catalogs,
+complete action and execution retention, and bundle publication remain pending.
 
 ## Version one
 
@@ -347,6 +354,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Implement restartable initial baseline capture for populated and seeded databases with application writes blocked until activation.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
+- [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.
 - [ ] Validate target rows in an isolated database with the epoch's constraints, foreign keys and trigger-enforced invariants.
 - [x] Expose complete shared projection parsing and isolated SQL validation for the bundled schema. Keep validation constraints active, compare exact tagged read-back and roll back temporary rows and business-trigger changes before success on native and Node WASM adapters.
 - [ ] Read back loaded validation rows with the tagged codec and compare them with the target projection, including storage classes and exact REAL bits. Refuse installation or activation on any mismatch.
