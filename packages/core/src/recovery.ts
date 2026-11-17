@@ -1,5 +1,13 @@
 /** Trusted recovery preparation. These helpers do not enroll or activate a workspace. */
 export {
+  parseRecoveryAssetCheckpointRecord,
+  readRecoveryAssetCheckpoint,
+  inspectRecoveryAssetCheckpoint,
+  rememberRecoveryAssetCheckpoint,
+  rememberRecoveryAssetCheckpointInTx,
+  requireStoredRecoveryAssetCheckpoint,
+} from "./actions/recovery-asset-store.js";
+export {
   RECOVERY_ASSET_PAYLOAD_VERSION,
   RECOVERY_ASSET_CHECKPOINT_VERSION,
   parseRecoveryAssetCheckpoint,

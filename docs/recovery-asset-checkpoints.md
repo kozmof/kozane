@@ -38,7 +38,7 @@ associations remain significant. Moving an invocation-only requirement between
 records changes the digest even when the combined manifest stays identical.
 
 Keep the expected asset descriptor independently from received payloads.
-Describing received data does not establish trust. These helpers do not register
+Describing received data does not establish trust. Description does not register
 the descriptor in the database or save payload files.
 
 ## Verify received requirements
@@ -73,6 +73,48 @@ accepts known historical schemas as metadata. Actual payload preparation accepts
 only the current bundled schema. Accessors and serialization hooks are refused
 without invocation.
 
+## Retain trusted asset descriptors
+
+Migration 0029 adds the device-local `local_recovery_assets` catalog.
+`rememberRecoveryAssetCheckpoint(db, checkpoint)` registers the trusted asset
+expectation under its workspace, device, epoch and checkpoint key. Register the
+original local and shared descriptors first. Both live records must match the
+pair retained inside the asset descriptor.
+
+The transaction-bound variant shares a host-owned commit. Registration takes
+the writer lock before reading any binding. Repeating the same descriptor
+preserves its registration timestamp. Changed asset hashes, lengths or original
+bindings cannot replace an existing expectation under the same key.
+
+`readRecoveryAssetCheckpoint`, `inspectRecoveryAssetCheckpoint` and
+`parseRecoveryAssetCheckpointRecord` return validated immutable metadata without
+converting timestamps to JavaScript dates. The table has no foreign keys to
+shared rows or the original catalogs. Orphaned expectations therefore remain
+readable for inspection after a source descriptor disappears. Reading them
+provides no permission to load their payloads.
+
+`requireStoredRecoveryAssetCheckpoint(catalog, input, expectedIdentity, contents)`
+resolves the asset expectation and checks both live source bindings in one read
+transaction. Supply the original local snapshot and shared row history through
+`contents`. Input, identity and source payloads are copied before the first read.
+Hashing and coverage checks run after that read transaction closes. All three
+catalogs are rechecked before success. Removed or replaced bindings refuse a
+result, while unrelated registrations and equivalent descriptor JSON formatting
+remain allowed.
+
+Local snapshots capture this seventh local table with exact tagged values.
+Isolated local validation checks every nested asset descriptor before allocating
+a database. Shared capture and replacement exclude the table. JSON version 19
+includes these expectations and accepts supported versions 7 through 18 with
+an empty asset catalog when omitted. Import validates descriptor shape, row
+identity and the embedded pair without installing manifests or images. Orphaned
+historical metadata remains available for review.
+
+Registration stores a trusted expectation. It does not save the asset payload,
+pin images, verify SQL values, enroll identities or publish a bundle. Register
+only descriptors established through trusted host preparation. Received catalog
+rows cannot establish their own expectations.
+
 ## Continue bundle preparation
 
 These helpers verify content and image metadata. They perform no SQL validation
@@ -85,8 +127,8 @@ invocation requirements from trusted retained records and preserve their extra
 manifest entries. A matching hash cannot authenticate those records or establish
 that they are complete.
 
-Durable asset-descriptor registration, manifest payload storage and complete
-action and execution retention remain pending. The Node image workflow still
+Manifest payload storage and complete action and execution retention remain
+pending. The Node image workflow still
 receives host manifests directly. It does not yet consume these asset payloads.
 Complete bundle publication, one-time installation and activation also remain
 pending.

@@ -33,6 +33,10 @@ const keys = {
 const selected = { baselineId: "baseline", effectSetIds: ["origin-a", "origin-b"] };
 // Independently hashed canonical vectors. Retain older records when the bundled schema changes.
 const vectors: Record<string, { byteLength: number; sha256: string }> = {
+  "0029_local_recovery_assets": {
+    byteLength: 732,
+    sha256: "7e059fcea4da527d325bfba47e5183242db973c6e0a83cd955d0b434d3ae8e4d",
+  },
   "0028_local_recovery_shared_history": {
     byteLength: 697,
     sha256: "0b30b6a760ef901e3402f87ac551c6329c44ddc6933a9c463bc9d2b7dbad7a7c",

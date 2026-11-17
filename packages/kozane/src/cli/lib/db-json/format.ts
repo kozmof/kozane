@@ -5,7 +5,7 @@ import * as schema from "../../../db/schema.js";
 
 export const EXPORT_KIND = "kozane.db.export";
 
-export const EXPORT_VERSION = 18;
+export const EXPORT_VERSION = 19;
 
 /**
  * Oldest supported dump version. Version 7 uses the `namespace` and `partition` table names.
@@ -28,6 +28,7 @@ export const EXPORT_VERSION = 18;
  * Version 16 includes retained asset manifest owners and explicit release decisions.
  * Version 17 includes the local trusted checkpoint descriptor catalog.
  * Version 18 includes shared-history descriptors and their original local checkpoint bindings.
+ * Version 19 includes trusted recovery asset descriptors bound to both original checkpoints.
  *
  * Dumps before version 7 are rejected. Migrate an old workspace database in place before
  * exporting it. Migration 0014 renames the tables without discarding rows.
@@ -64,6 +65,11 @@ const TABLE_ORDER = [
     name: "local_recovery_shared_history",
     orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
     since: 18,
+  },
+  {
+    name: "local_recovery_assets",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 19,
   },
   { name: "card", orderBy: ["id"] },
   { name: "glue", orderBy: ["id"] },

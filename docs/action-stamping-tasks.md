@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–28 and requires
+syncable database kind and `system.compose`. It supports schemas 19–29 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -100,7 +100,7 @@ API. Creation and label clocks use scoped bindings, and caught record failures
 abort their root. Migration 0020 now moves paths and observations to
 `taskspace_local` without a foreign key to shared rows. Readers join metadata
 only for present taskspaces, while local recovery readers retain absent rows.
-Shared capture, validation and replacement exclude that table. JSON version 18
+Shared capture, validation and replacement exclude that table. JSON version 19
 exports local rows separately, including absent taskspaces, and retains local file
 operations. Imports of versions
 7 through 9 split their inline values without changing the original dump.
@@ -108,12 +108,13 @@ Application lifecycle callers still use the version 1 local-only handlers.
 
 The retained taskspace, upload, manifest and checkpoint cohorts cover migrations
 20–28, through `0028_local_recovery_shared_history`. Fourteen cohorts retain fifty
-databases. Packed core and client checks pass eleven current-schema view outcomes
-and 116 earlier-schema envelope outcomes. All older cohorts remain unchanged.
-Browser execution of these cohorts remains pending.
+databases. Their earlier checks passed eleven schema-28 view outcomes and 116
+earlier-schema envelope outcomes. All older cohorts remain unchanged. A migration
+29 producer cohort and its packed checks remain pending. Browser execution of
+these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–28. These shared services reject local metadata inputs,
+and removal on schemas 20–29. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -188,7 +189,7 @@ tests verify atomic owner publication and staging preservation after publication
 and commit failures. This remains a prototype integration rather than production
 action routing.
 
-An internal local recovery snapshot now captures all six local tables and the
+An internal local recovery snapshot now captures all seven local tables and the
 shared baseline and effect-set selection in one adapter read transaction. It
 preserves tagged SQLite values and absent taskspace metadata, requires complete
 table coverage and checks workspace, device, epoch, checkpoint and schema identity.
@@ -223,7 +224,7 @@ mutation while hashing. Installation receipts remain pending.
 Migration 0027 adds a durable local descriptor catalog. Registration is idempotent
 for the same contents and refuses reuse of an identity with another descriptor.
 The catalog survives shared restoration and is included in local snapshots and
-version 18 JSON exports. Historical descriptors remain readable as metadata
+version 19 JSON exports. Historical descriptors remain readable as metadata
 without authorizing old-schema snapshot loading. Registration does not store
 payload bytes, retain history or pin images. Bundle publication and one-time
 installation remain pending.
@@ -284,7 +285,7 @@ Migration 0028 now persists trusted shared-history descriptors together with the
 original registered local snapshot expectation. Registration checks identity and
 selected IDs, is idempotent for the same pair and refuses replacement. Both
 catalog bindings are rechecked after shared hash and SQL validation. Local
-snapshots and version 18 JSON exports preserve this sixth local table. Complete
+snapshots and version 19 JSON exports preserve this sixth local table. Complete
 history retention, bundle publication and installation remain pending.
 
 Registered shared row-history payloads can now be saved and reopened through the
@@ -307,9 +308,18 @@ action and execution retention and bundle publication remain pending. See
 Core now describes canonical asset payloads bound to both original checkpoint
 descriptors. The content hash covers per-record manifest associations, including
 invocation-only requirements, and the combined image requirements. Verification
-checks both source payload hashes and recomputes exact coverage. Durable asset
-descriptor registration and manifest payload storage remain pending. See
+checks both source payload hashes and recomputes exact coverage. Manifest payload
+storage remains pending. See
 [recovery asset checkpoints](recovery-asset-checkpoints.md).
+
+Migration 0029 now retains trusted asset descriptors under immutable checkpoint
+keys. Registration requires both original source bindings, and catalog-backed
+verification rechecks all three records after hashing. Shared restoration keeps
+the new local catalog, and local validation checks nested expectations before
+SQL allocation. JSON version 19 preserves current and historical metadata.
+Native and Node WASM tests cover rollback and changed bindings. Native tests also
+cover competing registrations across connections. Manifest payload storage and
+complete bundle publication remain pending.
 
 ## Version one
 
@@ -387,7 +397,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.
-- [x] Persist shared-history descriptors with their original registered local checkpoint expectations. Serialize immutable registration, recheck both trusted catalog bindings after isolated validation, preserve records through local snapshots and version 18 JSON exports, and verify rollback, migration and competing connections.
+- [x] Persist shared-history descriptors with their original registered local checkpoint expectations. Serialize immutable registration, recheck both trusted catalog bindings after isolated validation, preserve records through local snapshots and version 19 JSON exports, and verify rollback, migration and competing connections.
 - [x] Save registered shared row-history payloads with synced exclusive publication and read-only interruption inspection. Reopen only published bytes within a host size limit, validate exact SQL values and recheck the original catalog pair and file identity without installing rows or consuming temporary evidence.
 - [ ] Validate target rows in an isolated database with the epoch's constraints, foreign keys and trigger-enforced invariants.
 - [x] Expose complete shared projection parsing and isolated SQL validation for the bundled schema. Keep validation constraints active, compare exact tagged read-back and roll back temporary rows and business-trigger changes before success on native and Node WASM adapters.
@@ -409,6 +419,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Connect saved registered payloads to stable recovery image owners. Check selected history IDs, commit pending protection before byte verification and preserve it after missing files or failed verification commits. Verify cleanup handoff and competing releases without publishing incomplete bundles.
 - [x] Check shared manifests against baseline and full effect images while preserving extra invocation requirements. Validate both saved payloads before image reservation, recheck both files and catalog bindings under the image writer lock, and preserve earlier protection after verification or commit failures.
 - [x] Bind per-record history manifests and combined image requirements to the original shared/local descriptor pair with canonical asset payloads. Verify independently retained content expectations, both source hashes and exact coverage while owning inputs before hashing.
+- [x] Persist trusted asset descriptors with immutable original checkpoint bindings. Require both live source catalogs before registration, recheck all three catalogs after content verification and preserve orphaned metadata, exact local snapshots and version 19 JSON exports. Verify migration, rollback and competing connections.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

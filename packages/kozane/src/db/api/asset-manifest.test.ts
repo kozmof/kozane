@@ -209,6 +209,7 @@ it.each([false, true])(
     const db = (await createTestDB()) as unknown as CoreDB;
     const migration = migrations.find((row) => row.tag === "0026_local_asset_manifest")!;
     await withMigration(db, async () => [
+      { sql: "DROP TABLE local_recovery_assets", args: [] },
       { sql: "DROP TABLE local_recovery_shared_history", args: [] },
       { sql: "DROP TABLE local_recovery_checkpoint", args: [] },
       { sql: "DROP TABLE local_asset_manifest", args: [] },

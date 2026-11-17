@@ -234,6 +234,7 @@ it.each([false, true])(
     const db = await database();
     const migration = migrations.find((row) => row.tag === "0027_local_recovery_checkpoint")!;
     await withMigration(db, async () => [
+      { sql: "DROP TABLE local_recovery_assets", args: [] },
       { sql: "DROP TABLE local_recovery_shared_history", args: [] },
       { sql: "DROP TABLE local_recovery_checkpoint", args: [] },
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },

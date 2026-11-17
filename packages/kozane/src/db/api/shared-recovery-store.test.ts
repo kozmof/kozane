@@ -214,7 +214,7 @@ it("preserves exact local binding records across shared restoration and later lo
     { ...identity, checkpointId: "later" },
     async () => selection,
   );
-  expect(snapshot.tables).toHaveLength(6);
+  expect(snapshot.tables).toHaveLength(7);
   expect(
     snapshot.tables.find(({ name }) => name === "local_recovery_shared_history")!.rows[0]
       .created_at,
@@ -258,15 +258,13 @@ it("checks descriptor row identity, local binding coherence and SQL constraints"
     ),
   ).toThrow("does not match");
   await expect(
-    f.source
-      .insert(localRecoverySharedHistoryTable)
-      .values({
-        ...key,
-        checkpointId: "other",
-        descriptor: JSON.stringify(f.shared.checkpoint),
-        localDescriptor: JSON.stringify(f.local.checkpoint),
-        createdAt: new Date(0),
-      }),
+    f.source.insert(localRecoverySharedHistoryTable).values({
+      ...key,
+      checkpointId: "other",
+      descriptor: JSON.stringify(f.shared.checkpoint),
+      localDescriptor: JSON.stringify(f.local.checkpoint),
+      createdAt: new Date(0),
+    }),
   ).rejects.toThrow();
 });
 
@@ -396,6 +394,7 @@ it.each([false, true])(
     const f = await fixture(false);
     const migration = migrations.find(({ tag }) => tag === "0028_local_recovery_shared_history")!;
     await withMigration(f.source, async () => [
+      { sql: "DROP TABLE local_recovery_assets", args: [] },
       { sql: "DROP TABLE local_recovery_shared_history", args: [] },
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },
       { sql: "UPDATE local_recovery_checkpoint SET created_at=9223372036854775807", args: [] },
@@ -415,7 +414,9 @@ it.each([false, true])(
       ).rejects.toThrow();
       await f.source.run(sql`DROP TRIGGER reject_upgrade`);
     }
-    expect((await applyMigrations(f.source)).appliedIds).toEqual([migration.id]);
+    expect((await applyMigrations(f.source)).appliedIds).toEqual(
+      migrations.slice(migration.idx).map(({ id }) => id),
+    );
     expect(
       await f.source.values(
         sql`SELECT descriptor,CAST(created_at AS TEXT) FROM local_recovery_checkpoint`,

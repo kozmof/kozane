@@ -71,6 +71,12 @@ import {
   requireRecoveryAssetCheckpoint,
   type RecoveryAssetPayload,
   type RecoveryAssetCheckpoint,
+  parseRecoveryAssetCheckpointRecord,
+  rememberRecoveryAssetCheckpoint,
+  rememberRecoveryAssetCheckpointInTx,
+  readRecoveryAssetCheckpoint,
+  inspectRecoveryAssetCheckpoint,
+  requireStoredRecoveryAssetCheckpoint,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -350,6 +356,18 @@ void captureLocalRecoveryCheckpoint(db, checkpoint.identity, async () => checkpo
         { localSnapshot: captured, sharedHistory },
       );
       void verified.manifest.entries;
+      void parseRecoveryAssetCheckpointRecord(checkpointKey, JSON.stringify(descriptor));
+      void rememberRecoveryAssetCheckpoint(db, descriptor);
+      void withTx(db, (tx) => rememberRecoveryAssetCheckpointInTx(tx, descriptor));
+      void readRecoveryAssetCheckpoint(db, checkpointKey);
+      void inspectRecoveryAssetCheckpoint(db, checkpointKey);
+      const stored: RecoveryAssetPayload = await requireStoredRecoveryAssetCheckpoint(
+        db,
+        parsed,
+        captured.identity,
+        { localSnapshot: captured, sharedHistory },
+      );
+      void stored.manifest;
       // @ts-expect-error Asset descriptors retain immutable checkpoint bindings.
       descriptor.binding.localCheckpoint.sha256 = "b".repeat(64);
       // @ts-expect-error Per-record asset requirements are immutable.

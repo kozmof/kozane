@@ -154,6 +154,7 @@ describe("db JSON export/import", () => {
       local_asset_manifest: 0,
       local_recovery_checkpoint: 0,
       local_recovery_shared_history: 0,
+      local_recovery_assets: 0,
       card: 2,
       glue: 1,
       glue_rel: 2,
@@ -284,7 +285,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(18);
+    expect(source.version).toBe(19);
     expect((await importDbJson(targetUrl, source)).local_asset_manifest).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     const unsafe = structuredClone(source);
@@ -344,7 +345,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(18);
+    expect(source.version).toBe(19);
     expect((await importDbJson(targetUrl, source)).local_recovery_checkpoint).toBe(2);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     const wrongIdentity = structuredClone(source);
@@ -411,7 +412,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(18);
+    expect(source.version).toBe(19);
     expect((await importDbJson(targetUrl, source)).local_recovery_shared_history).toBe(2);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     for (const change of ["identity", "hash", "local-selection"] as const) {
@@ -433,6 +434,91 @@ describe("db JSON export/import", () => {
       (await importDbJson(targetUrl, { ...source, version: 17, tables }))
         .local_recovery_shared_history,
     ).toBe(0);
+  });
+
+  it("round-trips trusted recovery asset expectations and rejects malformed bindings before replacing rows", async () => {
+    const sourceUrl = await migratedDbUrl("recovery-assets-source.db");
+    const targetUrl = await migratedDbUrl("recovery-assets-target.db");
+    await seedDb(targetUrl);
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [migrations.at(-2)!.id, migrations.at(-1)!.id].entries()) {
+        const identity = {
+          workspaceId: "workspace",
+          deviceId: "device",
+          epochId: "epoch",
+          checkpointId: `checkpoint-${index}`,
+          schemaId,
+        };
+        const localCheckpoint = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSetIds: ["empty"] },
+          byteLength: 700,
+          sha256: "a".repeat(64),
+        };
+        const checkpoint = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSets: [{ id: "empty", effectCount: 0 }] },
+          byteLength: 800,
+          sha256: "b".repeat(64),
+        };
+        const descriptor = {
+          version: 1,
+          binding: { checkpoint, localCheckpoint },
+          byteLength: 900,
+          sha256: "c".repeat(64),
+        };
+        // Orphaned metadata remains useful evidence and has no cross-catalog foreign key.
+        await client.execute({
+          sql: "INSERT INTO local_recovery_assets VALUES(?,?,?,?,?,?)",
+          args: [
+            identity.workspaceId,
+            identity.deviceId,
+            identity.epochId,
+            identity.checkpointId,
+            JSON.stringify(descriptor),
+            1,
+          ],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(19);
+    expect((await importDbJson(targetUrl, source)).local_recovery_assets).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    for (const change of [
+      "identity",
+      "hash",
+      "shared-binding",
+      "local-selection",
+      "nested-version",
+    ]) {
+      const invalid = structuredClone(source);
+      const row = invalid.tables.local_recovery_assets[0];
+      const descriptor = JSON.parse(String(row.descriptor));
+      if (change === "identity") row.checkpoint_id = "other";
+      if (change === "hash") descriptor.sha256 = "bad";
+      if (change === "shared-binding") descriptor.binding.checkpoint.identity.deviceId = "other";
+      if (change === "local-selection")
+        descriptor.binding.localCheckpoint.selection.baselineId = "other";
+      if (change === "nested-version") descriptor.binding.localCheckpoint.version = 2;
+      row.descriptor = JSON.stringify(descriptor);
+      await expect(importDbJson(targetUrl, invalid)).rejects.toThrow();
+      expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    }
+    const { local_recovery_assets: _assets, ...tables } = source.tables;
+    await expect(importDbJson(targetUrl, { ...source, tables })).rejects.toThrow(
+      "missing table local_recovery_assets",
+    );
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 18, tables })).local_recovery_assets,
+    ).toBe(0);
+    expect(source.tables.local_recovery_assets).toHaveLength(2);
   });
 
   it("round-trips image staging evidence without reading or installing files", async () => {
@@ -460,7 +546,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(18);
+    expect(source.version).toBe(19);
     expect((await importDbJson(targetUrl, source)).local_image_upload).toBe(4);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_image_upload[0].filename = "../outside.svg";
@@ -492,7 +578,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(18);
+    expect(source.version).toBe(19);
     expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_file_operation[0].path = "../escape";
