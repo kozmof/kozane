@@ -85,7 +85,8 @@ combined image requirements. It commits protection before byte verification and
 rechecks both saved files and catalog bindings under the image writer lock.
 
 These files retain the baseline and selected row-effect reconstruction data.
-Complete action and execution records, asset manifests, image bytes and their
-retention policies still need durable storage and verification. A complete
-bundle also needs the matching local payload and a durable publication boundary.
+The Node host can also retain [saved asset manifests](recovery-asset-payloads.md)
+bound to both source payloads. Complete action and execution records, image-byte
+verification and retention policies still need integration. A complete bundle
+also needs the matching local payload and a durable publication boundary.
 Installation and activation remain pending. Startup does not repeat file work.

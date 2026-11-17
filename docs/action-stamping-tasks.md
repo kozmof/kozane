@@ -308,8 +308,8 @@ action and execution retention and bundle publication remain pending. See
 Core now describes canonical asset payloads bound to both original checkpoint
 descriptors. The content hash covers per-record manifest associations, including
 invocation-only requirements, and the combined image requirements. Verification
-checks both source payload hashes and recomputes exact coverage. Manifest payload
-storage remains pending. See
+checks both source payload hashes and recomputes exact coverage. The Node host
+can now retain these payloads through the trusted catalog workflow. See
 [recovery asset checkpoints](recovery-asset-checkpoints.md).
 
 Migration 0029 now retains trusted asset descriptors under immutable checkpoint
@@ -318,8 +318,16 @@ verification rechecks all three records after hashing. Shared restoration keeps
 the new local catalog, and local validation checks nested expectations before
 SQL allocation. JSON version 19 preserves current and historical metadata.
 Native and Node WASM tests cover rollback and changed bindings. Native tests also
-cover competing registrations across connections. Manifest payload storage and
-complete bundle publication remain pending.
+cover competing registrations across connections. Image workflow integration
+and complete bundle publication remain pending.
+
+Registered asset manifests can now be saved and reopened through the Node host.
+The workflow validates both saved source payloads with independent byte limits,
+checks canonical manifest contents and rechecks all three catalog bindings under
+the writer lock. Synced exclusive publication preserves interrupted evidence.
+Reads refuse changed files and temporary entries without installing rows or
+images. Image workflow integration and complete bundle publication remain
+pending. See [saved asset manifests](recovery-asset-payloads.md).
 
 ## Version one
 
@@ -420,6 +428,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Check shared manifests against baseline and full effect images while preserving extra invocation requirements. Validate both saved payloads before image reservation, recheck both files and catalog bindings under the image writer lock, and preserve earlier protection after verification or commit failures.
 - [x] Bind per-record history manifests and combined image requirements to the original shared/local descriptor pair with canonical asset payloads. Verify independently retained content expectations, both source hashes and exact coverage while owning inputs before hashing.
 - [x] Persist trusted asset descriptors with immutable original checkpoint bindings. Require both live source catalogs before registration, recheck all three catalogs after content verification and preserve orphaned metadata, exact local snapshots and version 19 JSON exports. Verify migration, rollback and competing connections.
+- [x] Save and reopen registered asset-manifest payloads with synced exclusive publication and independent host limits for all three payloads. Validate both saved sources, canonical manifest contents and exact coverage, recheck all original bindings and files, and preserve interruption evidence after filesystem or commit failures without installing images.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

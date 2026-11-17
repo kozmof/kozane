@@ -1,4 +1,4 @@
-/** Internal file protocol shared by local and shared-history checkpoint payloads. */
+/** Internal immutable file protocol for checkpoint payloads and asset manifests. */
 import * as fs from "node:fs/promises";
 import { constants, type BigIntStats } from "node:fs";
 import { createHash } from "node:crypto";
@@ -10,7 +10,7 @@ export type RecoveryPayloadEvidence =
   | "different-content"
   | "unsafe-path"
   | "unreadable";
-type Area = "checkpoints" | "shared-history";
+type Area = "checkpoints" | "shared-history" | "asset-manifests";
 type RecoveryPayloadDescriptor = Readonly<{ sha256: string; byteLength: number }>;
 const code = (error: unknown) => (error instanceof Error && "code" in error ? error.code : null);
 export const paths = (directory: string, checkpoint: RecoveryPayloadDescriptor) => ({

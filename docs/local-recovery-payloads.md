@@ -130,6 +130,11 @@ When both payloads are saved, use the
 manifests against actual shared rows as well as selected IDs. It checks both
 saved files and catalog bindings around protected image verification.
 
+[Saved asset manifests](recovery-asset-payloads.md) retain canonical requirements
+bound to both original payload descriptors. Their separate publication and
+bounded reads validate both source files. The image workflow still receives
+host manifests directly.
+
 ## Current scope
 
 This file stores only the local snapshot payload. It does not contain shared

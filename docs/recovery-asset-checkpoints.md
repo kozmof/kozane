@@ -127,8 +127,9 @@ invocation requirements from trusted retained records and preserve their extra
 manifest entries. A matching hash cannot authenticate those records or establish
 that they are complete.
 
-Manifest payload storage and complete action and execution retention remain
-pending. The Node image workflow still
-receives host manifests directly. It does not yet consume these asset payloads.
-Complete bundle publication, one-time installation and activation also remain
-pending.
+The Node host provides [saved recovery manifests](recovery-asset-payloads.md)
+with immutable publication, read-only interruption inspection and bounded reads.
+Both source payloads are validated before saving or returning manifests. The
+image workflow still receives host manifests directly and does not yet consume
+these saved payloads. Complete action and execution retention, complete bundle
+publication, one-time installation and activation remain pending.
