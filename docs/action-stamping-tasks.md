@@ -107,10 +107,10 @@ operations. Imports of versions
 Application lifecycle callers still use the version 1 local-only handlers.
 
 The retained taskspace, upload, manifest and checkpoint cohorts cover migrations
-20–27, through `0027_local_recovery_checkpoint`. All older cohorts remain unchanged.
-Migration 0028 adds shared-history descriptor bindings. A retained schema-28
-producer is required before release. Browser execution of these cohorts remains
-pending.
+20–28, through `0028_local_recovery_shared_history`. Fourteen cohorts retain fifty
+databases. Packed core and client checks pass eleven current-schema view outcomes
+and 116 earlier-schema envelope outcomes. All older cohorts remain unchanged.
+Browser execution of these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
 and removal on schemas 20–28. These shared services reject local metadata inputs,

@@ -66,11 +66,16 @@ earlier cohorts retain forty-two databases.
 The `core-0.2.0-migration27-wasm` cohort adds four databases produced by the
 packed candidate at source revision `a7a4fc6`. It uses
 `0027_local_recovery_checkpoint` and records eleven service-scenario outcomes.
-The corpus now has forty-six databases. Packed core and client checks verify
-eleven current-ID outcomes and 105 earlier-ID envelope outcomes without changing
-older fixtures.
+These earlier cohorts retain forty-six databases.
+
+The `core-0.2.0-migration28-wasm` cohort adds four databases produced by the
+packed candidate at source revision `33c1ee4`. It uses
+`0028_local_recovery_shared_history` and records eleven service-scenario outcomes.
+The corpus now has fourteen cohorts and fifty databases. Packed core and client
+checks verify eleven current-ID outcomes and 116 earlier-ID envelope outcomes
+without changing older fixtures.
 Each manifest pins its producer archive, database hashes and driver versions.
-Chromium execution for the schema-20 through schema-27 cohorts remains pending.
+Chromium execution for the schema-20 through schema-28 cohorts remains pending.
 
 Add a new cohort explicitly after building the intended candidate.
 
