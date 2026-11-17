@@ -1,5 +1,6 @@
 /** Canonical content binding for a local checkpoint. Descriptors are not activation receipts. */
 import type { DB, ReadTx } from "../database.js";
+import { migrations } from "../generated/migrations.js";
 import {
   LocalRecoveryError,
   captureLocalRecoverySnapshot,
@@ -18,6 +19,53 @@ export interface LocalRecoveryCheckpoint {
   readonly selection: LocalRecoverySelection;
   readonly byteLength: number;
   readonly sha256: string;
+}
+export type LocalRecoveryCheckpointKey = Pick<
+  LocalRecoveryIdentity,
+  "workspaceId" | "deviceId" | "epochId" | "checkpointId"
+>;
+const keyFields = ["workspaceId", "deviceId", "epochId", "checkpointId"] as const;
+function fields(input: unknown, names: readonly string[]) {
+  if (
+    !input ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    ![Object.prototype, null].includes(Object.getPrototypeOf(input)) ||
+    Reflect.ownKeys(input).length !== names.length
+  )
+    throw new LocalRecoveryError("Invalid local recovery checkpoint data");
+  return Object.fromEntries(
+    names.map((name) => {
+      const value = Object.getOwnPropertyDescriptor(input, name);
+      if (!value || !("value" in value) || !value.enumerable)
+        throw new LocalRecoveryError("Local recovery checkpoint requires plain fields");
+      return [name, value.value];
+    }),
+  );
+}
+export function parseLocalRecoveryCheckpointKey(input: unknown): LocalRecoveryCheckpointKey {
+  const value = fields(input, keyFields);
+  const parsed = parseLocalRecoveryIdentity({ ...value, schemaId: migrations.at(-1)!.id });
+  return Object.freeze({
+    workspaceId: parsed.workspaceId,
+    deviceId: parsed.deviceId,
+    epochId: parsed.epochId,
+    checkpointId: parsed.checkpointId,
+  });
+}
+
+/** Known historical descriptors can be retained as metadata. Snapshot loading still requires the current schema. */
+export function parseLocalRecoveryCheckpointRecord(
+  key: unknown,
+  descriptor: unknown,
+): LocalRecoveryCheckpoint {
+  const wanted = parseLocalRecoveryCheckpointKey(key);
+  if (typeof descriptor !== "string")
+    throw new LocalRecoveryError("Stored checkpoint descriptor requires TEXT");
+  const parsed = parseLocalRecoveryCheckpoint(JSON.parse(descriptor));
+  if (keyFields.some((field) => wanted[field] !== parsed.identity[field]))
+    throw new LocalRecoveryError("Stored checkpoint identity mismatch");
+  return parsed;
 }
 
 /** Finish the consistent read boundary before hashing its immutable result. */
@@ -59,7 +107,10 @@ export function parseLocalRecoveryCheckpoint(input: unknown): LocalRecoveryCheck
     throw new LocalRecoveryError("Unsupported or malformed local recovery checkpoint");
   return Object.freeze({
     version: LOCAL_RECOVERY_CHECKPOINT_VERSION,
-    identity: parseLocalRecoveryIdentity(data.identity),
+    identity: parseLocalRecoveryIdentity(
+      data.identity,
+      migrations.map((row) => row.id),
+    ),
     selection: parseLocalRecoverySelection(data.selection),
     byteLength: data.byteLength,
     sha256: data.sha256,

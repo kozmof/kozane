@@ -40,6 +40,33 @@ assert.equal(createServiceContext, services.createServiceContext);
 assert.throws(() => createServiceContext({ contentMax: 1 }), ValidationError);
 assert.ok(schema.cardTable);
 assert.equal(typeof services.cards.create, "function");
+const checkpointKey = {
+  workspaceId: "workspace",
+  deviceId: "device",
+  epochId: "epoch",
+  checkpointId: "checkpoint",
+};
+const checkpoint = {
+  version: core.LOCAL_RECOVERY_CHECKPOINT_VERSION,
+  identity: { ...checkpointKey, schemaId: migrations.at(-1).id },
+  selection: { baselineId: "baseline", effectSetIds: [] },
+  byteLength: 642,
+  sha256: "a".repeat(64),
+};
+assert.deepEqual(core.parseLocalRecoveryCheckpoint(checkpoint), checkpoint);
+assert.deepEqual(
+  core.parseLocalRecoveryCheckpointRecord(checkpointKey, JSON.stringify(checkpoint)),
+  checkpoint,
+);
+assert.throws(
+  () =>
+    core.parseLocalRecoveryCheckpointRecord(
+      { ...checkpointKey, checkpointId: "other" },
+      JSON.stringify(checkpoint),
+    ),
+  core.LocalRecoveryError,
+);
+assert.ok(Object.isFrozen(core.parseLocalRecoveryCheckpoint(checkpoint).identity));
 assert.equal(INVENTORY_COLUMNS, 6);
 assert.equal(cardSpan("short"), 1);
 assert.deepEqual(
@@ -178,7 +205,7 @@ try {
   for (const record of migrations)
     for (const statement of record.statements) sqlite.exec(statement);
   sqlite.exec("COMMIT; PRAGMA foreign_keys=ON");
-  for (const name of ["namespace", "scope_area", "inventory"])
+  for (const name of ["namespace", "scope_area", "inventory", "local_recovery_checkpoint"])
     assert.ok(sqlite.prepare("SELECT name FROM sqlite_schema WHERE name=?").get(name));
   assert.ok(
     sqlite

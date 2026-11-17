@@ -91,7 +91,7 @@ it("captures every local table and retains absent metadata and exact SQLite valu
 
 it("includes empty local tables before the first local write", async () => {
   const snapshot = await capture(await database());
-  expect(snapshot.tables).toHaveLength(4);
+  expect(snapshot.tables).toHaveLength(5);
   expect(snapshot.tables.every((table) => table.rows.length === 0)).toBe(true);
 });
 

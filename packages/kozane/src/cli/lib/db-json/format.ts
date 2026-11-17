@@ -5,7 +5,7 @@ import * as schema from "../../../db/schema.js";
 
 export const EXPORT_KIND = "kozane.db.export";
 
-export const EXPORT_VERSION = 16;
+export const EXPORT_VERSION = 17;
 
 /**
  * Oldest supported dump version. Version 7 uses the `namespace` and `partition` table names.
@@ -26,6 +26,7 @@ export const EXPORT_VERSION = 16;
  * Version 14 adds explicit abandonment metadata and planned CLI layout paths.
  * Version 15 includes local image upload pins and their installation evidence.
  * Version 16 includes retained asset manifest owners and explicit release decisions.
+ * Version 17 includes the local trusted checkpoint descriptor catalog.
  *
  * Dumps before version 7 are rejected. Migrate an old workspace database in place before
  * exporting it. Migration 0014 renames the tables without discarding rows.
@@ -53,6 +54,11 @@ const TABLE_ORDER = [
   { name: "local_file_operation", orderBy: ["id"], since: 11 },
   { name: "local_image_upload", orderBy: ["filename"], since: 15 },
   { name: "local_asset_manifest", orderBy: ["owner_kind", "owner_id"], since: 16 },
+  {
+    name: "local_recovery_checkpoint",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 17,
+  },
   { name: "card", orderBy: ["id"] },
   { name: "glue", orderBy: ["id"] },
   // Keep glue members beside their groups in the dump.

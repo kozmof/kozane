@@ -12,6 +12,8 @@ import type {
   SlotPlacement,
   SharedTaskspace,
   ActionInputsV2,
+  LocalRecoveryCheckpoint,
+  LocalRecoveryCheckpointKey,
 } from "@kozane/core";
 import {
   planStow,
@@ -25,6 +27,8 @@ import {
   isPlainObject,
   entryNameIssue,
   errorMessage,
+  parseLocalRecoveryCheckpoint,
+  parseLocalRecoveryCheckpointRecord,
   type BoardRect,
   type CardContentCheck,
   type PathKind,
@@ -194,5 +198,28 @@ void compareSchemaManifests(canonicalSchemaManifest);
 canonicalSchemaManifest.push({});
 // @ts-expect-error Database history checks require an explicit supported mode.
 void validateDatabaseMigrationHistory(db, "automatic");
+const checkpoint: LocalRecoveryCheckpoint = {
+  version: 1,
+  identity: {
+    workspaceId: "workspace",
+    deviceId: "device",
+    epochId: "epoch",
+    checkpointId: "checkpoint",
+    schemaId: migrations.at(-1)!.id,
+  },
+  selection: { baselineId: "baseline", effectSetIds: [] },
+  byteLength: 642,
+  sha256: "a".repeat(64),
+};
+const checkpointKey: LocalRecoveryCheckpointKey = {
+  workspaceId: "workspace",
+  deviceId: "device",
+  epochId: "epoch",
+  checkpointId: "checkpoint",
+};
+void parseLocalRecoveryCheckpoint(checkpoint).sha256;
+void parseLocalRecoveryCheckpointRecord(checkpointKey, JSON.stringify(checkpoint)).identity;
+// @ts-expect-error Checkpoint descriptors are immutable.
+checkpoint.sha256 = "b".repeat(64);
 // @ts-expect-error History checks require an explicit supported mode.
 void validateMigrationHistory([], "automatic");

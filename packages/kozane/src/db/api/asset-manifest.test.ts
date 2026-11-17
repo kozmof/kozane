@@ -209,6 +209,7 @@ it.each([false, true])(
     const db = (await createTestDB()) as unknown as CoreDB;
     const migration = migrations.find((row) => row.tag === "0026_local_asset_manifest")!;
     await withMigration(db, async () => [
+      { sql: "DROP TABLE local_recovery_checkpoint", args: [] },
       { sql: "DROP TABLE local_asset_manifest", args: [] },
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },
       {
@@ -231,7 +232,9 @@ it.each([false, true])(
       await expect(db.select().from(localAssetManifestTable)).rejects.toThrow();
       await db.run(sql`DROP TRIGGER reject_upgrade`);
     }
-    expect((await applyMigrations(db)).appliedIds).toEqual([migration.id]);
+    expect((await applyMigrations(db)).appliedIds).toEqual(
+      migrations.filter((row) => row.when >= migration.when).map((row) => row.id),
+    );
     expect(
       Array.from(
         (

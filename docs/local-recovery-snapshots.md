@@ -26,6 +26,7 @@ tables, including explicit empty tables.
 | `local_file_operation` | Pending, confirmed and abandoned operations and their evidence |
 | `local_image_upload` | Upload intent, installation evidence, errors and decisions |
 | `local_asset_manifest` | Pending, retained and released owners and their manifests |
+| `local_recovery_checkpoint` | Previously registered checkpoint descriptors and registration timestamps |
 
 SQL encodes values before driver conversion. The version 1 tagged row codec keeps
 signed 64-bit integers as decimal strings and preserves finite REAL bits, TEXT,
@@ -89,8 +90,46 @@ constraints or preserve their storage classes when loaded.
 
 These descriptors bind known contents. They are not signatures or durable
 installation receipts. Recomputing a descriptor from an untrusted snapshot does
-not establish authenticity. Durable descriptor storage, bundle publication and
-one-time receipt integration remain pending.
+not establish authenticity. Bundle publication and one-time receipt integration
+remain pending.
+
+## Retain trusted descriptors
+
+Migration 0027 adds `local_recovery_checkpoint`, a local catalog with no foreign
+keys to shared rows. `rememberLocalRecoveryCheckpoint` in
+`actions/local-recovery-store.ts` stores a trusted descriptor under its workspace,
+device, epoch and checkpoint identity. The transaction-bound variant shares a
+host-owned commit. Both acquire the database writer lock before checking the key.
+
+Repeating the same descriptor is idempotent and preserves its registration time.
+Another hash, byte length, selection or schema cannot replace it under the same
+identity. Read helpers validate the descriptor and its row identity without
+converting the registration timestamp to a JavaScript date. There is no catalog
+deletion API or automatic expiry.
+
+Capture and hash the snapshot before registering its descriptor. The snapshot
+therefore excludes its own registration, while later snapshots include prior
+catalog records. Save the original payload separately. The catalog stores no
+snapshot bytes, action history or publication state. A retry must use the saved
+payload and descriptor. A fresh capture needs a new checkpoint identity.
+
+Known historical schema descriptors remain readable as metadata. Loading their
+snapshot rows still requires explicit schema compatibility. Unknown schema IDs
+and malformed stored descriptors are refused. The public core entry exports the
+descriptor parsers and types for host bookkeeping. JSON version 17 includes
+catalog records, and older supported dumps import with an empty catalog when it
+is absent. Import validates descriptor shape and row identity without installing
+snapshots.
+
+Shared capture and restoration exclude the catalog. Local checkpoint capture
+includes its exact rows and timestamps, and isolated validation checks every
+stored descriptor before allocating a database. Native and WASM tests cover
+idempotency, changed-content refusal, history preservation and migration rollback.
+A native test covers competing registrations and reopening a committed record.
+
+Registration records the host's trusted expectation. It does not verify image
+availability, pin files, enroll a workspace or publish a complete bundle. Do not
+register a descriptor solely because it accompanied received snapshot data.
 
 ## Validate rows in an isolated database
 
@@ -164,8 +203,8 @@ missing. These checks exercise asset retention without publishing a bundle.
 
 ## Remaining recovery work
 
-Durable workspace and epoch enrollment, checkpoint persistence, complete bundle
-assembly and installation remain pending. The current selection records a
+Durable workspace and epoch enrollment, complete bundle assembly and installation
+remain pending. The current selection records a
 baseline and ordered effect sets. Sync queues and cursors still need a compatible
 checkpoint format when those stores are implemented.
 

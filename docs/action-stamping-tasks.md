@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–26 and requires
+syncable database kind and `system.compose`. It supports schemas 19–27 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -100,19 +100,19 @@ API. Creation and label clocks use scoped bindings, and caught record failures
 abort their root. Migration 0020 now moves paths and observations to
 `taskspace_local` without a foreign key to shared rows. Readers join metadata
 only for present taskspaces, while local recovery readers retain absent rows.
-Shared capture, validation and replacement exclude that table. JSON version 16
+Shared capture, validation and replacement exclude that table. JSON version 17
 exports local rows separately, including absent taskspaces, and retains local file
 operations. Imports of versions
 7 through 9 split their inline values without changing the original dump.
 Application lifecycle callers still use the version 1 local-only handlers.
 
-The retained taskspace, upload and manifest cohorts cover migrations 20–26, through
+The retained taskspace, upload and manifest cohorts cover migrations 20–27, through
 `0026_local_asset_manifest`. Packed core and client checks pass eleven
 current-schema view outcomes and 94 earlier-schema envelope outcomes. All older
 cohorts remain unchanged. Browser execution of these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–26. These shared services reject local metadata inputs,
+and removal on schemas 20–27. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -187,7 +187,7 @@ tests verify atomic owner publication and staging preservation after publication
 and commit failures. This remains a prototype integration rather than production
 action routing.
 
-An internal local recovery snapshot now captures all four local tables and the
+An internal local recovery snapshot now captures all five local tables and the
 shared baseline and effect-set selection in one adapter read transaction. It
 preserves tagged SQLite values and absent taskspace metadata, requires complete
 table coverage and checks workspace, device, epoch, checkpoint and schema identity.
@@ -217,8 +217,15 @@ lengths and SHA-256 hashes. Capture closes its read transaction before hashing.
 Descriptor verification checks identity, history selection and exact snapshot
 contents before isolated SQL validation allocates a database. Native and WASM
 tests cover canonical ordering, exact TEXT cells, payload changes and caller
-mutation while hashing. Durable descriptor storage and installation receipts
-remain pending.
+mutation while hashing. Installation receipts remain pending.
+
+Migration 0027 adds a durable local descriptor catalog. Registration is idempotent
+for the same contents and refuses reuse of an identity with another descriptor.
+The catalog survives shared restoration and is included in local snapshots and
+version 17 JSON exports. Historical descriptors remain readable as metadata
+without authorizing old-schema snapshot loading. Registration does not store
+payload bytes, retain history or pin images. Bundle publication and one-time
+installation remain pending.
 
 ## Version one
 
@@ -306,6 +313,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Validate local snapshot rows in a separate empty database under canonical SQL constraints. Compare exact tagged read-back, roll back temporary rows and refuse success after connection, cleanup or commit failures.
 - [x] Collect local checkpoint image requirements and merge selected shared-history manifests. Reject malformed active or inactive metadata and immutable name conflicts before SQL validation. Verify recovery-owner pins through cleanup and missing-file verification.
 - [x] Bind local checkpoints to canonical snapshot hashes and UTF-8 byte lengths. Verify separately retained descriptors before SQL allocation, preserve exact TEXT and materialization order, and hash captured snapshots after the consistent read boundary closes.
+- [x] Persist trusted checkpoint descriptors in a local catalog with immutable identity bindings and idempotent registration. Preserve historical metadata through shared restoration and recovery exports, and verify competing registrations, rollback and migration.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

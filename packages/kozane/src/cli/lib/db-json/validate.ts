@@ -3,7 +3,13 @@ import { INVENTORY_SLOT_MAX } from "../../../lib/constants.js";
 import { plural } from "../plural.js";
 import { taskspacePathIssue } from "../../../lib/server/taskspace-path.js";
 import { type TableRows } from "./format.js";
-import { imagePath, IMAGE_MAX_BYTES, mergeAssetManifests, parseAssetManifest } from "@kozane/core";
+import {
+  imagePath,
+  IMAGE_MAX_BYTES,
+  mergeAssetManifests,
+  parseAssetManifest,
+  parseLocalRecoveryCheckpointRecord,
+} from "@kozane/core";
 import { type ImportDbJsonOptions } from "./import.js";
 
 /**
@@ -11,6 +17,16 @@ import { type ImportDbJsonOptions } from "./import.js";
  * during import, but this check identifies the offending row.
  */
 export function validateDumpRefs(tables: TableRows): void {
+  for (const row of tables.local_recovery_checkpoint)
+    parseLocalRecoveryCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+    );
   for (const row of tables.local_image_upload) {
     if (
       typeof row.filename !== "string" ||

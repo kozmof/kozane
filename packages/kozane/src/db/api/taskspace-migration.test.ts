@@ -29,6 +29,7 @@ it.each([false, true])(
             "local_file_operation",
             "local_image_upload",
             "local_asset_manifest",
+            "local_recovery_checkpoint",
           ].includes(name),
       )
       .map(({ name }) => name);
@@ -37,6 +38,7 @@ it.each([false, true])(
     await withMigration(db, async () => [
       ...[
         "local_asset_manifest",
+        "local_recovery_checkpoint",
         "local_image_upload",
         "local_file_operation",
         "taskspace_local",

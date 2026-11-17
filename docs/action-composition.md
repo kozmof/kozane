@@ -35,7 +35,7 @@ production reader registration must be settled before sync activation.
 
 For shared taskspace lifecycle children, use `composeActionsV2` from
 `actions/composition-v2.ts` with `createServiceActionRegistryV2`. This pair uses
-contract 2 and supports schemas 20–26. Creation, label changes and removal affect
+contract 2 and supports schemas 20–27. Creation, label changes and removal affect
 shared rows only. The five taskspace file methods remain excluded. Version 1
 continues to exclude all taskspace lifecycle and file methods. Each wrapper
 refuses the other contract's registry before running its callback.

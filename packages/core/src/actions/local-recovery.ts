@@ -75,13 +75,16 @@ function id(input: unknown): string {
     throw new LocalRecoveryError("Invalid local recovery identity");
   return input;
 }
-export function parseLocalRecoveryIdentity(input: unknown): LocalRecoveryIdentity {
+export function parseLocalRecoveryIdentity(
+  input: unknown,
+  schemaIds: readonly string[] = [migrations.at(-1)!.id],
+): LocalRecoveryIdentity {
   const fields = ["workspaceId", "deviceId", "epochId", "checkpointId", "schemaId"] as const;
   const value = object(input, fields);
   const parsed = Object.fromEntries(
     fields.map((field) => [field, id(value[field])]),
   ) as unknown as LocalRecoveryIdentity;
-  if (parsed.schemaId !== migrations.at(-1)!.id)
+  if (!schemaIds.includes(parsed.schemaId))
     throw new LocalRecoveryError("Unsupported local recovery schema");
   return Object.freeze(parsed);
 }

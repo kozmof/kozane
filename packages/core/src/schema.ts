@@ -302,6 +302,30 @@ export const localAssetManifestTable = sqliteTable(
   ],
 );
 
+/** Trusted checkpoint descriptors are local bookkeeping, independent of shared rows and file pins. */
+export const localRecoveryCheckpointTable = sqliteTable(
+  "local_recovery_checkpoint",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_checkpoint_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_checkpoint_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_extract(${t.descriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.identity.checkpointId') IS ${t.checkpointId}`,
+    ),
+  ],
+);
+
 export const cardTable = sqliteTable(
   "card",
   {

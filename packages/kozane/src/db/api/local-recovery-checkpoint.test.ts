@@ -31,6 +31,17 @@ const keys = {
   schemaId: migrations.at(-1)!.id,
 };
 const selected = { baselineId: "baseline", effectSetIds: ["origin-a", "origin-b"] };
+// Independently hashed canonical vectors. Retain older records when the bundled schema changes.
+const vectors: Record<string, { byteLength: number; sha256: string }> = {
+  "0026_local_asset_manifest": {
+    byteLength: 590,
+    sha256: "194455915db1be514ac518761ea21f4820f4845a5785b4491de53cea794e3b2d",
+  },
+  "0027_local_recovery_checkpoint": {
+    byteLength: 642,
+    sha256: "18d0c689f6f59bc991bc55e0a0d594844f0f3bb6476a63efd53e0462d114ddde",
+  },
+};
 async function fixture() {
   const source = (await createTestDB()) as unknown as DB;
   await source.run(
@@ -48,9 +59,7 @@ it("binds canonical UTF-8 snapshot bytes to a SHA-256 descriptor", async () => {
     version: 1,
     identity: keys,
     selection: selected,
-    // Version 1 canonical vector for migration 26, independently hashed with Node SHA-256.
-    byteLength: 590,
-    sha256: "194455915db1be514ac518761ea21f4820f4845a5785b4491de53cea794e3b2d",
+    ...vectors[keys.schemaId],
   });
   expect(f.checkpoint.byteLength).toBeGreaterThan(canonical.length);
   expect(f.checkpoint.byteLength).toBe(new TextEncoder().encode(canonical).byteLength);

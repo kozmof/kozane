@@ -59,7 +59,8 @@ owner and removes the uncommitted new reservation. These APIs do not run cleanup
 
 The ledger has no foreign keys to shared data. Shared capture, projection
 validation and replacement exclude it and preserve pending, retained and released
-owners. Version 16 JSON exports include all owners and decisions. Earlier
+owners. Version 17 JSON exports include all owners and decisions, plus checkpoint
+descriptor records. Earlier
 supported dumps import with an empty ledger when it is absent. Import validates
 manifest paths and identity consistency without installing or verifying files.
 Image bytes still require a separate backup.

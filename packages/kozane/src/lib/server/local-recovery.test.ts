@@ -7,10 +7,15 @@ import { sql } from "drizzle-orm";
 import { createTestDB } from "../../test-utils/db.js";
 import { openDb } from "../../db/client.js";
 import { withTx } from "../../db/database.js";
-import type { DB } from "../../../../core/src/database.js";
+import type { DB, Tx as CoreTx } from "../../../../core/src/database.js";
 import { migrations } from "../../../../core/src/generated/migrations.js";
 import { captureLocalRecoverySnapshot } from "../../../../core/src/actions/local-recovery.js";
 import { localRecoveryAssetManifest } from "../../../../core/src/actions/local-recovery-assets.js";
+import {
+  rememberLocalRecoveryCheckpoint,
+  rememberLocalRecoveryCheckpointInTx,
+  inspectLocalRecoveryCheckpoint,
+} from "../../../../core/src/actions/local-recovery-store.js";
 import { localImageUploadTable } from "../../db/schema.js";
 import {
   reserveAssetManifest,
@@ -28,6 +33,68 @@ import { abandonImageUpload } from "./image-upload-recovery.js";
 const roots: string[] = [];
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
+
+it("serializes catalog registration across connections and reopens the committed descriptor", async () => {
+  const root = await mkdtemp(join(tmpdir(), "kozane-checkpoint-catalog-"));
+  roots.push(root);
+  const path = join(root, "db.sqlite");
+  const db = await createTestDB(path);
+  const other = await openDb(`file:${path}`);
+  const descriptor = {
+    version: 1,
+    identity: {
+      workspaceId: "workspace",
+      deviceId: "device",
+      epochId: "epoch",
+      checkpointId: "checkpoint",
+      schemaId: migrations.at(-1)!.id,
+    },
+    selection: { baselineId: "baseline", effectSetIds: [] },
+    byteLength: 642,
+    sha256: "a".repeat(64),
+  };
+  const { schemaId: _schema, ...key } = descriptor.identity;
+  const entered = Promise.withResolvers<void>();
+  const proceed = Promise.withResolvers<void>();
+  const pending = withTx(db, async (tx) => {
+    await rememberLocalRecoveryCheckpointInTx(tx as unknown as CoreTx, descriptor);
+    entered.resolve();
+    await proceed.promise;
+  });
+  void pending.catch(() => {});
+  try {
+    await entered.promise;
+    expect(await inspectLocalRecoveryCheckpoint(other.db as unknown as DB, key)).toBeNull();
+    await other.db.values(sql`PRAGMA busy_timeout=1`);
+    await expect(
+      rememberLocalRecoveryCheckpoint(other.db as unknown as DB, {
+        ...descriptor,
+        sha256: "b".repeat(64),
+      }),
+    ).rejects.toThrow();
+  } finally {
+    proceed.resolve();
+    await pending;
+    other.close();
+  }
+  const reopened = await openDb(`file:${path}`);
+  try {
+    expect(await inspectLocalRecoveryCheckpoint(reopened.db as unknown as DB, key)).toEqual(
+      descriptor,
+    );
+    expect(
+      (await rememberLocalRecoveryCheckpoint(reopened.db as unknown as DB, descriptor)).changed,
+    ).toBe(false);
+    await expect(
+      rememberLocalRecoveryCheckpoint(reopened.db as unknown as DB, {
+        ...descriptor,
+        sha256: "b".repeat(64),
+      }),
+    ).rejects.toThrow("different contents");
+  } finally {
+    reopened.close();
+  }
 });
 
 it.each([false, true])(

@@ -40,7 +40,7 @@ envelopes. Replay interprets the frozen list without rerunning the callback.
 `actions/service-registry.ts` now installs every declared syncable database kind
 through its real `InTx` service, together with `system.compose`. The factory
 requires complete host recovery registrations for local-only kinds and refuses
-attempts to replace database handlers. Version 1 currently supports schemas 19–26.
+attempts to replace database handlers. Version 1 currently supports schemas 19–27.
 Tests record and replay each database kind, check namespace ownership and apply
 the executing host's limits. See the
 [service registry](action-execution-scopes.md#dispatch-real-service-actions).
@@ -71,7 +71,7 @@ Local-only handlers must then be prevented from changing shared rows.
 
 Those declarations remain unchanged in contract version 1. The opt-in version 2
 registry now routes taskspace lifecycle intents through shared database services
-on schemas 20–26. Creation and label changes reject local path and observation fields.
+on schemas 20–27. Creation and label changes reject local path and observation fields.
 The five file methods still require explicit host recovery registrations. Node
 application lifecycle callers retain their existing filesystem workflows until
 their routing is migrated. See the

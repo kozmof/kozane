@@ -7,7 +7,10 @@ import { readSchemaManifest } from "../migrations/schema-reader.js";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import { localTableNames } from "./local-tables.js";
 import { localRecoveryAssetManifest } from "./local-recovery-assets.js";
-import { requireLocalRecoveryCheckpoint } from "./local-recovery-checkpoint.js";
+import {
+  requireLocalRecoveryCheckpoint,
+  parseLocalRecoveryCheckpointRecord,
+} from "./local-recovery-checkpoint.js";
 import {
   LocalRecoveryError,
   requireLocalRecoveryIdentity,
@@ -59,6 +62,25 @@ export async function validateLocalRecoverySnapshot(
   // Copy and reject malformed or mismatched transport before allocating any database.
   const snapshot = requireLocalRecoveryIdentity(input, expected);
   localRecoveryAssetManifest(snapshot);
+  for (const table of snapshot.tables)
+    if (table.name === "local_recovery_checkpoint")
+      for (const row of table.rows) {
+        const text = (column: string) => {
+          const value = row[column];
+          if (value[0] !== "text")
+            throw new LocalRecoveryError(`Stored checkpoint requires TEXT: ${column}`);
+          return value[1];
+        };
+        parseLocalRecoveryCheckpointRecord(
+          {
+            workspaceId: text("workspace_id"),
+            deviceId: text("device_id"),
+            epochId: text("epoch_id"),
+            checkpointId: text("checkpoint_id"),
+          },
+          text("descriptor"),
+        );
+      }
   const target = createRowProjection(
     plan.loadOrder,
     snapshot.tables.flatMap((table) => table.rows.map((row) => ({ table: table.name, row }))),

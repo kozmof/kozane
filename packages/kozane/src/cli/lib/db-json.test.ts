@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as schema from "../../db/schema";
 import { runMigrations } from "./db";
 import type { DbJsonDump } from "./db-json/format.js";
+import { migrations } from "../../../../core/src/generated/migrations.js";
 import {
   TABLES,
   dumpLimitWarnings,
@@ -151,6 +152,7 @@ describe("db JSON export/import", () => {
       local_file_operation: 0,
       local_image_upload: 0,
       local_asset_manifest: 0,
+      local_recovery_checkpoint: 0,
       card: 2,
       glue: 1,
       glue_rel: 2,
@@ -281,7 +283,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(16);
+    expect(source.version).toBe(17);
     expect((await importDbJson(targetUrl, source)).local_asset_manifest).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     const unsafe = structuredClone(source);
@@ -300,6 +302,62 @@ describe("db JSON export/import", () => {
     const { local_asset_manifest: _manifests, ...tables } = source.tables;
     expect(
       (await importDbJson(targetUrl, { ...source, version: 15, tables })).local_asset_manifest,
+    ).toBe(0);
+  });
+
+  it("round-trips checkpoint descriptors, preserves historical metadata and rejects invalid catalog identities", async () => {
+    const sourceUrl = await migratedDbUrl("checkpoint-source.db");
+    const targetUrl = await migratedDbUrl("checkpoint-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [
+        "0026_local_asset_manifest",
+        migrations.at(-1)!.id,
+      ].entries()) {
+        const descriptor = {
+          version: 1,
+          identity: {
+            workspaceId: "workspace",
+            deviceId: "device",
+            epochId: "epoch",
+            checkpointId: `checkpoint-${index}`,
+            schemaId,
+          },
+          selection: { baselineId: "baseline", effectSetIds: [] },
+          byteLength: 642,
+          sha256: "a".repeat(64),
+        };
+        await client.execute({
+          sql: "INSERT INTO local_recovery_checkpoint VALUES(?,?,?,?,?,?)",
+          args: [
+            "workspace",
+            "device",
+            "epoch",
+            `checkpoint-${index}`,
+            JSON.stringify(descriptor),
+            1,
+          ],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(17);
+    expect((await importDbJson(targetUrl, source)).local_recovery_checkpoint).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const wrongIdentity = structuredClone(source);
+    wrongIdentity.tables.local_recovery_checkpoint[0].checkpoint_id = "different";
+    await expect(importDbJson(targetUrl, wrongIdentity)).rejects.toThrow("identity mismatch");
+    const malformed = structuredClone(source);
+    const descriptor = JSON.parse(String(malformed.tables.local_recovery_checkpoint[0].descriptor));
+    descriptor.sha256 = "bad";
+    malformed.tables.local_recovery_checkpoint[0].descriptor = JSON.stringify(descriptor);
+    await expect(importDbJson(targetUrl, malformed)).rejects.toThrow();
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const { local_recovery_checkpoint: _catalog, ...tables } = source.tables;
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 16, tables })).local_recovery_checkpoint,
     ).toBe(0);
   });
 
@@ -328,7 +386,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(16);
+    expect(source.version).toBe(17);
     expect((await importDbJson(targetUrl, source)).local_image_upload).toBe(4);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_image_upload[0].filename = "../outside.svg";
@@ -360,7 +418,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(16);
+    expect(source.version).toBe(17);
     expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_file_operation[0].path = "../escape";
