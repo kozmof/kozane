@@ -191,6 +191,11 @@ rolls back temporary rows and trigger changes before returning. The prototype's
 validator still retains rows in its test database for installation assertions.
 Neither helper activates a workspace or finalizes production history storage.
 
+The public reconstruction helper also accepts the fixture's complete baseline
+and selected row effects through its explicit input format. Native and Node WASM
+tests compare reconstructed cascade states with live captured rows, validate
+the final projection separately and preserve all origin history and local paths.
+
 ## Replace populated rows in the fixture
 
 The capture fixture's `restore` method accepts a fresh validation database factory

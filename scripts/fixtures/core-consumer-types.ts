@@ -46,7 +46,11 @@ import {
   type LocalRecoverySnapshot,
   parseSharedRecoveryProjection,
   validateSharedRecoveryProjection,
+  reconstructSharedRecoveryProjection,
   type SharedRecoveryProjection,
+  type SharedRecoveryHistory,
+  type SharedRecoverySelection,
+  type SharedRecoveryEffect,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -239,6 +243,31 @@ const sharedProjection: SharedRecoveryProjection = parseSharedRecoveryProjection
 void validateSharedRecoveryProjection(async () => db, sharedProjection).then(
   (validated: SharedRecoveryProjection) => validated,
 );
+const sharedSelection: SharedRecoverySelection = {
+  baselineId: "baseline",
+  effectSets: [{ id: "empty", effectCount: 0 }],
+};
+const sharedHistory: SharedRecoveryHistory = {
+  baseline: { id: "baseline", projection: sharedProjection },
+  effectSets: [{ id: "empty", effects: [] }],
+};
+const reconstructed: SharedRecoveryProjection = reconstructSharedRecoveryProjection(
+  sharedHistory,
+  sharedSelection,
+);
+const sharedEffect: SharedRecoveryEffect = {
+  ord: 0,
+  table: "namespace",
+  key: { id: ["text", "n"] },
+  op: "D",
+  before: { id: ["text", "n"], name: ["text", "Main"], is_default: ["integer", "0"] },
+  after: null,
+};
+void reconstructed;
+// @ts-expect-error Reconstruction effects are immutable.
+sharedEffect.ord = 1;
+// @ts-expect-error Materialization selections are immutable.
+sharedSelection.effectSets.push({ id: "extra", effectCount: 0 });
 // @ts-expect-error Parsed shared projections are immutable.
 sharedProjection.schemaId = "other";
 // @ts-expect-error Parsed host identities are immutable.

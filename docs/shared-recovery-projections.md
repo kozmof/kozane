@@ -1,9 +1,9 @@
 # Shared recovery projections
 
 Core can validate reconstructed shared rows without installing a workspace.
-Use `parseSharedRecoveryProjection` and `validateSharedRecoveryProjection` from
-`@kozane/core/recovery` to prepare a complete target before a future installation
-boundary.
+Use `reconstructSharedRecoveryProjection`, `parseSharedRecoveryProjection` and
+`validateSharedRecoveryProjection` from `@kozane/core/recovery` to prepare a
+complete target before a future installation boundary.
 
 ## Prepare complete target rows
 
@@ -23,10 +23,45 @@ keys and malformed tagged values. Accessors and serialization hooks are refused
 without invocation. The result is an immutable copy with canonical table, row
 and column order.
 
-The projection describes target rows. It carries no trusted workspace, epoch or
-checkpoint binding and does not prove that selected history is complete. The
-host must reconstruct it from the correct baseline and ordered complete effect
-sets, check full before images and establish those identities separately.
+The projection describes target rows. The host must establish workspace, epoch
+and checkpoint bindings separately and retain the required history and images.
+
+## Reconstruct selected history
+
+Call `reconstructSharedRecoveryProjection(input, expected)` with a baseline and
+exactly the selected effect-set records. The baseline has an `id` and a complete
+`projection`. Each effect set has an `id` and an `effects` array. Keep complete
+action, execution and asset records separately for later installation and audit.
+
+Obtain `expected` independently from trusted completed records. It contains
+`baselineId` and an ordered `effectSets` array of entries with `id` and
+`effectCount`. Bind those IDs to the intended checkpoint and derive counts from
+the complete retained records before receiving effect arrays. Expected counts
+must not come from the received arrays being checked.
+
+Reconstruction checks the baseline ID, requires every selected set and refuses
+duplicate or unselected records. Empty selected sets still require explicit
+records with a zero expected count. Received records can arrive in any order.
+The expected selection controls materialization order.
+
+Each effect has `ord`, `table`, `key`, `op`, `before` and `after`. Ordinals start
+at zero and remain consecutive within each set. Operations are `I`, `U` or `D`.
+Keys include every primary-key column and cannot contain NULL. Before and after
+images use the tagged codec and contain every column when present. Insert before
+images and delete after images are NULL. Unknown tables, local tables, malformed
+transport, changed keys and count or ordinal gaps refuse reconstruction.
+
+The helper applies effects in memory and checks each full before image against
+the current row. Storage classes, unsafe integers and REAL bits remain exact.
+Intermediate relationally invalid images remain outside SQLite until the full
+selection is reconstructed. A later mismatch returns no partial result and
+leaves the baseline and input records unchanged. The result is a canonical
+immutable projection ready for isolated SQL validation.
+
+This preparation helper does not establish authenticity, authorize action
+eligibility or persist history. The host supplies the correct completed shared
+records from the matching workspace and epoch. Production log storage and
+durable checkpoint bindings remain pending.
 
 ## Validate in a separate database
 
@@ -37,7 +72,7 @@ schema and refuses existing application rows, including local rows.
 
 Inside a savepoint, validation temporarily removes the two mutating card
 triggers. Table constraints, unique indexes, foreign keys and validation-only
-triggers remain active. Rows load in the schema's parent-before-child order.
+triggers remain active. Rows load in schema order, with parents before children.
 Validation checks foreign keys and the final inventory pair invariant, then
 reads every shared row through the tagged codec and compares exact values.
 
@@ -56,6 +91,11 @@ Native and Node WASM tests cover complete targets, malformed transport, SQL
 constraints, affinity changes, altered read-back, connection flags, cleanup
 failures and failed outer commits. Tests also verify that all 12 shared tables
 remain empty and both mutating triggers return after successful validation.
+
+Reconstruction tests also cover selected materialization order, missing and
+truncated sets, ordinal gaps, exact before images, composite keys and real
+captured cascades. Source rows, local attachments and retained origin history
+remain unchanged.
 
 ## Continue recovery preparation
 

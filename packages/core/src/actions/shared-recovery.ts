@@ -8,7 +8,7 @@ import { readSchemaManifest } from "../migrations/schema-reader.js";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import { localTableNames } from "./local-tables.js";
 import { createRestorationPlan } from "./restoration-plan.js";
-import { createRowProjection } from "./projection.js";
+import { createRowProjection, type ProjectionEffect } from "./projection.js";
 import { parseTaggedRow, taggedRowKey, ROW_ENCODING_VERSION, type TaggedRow } from "./row-codec.js";
 import {
   captureRowSql,
@@ -23,6 +23,19 @@ export interface SharedRecoveryProjection {
   readonly rowEncodingVersion: typeof ROW_ENCODING_VERSION;
   readonly schemaId: string;
   readonly tables: readonly { readonly name: string; readonly rows: readonly TaggedRow[] }[];
+}
+/** Expected counts come from completed retained records, independently of received effect arrays. */
+export interface SharedRecoverySelection {
+  readonly baselineId: string;
+  readonly effectSets: readonly { readonly id: string; readonly effectCount: number }[];
+}
+export type SharedRecoveryEffect = ProjectionEffect;
+export interface SharedRecoveryHistory {
+  readonly baseline: { readonly id: string; readonly projection: SharedRecoveryProjection };
+  readonly effectSets: readonly {
+    readonly id: string;
+    readonly effects: readonly SharedRecoveryEffect[];
+  }[];
 }
 export class SharedRecoveryError extends Error {
   override readonly name = "SharedRecoveryError";
@@ -122,6 +135,97 @@ export function parseSharedRecoveryProjection(input: unknown): SharedRecoveryPro
         return Object.freeze({ name: table.name, rows: Object.freeze(rows.map(({ row }) => row)) });
       }),
     ),
+  });
+}
+
+function historyId(input: unknown): string {
+  if (
+    typeof input !== "string" ||
+    !input.trim() ||
+    input.length > 1000 ||
+    input.includes("\0") ||
+    !input.isWellFormed()
+  )
+    throw new SharedRecoveryError("Invalid shared recovery history identity");
+  return input;
+}
+function selectedHistory(input: unknown): SharedRecoverySelection {
+  const value = fields(input, ["baselineId", "effectSets"]);
+  const seen = new Set<string>();
+  const effectSets = array(value.effectSets).map((input) => {
+    const entry = fields(input, ["id", "effectCount"]);
+    const id = historyId(entry.id);
+    if (seen.has(id))
+      throw new SharedRecoveryError("Duplicate selected shared recovery effect set");
+    if (!Number.isSafeInteger(entry.effectCount) || (entry.effectCount as number) < 0)
+      throw new SharedRecoveryError("Invalid expected shared recovery effect count");
+    seen.add(id);
+    return Object.freeze({ id, effectCount: entry.effectCount as number });
+  });
+  return Object.freeze({
+    baselineId: historyId(value.baselineId),
+    effectSets: Object.freeze(effectSets),
+  });
+}
+
+/** Pure reconstruction. The trusted host owns identity, completeness and retention of the selected records. */
+export function reconstructSharedRecoveryProjection(
+  input: unknown,
+  expected: SharedRecoverySelection,
+): SharedRecoveryProjection {
+  const selected = selectedHistory(expected);
+  const value = fields(input, ["baseline", "effectSets"]);
+  const baseline = fields(value.baseline, ["id", "projection"]);
+  if (historyId(baseline.id) !== selected.baselineId)
+    throw new SharedRecoveryError("Shared recovery baseline selection mismatch");
+  const initial = parseSharedRecoveryProjection(baseline.projection);
+  const counts = new Map(selected.effectSets.map((entry) => [entry.id, entry.effectCount]));
+  const sets = new Map<string, readonly ProjectionEffect[]>();
+  for (const input of array(value.effectSets)) {
+    const entry = fields(input, ["id", "effects"]);
+    const id = historyId(entry.id);
+    if (!counts.has(id) || sets.has(id))
+      throw new SharedRecoveryError("Unselected or duplicate shared recovery effect set");
+    const effects = array(entry.effects);
+    if (effects.length !== counts.get(id))
+      throw new SharedRecoveryError("Shared recovery effect count mismatch");
+    sets.set(
+      id,
+      Object.freeze(
+        effects.map((input, index): ProjectionEffect => {
+          const effect = fields(input, ["ord", "table", "key", "op", "before", "after"]);
+          if (effect.ord !== index)
+            throw new SharedRecoveryError(
+              "Shared recovery effects require consecutive ordinals from zero",
+            );
+          const table = plan.loadOrder.find((table) => table.name === effect.table);
+          if (!table || !["I", "U", "D"].includes(effect.op as string))
+            throw new SharedRecoveryError("Invalid shared recovery effect table or operation");
+          const key = parseTaggedRow(effect.key);
+          if (table.primaryKey.some((column) => key[column]?.[0] === "null"))
+            throw new SharedRecoveryError("Shared recovery effect primary key is NULL");
+          return Object.freeze({
+            ord: index,
+            table: table.name,
+            key,
+            op: effect.op as "I" | "U" | "D",
+            before: effect.before === null ? null : parseTaggedRow(effect.before),
+            after: effect.after === null ? null : parseTaggedRow(effect.after),
+          });
+        }),
+      ),
+    );
+  }
+  if (sets.size !== selected.effectSets.length)
+    throw new SharedRecoveryError("Missing selected shared recovery effect set");
+  let projection = createRowProjection(
+    plan.loadOrder,
+    initial.tables.flatMap((table) => table.rows.map((row) => ({ table: table.name, row }))),
+  );
+  for (const { id } of selected.effectSets) projection = projection.apply(sets.get(id)!);
+  return parseSharedRecoveryProjection({
+    ...initial,
+    tables: plan.loadOrder.map(({ name }) => ({ name, rows: projection.rows(name) })),
   });
 }
 function statement(value: InstallationValue) {

@@ -47,7 +47,7 @@ Import from these six entry points. Private module paths are unsupported and may
 | `@kozane/core/schema`     | Drizzle tables and relations                                               |
 | `@kozane/core/services`   | Resource operations and domain input validation                            |
 | `@kozane/core/migrations` | Migration application, history checks, and schema comparison               |
-| `@kozane/core/recovery` | Shared projection validation, local snapshot capture, descriptor storage and asset requirements |
+| `@kozane/core/recovery` | Shared reconstruction and projection validation, local snapshot capture, descriptor storage and asset requirements |
 
 The recovery entry prepares shared projections and local checkpoints for trusted
 hosts. It does not enroll a workspace, activate a destination or publish complete

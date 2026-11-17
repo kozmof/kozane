@@ -261,9 +261,16 @@ A public shared projection validator now checks complete reconstructed rows in
 an isolated empty database. It preserves exact tagged values under canonical
 constraints, rolls back temporary rows and business-trigger changes before
 returning, and refuses cleanup or commit failures. Native and Node WASM checks
-cover the preparation boundary. Trusted history reconstruction, installation
-and activation remain pending. See
+cover the preparation boundary. Durable history bindings, installation and
+activation remain pending. See
 [shared recovery projections](shared-recovery-projections.md).
+
+Shared reconstruction now applies selected effect sets against a complete
+baseline in memory. A separate trusted selection supplies IDs, order and expected
+effect counts. Missing, duplicate or unselected records, truncation, ordinal gaps
+and mismatched full before images refuse a result. Native and Node WASM tests
+cover real captured cascades without changing local paths or retained origin
+history. Durable history storage and checkpoint binding remain pending.
 
 ## Version one
 
@@ -339,6 +346,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Add workspace and epoch identities, schema and encoding versions, baseline hashes and restoration selections.
 - [ ] Implement restartable initial baseline capture for populated and seeded databases with application writes blocked until activation.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
+- [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [ ] Validate target rows in an isolated database with the epoch's constraints, foreign keys and trigger-enforced invariants.
 - [x] Expose complete shared projection parsing and isolated SQL validation for the bundled schema. Keep validation constraints active, compare exact tagged read-back and roll back temporary rows and business-trigger changes before success on native and Node WASM adapters.
 - [ ] Read back loaded validation rows with the tagged codec and compare them with the target projection, including storage classes and exact REAL bits. Refuse installation or activation on any mismatch.

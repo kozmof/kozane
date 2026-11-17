@@ -62,6 +62,25 @@ const sharedProjection = recovery.parseSharedRecoveryProjection({
 });
 assert.equal(sharedProjection.tables.length, 12);
 assert.ok(Object.isFrozen(sharedProjection.tables[0].rows));
+const sharedHistory = {
+  baseline: { id: "baseline", projection: sharedProjection },
+  effectSets: [{ id: "empty", effects: [] }],
+};
+assert.deepEqual(
+  recovery.reconstructSharedRecoveryProjection(sharedHistory, {
+    baselineId: "baseline",
+    effectSets: [{ id: "empty", effectCount: 0 }],
+  }),
+  sharedProjection,
+);
+assert.throws(
+  () =>
+    recovery.reconstructSharedRecoveryProjection(sharedHistory, {
+      baselineId: "baseline",
+      effectSets: [{ id: "empty", effectCount: 1 }],
+    }),
+  recovery.SharedRecoveryError,
+);
 assert.throws(
   () =>
     recovery.parseSharedRecoveryProjection({

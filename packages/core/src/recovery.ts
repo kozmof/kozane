@@ -3,8 +3,12 @@ export {
   SHARED_RECOVERY_PROJECTION_VERSION,
   SharedRecoveryError,
   parseSharedRecoveryProjection,
+  reconstructSharedRecoveryProjection,
   validateSharedRecoveryProjection,
   type SharedRecoveryProjection,
+  type SharedRecoverySelection,
+  type SharedRecoveryEffect,
+  type SharedRecoveryHistory,
 } from "./actions/shared-recovery.js";
 export {
   LOCAL_RECOVERY_VERSION,
