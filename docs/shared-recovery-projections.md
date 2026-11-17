@@ -146,6 +146,12 @@ Only trusted host capture should register expectations. Receiving a descriptor
 with a payload does not make it trusted. Registration stores metadata and does
 not retain history files, pin images, enroll identities or publish a bundle.
 
+The Node host now provides
+[saved shared payloads](shared-recovery-payloads.md) with immutable file
+publication, read-only interruption inspection and bounded reads. Saving and
+loading preserve the original shared/local binding across SQL validation and
+filesystem work. Complete history and bundle publication remain pending.
+
 ## Validate in a separate database
 
 Pass a trusted factory that owns a separate empty database and its disposal.

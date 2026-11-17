@@ -284,8 +284,16 @@ Migration 0028 now persists trusted shared-history descriptors together with the
 original registered local snapshot expectation. Registration checks identity and
 selected IDs, is idempotent for the same pair and refuses replacement. Both
 catalog bindings are rechecked after shared hash and SQL validation. Local
-snapshots and version 18 JSON exports preserve this sixth local table. History
-file retention, bundle publication and installation remain pending.
+snapshots and version 18 JSON exports preserve this sixth local table. Complete
+history retention, bundle publication and installation remain pending.
+
+Registered shared row-history payloads can now be saved and reopened through the
+Node host. Local and shared files use the same synced, exclusive publication
+protocol in separate directories. Shared operations check the original pair of
+catalog expectations, preserve interrupted evidence and refuse changed files or
+bindings. Reads require an explicit byte limit and isolated SQL validation.
+Complete action and execution retention, bundle publication and installation
+remain pending. See [saved shared payloads](shared-recovery-payloads.md).
 
 ## Version one
 
@@ -364,6 +372,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.
 - [x] Persist shared-history descriptors with their original registered local checkpoint expectations. Serialize immutable registration, recheck both trusted catalog bindings after isolated validation, preserve records through local snapshots and version 18 JSON exports, and verify rollback, migration and competing connections.
+- [x] Save registered shared row-history payloads with synced exclusive publication and read-only interruption inspection. Reopen only published bytes within a host size limit, validate exact SQL values and recheck the original catalog pair and file identity without installing rows or consuming temporary evidence.
 - [ ] Validate target rows in an isolated database with the epoch's constraints, foreign keys and trigger-enforced invariants.
 - [x] Expose complete shared projection parsing and isolated SQL validation for the bundled schema. Keep validation constraints active, compare exact tagged read-back and roll back temporary rows and business-trigger changes before success on native and Node WASM adapters.
 - [ ] Read back loaded validation rows with the tagged codec and compare them with the target projection, including storage classes and exact REAL bits. Refuse installation or activation on any mismatch.

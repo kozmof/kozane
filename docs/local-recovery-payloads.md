@@ -121,6 +121,10 @@ effect-set files, establish their completeness, copy image bytes into a bundle
 or publish a complete bundle. Later publication must verify those requirements
 and the saved payload under its own durable boundary.
 
+Matching [shared row-history payloads](shared-recovery-payloads.md) use a separate
+directory and the same immutable file protocol. Their host workflow also checks
+the original local descriptor retained in the shared catalog.
+
 ## Current scope
 
 This file stores only the local snapshot payload. It does not contain shared

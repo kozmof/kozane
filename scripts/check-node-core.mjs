@@ -199,7 +199,49 @@ if (!process.execArgv.includes(flag)) {
     assert.equal(legacyServices[name], services[name]);
     const filename = name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
     const aliases = await legacy(`services/${filename}.js`);
-    for (const [key, value] of Object.entries(aliases)) assert.equal(value, services[name][key]);
+    for (const [key, value] of Object.entries(aliases)) {
+      if (name === "cards" && ["create", "createInTx", "update", "updateInTx"].includes(key)) {
+        // Node adapters complete local upload pins after the public shared-row service succeeds.
+        assert.equal(typeof value, "function");
+        assert.notEqual(value, services[name][key]);
+      } else assert.equal(value, services[name][key]);
+    }
+  }
+  const nodeCards = await legacy("services/cards.js");
+  const cardProbeHandle = {
+    query: {},
+    ...Object.fromEntries(
+      ["select", "selectDistinct", "all", "get", "values", "insert", "update", "delete", "run"].map(
+        (name) => [
+          name,
+          () => {
+            throw new Error("Card validation must precede SQL");
+          },
+        ],
+      ),
+    ),
+  };
+  const cardProbeDb = database.createDatabaseAdapter(cardProbeHandle, {
+    read: async () => {
+      throw new Error("Unexpected card probe read boundary");
+    },
+    write: (operation) => operation(cardProbeHandle),
+  });
+  for (const method of ["create", "createInTx", "update", "updateInTx"]) {
+    const args = [
+      database.createServiceContext(),
+      "namespace",
+      ...(method.startsWith("update") ? ["card"] : []),
+      { partitionId: "partition", content: 7 },
+    ];
+    await assert.rejects(
+      () =>
+        method.endsWith("InTx")
+          ? database.withTx(cardProbeDb, (tx) => nodeCards[method](tx, ...args))
+          : nodeCards[method](cardProbeDb, ...args),
+      (error) => error instanceof core.ValidationError,
+      `Node card adapter must preserve public core validation identity: ${method}`,
+    );
   }
   assert.equal(
     (await legacy("services/context.js")).createServiceContext,
@@ -246,7 +288,12 @@ if (!process.execArgv.includes(flag)) {
     assert.equal(tx.insert, undefined);
     assert.equal(tx.transaction, undefined);
   });
-  assert.equal(await legacyDb.withTx(db, async (tx) => tx), handle);
+  await legacyDb.withTx(db, async (tx) => {
+    assert.notEqual(tx, handle);
+    assert.equal(tx.query, handle.query);
+    for (const method of ["select", "selectDistinct", "all", "get", "values"])
+      assert.equal(tx[method](), handle, "Write methods retain their database receiver");
+  });
   assert.throws(() => legacyDb.createServiceContext({ contentMax: 0 }), core.ValidationError);
   console.log("Node package uses the expected public core runtime and client UI configuration.");
 }
