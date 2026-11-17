@@ -20,7 +20,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: [
-      ...["index", "database", "schema", "services", "migrations"].map((name) => ({
+      ...["index", "database", "schema", "services", "migrations", "recovery"].map((name) => ({
         find: new RegExp("^@kozane/core" + (name === "index" ? "" : "/" + name) + "$"),
         replacement: resolve(`packages/core/src/${name}.ts`),
       })),

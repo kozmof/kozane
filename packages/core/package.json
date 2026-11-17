@@ -31,6 +31,10 @@
       "types": "./dist/packages/core/src/services.d.ts",
       "import": "./dist/packages/core/src/services.js"
     },
+    "./recovery": {
+      "types": "./dist/packages/core/src/recovery.d.ts",
+      "import": "./dist/packages/core/src/recovery.js"
+    },
     "./migrations": {
       "types": "./dist/packages/core/src/migrations.d.ts",
       "import": "./dist/packages/core/src/migrations.js"

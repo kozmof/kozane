@@ -234,6 +234,15 @@ changed contents and bindings removed or replaced during preparation refuse
 success. Unrelated registrations remain allowed. Installation and activation
 still require their own durable boundary.
 
+Registered local snapshot payloads can now be saved as immutable hash-named files.
+The host validates the trusted catalog and SQL snapshot before disk work, writes
+and syncs temporary bytes, publishes exclusively and preserves evidence after
+filesystem or commit failures. Inspection is read-only and temporary data is not
+retried automatically. A public `@kozane/core/recovery` entry exposes the trusted
+preparation helpers. Complete bundle publication, image and history retention,
+and destination activation remain pending. See
+[saved local snapshot payloads](local-recovery-payloads.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -322,6 +331,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Bind local checkpoints to canonical snapshot hashes and UTF-8 byte lengths. Verify separately retained descriptors before SQL allocation, preserve exact TEXT and materialization order, and hash captured snapshots after the consistent read boundary closes.
 - [x] Persist trusted checkpoint descriptors in a local catalog with immutable identity bindings and idempotent registration. Preserve historical metadata through shared restoration and recovery exports, and verify competing registrations, rollback and migration.
 - [x] Resolve snapshot validation expectations from the trusted catalog and recheck their binding after isolated validation. Refuse transport-supplied expectations, missing registrations and changed bindings without installing local rows.
+- [x] Save original registered local snapshot payloads with synced temporary files, exclusive immutable publication and read-only interruption evidence. Refuse unsafe paths and changed contents, serialize catalog binding checks and preserve files after failed outer commits.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

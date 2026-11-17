@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import * as core from "@kozane/core";
+import * as recovery from "@kozane/core/recovery";
 import {
   ValidationError,
   domainErrorCode,
@@ -35,6 +36,9 @@ import {
 } from "@kozane/core/migrations";
 import { DatabaseSync } from "node:sqlite";
 assert.equal(ValidationError, services.ValidationError);
+assert.equal(recovery.LocalRecoveryError, core.LocalRecoveryError);
+assert.equal(recovery.parseLocalRecoveryCheckpoint, core.parseLocalRecoveryCheckpoint);
+assert.equal(typeof recovery.validateStoredLocalRecoveryCheckpoint, "function");
 assert.equal(domainErrorCode(new ValidationError("invalid")), "validation");
 assert.equal(createServiceContext, services.createServiceContext);
 assert.throws(() => createServiceContext({ contentMax: 1 }), ValidationError);

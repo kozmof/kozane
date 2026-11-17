@@ -113,6 +113,11 @@ catalog records. Save the original payload separately. The catalog stores no
 snapshot bytes, action history or publication state. A retry must use the saved
 payload and descriptor. A fresh capture needs a new checkpoint identity.
 
+The Node host now provides [saved snapshot payloads](local-recovery-payloads.md)
+with immutable filenames, committed catalog intent before disk work and read-only
+inspection of interrupted publication. This stores the original local payload
+without claiming complete bundle publication or activation.
+
 Known historical schema descriptors remain readable as metadata. Loading their
 snapshot rows still requires explicit schema compatibility. Unknown schema IDs
 and malformed stored descriptors are refused. The public core entry exports the

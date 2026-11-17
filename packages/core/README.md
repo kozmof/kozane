@@ -38,7 +38,7 @@ Use pure helpers directly when a feature only needs a local calculation or previ
 
 ### Public entry points
 
-Import from these five entry points. Private module paths are unsupported and may change.
+Import from these six entry points. Private module paths are unsupported and may change.
 
 | Entry point               | Purpose                                                                    |
 | ------------------------- | -------------------------------------------------------------------------- |
@@ -47,6 +47,14 @@ Import from these five entry points. Private module paths are unsupported and ma
 | `@kozane/core/schema`     | Drizzle tables and relations                                               |
 | `@kozane/core/services`   | Resource operations and domain input validation                            |
 | `@kozane/core/migrations` | Migration application, history checks, and schema comparison               |
+| `@kozane/core/recovery` | Trusted snapshot capture, descriptor storage, validation and asset requirements |
+
+The recovery entry prepares local checkpoints for trusted hosts. It does not
+enroll a workspace, activate a destination or publish complete recovery bundles.
+Hosts retain the expected descriptor independently of received snapshot data and
+own filesystem access and validation database disposal. See
+[local recovery snapshots](../../docs/local-recovery-snapshots.md) for the current
+contracts and remaining activation work.
 
 ## Application operations
 

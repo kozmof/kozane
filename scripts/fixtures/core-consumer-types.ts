@@ -37,6 +37,12 @@ import {
 } from "@kozane/core";
 import { createServiceContext, withTx, withReadTx, records, type DB } from "@kozane/core/database";
 import { cards, namespaces, taskspaces } from "@kozane/core/services";
+import {
+  captureLocalRecoveryCheckpoint,
+  validateStoredLocalRecoveryCheckpoint,
+  rememberLocalRecoveryCheckpoint,
+  type LocalRecoverySnapshot,
+} from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
   migrations,
@@ -218,6 +224,13 @@ const checkpointKey: LocalRecoveryCheckpointKey = {
   checkpointId: "checkpoint",
 };
 void parseLocalRecoveryCheckpoint(checkpoint).sha256;
+void captureLocalRecoveryCheckpoint(db, checkpoint.identity, async () => checkpoint.selection).then(
+  ({ snapshot, checkpoint }) => {
+    const captured: LocalRecoverySnapshot = snapshot;
+    void rememberLocalRecoveryCheckpoint(db, checkpoint);
+    void validateStoredLocalRecoveryCheckpoint(db, async () => db, captured, checkpoint.identity);
+  },
+);
 void parseLocalRecoveryCheckpointRecord(checkpointKey, JSON.stringify(checkpoint)).identity;
 // @ts-expect-error Checkpoint descriptors are immutable.
 checkpoint.sha256 = "b".repeat(64);
