@@ -104,6 +104,26 @@ execution records, asset manifests and image bytes need their own retained
 bindings. Describing received data does not establish a trusted expectation.
 History retention, bundle publication and installation remain pending.
 
+## Check shared image coverage
+
+`sharedRecoveryAssetManifest(payload, images)` checks host manifests against a
+parsed shared row-history payload. Supply a baseline manifest and an ordered
+effect-set manifest list with IDs matching the payload selection. Each entry
+contains `id` and `manifest`. `parseSharedRecoveryHistoryImages` returns an
+immutable canonical copy of that metadata.
+
+The collector requires every baseline row image and each set's full before and
+after image references. Intermediate and deleted values remain required even
+when absent from the final projection. Every supplied entry remains in the
+combined manifest, including invocation-only requirements in empty effect sets.
+Conflicting hashes or lengths under one image name refuse collection.
+
+Obtain manifests from trusted complete history records. The row payload does not
+contain invocations or execution records, so this check cannot establish their
+coverage or authenticate the supplied manifests. It reads no image bytes. The
+Node [saved checkpoint image workflow](recovery-checkpoint-images.md) combines
+this check with both saved payloads and protected byte verification.
+
 ## Retain trusted shared descriptors
 
 Migration 0028 adds the device-local `local_recovery_shared_history` catalog.

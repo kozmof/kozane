@@ -81,6 +81,26 @@ const sharedDescription = await recovery.describeSharedRecoveryHistory(
 );
 assert.equal(sharedDescription.checkpoint.version, recovery.SHARED_RECOVERY_CHECKPOINT_VERSION);
 assert.equal(sharedDescription.payload.version, recovery.SHARED_RECOVERY_HISTORY_VERSION);
+const sharedHistoryImages = {
+  baseline: { id: "baseline", manifest: { version: 1, entries: [] } },
+  effectSets: [{ id: "empty", manifest: { version: 1, entries: [] } }],
+};
+assert.deepEqual(
+  recovery.parseSharedRecoveryHistoryImages(sharedHistoryImages),
+  sharedHistoryImages,
+);
+assert.deepEqual(
+  recovery.sharedRecoveryAssetManifest(sharedDescription.payload, sharedHistoryImages),
+  { version: 1, entries: [] },
+);
+assert.throws(
+  () =>
+    recovery.sharedRecoveryAssetManifest(sharedDescription.payload, {
+      ...sharedHistoryImages,
+      effectSets: [],
+    }),
+  recovery.SharedRecoveryError,
+);
 const sharedLocalDescriptor = {
   version: 1,
   identity: sharedIdentity,

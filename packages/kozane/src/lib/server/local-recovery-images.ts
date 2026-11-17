@@ -1,8 +1,10 @@
 /** Protect checkpoint images before verification. This does not retain history or publish a bundle. */
 import { createHash } from "node:crypto";
-import { parseAssetManifest, type AssetManifest } from "@kozane/core";
 import {
   localRecoveryAssetManifest,
+  parseSharedRecoveryHistoryImages,
+  SharedRecoveryError,
+  type SharedRecoveryHistoryImages,
   parseLocalRecoveryIdentity,
   readLocalRecoveryCheckpoint,
   type LocalRecoveryCheckpoint,
@@ -17,64 +19,10 @@ import {
   LocalRecoveryPayloadError,
 } from "./local-recovery-payload.js";
 
-type HistoryImages = Readonly<{ id: string; manifest: AssetManifest }>;
-export type LocalRecoveryHistoryImages = Readonly<{
-  baseline: HistoryImages;
-  effectSets: readonly HistoryImages[];
-}>;
+export type LocalRecoveryHistoryImages = SharedRecoveryHistoryImages;
 type Options = Parameters<typeof loadRegisteredLocalRecoveryPayload>[0] & {
   history: LocalRecoveryHistoryImages;
 };
-
-function fields(input: unknown, names: readonly string[]) {
-  if (
-    !input ||
-    typeof input !== "object" ||
-    ![Object.prototype, null].includes(Object.getPrototypeOf(input)) ||
-    Reflect.ownKeys(input).length !== names.length
-  )
-    throw new LocalRecoveryPayloadError("Invalid checkpoint history images");
-  return Object.fromEntries(
-    names.map((name) => {
-      const field = Object.getOwnPropertyDescriptor(input, name);
-      if (!field || !("value" in field) || !field.enumerable)
-        throw new LocalRecoveryPayloadError("Checkpoint history images require plain data");
-      return [name, field.value];
-    }),
-  );
-}
-function historyEntry(input: unknown): HistoryImages {
-  const value = fields(input, ["id", "manifest"]);
-  if (
-    typeof value.id !== "string" ||
-    !value.id.trim() ||
-    value.id.length > 1000 ||
-    value.id.includes("\0") ||
-    !value.id.isWellFormed()
-  )
-    throw new LocalRecoveryPayloadError("Invalid checkpoint history identity");
-  return Object.freeze({ id: value.id, manifest: parseAssetManifest(value.manifest) });
-}
-function historyImages(input: unknown): LocalRecoveryHistoryImages {
-  const value = fields(input, ["baseline", "effectSets"]);
-  if (
-    !Array.isArray(value.effectSets) ||
-    Reflect.ownKeys(value.effectSets).length !== value.effectSets.length + 1
-  )
-    throw new LocalRecoveryPayloadError("Invalid checkpoint history image list");
-  const effectSets = value.effectSets;
-  return Object.freeze({
-    baseline: historyEntry(value.baseline),
-    effectSets: Object.freeze(
-      Array.from({ length: effectSets.length }, (_, index) => {
-        const field = Object.getOwnPropertyDescriptor(effectSets, String(index));
-        if (!field || !("value" in field) || !field.enumerable)
-          throw new LocalRecoveryPayloadError("Checkpoint history images require plain entries");
-        return historyEntry(field.value);
-      }),
-    ),
-  });
-}
 
 /** One immutable ledger owner per catalog key, independent of caller-chosen path or owner IDs. */
 export function registeredLocalRecoveryImageOwner(input: LocalRecoveryIdentity) {
@@ -87,7 +35,14 @@ export function registeredLocalRecoveryImageOwner(input: LocalRecoveryIdentity) 
 
 async function prepare(options: Options) {
   // Copy host history before the first await, including manifests and materialization order.
-  const history = historyImages(options.history);
+  let history: SharedRecoveryHistoryImages;
+  try {
+    history = parseSharedRecoveryHistoryImages(options.history);
+  } catch (cause) {
+    if (cause instanceof SharedRecoveryError)
+      throw new LocalRecoveryPayloadError(cause.message, { cause });
+    throw cause;
+  }
   const { db, root } = options;
   const { snapshot, checkpoint } = await loadRegisteredLocalRecoveryPayload(options);
   const selection = checkpoint.selection;

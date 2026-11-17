@@ -295,6 +295,15 @@ bindings. Reads require an explicit byte limit and isolated SQL validation.
 Complete action and execution retention, bundle publication and installation
 remain pending. See [saved shared payloads](shared-recovery-payloads.md).
 
+Saved local and shared payloads can now reserve and verify their combined image
+requirements. Core checks each manifest against the baseline and full effect
+images, including intermediate and deleted references, and preserves extra host
+requirements from complete invocations. The Node workflow rechecks both payload
+files and catalog bindings under the image writer lock. Pending protection
+commits before image reads and survives failed verification or commits. Complete
+action and execution retention and bundle publication remain pending. See
+[saved checkpoint images](recovery-checkpoint-images.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -391,6 +400,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Save original registered local snapshot payloads with synced temporary files, exclusive immutable publication and read-only interruption evidence. Refuse unsafe paths and changed contents, serialize catalog binding checks and preserve files after failed outer commits.
 - [x] Read published registered payloads with an explicit host byte limit and expected identity. Verify canonical bytes and exact SQL values, refuse temporary evidence and recheck file identity and catalog binding after isolated validation without installing rows.
 - [x] Connect saved registered payloads to stable recovery image owners. Check selected history IDs, commit pending protection before byte verification and preserve it after missing files or failed verification commits. Verify cleanup handoff and competing releases without publishing incomplete bundles.
+- [x] Check shared manifests against baseline and full effect images while preserving extra invocation requirements. Validate both saved payloads before image reservation, recheck both files and catalog bindings under the image writer lock, and preserve earlier protection after verification or commit failures.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

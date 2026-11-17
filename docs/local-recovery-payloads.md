@@ -125,6 +125,11 @@ Matching [shared row-history payloads](shared-recovery-payloads.md) use a separa
 directory and the same immutable file protocol. Their host workflow also checks
 the original local descriptor retained in the shared catalog.
 
+When both payloads are saved, use the
+[saved checkpoint image workflow](recovery-checkpoint-images.md) to check
+manifests against actual shared rows as well as selected IDs. It checks both
+saved files and catalog bindings around protected image verification.
+
 ## Current scope
 
 This file stores only the local snapshot payload. It does not contain shared

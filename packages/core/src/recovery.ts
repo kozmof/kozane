@@ -54,6 +54,11 @@ export {
 } from "./actions/local-recovery-checkpoint.js";
 export { localRecoveryAssetManifest } from "./actions/local-recovery-assets.js";
 export {
+  parseSharedRecoveryHistoryImages,
+  sharedRecoveryAssetManifest,
+  type SharedRecoveryHistoryImages,
+} from "./actions/shared-recovery-assets.js";
+export {
   rememberLocalRecoveryCheckpoint,
   rememberLocalRecoveryCheckpointInTx,
   readLocalRecoveryCheckpoint,

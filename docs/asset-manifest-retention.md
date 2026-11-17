@@ -95,3 +95,9 @@ This is a retention mechanism for trusted host workflows. Production action
 history, transfer queues and recovery-bundle builders still need to register
 their owners and release them under their retention policies. No new end-user
 manifest commands are added, and mandatory action capture remains disabled.
+
+The [saved checkpoint image workflow](recovery-checkpoint-images.md) also checks
+baseline and intermediate row-image coverage against saved shared history. It
+validates both local and shared payloads and preserves extra host requirements
+from complete invocations. Both payload files and catalog bindings are rechecked
+under the image writer lock before reservation and around byte verification.

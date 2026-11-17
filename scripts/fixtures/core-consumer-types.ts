@@ -62,6 +62,9 @@ import {
   inspectSharedRecoveryCheckpoint,
   validateStoredSharedRecoveryCheckpoint,
   type SharedRecoveryCheckpointBinding,
+  parseSharedRecoveryHistoryImages,
+  sharedRecoveryAssetManifest,
+  type SharedRecoveryHistoryImages,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -291,6 +294,14 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
       parsedIdentity,
     );
     const target: SharedRecoveryProjection = validated.projection;
+    const historyImages: SharedRecoveryHistoryImages = parseSharedRecoveryHistoryImages({
+      baseline: { id: "baseline", manifest: { version: 1, entries: [] } },
+      effectSets: [{ id: "empty", manifest: { version: 1, entries: [] } }],
+    });
+    const required = sharedRecoveryAssetManifest(savedPayload, historyImages);
+    void required.entries;
+    // @ts-expect-error Parsed history manifests are immutable.
+    historyImages.effectSets.push({ id: "extra", manifest: { version: 1, entries: [] } });
     const remembered = await rememberSharedRecoveryCheckpoint(db, descriptor);
     const binding: SharedRecoveryCheckpointBinding = remembered.binding;
     void inspectSharedRecoveryCheckpoint(db, checkpointKey);

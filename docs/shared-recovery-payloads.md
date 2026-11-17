@@ -79,6 +79,11 @@ performs no filesystem changes or live row installation.
 
 ## Current scope
 
+The [saved checkpoint image workflow](recovery-checkpoint-images.md) validates
+both saved payloads and checks shared row-image coverage before reserving their
+combined image requirements. It commits protection before byte verification and
+rechecks both saved files and catalog bindings under the image writer lock.
+
 These files retain the baseline and selected row-effect reconstruction data.
 Complete action and execution records, asset manifests, image bytes and their
 retention policies still need durable storage and verification. A complete
