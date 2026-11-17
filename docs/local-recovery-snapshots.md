@@ -61,6 +61,37 @@ conditions before loading the snapshot once on its originating device.
 Shared-only restoration and joining another device must continue to omit source
 attachments.
 
+## Bind a checkpoint to snapshot contents
+
+`captureLocalRecoveryCheckpoint` in `actions/local-recovery-checkpoint.ts` captures
+the snapshot and returns it with a version 1 content descriptor. Hashing starts
+after the consistent read transaction closes. `describeLocalRecoverySnapshot`
+creates the same descriptor for an already captured snapshot.
+
+The descriptor records the workspace, device, epoch, checkpoint and schema
+identities, the ordered history selection, the canonical UTF-8 byte length and a
+lowercase SHA-256 digest. Canonicalization removes incoming JSON whitespace and
+object, table and row ordering differences. It preserves materialization order
+and every tagged value. TEXT cells remain exact, including cells that themselves
+contain JSON. Reformatting a stored intent or manifest string changes the digest.
+
+Retain the expected descriptor separately from received snapshot data.
+`requireLocalRecoveryCheckpoint` compares identity and selection before hashing,
+then verifies byte length and content hash. Caller mutation while hashing cannot
+change the copied snapshot or expected descriptor. A changed row under an
+unchanged checkpoint ID is refused, including a same-length edit or a change to
+an integer beyond JavaScript's safe range.
+
+`validateLocalRecoveryCheckpoint` verifies the descriptor and the host's expected
+identity before allocating an isolated validation database. It then runs the SQL
+validation below. A matching hash alone does not prove that rows satisfy SQL
+constraints or preserve their storage classes when loaded.
+
+These descriptors bind known contents. They are not signatures or durable
+installation receipts. Recomputing a descriptor from an untrusted snapshot does
+not establish authenticity. Durable descriptor storage, bundle publication and
+one-time receipt integration remain pending.
+
 ## Validate rows in an isolated database
 
 `validateLocalRecoverySnapshot` in `actions/local-recovery-validation.ts` checks

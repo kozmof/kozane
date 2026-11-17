@@ -75,7 +75,7 @@ function id(input: unknown): string {
     throw new LocalRecoveryError("Invalid local recovery identity");
   return input;
 }
-function identity(input: unknown): LocalRecoveryIdentity {
+export function parseLocalRecoveryIdentity(input: unknown): LocalRecoveryIdentity {
   const fields = ["workspaceId", "deviceId", "epochId", "checkpointId", "schemaId"] as const;
   const value = object(input, fields);
   const parsed = Object.fromEntries(
@@ -85,7 +85,7 @@ function identity(input: unknown): LocalRecoveryIdentity {
     throw new LocalRecoveryError("Unsupported local recovery schema");
   return Object.freeze(parsed);
 }
-function selection(input: unknown): LocalRecoverySelection {
+export function parseLocalRecoverySelection(input: unknown): LocalRecoverySelection {
   const value = object(input, ["baselineId", "effectSetIds"]);
   const effects = array(value.effectSetIds).map(id);
   if (new Set(effects).size !== effects.length)
@@ -98,8 +98,8 @@ export function parseLocalRecoverySnapshot(input: unknown): LocalRecoverySnapsho
   const value = object(input, ["version", "rowEncodingVersion", "identity", "selection", "tables"]);
   if (value.version !== LOCAL_RECOVERY_VERSION || value.rowEncodingVersion !== ROW_ENCODING_VERSION)
     throw new LocalRecoveryError("Unsupported local recovery encoding");
-  const keys = identity(value.identity);
-  const selected = selection(value.selection);
+  const keys = parseLocalRecoveryIdentity(value.identity);
+  const selected = parseLocalRecoverySelection(value.selection);
   const tables = new Map<string, readonly TaggedRow[]>();
   for (const entry of array(value.tables)) {
     const table = object(entry, ["name", "rows"]);
@@ -156,7 +156,7 @@ export function requireLocalRecoveryIdentity(
   input: unknown,
   expected: LocalRecoveryIdentity,
 ): LocalRecoverySnapshot {
-  const wanted = identity(expected);
+  const wanted = parseLocalRecoveryIdentity(expected);
   const snapshot = parseLocalRecoverySnapshot(input);
   for (const field of Object.keys(wanted) as (keyof LocalRecoveryIdentity)[])
     if (snapshot.identity[field] !== wanted[field])
@@ -170,7 +170,7 @@ export function captureLocalRecoverySnapshot(
   keys: LocalRecoveryIdentity,
   readSelection: (tx: ReadTx) => Promise<LocalRecoverySelection>,
 ): Promise<LocalRecoverySnapshot> {
-  const copied = identity(keys);
+  const copied = parseLocalRecoveryIdentity(keys);
   if (typeof readSelection !== "function")
     throw new LocalRecoveryError("Local recovery requires a checkpoint reader");
   return withReadTx(db, async (tx) => {
@@ -181,7 +181,7 @@ export function captureLocalRecoverySnapshot(
       objects.filter((entry) => localTableNames.includes(entry.table));
     if (!compareSchemaManifests(local(actual), local(canonicalSchemaManifest)).matches)
       throw new LocalRecoveryError("Local recovery requires the canonical local schema");
-    const selected = selection(await readSelection(tx));
+    const selected = parseLocalRecoverySelection(await readSelection(tx));
     const tables = [];
     for (const table of plan.loadOrder) {
       const rows = await tx.values(

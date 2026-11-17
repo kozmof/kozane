@@ -7,6 +7,7 @@ import { readSchemaManifest } from "../migrations/schema-reader.js";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import { localTableNames } from "./local-tables.js";
 import { localRecoveryAssetManifest } from "./local-recovery-assets.js";
+import { requireLocalRecoveryCheckpoint } from "./local-recovery-checkpoint.js";
 import {
   LocalRecoveryError,
   requireLocalRecoveryIdentity,
@@ -24,6 +25,18 @@ import {
 
 const plan = createRestorationPlan(canonicalSchemaManifest, localTableNames);
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
+
+/** Verify a separately retained content descriptor and trusted identity before SQL validation. */
+export async function validateLocalRecoveryCheckpoint(
+  createDatabase: () => Promise<DB>,
+  input: unknown,
+  checkpoint: unknown,
+  expected: LocalRecoveryIdentity,
+): Promise<LocalRecoverySnapshot> {
+  const snapshot = requireLocalRecoveryIdentity(input, expected);
+  const checked = await requireLocalRecoveryCheckpoint(snapshot, checkpoint);
+  return validateLocalRecoverySnapshot(createDatabase, checked, snapshot.identity);
+}
 function statement(value: InstallationValue) {
   // Only canonical table/column identifiers reach the generator. They contain no question marks.
   const parts = value.sql.split("?");
