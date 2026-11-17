@@ -76,6 +76,12 @@ after failed publication. They also verify application upload completion in the
 same action transaction. Cleanup contention cannot remove files during handoff.
 Restoring an earlier selection leaves owners for deselected origin history intact.
 
+The [local checkpoint asset helper](local-recovery-snapshots.md#collect-and-protect-checkpoint-images)
+collects requirements from active snapshot records and selected shared-history
+manifests. Tests reserve the result under a recovery owner before releasing
+earlier pins. Missing required bytes preserve the pending recovery reservation
+and prevent successful verification. Complete bundle publication remains pending.
+
 This is a retention mechanism for trusted host workflows. Production action
 history, transfer queues and recovery-bundle builders still need to register
 their owners and release them under their retention policies. No new end-user

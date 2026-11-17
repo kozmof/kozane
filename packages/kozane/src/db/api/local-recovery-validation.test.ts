@@ -118,10 +118,9 @@ it.each([
   ["local_asset_manifest", "manifest", ["text", "{invalid"]],
   ["local_asset_manifest", "owner_kind", ["text", "unknown"]],
   ["local_asset_manifest", "release_reason", ["null"]],
-] as const)("refuses a SQL constraint violation in %s.%s", async (table, column, value) => {
+] as const)("refuses invalid stored metadata in %s.%s", async (table, column, value) => {
   const f = await fixture();
   await expect(f.validate(changed(f.snapshot, table, column, value))).rejects.toThrow();
-  expect(f.create).toHaveBeenCalledTimes(1);
   await f.unchanged();
 });
 

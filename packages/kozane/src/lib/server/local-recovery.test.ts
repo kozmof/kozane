@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile, readFile, utimes } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
@@ -9,10 +10,123 @@ import { withTx } from "../../db/database.js";
 import type { DB } from "../../../../core/src/database.js";
 import { migrations } from "../../../../core/src/generated/migrations.js";
 import { captureLocalRecoverySnapshot } from "../../../../core/src/actions/local-recovery.js";
+import { localRecoveryAssetManifest } from "../../../../core/src/actions/local-recovery-assets.js";
+import { localImageUploadTable } from "../../db/schema.js";
+import {
+  reserveAssetManifest,
+  releaseAssetManifest,
+  inspectAssetManifest,
+} from "../../db/api/asset-manifest.js";
+import {
+  storeImage,
+  imageDirectory,
+  collectUnusedImages,
+  retryImageDeletions,
+} from "./image-assets.js";
+import { retainImageManifest } from "./image-manifest-retention.js";
+import { abandonImageUpload } from "./image-upload-recovery.js";
 const roots: string[] = [];
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
+
+it.each([false, true])(
+  "protects checkpoint image requirements through recovery-owner verification (missing=%s)",
+  async (missing) => {
+    const root = await mkdtemp(join(tmpdir(), "kozane-local-recovery-assets-"));
+    roots.push(root);
+    const db = await createTestDB(join(root, "db.sqlite"));
+    const uploads: (typeof localImageUploadTable.$inferSelect)[] = [];
+    for (const n of [1, 2, 3, 4]) {
+      const url = await storeImage(
+        root,
+        db,
+        "image.svg",
+        new TextEncoder().encode(`<svg><text>${n}</text></svg>`),
+      );
+      const filename = url.split("/").pop()!;
+      uploads.push(
+        (await db.select().from(localImageUploadTable)).find((row) => row.filename === filename)!,
+      );
+    }
+    for (const row of uploads.slice(2))
+      await db.run(
+        sql`UPDATE local_image_upload SET state='completed',completed_at=1 WHERE filename=${row.filename}`,
+      );
+    const manifest = (indices: number[]) => ({
+      version: 1,
+      entries: indices.map((index) => ({
+        name: `.kozane/assets/images/${uploads[index].filename}`,
+        byteLength: uploads[index].byteLength,
+        sha256: uploads[index].sha256,
+      })),
+    });
+    const transfer = { kind: "transfer" as const, id: "incoming" };
+    const recovery = { kind: "recovery" as const, id: "checkpoint" };
+    await reserveAssetManifest(db, transfer, manifest([1]));
+    await rm(join(imageDirectory(root), uploads[3].filename));
+    const snapshot = await captureLocalRecoverySnapshot(
+      db as unknown as DB,
+      {
+        workspaceId: "workspace",
+        deviceId: "device",
+        epochId: "epoch",
+        checkpointId: "checkpoint",
+        schemaId: migrations.at(-1)!.id,
+      },
+      async () => ({ baselineId: "baseline", effectSetIds: [] }),
+    );
+    // The selected shared checkpoint also requires the third image. The inactive fourth is not required.
+    const required = localRecoveryAssetManifest(snapshot, [manifest([2])]);
+    expect(required.entries.map((entry) => entry.name).sort()).toEqual(
+      manifest([0, 1, 2])
+        .entries.map((entry) => entry.name)
+        .sort(),
+    );
+    await reserveAssetManifest(db, recovery, required);
+    for (const row of uploads.slice(0, 2))
+      await abandonImageUpload(db, row.filename, "Retained by checkpoint", true);
+    await releaseAssetManifest(db, transfer, "Transferred to checkpoint");
+    const queue = join(imageDirectory(root), ".pending-delete");
+    await mkdir(queue, { recursive: true });
+    for (const row of uploads.slice(0, 3)) {
+      await writeFile(join(queue, row.filename), "");
+      await utimes(join(imageDirectory(root), row.filename), new Date(0), new Date(0));
+    }
+    if (missing) await rm(join(imageDirectory(root), uploads[0].filename));
+    const cleanup = async () => {
+      await collectUnusedImages(root, db);
+      await retryImageDeletions(root, db);
+    };
+    await cleanup();
+    expect(
+      uploads.slice(1, 3).every((row) => existsSync(join(imageDirectory(root), row.filename))),
+    ).toBe(true);
+    if (missing) {
+      await expect(retainImageManifest(db, root, recovery)).rejects.toThrow("absent");
+      expect((await inspectAssetManifest(db, recovery)).record.state).toBe("pending");
+      await cleanup();
+      expect(
+        uploads.slice(1, 3).every((row) => existsSync(join(imageDirectory(root), row.filename))),
+      ).toBe(true);
+    } else {
+      expect((await retainImageManifest(db, root, recovery)).record.state).toBe("retained");
+      await cleanup();
+      expect(await readFile(join(imageDirectory(root), uploads[0].filename), "utf8")).toContain(
+        "<text>1</text>",
+      );
+      await releaseAssetManifest(db, recovery, "Checkpoint retired");
+      await cleanup();
+      expect(
+        uploads.every(
+          (row) =>
+            !existsSync(join(imageDirectory(root), row.filename)) &&
+            !existsSync(join(imageDirectory(root), ".retained", row.filename)),
+        ),
+      ).toBe(true);
+    }
+  },
+);
 
 it("keeps local rows and shared-history selection at one checkpoint while another connection commits", async () => {
   const root = await mkdtemp(join(tmpdir(), "kozane-local-recovery-checkpoint-"));

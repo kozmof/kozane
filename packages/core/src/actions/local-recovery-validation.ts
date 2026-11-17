@@ -6,6 +6,7 @@ import { compareSchemaManifests } from "../migrations/schema.js";
 import { readSchemaManifest } from "../migrations/schema-reader.js";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import { localTableNames } from "./local-tables.js";
+import { localRecoveryAssetManifest } from "./local-recovery-assets.js";
 import {
   LocalRecoveryError,
   requireLocalRecoveryIdentity,
@@ -44,6 +45,7 @@ export async function validateLocalRecoverySnapshot(
 ): Promise<LocalRecoverySnapshot> {
   // Copy and reject malformed or mismatched transport before allocating any database.
   const snapshot = requireLocalRecoveryIdentity(input, expected);
+  localRecoveryAssetManifest(snapshot);
   const target = createRowProjection(
     plan.loadOrder,
     snapshot.tables.flatMap((table) => table.rows.map((row) => ({ table: table.name, row }))),

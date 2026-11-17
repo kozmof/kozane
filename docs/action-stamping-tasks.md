@@ -204,6 +204,14 @@ constraints, affinity changes, changed read-back and connection flags, savepoint
 cleanup failures and failed commits. Production local installation remains
 pending.
 
+Local snapshot asset checks now collect pending and installed uploads and every
+active manifest owner. They merge selected shared-history manifests while
+checking all immutable name identities, including inactive records. Malformed
+metadata and collisions refuse validation before database allocation. Node tests
+verify recovery-owner protection through cleanup and byte verification, including
+missing required files. Complete bundle publication and history retention remain
+pending.
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -288,6 +296,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Capture full local recovery snapshots and shared checkpoint selections from one consistent database read transaction.
 - [x] Add an internal versioned local snapshot format and capture helper with complete table coverage, exact tagged values, checkpoint selection and identity checks. Verify concurrent checkpoint reads and refuse malformed transport without changing source data.
 - [x] Validate local snapshot rows in a separate empty database under canonical SQL constraints. Compare exact tagged read-back, roll back temporary rows and refuse success after connection, cleanup or commit failures.
+- [x] Collect local checkpoint image requirements and merge selected shared-history manifests. Reject malformed active or inactive metadata and immutable name conflicts before SQL validation. Verify recovery-owner pins through cleanup and missing-file verification.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

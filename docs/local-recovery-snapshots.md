@@ -64,8 +64,9 @@ attachments.
 ## Validate rows in an isolated database
 
 `validateLocalRecoverySnapshot` in `actions/local-recovery-validation.ts` checks
-identity and copies transport before calling a trusted database factory. The
-factory supplies a separate empty database and owns its disposal. The helper
+identity, copies transport and validates local asset metadata before calling a
+trusted database factory. The factory supplies a separate empty database and owns
+its disposal. The helper
 configures and verifies foreign keys and recursive triggers, checks the complete
 bundled schema and refuses existing shared or local application rows.
 
@@ -88,8 +89,47 @@ that mismatched identities refuse validation before allocating a database and
 that existing validation rows are preserved when the destination is refused.
 
 SQL validation does not publish a recovery bundle or establish that image bytes
-are available. It does not replace the host's operation, manifest and path
-validation or the future one-time installation boundary.
+are available. It does not replace the host's operation and path validation or
+the future one-time installation boundary.
+
+## Collect and protect checkpoint images
+
+`localRecoveryAssetManifest` in `actions/local-recovery-assets.ts` collects image
+requirements from the snapshot. Pending and installed uploads require their
+recorded bytes. Pending and retained manifest owners require every listed image.
+Completed or abandoned uploads and released owners retain name identity without
+requiring their old files.
+
+Pass the selected shared baseline and effect-set manifests as the second argument
+when assembling checkpoint requirements. The helper includes those images and
+checks them against every local identity record, including inactive records.
+Different hashes or lengths under one name are refused. The host must obtain
+those manifests from the checkpoint's complete retained history. The helper does
+not establish that correspondence or retain history itself.
+
+All local asset metadata must remain well formed, including inactive entries.
+Malformed names, lengths, hashes, owner kinds, states and manifest JSON refuse
+collection. SQL snapshot validation runs these checks before allocating its
+validation database. Collection returns immutable metadata and does not read or
+change files.
+
+A pending requirement remains required even if file creation never completed.
+Metadata collection does not establish availability. Missing required bytes must
+block complete bundle publication until the pending work is resolved. Do not drop
+the requirement or abandon its owner automatically.
+
+Reserve the combined manifest under a recovery owner before verifying bytes.
+Keep earlier protection until that reservation commits. Verify the reserved
+files through the [local manifest ledger](asset-manifest-retention.md) before
+publication. Missing or changed bytes leave the recovery owner pending. Keeping
+this owner active protects the checkpoint independently of earlier upload and
+transfer decisions.
+
+Native and WASM tests cover every owner kind and upload state, shared-history
+requirements, inactive identity conflicts and malformed metadata. Node tests
+transfer protection to a recovery owner and run cleanup before and after byte
+verification. They also preserve pending protection when a required file is
+missing. These checks exercise asset retention without publishing a bundle.
 
 ## Remaining recovery work
 
