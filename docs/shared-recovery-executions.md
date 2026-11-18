@@ -168,9 +168,10 @@ eligibility. Structural verification provides neither authorization.
 
 Core can prepare [original action records](shared-recovery-actions.md) with first
 inputs, binding maps, exact local sequence values and provenance. These records
-remain distinct from later execution inputs. Durable original-record storage,
-origin and deselected execution sets and retention policy remain requirements
-for complete history.
+remain distinct from later execution inputs. The Node host can retain
+[saved originals](shared-recovery-action-payloads.md) with their trusted sources.
+Origin and deselected execution sets, original invocation manifest integration
+and retention policy remain requirements for complete history.
 The Node host can retain [saved execution payloads](shared-recovery-execution-payloads.md)
 with both saved sources and all three original catalog bindings. The
 [saved asset workflow](recovery-asset-payloads.md#check-saved-execution-coverage)

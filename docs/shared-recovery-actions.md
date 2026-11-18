@@ -160,8 +160,10 @@ includes its records. Versions 7 through 20 import with an empty action catalog
 when omitted. Import preserves coherent historical and orphaned metadata without
 installing original action records or reading images.
 
-Registration stores expectations. Original action payload bytes, manifests and
-image bytes remain separate requirements.
+Registration stores expectations. The Node host can retain
+[saved original-action payloads](shared-recovery-action-payloads.md) after
+validating their saved sources and all four original catalog bindings.
+Manifests and image bytes remain separate requirements.
 
 ## Current scope
 
@@ -169,7 +171,7 @@ These helpers prepare original records for roots named by the selected execution
 checkpoint. Preparation and content checks perform no SQL validation, file
 writes, image reservation or live installation.
 
-Original payload storage, saved manifest integration, origin and
-deselected effect sets, complete history retention and complete bundle
-publication remain pending. Production capture remains subject to the
+Saved manifest integration, origin and deselected effect sets, complete history
+retention and complete bundle publication remain pending. Production capture
+remains subject to the
 [adapter verification gate](action-capture-prototype.md).

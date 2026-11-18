@@ -10,7 +10,7 @@ export type RecoveryPayloadEvidence =
   | "different-content"
   | "unsafe-path"
   | "unreadable";
-type Area = "checkpoints" | "shared-history" | "asset-manifests" | "executions";
+type Area = "checkpoints" | "shared-history" | "asset-manifests" | "executions" | "actions";
 type RecoveryPayloadDescriptor = Readonly<{ sha256: string; byteLength: number }>;
 const code = (error: unknown) => (error instanceof Error && "code" in error ? error.code : null);
 export const paths = (directory: string, checkpoint: RecoveryPayloadDescriptor) => ({
