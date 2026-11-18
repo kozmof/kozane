@@ -260,6 +260,7 @@ const assetLocal = await recovery.describeLocalRecoverySnapshot({
     "local_recovery_shared_history",
     "local_recovery_assets",
     "local_recovery_executions",
+    "local_recovery_actions",
   ].map((name) => ({ name, rows: [] })),
 });
 const assetSources = {
@@ -302,6 +303,30 @@ for (const helper of [
   recovery.readSharedRecoveryExecutionCheckpoint,
   recovery.inspectSharedRecoveryExecutionCheckpoint,
   recovery.requireStoredSharedRecoveryExecutionCheckpoint,
+])
+  assert.equal(typeof helper, "function");
+assert.deepEqual(
+  recovery.parseSharedRecoveryActionCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(actionDescription.checkpoint),
+    JSON.stringify(sharedLocalDescriptor),
+  ),
+  {
+    checkpoint: actionDescription.checkpoint,
+    localCheckpoint: sharedLocalDescriptor,
+  },
+);
+for (const helper of [
+  recovery.rememberSharedRecoveryActionCheckpoint,
+  recovery.rememberSharedRecoveryActionCheckpointInTx,
+  recovery.readSharedRecoveryActionCheckpoint,
+  recovery.inspectSharedRecoveryActionCheckpoint,
+  recovery.requireStoredSharedRecoveryActionCheckpoint,
 ])
   assert.equal(typeof helper, "function");
 assert.deepEqual(
@@ -587,6 +612,7 @@ try {
     "local_recovery_shared_history",
     "local_recovery_assets",
     "local_recovery_executions",
+    "local_recovery_actions",
   ])
     assert.ok(sqlite.prepare("SELECT name FROM sqlite_schema WHERE name=?").get(name));
   assert.ok(

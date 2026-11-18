@@ -68,8 +68,9 @@ after validating both saved source payloads and their original catalog bindings.
 [Original recovery actions](../../docs/shared-recovery-actions.md) preserve
 first-recorded inputs, bindings, local sequence values and provenance beside
 selected executions. Their verification permits changed child inputs while
-requiring the original root input and provider map. Durable original-record
-storage and complete history retention remain pending.
+requiring the original root input and provider map. Trusted action expectations
+can be retained in a local catalog with their original source bindings. Original
+payload storage and complete history retention remain pending.
 
 ## Application operations
 

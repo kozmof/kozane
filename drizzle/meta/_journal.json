@@ -218,6 +218,13 @@
       "when": 1794962975529,
       "tag": "0030_local_recovery_executions",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1794993615639,
+      "tag": "0031_local_recovery_actions",
+      "breakpoints": true
     }
   ]
 }

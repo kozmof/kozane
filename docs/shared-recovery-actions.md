@@ -117,13 +117,59 @@ checks selected execution inputs. It does not cover these additional original
 records. Retain their manifests and earlier image pins separately until a
 durable workflow protects the combined requirements.
 
+## Retain trusted action descriptors
+
+Migration 0031 adds the device-local `local_recovery_actions` catalog.
+Register the original local, shared and execution expectations first. Then call
+`rememberSharedRecoveryActionCheckpoint(db, checkpoint)` with a descriptor
+established by trusted first-record capture. Received catalog rows do not
+establish that trust.
+
+Each record retains the action descriptor and exact original local descriptor.
+The action descriptor itself binds the original execution and shared
+expectations. Registration acquires the writer lock and requires all three live
+source catalogs to match. Changed contents, action selections or source bindings
+cannot replace an existing key. Repeating the same binding preserves its
+timestamp. `rememberSharedRecoveryActionCheckpointInTx` shares a host-owned
+commit with dependent work.
+
+`readSharedRecoveryActionCheckpoint`, `inspectSharedRecoveryActionCheckpoint`
+and `parseSharedRecoveryActionCheckpointRecord` return an immutable `binding`.
+Its `checkpoint` is the action descriptor and `localCheckpoint` is the original
+local expectation. Reads check row identities and nested descriptor coherence
+without converting registration timestamps to JavaScript dates. Read and
+inspection helpers return `null` for an unregistered key.
+
+The catalog has no foreign keys to shared rows or other catalogs. Historical
+and orphaned expectations remain inspectable after source records disappear.
+Inspection does not authorize verification or installation.
+
+`requireStoredSharedRecoveryActionCheckpoint(catalog, input, expectedIdentity,
+executions, sharedHistory)` copies all transport and the host identity before
+its first catalog read. It resolves all four original bindings in one read
+transaction. Content and attribution checks run outside that transaction.
+All four catalogs are checked again before success, including the original
+local bindings retained by the execution and shared records. Coherent replacement
+of every catalog with another binding still refuses success. Unrelated
+registrations and equivalent descriptor JSON formatting remain allowed.
+
+Local snapshots include this ninth local table with exact tagged values.
+Isolated local validation checks every nested action descriptor before database
+allocation. Shared capture and replacement exclude the table. JSON version 21
+includes its records. Versions 7 through 20 import with an empty action catalog
+when omitted. Import preserves coherent historical and orphaned metadata without
+installing original action records or reading images.
+
+Registration stores expectations. Original action payload bytes, manifests and
+image bytes remain separate requirements.
+
 ## Current scope
 
 These helpers prepare original records for roots named by the selected execution
-checkpoint. They perform no SQL validation, catalog registration, file writes,
-image reservation or live installation.
+checkpoint. Preparation and content checks perform no SQL validation, file
+writes, image reservation or live installation.
 
-Durable original-record storage, saved manifest integration, origin and
+Original payload storage, saved manifest integration, origin and
 deselected effect sets, complete history retention and complete bundle
 publication remain pending. Production capture remains subject to the
 [adapter verification gate](action-capture-prototype.md).

@@ -8,4 +8,5 @@ export const localTableNames: readonly string[] = Object.freeze([
   "local_recovery_shared_history",
   "local_recovery_assets",
   "local_recovery_executions",
+  "local_recovery_actions",
 ]);

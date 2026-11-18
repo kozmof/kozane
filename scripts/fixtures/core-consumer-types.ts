@@ -102,6 +102,13 @@ import {
   type SharedRecoveryActionRecord,
   type SharedRecoveryActionHistory,
   type SharedRecoveryActionCheckpoint,
+  parseSharedRecoveryActionCheckpointRecord,
+  rememberSharedRecoveryActionCheckpoint,
+  rememberSharedRecoveryActionCheckpointInTx,
+  readSharedRecoveryActionCheckpoint,
+  inspectSharedRecoveryActionCheckpoint,
+  requireStoredSharedRecoveryActionCheckpoint,
+  type SharedRecoveryActionCheckpointBinding,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -404,6 +411,28 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
       originalCheckpoint.selection.actionIds.push("other");
       const registered = await rememberSharedRecoveryExecutionCheckpoint(db, expected);
       const binding: SharedRecoveryExecutionCheckpointBinding = registered.binding;
+      const registeredOriginals = await rememberSharedRecoveryActionCheckpoint(
+        db,
+        originalCheckpoint,
+      );
+      const originalBinding: SharedRecoveryActionCheckpointBinding = registeredOriginals.binding;
+      void parseSharedRecoveryActionCheckpointRecord(
+        checkpointKey,
+        JSON.stringify(originalCheckpoint),
+        JSON.stringify(originalBinding.localCheckpoint),
+      );
+      void withTx(db, (tx) => rememberSharedRecoveryActionCheckpointInTx(tx, originalCheckpoint));
+      void readSharedRecoveryActionCheckpoint(db, checkpointKey);
+      void inspectSharedRecoveryActionCheckpoint(db, checkpointKey);
+      const storedOriginals: SharedRecoveryActionHistory =
+        await requireStoredSharedRecoveryActionCheckpoint(
+          db,
+          originalPayload,
+          parsedIdentity,
+          result,
+          savedPayload,
+        );
+      void storedOriginals.actions;
       void parseSharedRecoveryExecutionCheckpointRecord(
         checkpointKey,
         JSON.stringify(expected),

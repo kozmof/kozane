@@ -156,6 +156,7 @@ describe("db JSON export/import", () => {
       local_recovery_shared_history: 0,
       local_recovery_assets: 0,
       local_recovery_executions: 0,
+      local_recovery_actions: 0,
       card: 2,
       glue: 1,
       glue_rel: 2,
@@ -286,7 +287,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(20);
+    expect(source.version).toBe(21);
     expect((await importDbJson(targetUrl, source)).local_asset_manifest).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     const unsafe = structuredClone(source);
@@ -346,7 +347,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(20);
+    expect(source.version).toBe(21);
     expect((await importDbJson(targetUrl, source)).local_recovery_checkpoint).toBe(2);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     const wrongIdentity = structuredClone(source);
@@ -413,7 +414,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(20);
+    expect(source.version).toBe(21);
     expect((await importDbJson(targetUrl, source)).local_recovery_shared_history).toBe(2);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     for (const change of ["identity", "hash", "local-selection"] as const) {
@@ -488,7 +489,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(20);
+    expect(source.version).toBe(21);
     expect((await importDbJson(targetUrl, source)).local_recovery_assets).toBe(2);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     for (const change of [
@@ -577,7 +578,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(20);
+    expect(source.version).toBe(21);
     expect((await importDbJson(targetUrl, source)).local_recovery_executions).toBe(2);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     for (const change of [
@@ -614,6 +615,105 @@ describe("db JSON export/import", () => {
     expect(source.tables.local_recovery_executions).toHaveLength(2);
   });
 
+  it("round-trips trusted original-action expectations and refuses malformed source bindings before replacing rows", async () => {
+    const sourceUrl = await migratedDbUrl("actions-source.db"),
+      targetUrl = await migratedDbUrl("actions-target.db");
+    await seedDb(targetUrl);
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [migrations.at(-2)!.id, migrations.at(-1)!.id].entries()) {
+        const identity = {
+          workspaceId: "workspace",
+          deviceId: "device",
+          epochId: "epoch",
+          checkpointId: `checkpoint-${index}`,
+          schemaId,
+        };
+        const local = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSetIds: ["empty"] },
+          byteLength: 700,
+          sha256: "a".repeat(64),
+        };
+        const shared = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSets: [{ id: "empty", effectCount: 0 }] },
+          byteLength: 800,
+          sha256: "b".repeat(64),
+        };
+        const execution = {
+          version: 1,
+          checkpoint: shared,
+          selection: {
+            baselineId: "baseline",
+            effectSets: [{ id: "empty", rootId: "root", executionCount: 2 }],
+          },
+          byteLength: 900,
+          sha256: "c".repeat(64),
+        };
+        const descriptor = {
+          version: 1,
+          checkpoint: execution,
+          selection: { actionIds: ["root", "child"] },
+          byteLength: 1000,
+          sha256: "d".repeat(64),
+        };
+        await client.execute({
+          sql: "INSERT INTO local_recovery_actions VALUES(?,?,?,?,?,?,?)",
+          args: [
+            identity.workspaceId,
+            identity.deviceId,
+            identity.epochId,
+            identity.checkpointId,
+            JSON.stringify(descriptor),
+            JSON.stringify(local),
+            1,
+          ],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(21);
+    expect((await importDbJson(targetUrl, source)).local_recovery_actions).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    for (const change of [
+      "identity",
+      "hash",
+      "selection",
+      "count",
+      "local-identity",
+      "local-selection",
+    ]) {
+      const invalid = structuredClone(source),
+        row = invalid.tables.local_recovery_actions[0];
+      const descriptor = JSON.parse(String(row.descriptor)),
+        local = JSON.parse(String(row.local_descriptor));
+      if (change === "identity") row.checkpoint_id = "other";
+      if (change === "hash") descriptor.sha256 = "bad";
+      if (change === "selection") descriptor.selection.actionIds = ["child"];
+      if (change === "count") descriptor.checkpoint.selection.effectSets[0].executionCount = 0;
+      if (change === "local-identity") local.identity.deviceId = "other";
+      if (change === "local-selection") local.selection.effectSetIds = [];
+      row.descriptor = JSON.stringify(descriptor);
+      row.local_descriptor = JSON.stringify(local);
+      await expect(importDbJson(targetUrl, invalid)).rejects.toThrow();
+      expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    }
+    const { local_recovery_actions: _actions, ...tables } = source.tables;
+    await expect(importDbJson(targetUrl, { ...source, tables })).rejects.toThrow(
+      "missing table local_recovery_actions",
+    );
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 20, tables })).local_recovery_actions,
+    ).toBe(0);
+    expect(source.tables.local_recovery_actions).toHaveLength(2);
+  });
+
   it("round-trips image staging evidence without reading or installing files", async () => {
     const sourceUrl = await migratedDbUrl("uploads-source.db");
     const targetUrl = await migratedDbUrl("uploads-target.db");
@@ -639,7 +739,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(20);
+    expect(source.version).toBe(21);
     expect((await importDbJson(targetUrl, source)).local_image_upload).toBe(4);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_image_upload[0].filename = "../outside.svg";
@@ -671,7 +771,7 @@ describe("db JSON export/import", () => {
       client.close();
     }
     const source = await exportDbJson(sourceUrl);
-    expect(source.version).toBe(20);
+    expect(source.version).toBe(21);
     expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
     expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
     source.tables.local_file_operation[0].path = "../escape";
