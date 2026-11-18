@@ -87,7 +87,9 @@ rechecks both saved files and catalog bindings under the image writer lock.
 These files retain the baseline and selected row-effect reconstruction data.
 The Node host can also retain [saved asset manifests](recovery-asset-payloads.md)
 bound to both source payloads. Their image workflow can reserve those saved
-requirements and verify protected bytes. Complete action and execution records
-and retention policies still need integration. A complete bundle
+requirements and verify protected bytes. It can also retain
+[selected execution payloads](shared-recovery-execution-payloads.md) with trusted
+roots, counts and row-effect attribution. Complete action and execution records,
+manifest integration and retention policies remain pending. A complete bundle
 also needs the matching local payload and a durable publication boundary.
 Installation and activation remain pending. Startup does not repeat file work.

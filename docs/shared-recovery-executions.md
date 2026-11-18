@@ -168,7 +168,8 @@ eligibility. Structural verification provides neither authorization.
 
 Original per-action records, origin and deselected execution sets, provenance
 metadata and retention policy remain separate requirements for complete history.
-Execution payload storage and integration with saved manifest publication remain
-pending. Complete bundle publication and
-installation also remain pending. Production capture remains subject to the
+The Node host can retain [saved execution payloads](shared-recovery-execution-payloads.md)
+with both saved sources and all three original catalog bindings. Integration
+with saved manifest publication, complete bundle publication and installation
+remain pending. Production capture remains subject to the
 [adapter verification gate](action-capture-prototype.md).

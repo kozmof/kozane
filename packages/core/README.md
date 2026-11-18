@@ -62,7 +62,8 @@ current contracts and remaining activation work.
 selected scope records and effect attribution without invoking handlers. Their
 descriptors preserve no-op children and invocation image requirements beside the
 shared row checkpoint. Trusted descriptors can be retained in a local catalog.
-Execution payload storage remains pending.
+The Node host can retain [saved execution payloads](../../docs/shared-recovery-execution-payloads.md)
+after validating both saved source payloads and their original catalog bindings.
 
 ## Application operations
 
