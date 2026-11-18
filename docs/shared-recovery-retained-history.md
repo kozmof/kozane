@@ -100,9 +100,11 @@ host responsibilities.
 
 These helpers cover roots named by the current selected execution checkpoint.
 Trusted descriptors can be retained in the local catalog described below.
-Retained payload files, roots outside that checkpoint, retained manifest storage
-and complete recovery bundle publication remain pending. The production log format and authority policy remain subject
-to the [adapter verification gate](action-capture-prototype.md).
+The Node host can also retain
+[saved payload files](shared-recovery-retained-payloads.md).
+Roots outside that checkpoint, retained manifest storage and complete recovery
+bundle publication remain pending. The production log format and authority policy
+remain subject to the [adapter verification gate](action-capture-prototype.md).
 
 ## Retain trusted descriptors
 

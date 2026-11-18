@@ -82,7 +82,10 @@ pending.
 
 Trusted retained-history descriptors can be registered locally with all four
 original source bindings. Catalog-backed verification rechecks all five records
-after hashing. Payload files and complete bundles remain pending.
+after hashing. The Node host can retain
+[saved retained-history payloads](../../docs/shared-recovery-retained-payloads.md)
+after validating all saved sources and each run's before and after SQL states.
+Complete bundles remain pending.
 
 ## Application operations
 

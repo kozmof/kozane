@@ -93,8 +93,10 @@ original `binding`. Loading performs no filesystem writes or live row installati
 ## Continue bundle preparation
 
 These files preserve first-recorded actions for the selected roots. They do not
-retain origin or deselected effect sets. Complete history retention and complete
-bundle publication remain pending.
+retain origin or deselected effect sets. Use
+[saved retained history](shared-recovery-retained-payloads.md) for those runs and
+their complete contexts. Complete history retention and bundle publication
+remain pending.
 
 Saving or loading originals does not read images or create image reservations.
 Original inputs can reference images absent from selected executions and shared

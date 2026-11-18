@@ -413,7 +413,7 @@ per-run contexts. Selected runs must match the current materialization, while
 deselected runs reconstruct independently. Content checks bind originals,
 executions and shared rows. Optional isolated SQL validation checks each run's
 before and after states, and per-run manifests cover all rows and actual inputs.
-Durable archive payload storage, additional roots and complete bundles remain pending.
+Additional roots, retained manifest storage and complete bundles remain pending.
 See [retained recovery history](shared-recovery-retained-history.md).
 
 Migration 0032 now retains trusted retained-history descriptors with the exact
@@ -424,6 +424,16 @@ Local validation and version 22 JSON exports preserve historical and orphaned
 metadata without timestamp conversion. Native and Node WASM tests cover content
 changes, coherent replacement, migration and rollback. Native tests cover
 competing registrations and JSON import rollback.
+
+The Node host now saves and reopens registered retained-history payloads through
+synced exclusive publication. Independent limits bound retained, original,
+execution, shared and local reads. All four saved sources and both endpoints of
+each retained run undergo content and exact SQL validation. All five original
+catalog bindings and four source files remain checked around file work. Native
+tests cover independent origin and superseded contexts, skipped executions,
+changed evidence, unsafe paths, large inputs, competing writers and publication
+or commit failures. Retained manifests, protected images and complete bundles
+remain pending. See [saved retained history](shared-recovery-retained-payloads.md).
 
 ## Version one
 
@@ -537,6 +547,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [x] Prepare retained origin, superseded rebase and authoritative effect sets for selected roots with a separately trusted inventory, complete per-run before-states and row and execution records. Bind original and selected source hashes, check selected contexts against materialization, validate both endpoints in isolated SQL databases and collect per-run image requirements without applying deselected runs.
 - [x] Persist trusted retained-history descriptors with exact original local bindings and nested original, execution and shared expectations. Require all four live source catalogs, recheck all five bindings after content verification and preserve historical and orphaned metadata through shared replacement, local validation and version 22 JSON exports. Verify migration, rollback and competing registrations.
+- [x] Save and reopen registered retained-history payloads with synced exclusive publication and independent read limits for retained data and all four sources. Validate per-run before and after SQL states, original and selected source contents, all five original catalog bindings and four saved source files. Preserve interrupted evidence after changed files, unsafe paths, competing writers and publication or commit failures.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.
