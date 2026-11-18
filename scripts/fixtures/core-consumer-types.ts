@@ -86,6 +86,13 @@ import {
   type SharedRecoveryExecutionSet,
   type SharedRecoveryExecutionHistory,
   type SharedRecoveryExecutionCheckpoint,
+  parseSharedRecoveryExecutionCheckpointRecord,
+  rememberSharedRecoveryExecutionCheckpoint,
+  rememberSharedRecoveryExecutionCheckpointInTx,
+  readSharedRecoveryExecutionCheckpoint,
+  inspectSharedRecoveryExecutionCheckpoint,
+  requireStoredSharedRecoveryExecutionCheckpoint,
+  type SharedRecoveryExecutionCheckpointBinding,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -348,6 +355,24 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
         savedPayload,
       );
       void sharedRecoveryExecutionAssetManifest(result, historyImages).entries;
+      const registered = await rememberSharedRecoveryExecutionCheckpoint(db, expected);
+      const binding: SharedRecoveryExecutionCheckpointBinding = registered.binding;
+      void parseSharedRecoveryExecutionCheckpointRecord(
+        checkpointKey,
+        JSON.stringify(expected),
+        JSON.stringify(binding.localCheckpoint),
+      );
+      void withTx(db, (tx) => rememberSharedRecoveryExecutionCheckpointInTx(tx, expected));
+      void readSharedRecoveryExecutionCheckpoint(db, checkpointKey);
+      void inspectSharedRecoveryExecutionCheckpoint(db, checkpointKey);
+      const stored: SharedRecoveryExecutionHistory =
+        await requireStoredSharedRecoveryExecutionCheckpoint(
+          db,
+          result,
+          parsedIdentity,
+          savedPayload,
+        );
+      void stored.effectSets;
       // @ts-expect-error Execution histories are immutable.
       result.effectSets[0].executions.push(root);
       // @ts-expect-error Retained execution counts are immutable.

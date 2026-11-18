@@ -10,6 +10,7 @@ import { localRecoveryAssetManifest } from "./local-recovery-assets.js";
 import { inspectLocalRecoveryCheckpoint } from "./local-recovery-store.js";
 import { parseSharedRecoveryCheckpointRecord } from "./shared-recovery-store.js";
 import { parseRecoveryAssetCheckpointRecord } from "./recovery-asset-store.js";
+import { parseSharedRecoveryExecutionCheckpointRecord } from "./shared-recovery-execution-store.js";
 import {
   requireLocalRecoveryCheckpoint,
   parseLocalRecoveryCheckpointRecord,
@@ -147,6 +148,26 @@ export async function validateLocalRecoverySnapshot(
             checkpointId: text("checkpoint_id"),
           },
           text("descriptor"),
+        );
+      }
+  for (const table of snapshot.tables)
+    if (table.name === "local_recovery_executions")
+      for (const row of table.rows) {
+        const text = (column: string) => {
+          const value = row[column];
+          if (value[0] !== "text")
+            throw new LocalRecoveryError(`Stored execution checkpoint requires TEXT: ${column}`);
+          return value[1];
+        };
+        parseSharedRecoveryExecutionCheckpointRecord(
+          {
+            workspaceId: text("workspace_id"),
+            deviceId: text("device_id"),
+            epochId: text("epoch_id"),
+            checkpointId: text("checkpoint_id"),
+          },
+          text("descriptor"),
+          text("local_descriptor"),
         );
       }
   const target = createRowProjection(

@@ -61,7 +61,8 @@ current contracts and remaining activation work.
 [Shared recovery executions](../../docs/shared-recovery-executions.md) prepare
 selected scope records and effect attribution without invoking handlers. Their
 descriptors preserve no-op children and invocation image requirements beside the
-shared row checkpoint. Durable execution storage remains pending.
+shared row checkpoint. Trusted descriptors can be retained in a local catalog.
+Execution payload storage remains pending.
 
 ## Application operations
 

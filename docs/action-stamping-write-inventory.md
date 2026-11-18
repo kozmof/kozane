@@ -40,7 +40,7 @@ envelopes. Replay interprets the frozen list without rerunning the callback.
 `actions/service-registry.ts` now installs every declared syncable database kind
 through its real `InTx` service, together with `system.compose`. The factory
 requires complete host recovery registrations for local-only kinds and refuses
-attempts to replace database handlers. Version 1 currently supports schemas 19–29.
+attempts to replace database handlers. Version 1 currently supports schemas 19–30.
 Tests record and replay each database kind, check namespace ownership and apply
 the executing host's limits. See the
 [service registry](action-execution-scopes.md#dispatch-real-service-actions).
@@ -71,7 +71,7 @@ Local-only handlers must then be prevented from changing shared rows.
 
 Those declarations remain unchanged in contract version 1. The opt-in version 2
 registry now routes taskspace lifecycle intents through shared database services
-on schemas 20–29. Creation and label changes reject local path and observation fields.
+on schemas 20–30. Creation and label changes reject local path and observation fields.
 The five file methods still require explicit host recovery registrations. Node
 application lifecycle callers retain their existing filesystem workflows until
 their routing is migrated. See the
@@ -130,7 +130,8 @@ indexes are rebuilt and are not stamped application tables.
 | `packages/core/src/actions/shared-recovery-assets.ts` | Parse immutable shared-history manifest metadata, require exact selected IDs and check baseline and full effect image coverage. Preserve extra host requirements and refuse conflicting immutable image identities | Obtain trusted manifests from complete invocation and execution records and verify physical bytes through the host |
 | `packages/core/src/actions/recovery-asset-checkpoint.ts` | Bind per-record history manifests and combined image requirements to both original checkpoint descriptors. Copy inputs before hashing, verify independently retained asset expectations and both source hashes, and require exact row and local coverage | Retain complete records and enforce complete bundle publication |
 | `packages/core/src/actions/recovery-asset-store.ts` | Persist trusted asset expectations under immutable checkpoint keys. Require both original live source bindings before registration, recheck all three catalogs after content verification and retain historical or orphaned metadata without timestamp conversion | Enforce complete bundle publication and installation |
-| `packages/core/src/actions/shared-recovery-executions.ts` | Prepare selected scope records with independently trusted roots and execution counts. Check frame bindings, no-op children, sequential trees and complete effect attribution. Bind canonical contents to the original shared descriptor and check invocation image requirements without dispatching handlers | Retain original actions and complete execution history, persist trusted execution descriptors and payloads, integrate saved manifest coverage and enforce complete bundle publication |
+| `packages/core/src/actions/shared-recovery-executions.ts` | Prepare selected scope records with independently trusted roots and execution counts. Check frame bindings, no-op children, sequential trees and complete effect attribution. Bind canonical contents to the original shared descriptor and check invocation image requirements without dispatching handlers | Retain original actions and complete execution history, store execution payloads, integrate saved manifest coverage and enforce complete bundle publication |
+| `packages/core/src/actions/shared-recovery-execution-store.ts` | Register immutable execution expectations with their original local descriptor binding. Require both live source catalogs, resolve expectations before hashing and recheck all three catalogs before success. Preserve historical and orphaned metadata without timestamp conversion | Store execution payloads and original action records, integrate manifest coverage and enforce complete bundle publication and installation |
 
 The `cli/lib/db-json/import.ts` helper does not call inventory repair. The CLI
 command in `cli/commands/db.ts` performs a separate post-import repair after the

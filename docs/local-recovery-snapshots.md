@@ -29,6 +29,7 @@ tables, including explicit empty tables.
 | `local_recovery_checkpoint` | Previously registered checkpoint descriptors and registration timestamps |
 | `local_recovery_shared_history` | Shared-history descriptors, their original local descriptor bindings and registration timestamps |
 | `local_recovery_assets` | Asset descriptors bound to original shared/local expectations and registration timestamps |
+| `local_recovery_executions` | Selected-execution descriptors, original local bindings and registration timestamps |
 
 SQL encodes values before driver conversion. The version 1 tagged row codec keeps
 signed 64-bit integers as decimal strings and preserves finite REAL bits, TEXT,
@@ -124,7 +125,7 @@ Complete bundle publication and activation remain pending.
 Known historical schema descriptors remain readable as metadata. Loading their
 snapshot rows still requires explicit schema compatibility. Unknown schema IDs
 and malformed stored descriptors are refused. The public core entry exports the
-descriptor parsers and types for host bookkeeping. JSON version 19 includes
+descriptor parsers and types for host bookkeeping. JSON version 20 includes
 catalog records, and older supported dumps import with an empty catalog when it
 is absent. Import validates descriptor shape and row identity without installing
 snapshots.
@@ -153,6 +154,13 @@ bound to the exact original shared/local pair. This seventh local table also
 survives shared replacement. Local SQL validation checks every nested asset
 descriptor before allocating a database. The catalog stores expectations while
 manifest payloads and image bytes remain separate requirements.
+
+Migration 0030 adds
+[trusted execution expectations](shared-recovery-executions.md#retain-trusted-execution-descriptors).
+This eighth local table preserves both original source bindings. Shared row
+replacement retains it, and local validation checks every nested descriptor pair
+before database allocation. Execution payload bytes remain a separate storage
+requirement.
 
 ## Validate against a retained catalog binding
 

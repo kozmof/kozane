@@ -1,5 +1,14 @@
 /** Trusted recovery preparation. These helpers do not enroll or activate a workspace. */
 export {
+  parseSharedRecoveryExecutionCheckpointRecord,
+  readSharedRecoveryExecutionCheckpoint,
+  inspectSharedRecoveryExecutionCheckpoint,
+  rememberSharedRecoveryExecutionCheckpoint,
+  rememberSharedRecoveryExecutionCheckpointInTx,
+  requireStoredSharedRecoveryExecutionCheckpoint,
+  type SharedRecoveryExecutionCheckpointBinding,
+} from "./actions/shared-recovery-execution-store.js";
+export {
   SHARED_RECOVERY_EXECUTIONS_VERSION,
   SHARED_RECOVERY_EXECUTION_CHECKPOINT_VERSION,
   parseSharedRecoveryExecutionHistory,

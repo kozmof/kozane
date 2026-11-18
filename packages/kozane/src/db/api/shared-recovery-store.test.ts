@@ -214,7 +214,7 @@ it("preserves exact local binding records across shared restoration and later lo
     { ...identity, checkpointId: "later" },
     async () => selection,
   );
-  expect(snapshot.tables).toHaveLength(7);
+  expect(snapshot.tables).toHaveLength(8);
   expect(
     snapshot.tables.find(({ name }) => name === "local_recovery_shared_history")!.rows[0]
       .created_at,
@@ -394,6 +394,7 @@ it.each([false, true])(
     const f = await fixture(false);
     const migration = migrations.find(({ tag }) => tag === "0028_local_recovery_shared_history")!;
     await withMigration(f.source, async () => [
+      { sql: "DROP TABLE local_recovery_executions", args: [] },
       { sql: "DROP TABLE local_recovery_assets", args: [] },
       { sql: "DROP TABLE local_recovery_shared_history", args: [] },
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },

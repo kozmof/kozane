@@ -107,6 +107,57 @@ collector reads image bytes. The
 [saved checkpoint image workflow](recovery-checkpoint-images.md) provides
 protected byte verification for retained manifests.
 
+## Retain trusted execution descriptors
+
+Migration 0030 adds the device-local `local_recovery_executions` catalog.
+`rememberSharedRecoveryExecutionCheckpoint(db, checkpoint)` registers the
+descriptor established by trusted completed-scope capture. Register the original
+local snapshot and shared row-history descriptors first. The execution descriptor
+must name the same shared expectation, and both live source bindings must match.
+
+Each catalog record retains the execution descriptor and the exact original
+local snapshot descriptor. The transaction-bound variant shares a host-owned
+commit. Registration acquires the writer lock before checking any binding.
+Repeating the same pair preserves its timestamp. Changed hashes, lengths, root
+IDs, expected counts or source bindings cannot replace it under the same key.
+
+`readSharedRecoveryExecutionCheckpoint`,
+`inspectSharedRecoveryExecutionCheckpoint` and
+`parseSharedRecoveryExecutionCheckpointRecord` return an immutable `binding`.
+Its `checkpoint` is the execution descriptor and `localCheckpoint` is the
+original local expectation. The descriptor itself retains the original shared
+checkpoint. Reads validate each pair and row identity without converting
+registration timestamps to JavaScript dates.
+
+Read and inspection helpers return `null` for an unregistered key.
+
+The table has no foreign keys to shared rows or either source catalog. Orphaned
+expectations therefore remain inspectable after a source descriptor disappears.
+Inspection alone does not authorize verification or installation.
+
+`requireStoredSharedRecoveryExecutionCheckpoint(catalog, input,
+expectedIdentity, sharedHistory)` copies the received payload, expected identity
+and source rows before its first read. It resolves the execution expectation and
+both live source bindings in one read transaction. Hashing and attribution
+validation run after that transaction closes. All three records are checked
+again before the immutable payload is returned.
+
+Missing or replaced records and changed original local bindings refuse success,
+including a replacement of all three catalogs with another internally consistent
+pair. Unrelated registrations and equivalent descriptor JSON formatting remain
+allowed. Received catalog rows never establish their own trusted expectation.
+
+Local snapshots include this eighth local table with exact tagged values.
+Isolated local validation checks nested execution descriptors and their original
+local bindings before allocating a database. Shared capture and replacement
+exclude the catalog. JSON version 20 includes its records. Versions 7 through 19
+import with an empty execution catalog when omitted. Import preserves coherent
+historical and orphaned metadata without installing execution records or images.
+
+Registration stores expectations rather than payload bytes. It does not save
+execution arrays, image manifests or image files. Catalog-backed verification
+checks content and attribution, with no SQL validation or live installation.
+
 ## Current scope
 
 These helpers preserve selected finalized scope data. They do not invoke
@@ -117,7 +168,7 @@ eligibility. Structural verification provides neither authorization.
 
 Original per-action records, origin and deselected execution sets, provenance
 metadata and retention policy remain separate requirements for complete history.
-Durable execution-descriptor registration, payload storage and integration with
-saved manifest publication remain pending. Complete bundle publication and
+Execution payload storage and integration with saved manifest publication remain
+pending. Complete bundle publication and
 installation also remain pending. Production capture remains subject to the
 [adapter verification gate](action-capture-prototype.md).
