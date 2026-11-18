@@ -87,6 +87,12 @@ after hashing. The Node host can retain
 after validating all saved sources and each run's before and after SQL states.
 Complete bundles remain pending.
 
+[Retained asset checkpoints](../../docs/retained-recovery-asset-checkpoints.md)
+bind per-run and original-input manifests to the retained history and current
+asset descriptor. Verification checks all six source payloads and independent
+row and invocation coverage before accepting the combined image requirements.
+Durable retained-manifest storage and image protection remain pending.
+
 ## Application operations
 
 Use resource services for application writes. They own domain validation, configured

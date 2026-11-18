@@ -103,6 +103,8 @@ Saving and loading retained history do not read images or reserve them. Use
 `sharedRecoveryRetainedAssetManifest` to collect per-run metadata requirements,
 including deselected rows and execution inputs. Original invocation and current
 shared/local requirements remain separate inputs to the combined manifest.
-Connecting saved retained files to protected image verification remains pending.
+[Retained asset checkpoints](retained-recovery-asset-checkpoints.md) prepare
+content-bound manifests for these sources. Durable manifest storage and connecting
+saved retained files to protected image verification remain pending.
 Installation and activation remain pending. Startup does not automatically
 repeat filesystem work.

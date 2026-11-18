@@ -1,5 +1,9 @@
 # Content-bound recovery image requirements
 
+Use [retained asset checkpoints](retained-recovery-asset-checkpoints.md) to also
+bind origin, superseded rebase and authoritative run manifests with original-input
+requirements. The helpers below describe the current shared/local asset format.
+
 Core can bind image manifests to an exact pair of recovery checkpoints.
 Use the asset payload helpers from `@kozane/core/recovery` to prepare requirements
 for later durable bundle storage.

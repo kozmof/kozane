@@ -128,6 +128,16 @@ import {
   inspectSharedRecoveryRetainedCheckpoint,
   requireStoredSharedRecoveryRetainedCheckpoint,
   type SharedRecoveryRetainedCheckpointBinding,
+  parseSharedRecoveryRetainedImages,
+  RETAINED_RECOVERY_ASSET_PAYLOAD_VERSION,
+  RETAINED_RECOVERY_ASSET_CHECKPOINT_VERSION,
+  describeRetainedRecoveryAssets,
+  parseRetainedRecoveryAssetPayload,
+  parseRetainedRecoveryAssetCheckpoint,
+  requireRetainedRecoveryAssetCheckpoint,
+  type RetainedRecoveryAssetPayload,
+  type RetainedRecoveryAssetCheckpoint,
+  type RetainedRecoveryAssetSources,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -142,6 +152,9 @@ import {
   type MigrationRecord,
 } from "@kozane/core/migrations";
 declare const db: DB;
+declare const retainedAssetLocalSnapshot: LocalRecoverySnapshot;
+declare const retainedAssetCurrentPayload: RecoveryAssetPayload;
+declare const retainedAssetCurrentCheckpoint: RecoveryAssetCheckpoint;
 declare const error: ValidationError;
 const input: CardCreateInput = { partitionId: "p", content: "Typed public consumer" };
 const position: CardPositionUpdate = { cardId: "c", posX: 1, posY: 2 };
@@ -517,6 +530,44 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
         retainedCheckpoint,
       );
       const retainedBinding: SharedRecoveryRetainedCheckpointBinding = registeredRetained.binding;
+      const retainedAssetVersion: 1 = RETAINED_RECOVERY_ASSET_PAYLOAD_VERSION;
+      const retainedAssetCheckpointVersion: 1 = RETAINED_RECOVERY_ASSET_CHECKPOINT_VERSION;
+      void retainedAssetVersion;
+      void retainedAssetCheckpointVersion;
+      const retainedAssetSources: RetainedRecoveryAssetSources = {
+        localSnapshot: retainedAssetLocalSnapshot,
+        sharedHistory: savedPayload,
+        executions: result,
+        originalActions: verifiedOriginals,
+        retainedHistory: retainedPayload,
+        currentAssets: retainedAssetCurrentPayload,
+      };
+      const retainedAssets = await describeRetainedRecoveryAssets({
+        ...retainedAssetSources,
+        binding: retainedBinding,
+        assetCheckpoint: retainedAssetCurrentCheckpoint,
+        history: parseSharedRecoveryRetainedImages(retainedImages),
+        originalImages: { version: 1, entries: [] },
+      });
+      const retainedAssetPayload: RetainedRecoveryAssetPayload = parseRetainedRecoveryAssetPayload(
+        retainedAssets.payload,
+      );
+      const retainedAssetCheckpoint: RetainedRecoveryAssetCheckpoint =
+        parseRetainedRecoveryAssetCheckpoint(retainedAssets.checkpoint);
+      const verifiedRetainedAssets: RetainedRecoveryAssetPayload =
+        await requireRetainedRecoveryAssetCheckpoint(
+          retainedAssetPayload,
+          retainedAssetCheckpoint,
+          parsedIdentity,
+          retainedAssetSources,
+        );
+      void verifiedRetainedAssets.manifest.entries;
+      // @ts-expect-error Per-run manifests remain immutable.
+      verifiedRetainedAssets.history.effectSets.push(retainedImages.effectSets[0]);
+      // @ts-expect-error Original input requirements remain immutable.
+      verifiedRetainedAssets.originalImages.entries.length = 0;
+      // @ts-expect-error Retained source expectations remain immutable.
+      retainedAssetCheckpoint.binding.localCheckpoint.sha256 = "changed";
       void parseSharedRecoveryRetainedCheckpointRecord(
         checkpointKey,
         JSON.stringify(retainedCheckpoint),

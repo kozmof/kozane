@@ -96,6 +96,11 @@ requirements.
 The collector checks metadata. Physical byte verification and protection remain
 host responsibilities.
 
+[Retained asset checkpoints](retained-recovery-asset-checkpoints.md) bind per-run
+manifests, original inputs and current shared/local requirements to the exact
+retained and current asset descriptors. They verify complete source contents and
+independent coverage before preparing the combined manifest.
+
 ## Current scope
 
 These helpers cover roots named by the current selected execution checkpoint.

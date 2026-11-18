@@ -356,13 +356,9 @@ export async function validateSharedRecoveryRetainedHistory(
   }
   return payload;
 }
-/** Per-run baseline, row and actual invocation coverage, including deselected children and intermediate images. */
-export function sharedRecoveryRetainedAssetManifest(
-  input: unknown,
-  images: unknown,
-): AssetManifest {
-  const payload = parseSharedRecoveryRetainedHistory(input),
-    value = fields(images, ["effectSets"]);
+/** Own per-run image metadata without invoking transport hooks. Selection and coverage need the retained history. */
+export function parseSharedRecoveryRetainedImages(input: unknown): SharedRecoveryRetainedImages {
+  const value = fields(input, ["effectSets"]);
   const entries = array(value.effectSets).map((input) => {
     const value = fields(input, ["id", "history"]);
     return Object.freeze({
@@ -370,6 +366,15 @@ export function sharedRecoveryRetainedAssetManifest(
       history: parseSharedRecoveryHistoryImages(value.history),
     });
   });
+  return Object.freeze({ effectSets: Object.freeze(entries) });
+}
+/** Per-run baseline, row and actual invocation coverage, including deselected children and intermediate images. */
+export function sharedRecoveryRetainedAssetManifest(
+  input: unknown,
+  images: unknown,
+): AssetManifest {
+  const payload = parseSharedRecoveryRetainedHistory(input),
+    entries = parseSharedRecoveryRetainedImages(images).effectSets;
   if (
     !same(
       entries.map(({ id }) => id),

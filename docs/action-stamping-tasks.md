@@ -435,6 +435,15 @@ changed evidence, unsafe paths, large inputs, competing writers and publication
 or commit failures. Retained manifests, protected images and complete bundles
 remain pending. See [saved retained history](shared-recovery-retained-payloads.md).
 
+Core now prepares content-bound retained asset payloads with per-run manifests,
+original-input requirements and the exact current asset descriptor. Verification
+checks all six source payloads and requires complete baseline, effect and actual
+invocation coverage in each run's own manifests. Original and selected inputs
+also retain independent coverage, while the combined manifest preserves current
+local requirements and host extras. Durable manifest storage and protected image
+integration remain pending. See
+[retained asset checkpoints](retained-recovery-asset-checkpoints.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -548,6 +557,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Prepare retained origin, superseded rebase and authoritative effect sets for selected roots with a separately trusted inventory, complete per-run before-states and row and execution records. Bind original and selected source hashes, check selected contexts against materialization, validate both endpoints in isolated SQL databases and collect per-run image requirements without applying deselected runs.
 - [x] Persist trusted retained-history descriptors with exact original local bindings and nested original, execution and shared expectations. Require all four live source catalogs, recheck all five bindings after content verification and preserve historical and orphaned metadata through shared replacement, local validation and version 22 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered retained-history payloads with synced exclusive publication and independent read limits for retained data and all four sources. Validate per-run before and after SQL states, original and selected source contents, all five original catalog bindings and four saved source files. Preserve interrupted evidence after changed files, unsafe paths, competing writers and publication or commit failures.
+- [x] Bind canonical per-run retained manifests and first-recorded input requirements to the exact retained-history binding and current asset descriptor. Verify all six source payloads, independent baseline and effect coverage for every run, original and selected invocation coverage, and the exact combined manifest including local requirements and host extras. Own all sources before hashing and preserve historical descriptors as metadata.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

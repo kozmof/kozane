@@ -353,6 +353,64 @@ const assets = await recovery.describeRecoveryAssets({
   binding: { checkpoint: sharedDescription.checkpoint, localCheckpoint: assetLocal.checkpoint },
   history: sharedHistoryImages,
 });
+const retainedAssetSources = {
+  ...assetSources,
+  executions: executionDescription.payload,
+  originalActions: actionDescription.payload,
+  retainedHistory: retainedDescription.payload,
+  currentAssets: assets.payload,
+};
+const retainedAssets = await recovery.describeRetainedRecoveryAssets({
+  ...retainedAssetSources,
+  binding: { checkpoint: retainedDescription.checkpoint, localCheckpoint: assetLocal.checkpoint },
+  assetCheckpoint: assets.checkpoint,
+  history: { effectSets: [{ id: "empty", history: sharedHistoryImages }] },
+  originalImages: { version: 1, entries: [] },
+});
+assert.equal(retainedAssets.payload.version, recovery.RETAINED_RECOVERY_ASSET_PAYLOAD_VERSION);
+assert.equal(
+  retainedAssets.checkpoint.version,
+  recovery.RETAINED_RECOVERY_ASSET_CHECKPOINT_VERSION,
+);
+assert.equal(
+  retainedAssets.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(retainedAssets.payload), "utf8"),
+);
+assert.equal(
+  retainedAssets.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(retainedAssets.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryRetainedImages(retainedAssets.payload.history),
+  retainedAssets.payload.history,
+);
+assert.deepEqual(
+  recovery.parseRetainedRecoveryAssetPayload(retainedAssets.payload),
+  retainedAssets.payload,
+);
+assert.deepEqual(
+  recovery.parseRetainedRecoveryAssetCheckpoint(retainedAssets.checkpoint),
+  retainedAssets.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireRetainedRecoveryAssetCheckpoint(
+    retainedAssets.payload,
+    retainedAssets.checkpoint,
+    sharedIdentity,
+    retainedAssetSources,
+  ),
+  retainedAssets.payload,
+);
+await assert.rejects(
+  recovery.requireRetainedRecoveryAssetCheckpoint(
+    retainedAssets.payload,
+    { ...retainedAssets.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    retainedAssetSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(retainedAssets.payload.manifest, { version: 1, entries: [] });
 assert.equal(assets.payload.version, recovery.RECOVERY_ASSET_PAYLOAD_VERSION);
 assert.equal(assets.checkpoint.version, recovery.RECOVERY_ASSET_CHECKPOINT_VERSION);
 assert.equal(

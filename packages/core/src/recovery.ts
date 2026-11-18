@@ -8,6 +8,7 @@ export {
   requireSharedRecoveryRetainedCheckpoint,
   validateSharedRecoveryRetainedHistory,
   sharedRecoveryRetainedAssetManifest,
+  parseSharedRecoveryRetainedImages,
   type SharedRecoveryEffectSetSource,
   type SharedRecoveryRetainedSelection,
   type SharedRecoveryRetainedSet,
@@ -156,3 +157,14 @@ export {
   requireStoredSharedRecoveryRetainedCheckpoint,
   type SharedRecoveryRetainedCheckpointBinding,
 } from "./actions/shared-recovery-retained-store.js";
+export {
+  RETAINED_RECOVERY_ASSET_PAYLOAD_VERSION,
+  RETAINED_RECOVERY_ASSET_CHECKPOINT_VERSION,
+  parseRetainedRecoveryAssetPayload,
+  parseRetainedRecoveryAssetCheckpoint,
+  describeRetainedRecoveryAssets,
+  requireRetainedRecoveryAssetCheckpoint,
+  type RetainedRecoveryAssetPayload,
+  type RetainedRecoveryAssetCheckpoint,
+  type RetainedRecoveryAssetSources,
+} from "./actions/retained-recovery-asset-checkpoint.js";
