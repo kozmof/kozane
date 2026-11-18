@@ -48,6 +48,42 @@ evidence and changed bindings refuse success. A new reservation rolls back if
 owner publication changes a required binding. Earlier protection survives
 failed loading or verification.
 
+## Check saved execution images
+
+Save the matching [execution payload](shared-recovery-execution-payloads.md) and
+add `executionMaxBytes` to the registered saved-manifest path. The positive safe
+integer limit bounds the execution file independently of the other payloads.
+Supplying this option with host history manifests is refused.
+
+```ts
+const retained = await retainRegisteredRecoveryCheckpointImages({
+  root,
+  db,
+  expected,
+  localMaxBytes,
+  sharedMaxBytes,
+  assetMaxBytes,
+  executionMaxBytes,
+  createValidationDatabase,
+});
+```
+
+Loading checks trusted execution contents and attribution, then requires each
+effect-set manifest to cover its root and all child inputs. No-op children and
+zero-effect roots remain covered. Entries in another set do not satisfy missing
+coverage, even if the combined manifest contains the image.
+
+The result adds the original `executionBinding`. All four original catalog
+bindings and saved files are checked under the image writer lock before and
+after reservation and byte verification. Changed execution metadata, missing or
+changed execution bytes and temporary evidence refuse success. New reservations
+roll back after a failed recheck. Earlier pending or retained protection survives
+failed loading, verification or commits.
+
+The asset descriptor and image owner format remain unchanged. Supply
+`executionMaxBytes` for every call that requires this coverage. Neither record
+serves as a durable receipt for execution coverage or complete bundle publication.
+
 ## Supply host manifests
 
 Supply `history` with a baseline and an ordered `effectSets` array. Each entry
@@ -78,7 +114,8 @@ conflicting immutable names when merging requirements.
 
 `reserveRegisteredRecoveryCheckpointImages` returns the original shared/local
 `binding`, stable recovery `owner`, combined `manifest`, owner `state` and a
-`changed` flag. The saved-manifest path also returns `assetCheckpoint`. It checks
+`changed` flag. The saved-manifest path also returns `assetCheckpoint` and adds
+`executionBinding` when execution coverage is requested. It checks
 the required catalog bindings and published files under the image writer lock
 before and after owner publication. Missing or changed payload bytes and any
 temporary evidence refuse reservation. This operation does not read image bytes.

@@ -82,6 +82,46 @@ The immutable result contains `payload` and its trusted `checkpoint`. Loading
 performs no filesystem writes or live row installation. Temporary SQL rows are
 rolled back in each validation database.
 
+## Check saved execution coverage
+
+Save the matching [execution payload](shared-recovery-execution-payloads.md) and
+pass `executionMaxBytes` to either the save or load operation. This optional host
+limit must be a positive safe integer. An execution descriptor above the limit,
+a missing registration or mismatched original source bindings refuses work
+before opening files. The workflow copies the option before awaiting validation.
+
+```ts
+const saved = await saveRegisteredRecoveryAssetPayload({
+  root,
+  db,
+  expected,
+  input: assets.payload,
+  localMaxBytes,
+  sharedMaxBytes,
+  executionMaxBytes,
+  createValidationDatabase,
+});
+```
+
+The saved execution loader verifies trusted contents, both sources and execution
+attribution. Each effect-set manifest must cover its root input and every child
+input, including no-op children and zero-effect roots. An image listed only in
+another set's manifest does not satisfy that check, even when the combined
+manifest is unchanged. Extra supplied manifest entries remain required.
+
+Both sources also undergo the asset loader's validation. Supply a separate empty
+validation database and own its disposal for every factory call. Missing or
+changed execution bytes and any execution temporary evidence refuse success.
+All four original catalog bindings and the execution, shared and local source
+files are rechecked around asset publication or before loading returns.
+
+The result adds `executionBinding` with the original trusted execution descriptor
+and local expectation. The asset format and its descriptor still bind the
+shared/local pair. Execution coverage is an explicit check for each call.
+Omitting `executionMaxBytes` leaves invocation coverage to the host's retained
+records and manifests. Inspection observes asset evidence without checking
+execution coverage.
+
 ## Continue bundle preparation
 
 Saved manifests preserve requirements for both source payloads. These operations
@@ -91,8 +131,9 @@ has committed protection and verified its required bytes.
 
 The [saved checkpoint image workflow](recovery-checkpoint-images.md#use-registered-saved-manifests)
 accepts `assetMaxBytes` to load these manifests and commit their image protection
-before byte verification. It carries all three original catalog expectations and
-saved files through the image writer boundary. Complete action and execution
+before byte verification. Supplying `executionMaxBytes` also checks saved
+execution coverage and carries all four original catalog expectations and files
+through the image writer boundary. Complete action and execution
 retention, complete bundle publication, one-time installation and activation
 remain pending. A saved manifest is not a bundle publication or installation
 receipt.

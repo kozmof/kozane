@@ -92,7 +92,11 @@ origin and deselected execution sets, provenance and retention policy remain
 requirements for complete history.
 
 Saving or loading execution files does not read images or create image
-reservations. Integration with [saved asset manifests](recovery-asset-payloads.md)
-must still establish invocation image coverage from these trusted execution
-records. Complete bundle publication, one-time installation and activation
-remain pending. Startup does not automatically repeat file work.
+reservations. Supply `executionMaxBytes` to the
+[saved asset workflow](recovery-asset-payloads.md#check-saved-execution-coverage)
+to check each set's invocation image coverage against these trusted records.
+The [saved checkpoint image workflow](recovery-checkpoint-images.md#check-saved-execution-images)
+carries the execution expectation and file through reservation and byte
+verification with the other three payloads. Complete bundle publication,
+one-time installation and activation remain pending. Startup does not
+automatically repeat file work.

@@ -11,12 +11,18 @@ import {
   readRecoveryAssetCheckpoint,
   readSharedRecoveryCheckpoint,
   readLocalRecoveryCheckpoint,
+  inspectSharedRecoveryExecutionCheckpoint,
+  readSharedRecoveryExecutionCheckpoint,
+  sharedRecoveryExecutionAssetManifest,
   type RecoveryAssetCheckpoint,
+  type RecoveryAssetPayload,
+  type SharedRecoveryExecutionCheckpointBinding,
   type LocalRecoveryIdentity,
   type LocalRecoveryCheckpointKey,
 } from "@kozane/core/recovery";
 import { loadRegisteredLocalRecoveryPayload } from "./local-recovery-payload.js";
 import { loadRegisteredSharedRecoveryPayload } from "./shared-recovery-payload.js";
+import { loadRegisteredSharedRecoveryExecutionPayload } from "./shared-recovery-execution-payload.js";
 import {
   observe,
   publishRecoveryPayload,
@@ -36,17 +42,27 @@ type Options = {
   expected: LocalRecoveryIdentity;
   localMaxBytes: number;
   sharedMaxBytes: number;
+  executionMaxBytes?: number;
   createValidationDatabase: () => Promise<DB>;
 };
 function context(options: Options) {
-  const { root, db, localMaxBytes, sharedMaxBytes, createValidationDatabase } = options;
+  const { root, db, localMaxBytes, sharedMaxBytes, executionMaxBytes, createValidationDatabase } =
+    options;
   if (![localMaxBytes, sharedMaxBytes].every((value) => Number.isSafeInteger(value) && value > 0))
     throw new RecoveryAssetPayloadError("Payload read limits must be positive safe integers");
+  if (
+    executionMaxBytes !== undefined &&
+    (!Number.isSafeInteger(executionMaxBytes) || executionMaxBytes < 1)
+  )
+    throw new RecoveryAssetPayloadError(
+      "Execution payload read limit must be a positive safe integer",
+    );
   return {
     root,
     db,
     localMaxBytes,
     sharedMaxBytes,
+    executionMaxBytes,
     createValidationDatabase,
     expected: parseLocalRecoveryIdentity(options.expected),
   };
@@ -69,7 +85,26 @@ async function checkpointFor(ctx: Context) {
     throw new RecoveryAssetPayloadError("Registered source payload exceeds read limit");
   return checkpoint;
 }
-async function requireBinding(tx: Tx, checkpoint: RecoveryAssetCheckpoint) {
+async function executionFor(ctx: Context, checkpoint: RecoveryAssetCheckpoint) {
+  if (ctx.executionMaxBytes === undefined) return undefined;
+  const binding = await inspectSharedRecoveryExecutionCheckpoint(ctx.db, keyOf(ctx.expected));
+  if (!binding)
+    throw new RecoveryAssetPayloadError("Trusted execution checkpoint is not registered");
+  if (
+    JSON.stringify(binding.checkpoint.checkpoint) !==
+      JSON.stringify(checkpoint.binding.checkpoint) ||
+    JSON.stringify(binding.localCheckpoint) !== JSON.stringify(checkpoint.binding.localCheckpoint)
+  )
+    throw new RecoveryAssetPayloadError("Execution and asset source bindings differ");
+  if (binding.checkpoint.byteLength > ctx.executionMaxBytes)
+    throw new RecoveryAssetPayloadError("Registered execution payload exceeds read limit");
+  return binding;
+}
+async function requireBinding(
+  tx: Tx,
+  checkpoint: RecoveryAssetCheckpoint,
+  executionBinding?: SharedRecoveryExecutionCheckpointBinding,
+) {
   const key = keyOf(checkpoint.binding.checkpoint.identity);
   const assets = await readRecoveryAssetCheckpoint(tx, key);
   const shared = await readSharedRecoveryCheckpoint(tx, key);
@@ -83,20 +118,49 @@ async function requireBinding(tx: Tx, checkpoint: RecoveryAssetCheckpoint) {
     JSON.stringify(local) !== JSON.stringify(checkpoint.binding.localCheckpoint)
   )
     throw new RecoveryAssetPayloadError("Registered asset or source checkpoint binding changed");
+  if (executionBinding) {
+    const executions = await readSharedRecoveryExecutionCheckpoint(tx, key);
+    if (!executions || JSON.stringify(executions) !== JSON.stringify(executionBinding))
+      throw new RecoveryAssetPayloadError("Registered execution checkpoint binding changed");
+  }
 }
-async function requireSourceFiles(root: string, checkpoint: RecoveryAssetCheckpoint) {
+async function requireSourceFiles(
+  root: string,
+  checkpoint: RecoveryAssetCheckpoint,
+  executionBinding?: SharedRecoveryExecutionCheckpointBinding,
+) {
   for (const [sourceArea, descriptor] of [
     ["checkpoints", checkpoint.binding.localCheckpoint],
     ["shared-history", checkpoint.binding.checkpoint],
+    ...(executionBinding ? [["executions", executionBinding.checkpoint] as const] : []),
   ] as const) {
     const evidence = await observe(root, descriptor, sourceArea);
     if (evidence.published !== "matching-content" || evidence.temporary !== "absent")
       throw new RecoveryAssetPayloadError(`Saved ${sourceArea} payload needs review`);
   }
 }
-async function requireReady(tx: Tx, ctx: Context, checkpoint: RecoveryAssetCheckpoint) {
-  await requireBinding(tx, checkpoint);
-  await requireSourceFiles(ctx.root, checkpoint);
+async function requireReady(
+  tx: Tx,
+  ctx: Context,
+  checkpoint: RecoveryAssetCheckpoint,
+  executionBinding?: SharedRecoveryExecutionCheckpointBinding,
+) {
+  await requireBinding(tx, checkpoint, executionBinding);
+  await requireSourceFiles(ctx.root, checkpoint, executionBinding);
+}
+async function requireExecutionCoverage(
+  ctx: Context,
+  payload: RecoveryAssetPayload,
+  binding: SharedRecoveryExecutionCheckpointBinding | undefined,
+) {
+  if (!binding) return;
+  const executions = await loadRegisteredSharedRecoveryExecutionPayload({
+    ...ctx,
+    maxBytes: ctx.executionMaxBytes!,
+  });
+  if (JSON.stringify(executions.binding) !== JSON.stringify(binding))
+    throw new RecoveryAssetPayloadError("Saved execution checkpoint binding changed");
+  sharedRecoveryExecutionAssetManifest(executions.payload, payload.history);
 }
 async function sources(ctx: Context, checkpoint: RecoveryAssetCheckpoint) {
   const local = await loadRegisteredLocalRecoveryPayload({ ...ctx, maxBytes: ctx.localMaxBytes });
@@ -144,12 +208,14 @@ export async function inspectRegisteredRecoveryAssetPayload(
   return { checkpoint, ...(await observe(root, checkpoint, area)) };
 }
 
-/** Verify all three expectations and both saved sources before exclusive manifest publication. */
+/** Verify source expectations and optional saved execution coverage before exclusive manifest publication. */
 export async function saveRegisteredRecoveryAssetPayload(options: Options & { input: unknown }) {
   const ctx = context(options);
   const input = parseRecoveryAssetPayload(options.input);
   const checkpoint = await checkpointFor(ctx);
   const { payload, bytes } = canonical(input, checkpoint);
+  const executionBinding = await executionFor(ctx, checkpoint);
+  await requireExecutionCoverage(ctx, payload, executionBinding);
   const contents = await sources(ctx, checkpoint);
   await requireRecoveryAssetCheckpoint(payload, checkpoint, ctx.expected, contents);
   return withTx(ctx.db, async (tx) => {
@@ -159,14 +225,19 @@ export async function saveRegisteredRecoveryAssetPayload(options: Options & { in
       area,
       checkpoint,
       bytes,
-      () => requireReady(tx, ctx, checkpoint),
+      () => requireReady(tx, ctx, checkpoint, executionBinding),
       RecoveryAssetPayloadError,
     );
-    return { path: published.path, checkpoint, changed: published.changed };
+    return {
+      path: published.path,
+      checkpoint,
+      changed: published.changed,
+      ...(executionBinding ? { executionBinding } : {}),
+    };
   });
 }
 
-/** Read bounded published manifest bytes, validate both saved sources, then recheck files and all catalogs. */
+/** Read bounded manifest bytes, validate saved sources and optional executions, then recheck all expectations. */
 export async function loadRegisteredRecoveryAssetPayload(options: Options & { maxBytes: number }) {
   const ctx = context(options);
   const { maxBytes } = options;
@@ -175,9 +246,10 @@ export async function loadRegisteredRecoveryAssetPayload(options: Options & { ma
   const checkpoint = await checkpointFor(ctx);
   if (checkpoint.byteLength > maxBytes)
     throw new RecoveryAssetPayloadError("Registered asset payload exceeds read limit");
+  const executionBinding = await executionFor(ctx, checkpoint);
   const loaded = await withTx(ctx.db, async (tx) => {
     await tx.run(sql`UPDATE local_recovery_assets SET descriptor=descriptor WHERE 0`);
-    await requireBinding(tx, checkpoint);
+    await requireBinding(tx, checkpoint, executionBinding);
     const files = paths(await directory(ctx.root, false, area), checkpoint);
     await requireNoTemporary(files.temporary);
     const file = await readEntry(files.published, checkpoint, true);
@@ -197,16 +269,17 @@ export async function loadRegisteredRecoveryAssetPayload(options: Options & { ma
     });
   }
   const { payload } = canonical(input, checkpoint);
+  await requireExecutionCoverage(ctx, payload, executionBinding);
   const contents = await sources(ctx, checkpoint);
   await requireRecoveryAssetCheckpoint(payload, checkpoint, ctx.expected, contents);
   await withTx(ctx.db, async (tx) => {
     await tx.run(sql`UPDATE local_recovery_assets SET descriptor=descriptor WHERE 0`);
-    await requireReady(tx, ctx, checkpoint);
+    await requireReady(tx, ctx, checkpoint, executionBinding);
     const files = paths(await directory(ctx.root, false, area), checkpoint);
     await requireNoTemporary(files.temporary);
     const current = await fs.lstat(files.published, { bigint: true });
     if (!current.isFile() || !sameFile(current, loaded.identity))
       throw new RecoveryAssetPayloadError("Registered asset payload changed during validation");
   });
-  return Object.freeze({ payload, checkpoint });
+  return Object.freeze({ payload, checkpoint, ...(executionBinding ? { executionBinding } : {}) });
 }

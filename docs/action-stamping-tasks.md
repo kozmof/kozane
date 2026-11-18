@@ -358,9 +358,18 @@ exclusive publication. Independent limits bound execution, shared and local
 payload reads. Both saved sources undergo exact SQL validation before execution
 attribution is checked. All three original catalog bindings and source bytes
 are rechecked around file work. Native tests cover changed files, unsafe paths,
-interrupted publication, competing writers and failed commits. Original action
-retention, saved manifest integration and complete bundle publication remain
-pending. See [saved execution payloads](shared-recovery-execution-payloads.md).
+interrupted publication, competing writers and failed commits. See
+[saved execution payloads](shared-recovery-execution-payloads.md).
+
+Saved asset save/load and checkpoint image protection now accept an explicit
+`executionMaxBytes` limit. They check each set's manifest against trusted saved
+root and child inputs, including no-op children and zero-effect roots. All four
+original catalog bindings and files remain checked through publication,
+reservation and verification. Native tests cover unchanged combined manifests,
+changed execution evidence, archived invocation images, cleanup handoff,
+competing writers and failed commits. Original action retention, complete
+execution history and complete bundle publication remain pending. See
+[saved execution image coverage](recovery-checkpoint-images.md#check-saved-execution-images).
 
 ## Version one
 
@@ -466,6 +475,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Prepare selected execution records with independently trusted root IDs and counts. Bind finalized invocations, used and unused allocations, no-op children and complete effect attribution to the original shared checkpoint. Verify sequential trees, invocation image coverage, transport ownership and real captured scopes on native and Node WASM adapters without invoking handlers.
 - [x] Persist trusted execution descriptors with original local checkpoint bindings. Require live matching shared and local expectations, recheck all three catalogs after verification and retain exact metadata through shared replacement, local validation and version 20 JSON exports. Verify orphaned inspection, migration, rollback and competing connections.
 - [x] Save and reopen registered execution payloads with synced exclusive publication and independent limits for execution, shared and local reads. Validate both saved sources and execution attribution, recheck all three original catalog bindings and files, and preserve evidence after filesystem or commit failures. Verify unsafe paths, large inputs, exact source SQL values and competing writers without invoking handlers or installing rows.
+- [x] Connect saved execution payloads to asset save/load and protected image verification through an explicit host byte limit. Require per-set root and child image coverage, including no-op and zero-effect records. Carry all four original catalog bindings and files through publication, reservation and verification while preserving interruption evidence and earlier owners after failures.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

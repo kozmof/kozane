@@ -9,9 +9,11 @@ import {
   readSharedRecoveryCheckpoint,
   readLocalRecoveryCheckpoint,
   readRecoveryAssetCheckpoint,
+  readSharedRecoveryExecutionCheckpoint,
   type RecoveryAssetCheckpoint,
   type SharedRecoveryCheckpointBinding,
   type SharedRecoveryHistoryImages,
+  type SharedRecoveryExecutionCheckpointBinding,
 } from "@kozane/core/recovery";
 import { lockImageAssetWork } from "../../db/api/image-upload.js";
 import { reserveAssetManifestInTx, readAssetManifest } from "../../db/api/asset-manifest.js";
@@ -25,10 +27,13 @@ import { observe } from "./recovery-payload-files.js";
 export class RecoveryCheckpointImagesError extends Error {
   override readonly name = "RecoveryCheckpointImagesError";
 }
-type Options = Omit<Parameters<typeof loadRegisteredRecoveryAssetPayload>[0], "maxBytes"> &
+type Options = Omit<
+  Parameters<typeof loadRegisteredRecoveryAssetPayload>[0],
+  "maxBytes" | "executionMaxBytes"
+> &
   (
-    | { history: SharedRecoveryHistoryImages; assetMaxBytes?: never }
-    | { assetMaxBytes: number; history?: never }
+    | { history: SharedRecoveryHistoryImages; assetMaxBytes?: never; executionMaxBytes?: never }
+    | { assetMaxBytes: number; executionMaxBytes?: number; history?: never }
   );
 type Prepared = {
   root: string;
@@ -37,21 +42,24 @@ type Prepared = {
   manifest: AssetManifest;
   owner: ReturnType<typeof registeredLocalRecoveryImageOwner>;
   assetCheckpoint?: RecoveryAssetCheckpoint;
+  executionBinding?: SharedRecoveryExecutionCheckpointBinding;
 };
 async function prepare(options: Options): Promise<Prepared> {
-  const { root, db, createValidationDatabase, localMaxBytes, sharedMaxBytes } = options;
+  const { root, db, createValidationDatabase, localMaxBytes, sharedMaxBytes, executionMaxBytes } =
+    options;
   if (![localMaxBytes, sharedMaxBytes].every((value) => Number.isSafeInteger(value) && value > 0))
     throw new RecoveryCheckpointImagesError("Payload read limits must be positive safe integers");
   const expected = parseLocalRecoveryIdentity(options.expected);
   if (options.assetMaxBytes !== undefined) {
     if (options.history !== undefined)
       throw new RecoveryCheckpointImagesError("Choose saved manifests or host history");
-    const { payload, checkpoint } = await loadRegisteredRecoveryAssetPayload({
+    const { payload, checkpoint, executionBinding } = await loadRegisteredRecoveryAssetPayload({
       root,
       db,
       expected,
       localMaxBytes,
       sharedMaxBytes,
+      executionMaxBytes,
       createValidationDatabase,
       maxBytes: options.assetMaxBytes,
     });
@@ -62,8 +70,11 @@ async function prepare(options: Options): Promise<Prepared> {
       manifest: payload.manifest,
       owner: registeredLocalRecoveryImageOwner(expected),
       assetCheckpoint: checkpoint,
+      ...(executionBinding ? { executionBinding } : {}),
     };
   }
+  if (executionMaxBytes !== undefined)
+    throw new RecoveryCheckpointImagesError("Execution coverage requires saved manifests");
   const history = parseSharedRecoveryHistoryImages(options.history);
   const local = await loadRegisteredLocalRecoveryPayload({
     root,
@@ -110,6 +121,11 @@ async function requireBinding(tx: Tx, prepared: Prepared) {
     if (!assets || JSON.stringify(assets) !== JSON.stringify(prepared.assetCheckpoint))
       throw new RecoveryCheckpointImagesError("Registered asset checkpoint binding changed");
   }
+  if (prepared.executionBinding) {
+    const executions = await readSharedRecoveryExecutionCheckpoint(tx, key);
+    if (!executions || JSON.stringify(executions) !== JSON.stringify(prepared.executionBinding))
+      throw new RecoveryCheckpointImagesError("Registered execution checkpoint binding changed");
+  }
 }
 async function requirePayloads(prepared: Prepared) {
   const payloads = [
@@ -117,6 +133,9 @@ async function requirePayloads(prepared: Prepared) {
     { area: "shared-history" as const, checkpoint: prepared.binding.checkpoint },
     ...(prepared.assetCheckpoint
       ? [{ area: "asset-manifests" as const, checkpoint: prepared.assetCheckpoint }]
+      : []),
+    ...(prepared.executionBinding
+      ? [{ area: "executions" as const, checkpoint: prepared.executionBinding.checkpoint }]
       : []),
   ];
   for (const { area, checkpoint } of payloads) {
@@ -133,6 +152,7 @@ function result(prepared: Prepared, state: "pending" | "retained", changed: bool
     state,
     changed,
     ...(prepared.assetCheckpoint ? { assetCheckpoint: prepared.assetCheckpoint } : {}),
+    ...(prepared.executionBinding ? { executionBinding: prepared.executionBinding } : {}),
   });
 }
 async function reserve(prepared: Prepared) {
