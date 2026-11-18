@@ -216,6 +216,86 @@ const sharedHistoryImages = {
   baseline: { id: "baseline", manifest: { version: 1, entries: [] } },
   effectSets: [{ id: "empty", manifest: { version: 1, entries: [] } }],
 };
+const retainedDescription = await recovery.describeSharedRecoveryRetainedHistory({
+  checkpoint: actionDescription.checkpoint,
+  selection: {
+    effectSets: [
+      {
+        id: "empty",
+        rootId: "empty-root",
+        source: "authoritative",
+        baselineId: "baseline",
+        effectCount: 0,
+        executionCount: 1,
+      },
+    ],
+  },
+  effectSets: [
+    {
+      id: "empty",
+      rootId: "empty-root",
+      source: "authoritative",
+      history: sharedDescription.payload,
+      executions: executionDescription.payload,
+    },
+  ],
+  originals: actionDescription.payload,
+  executions: executionDescription.payload,
+  sharedHistory: sharedDescription.payload,
+});
+assert.equal(
+  retainedDescription.payload.version,
+  recovery.SHARED_RECOVERY_RETAINED_HISTORY_VERSION,
+);
+assert.equal(
+  retainedDescription.checkpoint.version,
+  recovery.SHARED_RECOVERY_RETAINED_CHECKPOINT_VERSION,
+);
+assert.equal(
+  retainedDescription.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(retainedDescription.payload), "utf8"),
+);
+assert.equal(
+  retainedDescription.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(retainedDescription.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryRetainedHistory(retainedDescription.payload),
+  retainedDescription.payload,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryRetainedCheckpoint(retainedDescription.checkpoint),
+  retainedDescription.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryRetainedCheckpoint(
+    retainedDescription.payload,
+    retainedDescription.checkpoint,
+    sharedIdentity,
+    actionDescription.payload,
+    executionDescription.payload,
+    sharedDescription.payload,
+  ),
+  retainedDescription.payload,
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryRetainedCheckpoint(
+    retainedDescription.payload,
+    { ...retainedDescription.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    actionDescription.payload,
+    executionDescription.payload,
+    sharedDescription.payload,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(
+  recovery.sharedRecoveryRetainedAssetManifest(retainedDescription.payload, {
+    effectSets: [{ id: "empty", history: sharedHistoryImages }],
+  }),
+  { version: 1, entries: [] },
+);
+assert.equal(typeof recovery.validateSharedRecoveryRetainedHistory, "function");
 assert.deepEqual(
   recovery.sharedRecoveryExecutionAssetManifest(executionDescription.payload, sharedHistoryImages),
   { version: 1, entries: [] },

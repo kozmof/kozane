@@ -1,5 +1,21 @@
 /** Trusted recovery preparation. These helpers do not enroll or activate a workspace. */
 export {
+  SHARED_RECOVERY_RETAINED_HISTORY_VERSION,
+  SHARED_RECOVERY_RETAINED_CHECKPOINT_VERSION,
+  parseSharedRecoveryRetainedHistory,
+  parseSharedRecoveryRetainedCheckpoint,
+  describeSharedRecoveryRetainedHistory,
+  requireSharedRecoveryRetainedCheckpoint,
+  validateSharedRecoveryRetainedHistory,
+  sharedRecoveryRetainedAssetManifest,
+  type SharedRecoveryEffectSetSource,
+  type SharedRecoveryRetainedSelection,
+  type SharedRecoveryRetainedSet,
+  type SharedRecoveryRetainedHistory,
+  type SharedRecoveryRetainedCheckpoint,
+  type SharedRecoveryRetainedImages,
+} from "./actions/shared-recovery-retained-history.js";
+export {
   parseSharedRecoveryActionCheckpointRecord,
   readSharedRecoveryActionCheckpoint,
   inspectSharedRecoveryActionCheckpoint,

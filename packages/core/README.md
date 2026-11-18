@@ -72,8 +72,13 @@ requiring the original root input and provider map. Trusted action expectations
 can be retained in a local catalog with their original source bindings. Original
 payloads can be retained by the [Node host](../../docs/shared-recovery-action-payloads.md).
 The host can check original invocation images against saved manifests and carry
-all five original expectations through image protection. Complete history
-retention remains pending.
+all five original expectations through image protection.
+
+[Retained recovery history](../../docs/shared-recovery-retained-history.md)
+prepares origin, superseded rebase and authoritative runs for selected roots.
+It checks each run against its own complete before-state and can validate both
+endpoints in isolated SQL databases. Durable complete history retention remains
+pending.
 
 ## Application operations
 

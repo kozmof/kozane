@@ -376,9 +376,8 @@ independently trusted ID selection preserves first-recorded invocations,
 bindings, exact SQLite sequence strings and provenance. Verification requires
 matching root inputs and full provider maps while allowing later child inputs
 and used binding subsets to differ. Skipped original children remain retained
-and their image requirements can be checked separately. Origin and deselected
-effect sets and complete bundle publication
-remain pending. See [original recovery actions](shared-recovery-actions.md).
+and their image requirements can be checked separately. See
+[original recovery actions](shared-recovery-actions.md).
 
 Migration 0031 now retains trusted original-action descriptors with exact
 original local bindings. Registration requires the execution, shared and local
@@ -395,8 +394,8 @@ and exact SQL validation. All four original catalog bindings and source files
 remain checked around file work. Native tests preserve first-recorded and
 skipped child inputs, exact sequence strings and provenance through reopening.
 They also cover unsafe paths, large inputs, changed files, competing writers
-and failed publication or commits. Origin and deselected effect sets and complete
-bundle publication remain pending. See [saved original actions](shared-recovery-action-payloads.md).
+and failed publication or commits. Complete history retention and bundle
+publication remain pending. See [saved original actions](shared-recovery-action-payloads.md).
 
 Saved manifest storage and image protection now accept `actionMaxBytes` with
 the execution read limit. They check all first-recorded inputs against the
@@ -407,6 +406,15 @@ verification. Native tests cover missing original-only requirements, archived
 bytes, cleanup handoff, changed evidence, competing writers and failed commits.
 Complete history retention and complete bundle publication remain pending. See
 [original invocation image protection](recovery-checkpoint-images.md#check-saved-original-invocation-images).
+
+Core now prepares origin, superseded rebase and authoritative runs for currently
+selected roots. An independent inventory binds source labels and complete
+per-run contexts. Selected runs must match the current materialization, while
+deselected runs reconstruct independently. Content checks bind originals,
+executions and shared rows. Optional isolated SQL validation checks each run's
+before and after states, and per-run manifests cover all rows and actual inputs.
+Durable archive storage, additional roots and complete bundles remain pending.
+See [retained recovery history](shared-recovery-retained-history.md).
 
 ## Version one
 
@@ -518,6 +526,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Save and reopen registered original-action payloads with synced exclusive publication and independent read limits for originals and all three saved sources. Verify original contents, source hashes, attribution and exact source SQL values. Recheck all four original catalog bindings and files, preserve interrupted evidence and refuse changed originals without running handlers or installing rows.
 - [x] Connect saved originals to manifest storage and protected image verification through an explicit host byte limit that requires saved execution coverage. Check first-recorded and skipped inputs against the combined manifest while preserving current per-set coverage. Carry all five original catalog bindings and files through publication, reservation and verification and preserve earlier protection after failures.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
+- [x] Prepare retained origin, superseded rebase and authoritative effect sets for selected roots with a separately trusted inventory, complete per-run before-states and row and execution records. Bind original and selected source hashes, check selected contexts against materialization, validate both endpoints in isolated SQL databases and collect per-run image requirements without applying deselected runs.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

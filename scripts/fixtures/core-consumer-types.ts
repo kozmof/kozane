@@ -109,6 +109,18 @@ import {
   inspectSharedRecoveryActionCheckpoint,
   requireStoredSharedRecoveryActionCheckpoint,
   type SharedRecoveryActionCheckpointBinding,
+  describeSharedRecoveryRetainedHistory,
+  parseSharedRecoveryRetainedHistory,
+  parseSharedRecoveryRetainedCheckpoint,
+  requireSharedRecoveryRetainedCheckpoint,
+  validateSharedRecoveryRetainedHistory,
+  sharedRecoveryRetainedAssetManifest,
+  type SharedRecoveryEffectSetSource,
+  type SharedRecoveryRetainedSelection,
+  type SharedRecoveryRetainedSet,
+  type SharedRecoveryRetainedHistory,
+  type SharedRecoveryRetainedCheckpoint,
+  type SharedRecoveryRetainedImages,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -405,6 +417,66 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
         );
       void sharedRecoveryActionAssetManifest(verifiedOriginals, { version: 1, entries: [] })
         .entries;
+      const source: SharedRecoveryEffectSetSource = "authoritative";
+      const retainedSelection: SharedRecoveryRetainedSelection = {
+        effectSets: [
+          {
+            id: "empty",
+            rootId: root.id,
+            source,
+            baselineId: "baseline",
+            effectCount: 0,
+            executionCount: 1,
+          },
+        ],
+      };
+      const retainedSet: SharedRecoveryRetainedSet = {
+        id: "empty",
+        rootId: root.id,
+        source,
+        history: savedPayload,
+        executions: result,
+      };
+      const retained = await describeSharedRecoveryRetainedHistory({
+        checkpoint: originalCheckpoint,
+        selection: retainedSelection,
+        effectSets: [retainedSet],
+        originals: verifiedOriginals,
+        executions: result,
+        sharedHistory: savedPayload,
+      });
+      const retainedPayload: SharedRecoveryRetainedHistory = parseSharedRecoveryRetainedHistory(
+        retained.payload,
+      );
+      const retainedCheckpoint: SharedRecoveryRetainedCheckpoint =
+        parseSharedRecoveryRetainedCheckpoint(retained.checkpoint);
+      const retainedImages: SharedRecoveryRetainedImages = {
+        effectSets: [{ id: "empty", history: historyImages }],
+      };
+      void sharedRecoveryRetainedAssetManifest(retainedPayload, retainedImages).entries;
+      const verifiedRetained: SharedRecoveryRetainedHistory =
+        await requireSharedRecoveryRetainedCheckpoint(
+          retainedPayload,
+          retainedCheckpoint,
+          parsedIdentity,
+          verifiedOriginals,
+          result,
+          savedPayload,
+        );
+      void validateSharedRecoveryRetainedHistory(
+        async () => db,
+        verifiedRetained,
+        retainedCheckpoint,
+        parsedIdentity,
+        verifiedOriginals,
+        result,
+        savedPayload,
+      );
+      // @ts-expect-error Retained provenance has a closed vocabulary.
+      const invalidSource: SharedRecoveryEffectSetSource = "future";
+      void invalidSource;
+      // @ts-expect-error Retained inventory is immutable.
+      retainedCheckpoint.selection.effectSets.push(retainedSelection.effectSets[0]);
       // @ts-expect-error First-record metadata is immutable.
       verifiedOriginals.actions[0].seq = "1";
       // @ts-expect-error Trusted original action selection is immutable.

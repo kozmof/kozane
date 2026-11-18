@@ -219,9 +219,18 @@ function requireOriginals(
     JSON.stringify(executions.selection) !== JSON.stringify(payload.checkpoint.selection)
   )
     throw new SharedRecoveryError("Original recovery action execution binding mismatch");
-  const originals = new Map(payload.actions.map((original) => [original.id, original]));
+  requireRecoveryActionOriginals(payload.actions, executions);
+}
+/** Internal relation check shared by selected and retained execution preparation. Inputs are already owned. */
+export function requireRecoveryActionOriginals(
+  actions: readonly SharedRecoveryActionRecord[],
+  executions: SharedRecoveryExecutionHistory,
+) {
+  const originals = new Map(actions.map((original) => [original.id, original]));
   for (const set of executions.effectSets) {
-    const root = originals.get(set.invocation.id)!;
+    const root = originals.get(set.invocation.id);
+    if (!root || root.rootId !== root.id || root.parentId !== null)
+      throw new SharedRecoveryError("Recovery execution has no original root");
     if (
       JSON.stringify(set.invocation) !==
         JSON.stringify(
