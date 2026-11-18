@@ -16,6 +16,7 @@ import {
   parseRecoveryAssetCheckpointRecord,
   parseSharedRecoveryExecutionCheckpointRecord,
   parseSharedRecoveryActionCheckpointRecord,
+  parseSharedRecoveryRetainedCheckpointRecord,
 } from "@kozane/core/recovery";
 
 /**
@@ -23,6 +24,17 @@ import {
  * during import, but this check identifies the offending row.
  */
 export function validateDumpRefs(tables: TableRows): void {
+  for (const row of tables.local_recovery_retained_history)
+    parseSharedRecoveryRetainedCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+      row.local_descriptor,
+    );
   for (const row of tables.local_recovery_actions)
     parseSharedRecoveryActionCheckpointRecord(
       {

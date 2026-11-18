@@ -80,6 +80,10 @@ It checks each run against its own complete before-state and can validate both
 endpoints in isolated SQL databases. Durable complete history retention remains
 pending.
 
+Trusted retained-history descriptors can be registered locally with all four
+original source bindings. Catalog-backed verification rechecks all five records
+after hashing. Payload files and complete bundles remain pending.
+
 ## Application operations
 
 Use resource services for application writes. They own domain validation, configured

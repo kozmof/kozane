@@ -524,10 +524,11 @@ it("limits compatibility to the audited schema and rejects complete routing erro
   expect(f.registry.supportsSchema(28)).toBe(true);
   expect(f.registry.supportsSchema(29)).toBe(true);
   expect(f.registry.supportsSchema(31)).toBe(true);
-  expect(f.registry.supportsSchema(32)).toBe(false);
+  expect(f.registry.supportsSchema(32)).toBe(true);
+  expect(f.registry.supportsSchema(33)).toBe(false);
   const before = await snapshot(f.db);
   await expect(
-    f.run("cards.create", requests["cards.create"], undefined, value, 32),
+    f.run("cards.create", requests["cards.create"], undefined, value, 33),
   ).rejects.toMatchObject({ code: "action-contract-required" });
   await expect(
     f.run("cards.update", { args: namespace, body: { content: "Changed" } }),

@@ -99,7 +99,49 @@ host responsibilities.
 ## Current scope
 
 These helpers cover roots named by the current selected execution checkpoint.
-Durable retained-history catalogs and payload files, roots outside that
-checkpoint, retained manifest storage and complete recovery bundle publication
-remain pending. The production log format and authority policy remain subject
+Trusted descriptors can be retained in the local catalog described below.
+Retained payload files, roots outside that checkpoint, retained manifest storage
+and complete recovery bundle publication remain pending. The production log format and authority policy remain subject
 to the [adapter verification gate](action-capture-prototype.md).
+
+## Retain trusted descriptors
+
+Migration 0032 adds `local_recovery_retained_history`. Register descriptors
+established by trusted capture with
+`rememberSharedRecoveryRetainedCheckpoint(db, checkpoint)`. The transaction-bound
+variant is `rememberSharedRecoveryRetainedCheckpointInTx`.
+
+Registration requires matching original-action, execution, shared and local
+catalog records. It stores the retained descriptor and exact original local
+descriptor under the workspace, device, epoch and checkpoint key. Nested
+descriptors bind the other three original sources. Repeating identical metadata
+preserves its registration timestamp. Changed contents, inventory or bindings
+under the same key are refused, including coherent source replacement.
+
+Do not register expectations solely because they accompanied received payloads.
+Registration stores trusted metadata without verifying payload bytes, reserving
+images or publishing a complete bundle.
+
+`readSharedRecoveryRetainedCheckpoint`,
+`inspectSharedRecoveryRetainedCheckpoint` and
+`parseSharedRecoveryRetainedCheckpointRecord` return an immutable `binding` with
+`checkpoint` and `localCheckpoint`. They validate nested descriptor and row
+identities without converting registration timestamps to JavaScript dates.
+Known historical and orphaned expectations remain inspectable. No source
+foreign keys or automatic expiration remove them.
+
+Use `requireStoredSharedRecoveryRetainedCheckpoint(catalog, input,
+expectedIdentity, originals, executions, sharedHistory)` for catalog-backed
+content verification. It owns all inputs before the first catalog read, resolves
+trusted expectations in one consistent read boundary and hashes outside that
+boundary. Before returning, it rechecks all five exact original bindings in a
+second consistent boundary. Missing, changed or coherently rebound sources cause
+failure. Descriptor whitespace and unrelated registrations do not alter an
+expectation.
+
+Shared capture and replacement exclude this tenth local table. Local snapshots
+retain its exact rows and timestamps. Isolated local validation parses every
+nested descriptor before allocating SQL. JSON export version 22 preserves current,
+historical and orphaned records. Earlier supported dumps import with an empty
+retained-history catalog when absent. Imports validate metadata without loading
+retained payloads or installing history.

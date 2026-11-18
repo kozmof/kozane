@@ -225,6 +225,13 @@
       "when": 1794993615639,
       "tag": "0031_local_recovery_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1794998512387,
+      "tag": "0032_local_recovery_retained_history",
+      "breakpoints": true
     }
   ]
 }

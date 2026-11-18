@@ -121,6 +121,13 @@ import {
   type SharedRecoveryRetainedHistory,
   type SharedRecoveryRetainedCheckpoint,
   type SharedRecoveryRetainedImages,
+  parseSharedRecoveryRetainedCheckpointRecord,
+  rememberSharedRecoveryRetainedCheckpoint,
+  rememberSharedRecoveryRetainedCheckpointInTx,
+  readSharedRecoveryRetainedCheckpoint,
+  inspectSharedRecoveryRetainedCheckpoint,
+  requireStoredSharedRecoveryRetainedCheckpoint,
+  type SharedRecoveryRetainedCheckpointBinding,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -505,6 +512,29 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
           savedPayload,
         );
       void storedOriginals.actions;
+      const registeredRetained = await rememberSharedRecoveryRetainedCheckpoint(
+        db,
+        retainedCheckpoint,
+      );
+      const retainedBinding: SharedRecoveryRetainedCheckpointBinding = registeredRetained.binding;
+      void parseSharedRecoveryRetainedCheckpointRecord(
+        checkpointKey,
+        JSON.stringify(retainedCheckpoint),
+        JSON.stringify(retainedBinding.localCheckpoint),
+      );
+      void withTx(db, (tx) => rememberSharedRecoveryRetainedCheckpointInTx(tx, retainedCheckpoint));
+      void readSharedRecoveryRetainedCheckpoint(db, checkpointKey);
+      void inspectSharedRecoveryRetainedCheckpoint(db, checkpointKey);
+      const storedRetained: SharedRecoveryRetainedHistory =
+        await requireStoredSharedRecoveryRetainedCheckpoint(
+          db,
+          retainedPayload,
+          parsedIdentity,
+          originalPayload,
+          result,
+          savedPayload,
+        );
+      void storedRetained.effectSets;
       void parseSharedRecoveryExecutionCheckpointRecord(
         checkpointKey,
         JSON.stringify(expected),

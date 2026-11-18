@@ -40,7 +40,7 @@ envelopes. Replay interprets the frozen list without rerunning the callback.
 `actions/service-registry.ts` now installs every declared syncable database kind
 through its real `InTx` service, together with `system.compose`. The factory
 requires complete host recovery registrations for local-only kinds and refuses
-attempts to replace database handlers. Version 1 currently supports schemas 19–31.
+attempts to replace database handlers. Version 1 currently supports schemas 19–32.
 Tests record and replay each database kind, check namespace ownership and apply
 the executing host's limits. See the
 [service registry](action-execution-scopes.md#dispatch-real-service-actions).
@@ -71,7 +71,7 @@ Local-only handlers must then be prevented from changing shared rows.
 
 Those declarations remain unchanged in contract version 1. The opt-in version 2
 registry now routes taskspace lifecycle intents through shared database services
-on schemas 20–31. Creation and label changes reject local path and observation fields.
+on schemas 20–32. Creation and label changes reject local path and observation fields.
 The five file methods still require explicit host recovery registrations. Node
 application lifecycle callers retain their existing filesystem workflows until
 their routing is migrated. See the
@@ -135,7 +135,8 @@ indexes are rebuilt and are not stamped application tables.
 | `packages/core/src/actions/shared-recovery-executions.ts` | Prepare selected scope records with independently trusted roots and execution counts. Check frame bindings, no-op children, sequential trees and complete effect attribution. Bind canonical contents to the original shared descriptor and check invocation image requirements without dispatching handlers | Retain complete execution history and enforce complete bundle publication |
 | `packages/core/src/actions/shared-recovery-execution-store.ts` | Register immutable execution expectations with their original local descriptor binding. Require both live source catalogs, resolve expectations before hashing and recheck all three catalogs before success. Preserve historical and orphaned metadata without timestamp conversion | Retain complete execution history and enforce complete bundle publication and installation |
 | `packages/core/src/actions/shared-recovery-actions.ts` | Prepare original action records with trusted IDs, exact first-record sequence strings and provenance. Bind original inputs and allocations to the selected execution descriptor, require immutable root data and preserve changed or skipped child inputs separately. Check original invocation image requirements without running handlers | Persist complete retained history and enforce complete bundle publication |
-| `packages/core/src/actions/shared-recovery-retained-history.ts` | Prepare retained origin, superseded rebase and authoritative runs for selected roots with independent inventory and complete per-run contexts. Check original and selected source bindings, reconstruct deselected runs separately, validate before and after SQL projections in isolated databases and collect per-run row and invocation image requirements | Persist trusted archive descriptors, payloads and manifests, cover additional roots and publish complete bundles |
+| `packages/core/src/actions/shared-recovery-retained-history.ts` | Prepare retained origin, superseded rebase and authoritative runs for selected roots with independent inventory and complete per-run contexts. Check original and selected source bindings, reconstruct deselected runs separately, validate before and after SQL projections in isolated databases and collect per-run row and invocation image requirements | Persist archive payloads and manifests, cover additional roots and publish complete bundles |
+| `packages/core/src/actions/shared-recovery-retained-store.ts` | Register immutable retained-history expectations with the exact original local descriptor and all nested source bindings. Require all four live source catalogs and recheck all five original expectations after content verification. Preserve exact historical and orphaned metadata through shared replacement, local validation and version 22 JSON exports | Retain payload files and manifests, cover additional roots and publish complete bundles |
 | `packages/core/src/actions/shared-recovery-action-store.ts` | Register immutable original-action expectations with the exact original local descriptor. Require matching execution, shared and local catalogs before registration and recheck all four expectations after content verification. Preserve coherent historical and orphaned metadata without timestamp conversion | Enforce complete history retention and bundle publication |
 
 The `cli/lib/db-json/import.ts` helper does not call inventory repair. The CLI

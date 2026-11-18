@@ -147,3 +147,12 @@ export {
   validateLocalRecoveryCheckpoint,
   validateStoredLocalRecoveryCheckpoint,
 } from "./actions/local-recovery-validation.js";
+export {
+  parseSharedRecoveryRetainedCheckpointRecord,
+  rememberSharedRecoveryRetainedCheckpoint,
+  rememberSharedRecoveryRetainedCheckpointInTx,
+  readSharedRecoveryRetainedCheckpoint,
+  inspectSharedRecoveryRetainedCheckpoint,
+  requireStoredSharedRecoveryRetainedCheckpoint,
+  type SharedRecoveryRetainedCheckpointBinding,
+} from "./actions/shared-recovery-retained-store.js";

@@ -31,6 +31,7 @@ tables, including explicit empty tables.
 | `local_recovery_assets` | Asset descriptors bound to original shared/local expectations and registration timestamps |
 | `local_recovery_executions` | Selected-execution descriptors, original local bindings and registration timestamps |
 | `local_recovery_actions` | Original-action descriptors, original local bindings and registration timestamps |
+| `local_recovery_retained_history` | Retained-run descriptors, original local bindings and registration timestamps |
 
 SQL encodes values before driver conversion. The version 1 tagged row codec keeps
 signed 64-bit integers as decimal strings and preserves finite REAL bits, TEXT,
@@ -126,7 +127,7 @@ Complete bundle publication and activation remain pending.
 Known historical schema descriptors remain readable as metadata. Loading their
 snapshot rows still requires explicit schema compatibility. Unknown schema IDs
 and malformed stored descriptors are refused. The public core entry exports the
-descriptor parsers and types for host bookkeeping. JSON version 21 includes
+descriptor parsers and types for host bookkeeping. JSON version 22 includes
 catalog records, and older supported dumps import with an empty catalog when it
 is absent. Import validates descriptor shape and row identity without installing
 snapshots.
@@ -168,8 +169,15 @@ Migration 0031 adds
 This ninth local table binds first-recorded contents to the exact original
 execution, shared and local expectations. It survives shared replacement.
 Local validation checks every nested descriptor before allocating a database.
-Registration stores expectations while original action payload storage remains
-pending.
+Registration stores expectations while original payload bytes use
+[separate host storage](shared-recovery-action-payloads.md).
+
+Migration 0032 adds
+[trusted retained-history expectations](shared-recovery-retained-history.md#retain-trusted-descriptors).
+This tenth local table binds the complete per-run inventory to all four original
+sources. Shared replacement preserves it. Local validation parses every nested
+descriptor before SQL allocation, and JSON export version 22 preserves current,
+historical and orphaned metadata.
 
 ## Validate against a retained catalog binding
 
