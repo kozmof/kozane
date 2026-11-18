@@ -77,6 +77,15 @@ import {
   readRecoveryAssetCheckpoint,
   inspectRecoveryAssetCheckpoint,
   requireStoredRecoveryAssetCheckpoint,
+  describeSharedRecoveryExecutions,
+  parseSharedRecoveryExecutionHistory,
+  parseSharedRecoveryExecutionCheckpoint,
+  requireSharedRecoveryExecutionCheckpoint,
+  sharedRecoveryExecutionAssetManifest,
+  type SharedRecoveryExecutionSelection,
+  type SharedRecoveryExecutionSet,
+  type SharedRecoveryExecutionHistory,
+  type SharedRecoveryExecutionCheckpoint,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -311,6 +320,39 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
       effectSets: [{ id: "empty", manifest: { version: 1, entries: [] } }],
     });
     const required = sharedRecoveryAssetManifest(savedPayload, historyImages);
+    const executionSelection: SharedRecoveryExecutionSelection = {
+      baselineId: "baseline",
+      effectSets: [{ id: "empty", rootId: "empty-root", executionCount: 1 }],
+    };
+    const root = { id: "empty-root", kind: "future.noop", contractVersion: 99, input: {} };
+    const executionSet: SharedRecoveryExecutionSet = {
+      id: "empty",
+      invocation: root,
+      generated: {},
+      executions: [{ ...root, parentId: null, executionOrd: 0, generated: {} }],
+      effects: [],
+    };
+    void describeSharedRecoveryExecutions({
+      checkpoint: descriptor,
+      selection: executionSelection,
+      sharedHistory: savedPayload,
+      effectSets: [executionSet],
+    }).then(async ({ payload, checkpoint }) => {
+      const history: SharedRecoveryExecutionHistory = parseSharedRecoveryExecutionHistory(payload);
+      const expected: SharedRecoveryExecutionCheckpoint =
+        parseSharedRecoveryExecutionCheckpoint(checkpoint);
+      const result: SharedRecoveryExecutionHistory = await requireSharedRecoveryExecutionCheckpoint(
+        history,
+        expected,
+        parsedIdentity,
+        savedPayload,
+      );
+      void sharedRecoveryExecutionAssetManifest(result, historyImages).entries;
+      // @ts-expect-error Execution histories are immutable.
+      result.effectSets[0].executions.push(root);
+      // @ts-expect-error Retained execution counts are immutable.
+      expected.selection.effectSets[0].executionCount = 0;
+    });
     void required.entries;
     // @ts-expect-error Parsed history manifests are immutable.
     historyImages.effectSets.push({ id: "extra", manifest: { version: 1, entries: [] } });

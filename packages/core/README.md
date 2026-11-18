@@ -58,6 +58,11 @@ own filesystem access and validation database disposal. See
 [shared recovery projections](../../docs/shared-recovery-projections.md) for the
 current contracts and remaining activation work.
 
+[Shared recovery executions](../../docs/shared-recovery-executions.md) prepare
+selected scope records and effect attribution without invoking handlers. Their
+descriptors preserve no-op children and invocation image requirements beside the
+shared row checkpoint. Durable execution storage remains pending.
+
 ## Application operations
 
 Use resource services for application writes. They own domain validation, configured

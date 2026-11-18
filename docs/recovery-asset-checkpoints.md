@@ -122,7 +122,9 @@ or image-byte reads. Validate SQL values in a separate database and use the
 [saved checkpoint image workflow](recovery-checkpoint-images.md) to commit
 protection before verifying live or archived image bytes.
 
-Shared row history contains no action or execution records. Obtain complete
+Shared row history contains no action or execution records. The
+[execution preparation helpers](shared-recovery-executions.md) can verify selected
+scope records and their invocation-only image requirements. Obtain complete
 invocation requirements from trusted retained records and preserve their extra
 manifest entries. A matching hash cannot authenticate those records or establish
 that they are complete.

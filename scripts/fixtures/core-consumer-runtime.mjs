@@ -82,10 +82,76 @@ const sharedDescription = await recovery.describeSharedRecoveryHistory(
 );
 assert.equal(sharedDescription.checkpoint.version, recovery.SHARED_RECOVERY_CHECKPOINT_VERSION);
 assert.equal(sharedDescription.payload.version, recovery.SHARED_RECOVERY_HISTORY_VERSION);
+const emptyExecutionInvocation = {
+  id: "empty-root",
+  kind: "future.noop",
+  contractVersion: 99,
+  input: { text: "Preserved 🪁" },
+};
+const executionDescription = await recovery.describeSharedRecoveryExecutions({
+  checkpoint: sharedDescription.checkpoint,
+  sharedHistory: sharedDescription.payload,
+  selection: {
+    baselineId: "baseline",
+    effectSets: [{ id: "empty", rootId: "empty-root", executionCount: 1 }],
+  },
+  effectSets: [
+    {
+      id: "empty",
+      invocation: emptyExecutionInvocation,
+      generated: {},
+      executions: [{ ...emptyExecutionInvocation, parentId: null, executionOrd: 0, generated: {} }],
+      effects: [],
+    },
+  ],
+});
+assert.equal(executionDescription.payload.version, recovery.SHARED_RECOVERY_EXECUTIONS_VERSION);
+assert.equal(
+  executionDescription.checkpoint.version,
+  recovery.SHARED_RECOVERY_EXECUTION_CHECKPOINT_VERSION,
+);
+assert.equal(
+  executionDescription.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(executionDescription.payload), "utf8").digest("hex"),
+);
+assert.equal(
+  executionDescription.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(executionDescription.payload), "utf8"),
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryExecutionHistory(executionDescription.payload),
+  executionDescription.payload,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryExecutionCheckpoint(executionDescription.checkpoint),
+  executionDescription.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryExecutionCheckpoint(
+    executionDescription.payload,
+    executionDescription.checkpoint,
+    sharedIdentity,
+    sharedDescription.payload,
+  ),
+  executionDescription.payload,
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryExecutionCheckpoint(
+    executionDescription.payload,
+    { ...executionDescription.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    sharedDescription.payload,
+  ),
+  recovery.SharedRecoveryError,
+);
 const sharedHistoryImages = {
   baseline: { id: "baseline", manifest: { version: 1, entries: [] } },
   effectSets: [{ id: "empty", manifest: { version: 1, entries: [] } }],
 };
+assert.deepEqual(
+  recovery.sharedRecoveryExecutionAssetManifest(executionDescription.payload, sharedHistoryImages),
+  { version: 1, entries: [] },
+);
 assert.deepEqual(
   recovery.parseSharedRecoveryHistoryImages(sharedHistoryImages),
   sharedHistoryImages,

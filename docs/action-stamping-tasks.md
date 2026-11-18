@@ -338,6 +338,14 @@ cleanup, archived invocation-only bytes, retained retries and competing writes.
 Complete action and execution retention and bundle publication remain pending.
 See [saved manifest image protection](recovery-checkpoint-images.md#use-registered-saved-manifests).
 
+Core can now prepare selected scope records alongside shared row history.
+Separately trusted root IDs and execution counts preserve no-op children. The
+validator checks frame bindings, sequential parent and effect attribution, and
+canonical content hashes bound to the original shared descriptor. Invocation
+image checks include zero-effect sets. Native and Node WASM tests include real
+captured scopes. Original action retention, durable execution storage and bundle
+publication remain pending. See [shared recovery executions](shared-recovery-executions.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -439,6 +447,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Persist trusted asset descriptors with immutable original checkpoint bindings. Require both live source catalogs before registration, recheck all three catalogs after content verification and preserve orphaned metadata, exact local snapshots and version 19 JSON exports. Verify migration, rollback and competing connections.
 - [x] Save and reopen registered asset-manifest payloads with synced exclusive publication and independent host limits for all three payloads. Validate both saved sources, canonical manifest contents and exact coverage, recheck all original bindings and files, and preserve interruption evidence after filesystem or commit failures without installing images.
 - [x] Connect registered saved manifests to image reservation and protected byte verification. Carry all three original catalog bindings and files through reservation and verification, reject ambiguous inputs and preserve earlier owners after changed requirements, failed reads, verification or commits. Verify cleanup handoff, archived invocation-only bytes and competing writes.
+- [x] Prepare selected execution records with independently trusted root IDs and counts. Bind finalized invocations, used and unused allocations, no-op children and complete effect attribution to the original shared checkpoint. Verify sequential trees, invocation image coverage, transport ownership and real captured scopes on native and Node WASM adapters without invoking handlers.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

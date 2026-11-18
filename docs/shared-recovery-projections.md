@@ -213,6 +213,12 @@ remain unchanged.
 
 ## Continue recovery preparation
 
+[Shared recovery executions](shared-recovery-executions.md) retain selected scope
+inputs, generated bindings and row-effect attribution beside the shared payload.
+Their content descriptor covers no-op children and invocation-only image
+requirements. Durable execution storage and original action retention remain
+separate requirements.
+
 Complete recovery on the originating device also needs the matching
 [local recovery snapshot](local-recovery-snapshots.md). Shared-only restoration
 and joining another device omit those attachments. Both modes still need

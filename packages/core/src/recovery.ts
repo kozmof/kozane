@@ -1,5 +1,18 @@
 /** Trusted recovery preparation. These helpers do not enroll or activate a workspace. */
 export {
+  SHARED_RECOVERY_EXECUTIONS_VERSION,
+  SHARED_RECOVERY_EXECUTION_CHECKPOINT_VERSION,
+  parseSharedRecoveryExecutionHistory,
+  parseSharedRecoveryExecutionCheckpoint,
+  describeSharedRecoveryExecutions,
+  requireSharedRecoveryExecutionCheckpoint,
+  sharedRecoveryExecutionAssetManifest,
+  type SharedRecoveryExecutionSelection,
+  type SharedRecoveryExecutionSet,
+  type SharedRecoveryExecutionHistory,
+  type SharedRecoveryExecutionCheckpoint,
+} from "./actions/shared-recovery-executions.js";
+export {
   parseRecoveryAssetCheckpointRecord,
   readRecoveryAssetCheckpoint,
   inspectRecoveryAssetCheckpoint,
