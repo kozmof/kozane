@@ -38,7 +38,7 @@ Use pure helpers directly when a feature only needs a local calculation or previ
 
 ### Public entry points
 
-Import from these five entry points. Private module paths are unsupported and may change.
+Import from these six entry points. Private module paths are unsupported and may change.
 
 | Entry point               | Purpose                                                                    |
 | ------------------------- | -------------------------------------------------------------------------- |
@@ -47,6 +47,42 @@ Import from these five entry points. Private module paths are unsupported and ma
 | `@kozane/core/schema`     | Drizzle tables and relations                                               |
 | `@kozane/core/services`   | Resource operations and domain input validation                            |
 | `@kozane/core/migrations` | Migration application, history checks, and schema comparison               |
+| `@kozane/core/recovery` | Shared reconstruction, content binding and projection validation, local snapshot capture, descriptor storage and asset requirements |
+
+The recovery entry prepares shared projections and local checkpoints for trusted
+hosts. It does not enroll a workspace, activate a destination or publish complete
+recovery bundles.
+Hosts retain the expected descriptor independently of received snapshot data and
+own filesystem access and validation database disposal. See
+[local recovery snapshots](../../docs/local-recovery-snapshots.md) and
+[shared recovery projections](../../docs/shared-recovery-projections.md) for the
+current contracts and remaining activation work.
+
+[Shared recovery executions](../../docs/shared-recovery-executions.md) prepare
+selected scope records and effect attribution without invoking handlers. Their
+descriptors preserve no-op children and invocation image requirements beside the
+shared row checkpoint. Trusted descriptors can be retained in a local catalog.
+The Node host can retain [saved execution payloads](../../docs/shared-recovery-execution-payloads.md)
+after validating both saved source payloads and their original catalog bindings.
+
+[Original recovery actions](../../docs/shared-recovery-actions.md) preserve
+first-recorded inputs, bindings, local sequence values and provenance beside
+selected executions. Their verification permits changed child inputs while
+requiring the original root input and provider map. Trusted action expectations
+can be retained in a local catalog with their original source bindings. Original
+payloads can be retained by the [Node host](../../docs/shared-recovery-action-payloads.md).
+The host can check original invocation images against saved manifests and carry
+all five original expectations through image protection.
+
+[Retained recovery history](../../docs/shared-recovery-retained-history.md)
+prepares origin, superseded rebase and authoritative runs for selected roots.
+It checks each run against its own complete before-state and can validate both
+endpoints in isolated SQL databases. Durable complete history retention remains
+pending.
+
+Trusted retained-history descriptors can be registered locally with all four
+original source bindings. Catalog-backed verification rechecks all five records
+after hashing. Payload files and complete bundles remain pending.
 
 ## Application operations
 
@@ -61,10 +97,57 @@ The `records` export provides table-level access through namespaces such as
 `records.namespace`, `records.partition`, and `records.card`. It supports reference
 lookups and Node compatibility, but does not apply configured service validation.
 
+Layer and partition creation and rename expose `createInTx` and `renameInTx`.
+Scopes also expose `createAreaInTx`, `updateAreaInTx`, and `removeAreaInTx`.
+Use these variants inside a caller-owned transaction. Their ordinary service
+entry points open an adapter write transaction.
+
+Card stacking and squash expose `setStackingInTx` and `squashInTx`.
+Layers, partitions and scopes expose `removeInTx`, including each removal's
+reassignment or membership cleanup. Namespaces expose `createInTx`, `renameInTx`,
+`removeInTx` and `setDefaultInTx`. These variants reuse the caller's transaction.
+Ordinary service entry points open one adapter transaction and call the same
+implementation. Transaction-bound record variants are available through
+`records.card`, `records.composite`, `records.scope` and `records.namespace`.
+
+Scope membership helpers now separate database and transaction handles.
+`records.scopeRel.addScopeRel` and `addScopeRels` accept a `DB` and open one
+write transaction. Migrate callers that pass a `Tx` to `addScopeRelInTx` or
+`addScopeRelsInTx`. These helpers check for existing memberships before inserting,
+so duplicate requests do not run insert triggers.
+
 Input preparation accepts up to 64 nested object or array containers, counting the
 root. Deeper inputs fail with `ValidationError` before dispatch. JSON input preparation
 uses stricter prototype checks than the root `isPlainObject` helper, which accepts
 non-null objects other than arrays without inspecting their prototypes.
+
+### Taskspace database records
+
+Use `records.taskspace.addTaskspaceInTx` to create a taskspace label and placement
+inside your transaction. Attach directory information separately through
+`updateTaskspaceLocationInTx`. Change the label with `updateTaskspaceNameInTx`,
+and delete the database record with `deleteTaskspaceInTx`. Your host owns directory
+creation, movement and removal.
+
+Location and observation updates preserve `createdAt` and `updatedAt`. A label
+request changes `updatedAt` only when the stored name changes. The existing
+`addTaskspace` and combined `updateTaskspace` methods remain available. Path-only
+calls to the combined update also preserve both timestamps.
+
+Migration 0020 moves paths, path kinds and observations into `taskspace_local`.
+The `taskspaceTable` schema export contains shared fields only. Read host views
+through taskspace record readers, which join the device's local attachment.
+Raw schema consumers can use `taskspaceLocalTable` for local fields.
+Deletion retains local metadata for absent taskspaces. Ordinary readers hide
+those attachments, and `getAllTaskspaceLocalMetadata` includes them for recovery.
+Legacy methods that change both tables use one adapter transaction.
+
+Use the `taskspaces` namespace from `@kozane/core/services` for validated shared
+lifecycle operations. `create` requires a namespace, a label and an existing
+workspace scope. `rename` and `remove` require namespace visibility. Their `InTx`
+variants reuse your transaction. Creation and rename return `SharedTaskspace`
+without local attachment fields, and reject path and observation inputs.
+These services change shared database rows, and your host owns filesystem work.
 
 ## Shared data and helpers
 
@@ -105,6 +188,17 @@ Raw SQL readers remain trusted interfaces and can execute arbitrary SQL. Hosts m
 enforce read-only access through driver or connection configuration. Type brands
 separate handles at compile time, while registration and dispatch check required
 reader methods at runtime.
+
+For action capture, call `configureActionConnection(execute)` from
+`@kozane/core/database` on each native connection before opening a transaction.
+Pass an async callback that executes one SQL statement and returns rows with
+numeric column indexes. The helper enables and reads back `foreign_keys` and
+`recursive_triggers`. SQLite cannot enable foreign keys after a transaction begins.
+Use `verifyActionConnection(execute)` to check the settings without changing them.
+An unavailable setting raises `ActionConnectionError` with its `pragma` and
+`observed` value. Driver failures propagate unchanged. Opt-in action scopes repeat
+setup on their transaction connection and verify settings after completion.
+Production action capture remains gated on adapter verification and write coverage.
 
 ### Migration hook
 

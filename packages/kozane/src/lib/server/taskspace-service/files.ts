@@ -33,6 +33,7 @@ export async function createDirectory(
     locals,
     params,
     "Failed to create taskspace directory",
+    { operation: "create-directory", subPath },
     (baseDir) => createTaskspaceDirectory({ baseDir, subPath }),
   );
   return created;
@@ -45,6 +46,7 @@ export async function renameEntry(locals: Context, params: Params, body: Record<
     locals,
     params,
     "Failed to rename taskspace entry",
+    { operation: "rename-entry", subPath, name },
     (baseDir) => renameTaskspaceEntry({ baseDir, subPath, name }),
   );
   return renamed;
@@ -58,6 +60,7 @@ export async function removeEntry(locals: Context, params: Params, requestedPath
     locals,
     params,
     "Failed to delete taskspace entry",
+    { operation: "remove-entry", subPath },
     (baseDir) => deleteTaskspaceEntry({ baseDir, subPath }),
   );
   return deleted;

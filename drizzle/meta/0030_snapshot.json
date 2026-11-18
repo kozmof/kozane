@@ -1,0 +1,1569 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "29dc1699-0c9b-4e61-baaa-dee79467c167",
+  "prevId": "1889529e-0ad9-4dbb-bc10-8eb2a1afdafc",
+  "tables": {
+    "card": {
+      "name": "card",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "partition_id": {
+          "name": "partition_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "layer_id": {
+          "name": "layer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "taskspace_id": {
+          "name": "taskspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "inventory_id": {
+          "name": "inventory_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "inventory_slot": {
+          "name": "inventory_slot",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pos_x": {
+          "name": "pos_x",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pos_y": {
+          "name": "pos_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "z_index": {
+          "name": "z_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "width": {
+          "name": "width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "card_partition": {
+          "name": "card_partition",
+          "columns": [
+            "partition_id"
+          ],
+          "isUnique": false
+        },
+        "card_layer": {
+          "name": "card_layer",
+          "columns": [
+            "layer_id"
+          ],
+          "isUnique": false
+        },
+        "card_partition_updated": {
+          "name": "card_partition_updated",
+          "columns": [
+            "partition_id",
+            "updated_at"
+          ],
+          "isUnique": false
+        },
+        "card_inventory_slot": {
+          "name": "card_inventory_slot",
+          "columns": [
+            "inventory_id",
+            "inventory_slot"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "card_partition_id_partition_id_fk": {
+          "name": "card_partition_id_partition_id_fk",
+          "tableFrom": "card",
+          "tableTo": "partition",
+          "columnsFrom": [
+            "partition_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "card_layer_id_layer_id_fk": {
+          "name": "card_layer_id_layer_id_fk",
+          "tableFrom": "card",
+          "tableTo": "layer",
+          "columnsFrom": [
+            "layer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "card_taskspace_id_taskspace_id_fk": {
+          "name": "card_taskspace_id_taskspace_id_fk",
+          "tableFrom": "card",
+          "tableTo": "taskspace",
+          "columnsFrom": [
+            "taskspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "cascade"
+        },
+        "card_inventory_id_inventory_id_fk": {
+          "name": "card_inventory_id_inventory_id_fk",
+          "tableFrom": "card",
+          "tableTo": "inventory",
+          "columnsFrom": [
+            "inventory_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "glue_rel": {
+      "name": "glue_rel",
+      "columns": {
+        "glue_id": {
+          "name": "glue_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "card_id": {
+          "name": "card_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "glue_rel_glue": {
+          "name": "glue_rel_glue",
+          "columns": [
+            "glue_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "glue_rel_glue_id_glue_id_fk": {
+          "name": "glue_rel_glue_id_glue_id_fk",
+          "tableFrom": "glue_rel",
+          "tableTo": "glue",
+          "columnsFrom": [
+            "glue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "glue_rel_card_id_card_id_fk": {
+          "name": "glue_rel_card_id_card_id_fk",
+          "tableFrom": "glue_rel",
+          "tableTo": "card",
+          "columnsFrom": [
+            "card_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "glue": {
+      "name": "glue",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "inventory": {
+      "name": "inventory",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "namespace_id": {
+          "name": "namespace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "pos_x": {
+          "name": "pos_x",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pos_y": {
+          "name": "pos_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "inventory_namespace": {
+          "name": "inventory_namespace",
+          "columns": [
+            "namespace_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "inventory_namespace_id_namespace_id_fk": {
+          "name": "inventory_namespace_id_namespace_id_fk",
+          "tableFrom": "inventory",
+          "tableTo": "namespace",
+          "columnsFrom": [
+            "namespace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "layer": {
+      "name": "layer",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "namespace_id": {
+          "name": "namespace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        }
+      },
+      "indexes": {
+        "layer_one_default_per_namespace": {
+          "name": "layer_one_default_per_namespace",
+          "columns": [
+            "namespace_id"
+          ],
+          "isUnique": true,
+          "where": "is_default = 1"
+        },
+        "layer_name_per_namespace": {
+          "name": "layer_name_per_namespace",
+          "columns": [
+            "namespace_id",
+            "name"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "layer_namespace_id_namespace_id_fk": {
+          "name": "layer_namespace_id_namespace_id_fk",
+          "tableFrom": "layer",
+          "tableTo": "namespace",
+          "columnsFrom": [
+            "namespace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "local_asset_manifest": {
+      "name": "local_asset_manifest",
+      "columns": {
+        "owner_kind": {
+          "name": "owner_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "manifest": {
+          "name": "manifest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "verified_at": {
+          "name": "verified_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "released_at": {
+          "name": "released_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "release_reason": {
+          "name": "release_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "local_asset_manifest_state": {
+          "name": "local_asset_manifest_state",
+          "columns": [
+            "state"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "local_asset_manifest_owner_kind_owner_id_pk": {
+          "columns": [
+            "owner_kind",
+            "owner_id"
+          ],
+          "name": "local_asset_manifest_owner_kind_owner_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "local_asset_manifest_owner": {
+          "name": "local_asset_manifest_owner",
+          "value": "\"local_asset_manifest\".\"owner_kind\" IN ('baseline','effect-set','pending-work','transfer','recovery') AND length(trim(\"local_asset_manifest\".\"owner_id\")) BETWEEN 1 AND 1000 AND instr(\"local_asset_manifest\".\"owner_id\",char(0))=0"
+        },
+        "local_asset_manifest_json": {
+          "name": "local_asset_manifest_json",
+          "value": "json_valid(\"local_asset_manifest\".\"manifest\")"
+        },
+        "local_asset_manifest_state": {
+          "name": "local_asset_manifest_state",
+          "value": "(\"local_asset_manifest\".\"state\"='pending' AND \"local_asset_manifest\".\"verified_at\" IS NULL AND \"local_asset_manifest\".\"released_at\" IS NULL AND \"local_asset_manifest\".\"release_reason\" IS NULL) OR (\"local_asset_manifest\".\"state\"='retained' AND \"local_asset_manifest\".\"verified_at\" IS NOT NULL AND \"local_asset_manifest\".\"released_at\" IS NULL AND \"local_asset_manifest\".\"release_reason\" IS NULL) OR (\"local_asset_manifest\".\"state\"='released' AND \"local_asset_manifest\".\"released_at\" IS NOT NULL AND \"local_asset_manifest\".\"release_reason\" IS NOT NULL AND length(trim(\"local_asset_manifest\".\"release_reason\")) > 0)"
+        }
+      }
+    },
+    "local_file_operation": {
+      "name": "local_file_operation",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "taskspace_id": {
+          "name": "taskspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "namespace_id": {
+          "name": "namespace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "path_kind": {
+          "name": "path_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "intent": {
+          "name": "intent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "abandoned_at": {
+          "name": "abandoned_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "abandon_reason": {
+          "name": "abandon_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "local_file_operation_state": {
+          "name": "local_file_operation_state",
+          "columns": [
+            "state"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "local_file_operation_kind": {
+          "name": "local_file_operation_kind",
+          "value": "\"local_file_operation\".\"kind\" IN ('taskspace.claim', 'taskspace.file', 'taskspace.directory') AND \"local_file_operation\".\"version\" = 1"
+        },
+        "local_file_operation_path_kind": {
+          "name": "local_file_operation_path_kind",
+          "value": "\"local_file_operation\".\"path_kind\" IN ('workspace_relative', 'absolute')"
+        },
+        "local_file_operation_state": {
+          "name": "local_file_operation_state",
+          "value": "(\"local_file_operation\".\"state\" = 'pending' AND \"local_file_operation\".\"confirmed_at\" IS NULL AND \"local_file_operation\".\"abandoned_at\" IS NULL AND \"local_file_operation\".\"abandon_reason\" IS NULL) OR (\"local_file_operation\".\"state\" = 'confirmed' AND \"local_file_operation\".\"confirmed_at\" IS NOT NULL AND \"local_file_operation\".\"error\" IS NULL AND \"local_file_operation\".\"abandoned_at\" IS NULL AND \"local_file_operation\".\"abandon_reason\" IS NULL) OR (\"local_file_operation\".\"state\" = 'abandoned' AND \"local_file_operation\".\"confirmed_at\" IS NULL AND \"local_file_operation\".\"abandoned_at\" IS NOT NULL AND \"local_file_operation\".\"abandon_reason\" IS NOT NULL AND length(trim(\"local_file_operation\".\"abandon_reason\")) > 0)"
+        }
+      }
+    },
+    "local_image_upload": {
+      "name": "local_image_upload",
+      "columns": {
+        "filename": {
+          "name": "filename",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "byte_length": {
+          "name": "byte_length",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "installed_at": {
+          "name": "installed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "abandoned_at": {
+          "name": "abandoned_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "abandon_reason": {
+          "name": "abandon_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "local_image_upload_state": {
+          "name": "local_image_upload_state",
+          "columns": [
+            "state"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "local_image_upload_name": {
+          "name": "local_image_upload_name",
+          "value": "length(\"local_image_upload\".\"filename\") IN (40,41) AND substr(\"local_image_upload\".\"filename\",37,1)='.' AND substr(\"local_image_upload\".\"filename\",1,36) NOT GLOB '*[^a-f0-9-]*' AND substr(\"local_image_upload\".\"filename\",38) IN ('jpg','jpeg','png','svg')"
+        },
+        "local_image_upload_bytes": {
+          "name": "local_image_upload_bytes",
+          "value": "typeof(\"local_image_upload\".\"byte_length\")='integer' AND \"local_image_upload\".\"byte_length\" BETWEEN 1 AND 10485760 AND length(\"local_image_upload\".\"sha256\")=64 AND \"local_image_upload\".\"sha256\" NOT GLOB '*[^a-f0-9]*'"
+        },
+        "local_image_upload_state": {
+          "name": "local_image_upload_state",
+          "value": "(\"local_image_upload\".\"state\"='pending' AND \"local_image_upload\".\"installed_at\" IS NULL AND \"local_image_upload\".\"completed_at\" IS NULL AND \"local_image_upload\".\"abandoned_at\" IS NULL AND \"local_image_upload\".\"abandon_reason\" IS NULL) OR (\"local_image_upload\".\"state\"='installed' AND \"local_image_upload\".\"installed_at\" IS NOT NULL AND \"local_image_upload\".\"completed_at\" IS NULL AND \"local_image_upload\".\"error\" IS NULL AND \"local_image_upload\".\"abandoned_at\" IS NULL AND \"local_image_upload\".\"abandon_reason\" IS NULL) OR (\"local_image_upload\".\"state\"='completed' AND \"local_image_upload\".\"installed_at\" IS NOT NULL AND \"local_image_upload\".\"completed_at\" IS NOT NULL AND \"local_image_upload\".\"error\" IS NULL AND \"local_image_upload\".\"abandoned_at\" IS NULL AND \"local_image_upload\".\"abandon_reason\" IS NULL) OR (\"local_image_upload\".\"state\"='abandoned' AND \"local_image_upload\".\"completed_at\" IS NULL AND \"local_image_upload\".\"abandoned_at\" IS NOT NULL AND \"local_image_upload\".\"abandon_reason\" IS NOT NULL AND length(trim(\"local_image_upload\".\"abandon_reason\")) > 0)"
+        }
+      }
+    },
+    "local_recovery_assets": {
+      "name": "local_recovery_assets",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "epoch_id": {
+          "name": "epoch_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "descriptor": {
+          "name": "descriptor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "local_recovery_assets_workspace_id_device_id_epoch_id_checkpoint_id_pk": {
+          "columns": [
+            "workspace_id",
+            "device_id",
+            "epoch_id",
+            "checkpoint_id"
+          ],
+          "name": "local_recovery_assets_workspace_id_device_id_epoch_id_checkpoint_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "local_recovery_assets_identity": {
+          "name": "local_recovery_assets_identity",
+          "value": "length(trim(\"local_recovery_assets\".\"workspace_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_assets\".\"workspace_id\",char(0))=0 AND length(trim(\"local_recovery_assets\".\"device_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_assets\".\"device_id\",char(0))=0 AND length(trim(\"local_recovery_assets\".\"epoch_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_assets\".\"epoch_id\",char(0))=0 AND length(trim(\"local_recovery_assets\".\"checkpoint_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_assets\".\"checkpoint_id\",char(0))=0"
+        },
+        "local_recovery_assets_descriptor": {
+          "name": "local_recovery_assets_descriptor",
+          "value": "json_valid(\"local_recovery_assets\".\"descriptor\") AND json_type(\"local_recovery_assets\".\"descriptor\",'$.version') IS 'integer' AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.version') IS 1 AND json_type(\"local_recovery_assets\".\"descriptor\",'$.binding.checkpoint.version') IS 'integer' AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.checkpoint.version') IS 1 AND json_type(\"local_recovery_assets\".\"descriptor\",'$.binding.localCheckpoint.version') IS 'integer' AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.localCheckpoint.version') IS 1 AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.checkpoint.identity.workspaceId') IS \"local_recovery_assets\".\"workspace_id\" AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.checkpoint.identity.deviceId') IS \"local_recovery_assets\".\"device_id\" AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.checkpoint.identity.epochId') IS \"local_recovery_assets\".\"epoch_id\" AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.checkpoint.identity.checkpointId') IS \"local_recovery_assets\".\"checkpoint_id\" AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.localCheckpoint.identity.workspaceId') IS \"local_recovery_assets\".\"workspace_id\" AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.localCheckpoint.identity.deviceId') IS \"local_recovery_assets\".\"device_id\" AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.localCheckpoint.identity.epochId') IS \"local_recovery_assets\".\"epoch_id\" AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.localCheckpoint.identity.checkpointId') IS \"local_recovery_assets\".\"checkpoint_id\" AND json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.localCheckpoint.identity.schemaId') IS json_extract(\"local_recovery_assets\".\"descriptor\",'$.binding.checkpoint.identity.schemaId')"
+        }
+      }
+    },
+    "local_recovery_checkpoint": {
+      "name": "local_recovery_checkpoint",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "epoch_id": {
+          "name": "epoch_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "descriptor": {
+          "name": "descriptor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "local_recovery_checkpoint_workspace_id_device_id_epoch_id_checkpoint_id_pk": {
+          "columns": [
+            "workspace_id",
+            "device_id",
+            "epoch_id",
+            "checkpoint_id"
+          ],
+          "name": "local_recovery_checkpoint_workspace_id_device_id_epoch_id_checkpoint_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "local_recovery_checkpoint_identity": {
+          "name": "local_recovery_checkpoint_identity",
+          "value": "length(trim(\"local_recovery_checkpoint\".\"workspace_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_checkpoint\".\"workspace_id\",char(0))=0 AND length(trim(\"local_recovery_checkpoint\".\"device_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_checkpoint\".\"device_id\",char(0))=0 AND length(trim(\"local_recovery_checkpoint\".\"epoch_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_checkpoint\".\"epoch_id\",char(0))=0 AND length(trim(\"local_recovery_checkpoint\".\"checkpoint_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_checkpoint\".\"checkpoint_id\",char(0))=0"
+        },
+        "local_recovery_checkpoint_descriptor": {
+          "name": "local_recovery_checkpoint_descriptor",
+          "value": "json_valid(\"local_recovery_checkpoint\".\"descriptor\") AND json_type(\"local_recovery_checkpoint\".\"descriptor\",'$.version') IS 'integer' AND json_extract(\"local_recovery_checkpoint\".\"descriptor\",'$.version') IS 1 AND json_extract(\"local_recovery_checkpoint\".\"descriptor\",'$.identity.workspaceId') IS \"local_recovery_checkpoint\".\"workspace_id\" AND json_extract(\"local_recovery_checkpoint\".\"descriptor\",'$.identity.deviceId') IS \"local_recovery_checkpoint\".\"device_id\" AND json_extract(\"local_recovery_checkpoint\".\"descriptor\",'$.identity.epochId') IS \"local_recovery_checkpoint\".\"epoch_id\" AND json_extract(\"local_recovery_checkpoint\".\"descriptor\",'$.identity.checkpointId') IS \"local_recovery_checkpoint\".\"checkpoint_id\""
+        }
+      }
+    },
+    "local_recovery_executions": {
+      "name": "local_recovery_executions",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "epoch_id": {
+          "name": "epoch_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "descriptor": {
+          "name": "descriptor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "local_descriptor": {
+          "name": "local_descriptor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "local_recovery_executions_workspace_id_device_id_epoch_id_checkpoint_id_pk": {
+          "columns": [
+            "workspace_id",
+            "device_id",
+            "epoch_id",
+            "checkpoint_id"
+          ],
+          "name": "local_recovery_executions_workspace_id_device_id_epoch_id_checkpoint_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "local_recovery_executions_identity": {
+          "name": "local_recovery_executions_identity",
+          "value": "length(trim(\"local_recovery_executions\".\"workspace_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_executions\".\"workspace_id\",char(0))=0 AND length(trim(\"local_recovery_executions\".\"device_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_executions\".\"device_id\",char(0))=0 AND length(trim(\"local_recovery_executions\".\"epoch_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_executions\".\"epoch_id\",char(0))=0 AND length(trim(\"local_recovery_executions\".\"checkpoint_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_executions\".\"checkpoint_id\",char(0))=0"
+        },
+        "local_recovery_executions_descriptor": {
+          "name": "local_recovery_executions_descriptor",
+          "value": "json_valid(\"local_recovery_executions\".\"descriptor\") AND json_type(\"local_recovery_executions\".\"descriptor\",'$.version') IS 'integer' AND json_extract(\"local_recovery_executions\".\"descriptor\",'$.version') IS 1 AND json_type(\"local_recovery_executions\".\"descriptor\",'$.checkpoint.version') IS 'integer' AND json_extract(\"local_recovery_executions\".\"descriptor\",'$.checkpoint.version') IS 1 AND json_extract(\"local_recovery_executions\".\"descriptor\",'$.checkpoint.identity.workspaceId') IS \"local_recovery_executions\".\"workspace_id\" AND json_extract(\"local_recovery_executions\".\"descriptor\",'$.checkpoint.identity.deviceId') IS \"local_recovery_executions\".\"device_id\" AND json_extract(\"local_recovery_executions\".\"descriptor\",'$.checkpoint.identity.epochId') IS \"local_recovery_executions\".\"epoch_id\" AND json_extract(\"local_recovery_executions\".\"descriptor\",'$.checkpoint.identity.checkpointId') IS \"local_recovery_executions\".\"checkpoint_id\""
+        },
+        "local_recovery_executions_local_descriptor": {
+          "name": "local_recovery_executions_local_descriptor",
+          "value": "json_valid(\"local_recovery_executions\".\"local_descriptor\") AND json_type(\"local_recovery_executions\".\"local_descriptor\",'$.version') IS 'integer' AND json_extract(\"local_recovery_executions\".\"local_descriptor\",'$.version') IS 1 AND json_extract(\"local_recovery_executions\".\"local_descriptor\",'$.identity.workspaceId') IS \"local_recovery_executions\".\"workspace_id\" AND json_extract(\"local_recovery_executions\".\"local_descriptor\",'$.identity.deviceId') IS \"local_recovery_executions\".\"device_id\" AND json_extract(\"local_recovery_executions\".\"local_descriptor\",'$.identity.epochId') IS \"local_recovery_executions\".\"epoch_id\" AND json_extract(\"local_recovery_executions\".\"local_descriptor\",'$.identity.checkpointId') IS \"local_recovery_executions\".\"checkpoint_id\" AND json_extract(\"local_recovery_executions\".\"local_descriptor\",'$.identity.schemaId') IS json_extract(\"local_recovery_executions\".\"descriptor\",'$.checkpoint.identity.schemaId')"
+        }
+      }
+    },
+    "local_recovery_shared_history": {
+      "name": "local_recovery_shared_history",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "epoch_id": {
+          "name": "epoch_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "checkpoint_id": {
+          "name": "checkpoint_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "descriptor": {
+          "name": "descriptor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "local_descriptor": {
+          "name": "local_descriptor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "local_recovery_shared_history_workspace_id_device_id_epoch_id_checkpoint_id_pk": {
+          "columns": [
+            "workspace_id",
+            "device_id",
+            "epoch_id",
+            "checkpoint_id"
+          ],
+          "name": "local_recovery_shared_history_workspace_id_device_id_epoch_id_checkpoint_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "local_recovery_shared_history_identity": {
+          "name": "local_recovery_shared_history_identity",
+          "value": "length(trim(\"local_recovery_shared_history\".\"workspace_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_shared_history\".\"workspace_id\",char(0))=0 AND length(trim(\"local_recovery_shared_history\".\"device_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_shared_history\".\"device_id\",char(0))=0 AND length(trim(\"local_recovery_shared_history\".\"epoch_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_shared_history\".\"epoch_id\",char(0))=0 AND length(trim(\"local_recovery_shared_history\".\"checkpoint_id\")) BETWEEN 1 AND 1000 AND instr(\"local_recovery_shared_history\".\"checkpoint_id\",char(0))=0"
+        },
+        "local_recovery_shared_history_descriptor": {
+          "name": "local_recovery_shared_history_descriptor",
+          "value": "json_valid(\"local_recovery_shared_history\".\"descriptor\") AND json_type(\"local_recovery_shared_history\".\"descriptor\",'$.version') IS 'integer' AND json_extract(\"local_recovery_shared_history\".\"descriptor\",'$.version') IS 1 AND json_extract(\"local_recovery_shared_history\".\"descriptor\",'$.identity.workspaceId') IS \"local_recovery_shared_history\".\"workspace_id\" AND json_extract(\"local_recovery_shared_history\".\"descriptor\",'$.identity.deviceId') IS \"local_recovery_shared_history\".\"device_id\" AND json_extract(\"local_recovery_shared_history\".\"descriptor\",'$.identity.epochId') IS \"local_recovery_shared_history\".\"epoch_id\" AND json_extract(\"local_recovery_shared_history\".\"descriptor\",'$.identity.checkpointId') IS \"local_recovery_shared_history\".\"checkpoint_id\""
+        },
+        "local_recovery_shared_history_local_descriptor": {
+          "name": "local_recovery_shared_history_local_descriptor",
+          "value": "json_valid(\"local_recovery_shared_history\".\"local_descriptor\") AND json_type(\"local_recovery_shared_history\".\"local_descriptor\",'$.version') IS 'integer' AND json_extract(\"local_recovery_shared_history\".\"local_descriptor\",'$.version') IS 1 AND json_extract(\"local_recovery_shared_history\".\"local_descriptor\",'$.identity.workspaceId') IS \"local_recovery_shared_history\".\"workspace_id\" AND json_extract(\"local_recovery_shared_history\".\"local_descriptor\",'$.identity.deviceId') IS \"local_recovery_shared_history\".\"device_id\" AND json_extract(\"local_recovery_shared_history\".\"local_descriptor\",'$.identity.epochId') IS \"local_recovery_shared_history\".\"epoch_id\" AND json_extract(\"local_recovery_shared_history\".\"local_descriptor\",'$.identity.checkpointId') IS \"local_recovery_shared_history\".\"checkpoint_id\" AND json_extract(\"local_recovery_shared_history\".\"local_descriptor\",'$.identity.schemaId') IS json_extract(\"local_recovery_shared_history\".\"descriptor\",'$.identity.schemaId')"
+        }
+      }
+    },
+    "namespace": {
+      "name": "namespace",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        }
+      },
+      "indexes": {
+        "namespace_one_default": {
+          "name": "namespace_one_default",
+          "columns": [
+            "is_default"
+          ],
+          "isUnique": true,
+          "where": "is_default = 1"
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "partition": {
+      "name": "partition",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "namespace_id": {
+          "name": "namespace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        }
+      },
+      "indexes": {
+        "partition_one_default_per_namespace": {
+          "name": "partition_one_default_per_namespace",
+          "columns": [
+            "namespace_id"
+          ],
+          "isUnique": true,
+          "where": "is_default = 1"
+        },
+        "partition_name_per_namespace": {
+          "name": "partition_name_per_namespace",
+          "columns": [
+            "namespace_id",
+            "name"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "partition_namespace_id_namespace_id_fk": {
+          "name": "partition_namespace_id_namespace_id_fk",
+          "tableFrom": "partition",
+          "tableTo": "namespace",
+          "columnsFrom": [
+            "namespace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "scope_area": {
+      "name": "scope_area",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scope_id": {
+          "name": "scope_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "namespace_id": {
+          "name": "namespace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pos_x": {
+          "name": "pos_x",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pos_y": {
+          "name": "pos_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "width": {
+          "name": "width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "height": {
+          "name": "height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "scope_area_scope": {
+          "name": "scope_area_scope",
+          "columns": [
+            "scope_id",
+            "namespace_id"
+          ],
+          "isUnique": false
+        },
+        "scope_area_namespace": {
+          "name": "scope_area_namespace",
+          "columns": [
+            "namespace_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "scope_area_scope_id_scope_id_fk": {
+          "name": "scope_area_scope_id_scope_id_fk",
+          "tableFrom": "scope_area",
+          "tableTo": "scope",
+          "columnsFrom": [
+            "scope_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "scope_area_namespace_id_namespace_id_fk": {
+          "name": "scope_area_namespace_id_namespace_id_fk",
+          "tableFrom": "scope_area",
+          "tableTo": "namespace",
+          "columnsFrom": [
+            "namespace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "scope_rel": {
+      "name": "scope_rel",
+      "columns": {
+        "scope_id": {
+          "name": "scope_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "card_id": {
+          "name": "card_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "scope_rel_card": {
+          "name": "scope_rel_card",
+          "columns": [
+            "card_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "scope_rel_scope_id_scope_id_fk": {
+          "name": "scope_rel_scope_id_scope_id_fk",
+          "tableFrom": "scope_rel",
+          "tableTo": "scope",
+          "columnsFrom": [
+            "scope_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "scope_rel_card_id_card_id_fk": {
+          "name": "scope_rel_card_id_card_id_fk",
+          "tableFrom": "scope_rel",
+          "tableTo": "card",
+          "columnsFrom": [
+            "card_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "scope_rel_scope_id_card_id_pk": {
+          "columns": [
+            "scope_id",
+            "card_id"
+          ],
+          "name": "scope_rel_scope_id_card_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "scope": {
+      "name": "scope",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "scope_name_unique": {
+          "name": "scope_name_unique",
+          "columns": [
+            "name"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "scope_name_nonempty": {
+          "name": "scope_name_nonempty",
+          "value": "length(\"scope\".\"name\") > 0"
+        }
+      }
+    },
+    "taskspace_local": {
+      "name": "taskspace_local",
+      "columns": {
+        "taskspace_id": {
+          "name": "taskspace_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "path_kind": {
+          "name": "path_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'workspace_relative'"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "taskspace": {
+      "name": "taskspace",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "namespace_id": {
+          "name": "namespace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "scope_id": {
+          "name": "scope_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "taskspace_scope": {
+          "name": "taskspace_scope",
+          "columns": [
+            "scope_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "taskspace_namespace_id_namespace_id_fk": {
+          "name": "taskspace_namespace_id_namespace_id_fk",
+          "tableFrom": "taskspace",
+          "tableTo": "namespace",
+          "columnsFrom": [
+            "namespace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "taskspace_scope_id_scope_id_fk": {
+          "name": "taskspace_scope_id_scope_id_fk",
+          "tableFrom": "taskspace",
+          "tableTo": "scope",
+          "columnsFrom": [
+            "scope_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "warp": {
+      "name": "warp",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "namespace_id": {
+          "name": "namespace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pos_x": {
+          "name": "pos_x",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pos_y": {
+          "name": "pos_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "warp_namespace": {
+          "name": "warp_namespace",
+          "columns": [
+            "namespace_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "warp_namespace_id_namespace_id_fk": {
+          "name": "warp_namespace_id_namespace_id_fk",
+          "tableFrom": "warp",
+          "tableTo": "namespace",
+          "columnsFrom": [
+            "namespace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

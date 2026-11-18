@@ -1,3 +1,4 @@
+import { configureActionConnection } from "@kozane/core/database";
 import sqlite3InitModule, { type SqlValue } from "@sqlite.org/sqlite-wasm";
 type SQLite = Awaited<ReturnType<typeof sqlite3InitModule>>;
 // The published loader declaration omits Emscripten overrides supported by its runtime.
@@ -47,7 +48,12 @@ self.onmessage = ({ data }) => {
         database = undefined;
         sqlite.capi.sqlite3_js_posix_create_file("/candidate.db", new Uint8Array(data.bytes));
         database = new sqlite.oo1.DB("/candidate.db", "w");
-        database.exec("PRAGMA foreign_keys=ON");
+        const opened = database;
+        await configureActionConnection(async (statement) => {
+          const rows: SqlValue[][] = [];
+          opened.exec({ sql: statement, rowMode: "array", resultRows: rows });
+          return rows;
+        });
         result = true;
       } else if (method === "close") {
         database?.close();

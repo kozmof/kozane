@@ -19,6 +19,9 @@ vi.mock("./db/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./db/client")>()),
   getDb: vi.fn(async () => ({ ready: true })),
 }));
+vi.mock("./lib/server/local-claim-startup", () => ({
+  reportPendingLocalClaims: vi.fn(async () => undefined),
+}));
 
 /** Workspace directory and expected database path, whether or not the file exists. */
 function workspace(): { root: string; dbPath: string } {

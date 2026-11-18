@@ -2,9 +2,29 @@
 import { Command } from "commander";
 
 import { taskspaceScan, taskspaceCreate, taskspaceList } from "../commands/taskspace.js";
+import { taskspaceRecover } from "../commands/taskspace-recover.js";
+import { taskspaceAbandon } from "../commands/taskspace-abandon.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "../commands/db.js";
+import { imageUploads, imageRecover, imageAbandon } from "../commands/image-upload.js";
 
 export function registerDataCommands(program: Command): void {
+  const image = program.command("image").description("Image upload recovery");
+  image
+    .command("uploads")
+    .description("List unfinished local image uploads")
+    .option("--all", "Include completed and abandoned upload records")
+    .action((opts) => imageUploads(opts));
+  image
+    .command("recover <filename>")
+    .description("Inspect an image upload without repeating filesystem work")
+    .option("--apply", "Confirm verified upload metadata without changing files")
+    .action((filename, opts) => imageRecover(filename, opts));
+  image
+    .command("abandon <filename>")
+    .description("Preview release of a reviewed image upload pin")
+    .requiredOption("--reason <reason>", "Record why upload tracking can be abandoned")
+    .option("--apply", "Release this upload pin while retaining its evidence")
+    .action((filename, opts) => imageAbandon(filename, opts));
   const db = program.command("db").description("Database management");
 
   db.command("status")
@@ -52,6 +72,19 @@ export function registerDataCommands(program: Command): void {
       "Namespace for reattached taskspaces (default: each marker's namespace, or the workspace default if it was deleted; requires --reattach)",
     )
     .action((opts) => taskspaceScan(opts));
+
+  taskspace
+    .command("recover <operationId>")
+    .description("Inspect a local filesystem operation (read-only by default)")
+    .option("--apply", "Finish verified database changes without changing files")
+    .action((operationId, opts) => taskspaceRecover(operationId, opts));
+
+  taskspace
+    .command("abandon <operationId>")
+    .description("Preview abandonment of a reviewed local filesystem operation")
+    .requiredOption("--reason <reason>", "Record why tracking can be abandoned")
+    .option("--apply", "Mark abandoned while retaining evidence and leaving files unchanged")
+    .action((operationId, opts) => taskspaceAbandon(operationId, opts));
 
   taskspace
     .command("create <name>")

@@ -19,6 +19,7 @@ import { mkdtemp, readFile, rm, utimes, readdir, mkdir, writeFile } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestDB } from "../../test-utils/db.js";
+import * as uploads from "../../db/api/image-upload.js";
 const svg = new TextEncoder().encode(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40"><rect width="80" height="40"/></svg>',
 );
@@ -44,7 +45,7 @@ describe("image assets", () => {
     const root = await mkdtemp(join(tmpdir(), "kozane-images-"));
     const db = await createTestDB();
     try {
-      const url = await storeImage(root, "drawing.svg", svg);
+      const url = await storeImage(root, db, "drawing.svg", svg);
       const file = join(imageDirectory(root), url.split("/").pop()!);
       expect(Array.from(await readFile(file))).toEqual(Array.from(svg));
       await collectUnusedImages(root, db);
@@ -84,7 +85,7 @@ it("never collects persistent assets from a memory session", async () => {
   const root = await mkdtemp(join(tmpdir(), "kozane-memory-assets-"));
   const db = await createTestDB();
   try {
-    const url = await storeImage(root, "drawing.svg", svg);
+    const url = await storeImage(root, db, "drawing.svg", svg);
     const file = join(imageDirectory(root), url.split("/").pop()!);
     await utimes(file, new Date(0), new Date(0));
     vi.stubEnv("KOZANE_MEMORY_MODE", "1");
@@ -98,7 +99,7 @@ it("never collects persistent assets from a memory session", async () => {
 it("contains cleanup failures and throttles repeated maintenance", async () => {
   const root = await mkdtemp(join(tmpdir(), "kozane-maintenance-"));
   const db = await createTestDB();
-  const select = vi.spyOn(db, "select").mockImplementation(() => {
+  const select = vi.spyOn(uploads, "pinnedImageNames").mockImplementation(async () => {
     throw new Error("database unavailable");
   });
   try {
@@ -159,7 +160,7 @@ it("deletes an image only when its last card is deleted, including archived imag
     const namespaceId = await createNamespace({ db, name: "Deletion" });
     const partition = await getDefaultPartition({ db, namespaceId });
     const context = createServiceContext();
-    const url = await storeImage(root, "image.svg", svg);
+    const url = await storeImage(root, db, "image.svg", svg);
     const input = { partitionId: partition!.id, content: "kozane-image:" + url };
     const first = await create(db, context, namespaceId, input);
     const second = await create(db, context, namespaceId, input);
@@ -179,7 +180,7 @@ it("deletes an image only when its last card is deleted, including archived imag
       return removeInTx(tx, context, namespaceId, { cardIds: [second.id] });
     });
     await expect(readImage(root, url.split("/").pop()!)).rejects.toThrow();
-    const archivedUrl = await storeImage(root, "archived.svg", svg);
+    const archivedUrl = await storeImage(root, db, "archived.svg", svg);
     await utimes(
       join(imageDirectory(root), archivedUrl.split("/").pop()!),
       new Date(0),
@@ -207,7 +208,7 @@ it("cleans cascading namespace deletions and retries filesystem failures durably
   try {
     const namespaceId = await createNamespace({ db, name: "Cascade" });
     const partition = await getDefaultPartition({ db, namespaceId });
-    const url = await storeImage(root, "image.svg", svg);
+    const url = await storeImage(root, db, "image.svg", svg);
     await create(db, context, namespaceId, {
       partitionId: partition!.id,
       content: "kozane-image:" + url,
@@ -236,7 +237,7 @@ it("retries queues larger than one query batch while preserving shared reference
   try {
     const namespaceId = await createNamespace({ db, name: "Batch" });
     const partition = await getDefaultPartition({ db, namespaceId });
-    const url = await storeImage(root, "shared.svg", svg);
+    const url = await storeImage(root, db, "shared.svg", svg);
     await create(db, createServiceContext(), namespaceId, {
       partitionId: partition!.id,
       content: "kozane-image:" + url,

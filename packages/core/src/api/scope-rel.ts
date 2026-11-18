@@ -35,9 +35,24 @@ export async function getCardsByScopeWithPartitionName({
     .where(eq(scopeRelTable.scopeId, scopeId));
 }
 
-export async function addScopeRel({ db, scopeId, cardId }: ScopeRelKey): Promise<void> {
-  // Ignore duplicate scope/card pairs.
-  await db.insert(scopeRelTable).values({ scopeId, cardId }).onConflictDoNothing();
+export async function addScopeRel(args: {
+  db: DB;
+  scopeId: string;
+  cardId: string;
+}): Promise<void> {
+  return withTx(args.db, (tx) => addScopeRelInTx({ ...args, db: tx }));
+}
+
+export async function addScopeRelInTx({
+  db,
+  scopeId,
+  cardId,
+}: {
+  db: Tx;
+  scopeId: string;
+  cardId: string;
+}): Promise<void> {
+  await addScopeRelsInTx({ db, scopeId, cardIds: [cardId] });
 }
 
 export async function removeScopeRel({ db, scopeId, cardId }: ScopeRelKey): Promise<void> {
@@ -48,18 +63,33 @@ export async function removeScopeRel({ db, scopeId, cardId }: ScopeRelKey): Prom
   assertFound(deleted, `ScopeRel scopeId=${scopeId} cardId=${cardId}`);
 }
 
-type AddScopeRels = NeedsScope & { cardIds: string[] };
+type AddScopeRels = { db: DB; scopeId: string; cardIds: string[] };
 
-/**
- * Add scope memberships idempotently in {@link chunked} statements. The caller must validate
- * ownership and provide a transaction, as the squash operation does.
- */
-export async function addScopeRels({ db, scopeId, cardIds }: AddScopeRels): Promise<void> {
-  for (const batch of chunked(cardIds))
-    await db
-      .insert(scopeRelTable)
-      .values(batch.map((cardId) => ({ scopeId, cardId })))
-      .onConflictDoNothing();
+/** Check membership and insert only missing rows inside one serialized write transaction. */
+export async function addScopeRels(args: AddScopeRels): Promise<void> {
+  return withTx(args.db, (tx) => addScopeRelsInTx({ ...args, db: tx }));
+}
+
+export async function addScopeRelsInTx({
+  db,
+  scopeId,
+  cardIds,
+}: Omit<AddScopeRels, "db"> & { db: Tx }): Promise<void> {
+  for (const batch of chunked([...new Set(cardIds)], {
+    columnsPerRow: columnCount(scopeRelTable),
+  })) {
+    const existing = new Set(
+      (
+        await db
+          .select({ cardId: scopeRelTable.cardId })
+          .from(scopeRelTable)
+          .where(and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, batch)))
+      ).map(({ cardId }) => cardId),
+    );
+    const missing = batch.filter((cardId) => !existing.has(cardId));
+    if (missing.length)
+      await db.insert(scopeRelTable).values(missing.map((cardId) => ({ scopeId, cardId })));
+  }
 }
 
 type AddScopeMembers = { db: DB; scopeId: string; namespaceId: string; cardIds: string[] };
@@ -91,14 +121,7 @@ export async function addScopeMembersInTx({
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    // Chunk memberships within the parameter limit, allowing two columns per row.
-    for (const batch of chunked([...new Set(cardIds)], {
-      columnsPerRow: columnCount(scopeRelTable),
-    }))
-      await tx
-        .insert(scopeRelTable)
-        .values(batch.map((cardId) => ({ scopeId, cardId })))
-        .onConflictDoNothing();
+    await addScopeRelsInTx({ db: tx, scopeId, cardIds });
 
     return { ok: true };
   })();

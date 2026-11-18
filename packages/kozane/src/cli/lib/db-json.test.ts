@@ -7,6 +7,8 @@ import { SQLiteTable, getTableConfig } from "drizzle-orm/sqlite-core";
 import { afterEach, describe, expect, it } from "vitest";
 import * as schema from "../../db/schema";
 import { runMigrations } from "./db";
+import type { DbJsonDump } from "./db-json/format.js";
+import { migrations } from "../../../../core/src/generated/migrations.js";
 import {
   TABLES,
   dumpLimitWarnings,
@@ -64,18 +66,19 @@ async function seedDb(dbUrl: string): Promise<void> {
           args: ["inventory-1", "namespace-1", "Kept", 600, 720],
         },
         {
-          sql: "INSERT INTO taskspace (id, namespace_id, scope_id, name, path, path_kind, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO taskspace (id, namespace_id, scope_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
           args: [
             "taskspace-1",
             "namespace-1",
             "scope-1",
             "Main",
-            ".kozane/taskspaces/main",
-            "workspace_relative",
-            1_800_000_000_000,
             1_700_000_000_000,
             1_700_000_000_001,
           ],
+        },
+        {
+          sql: "INSERT INTO taskspace_local(taskspace_id,path,path_kind,last_seen_at) VALUES(?,?,?,?)",
+          args: ["taskspace-1", ".kozane/taskspaces/main", "workspace_relative", 1_800_000_000_000],
         },
         // Set timestamps explicitly to avoid the epoch default.
         {
@@ -145,6 +148,16 @@ describe("db JSON export/import", () => {
       warp: 1,
       inventory: 1,
       taskspace: 1,
+      taskspace_local: 1,
+      local_file_operation: 0,
+      local_image_upload: 0,
+      local_asset_manifest: 0,
+      local_recovery_checkpoint: 0,
+      local_recovery_shared_history: 0,
+      local_recovery_assets: 0,
+      local_recovery_executions: 0,
+      local_recovery_actions: 0,
+      local_recovery_retained_history: 0,
       card: 2,
       glue: 1,
       glue_rel: 2,
@@ -199,6 +212,846 @@ describe("db JSON export/import", () => {
     await expect(importDbJson(dbUrl, legacy)).rejects.toThrow(/kozane db migrate/);
   });
 
+  function legacyTables(tables: DbJsonDump["tables"]) {
+    const { taskspace_local, ...shared } = structuredClone(tables);
+    return {
+      ...shared,
+      taskspace: shared.taskspace.map((row) => {
+        const local = taskspace_local.find((local) => local.taskspace_id === row.id);
+        return {
+          ...row,
+          path: local?.path ?? null,
+          path_kind: local?.path_kind ?? "workspace_relative",
+          last_seen_at: local?.last_seen_at ?? null,
+        };
+      }),
+    };
+  }
+
+  it("imports version 9 inline taskspace attachments without mutating the original dump", async () => {
+    const sourceUrl = await migratedDbUrl("v9-source.db");
+    const targetUrl = await migratedDbUrl("v9-target.db");
+    await seedDb(sourceUrl);
+    const source = await exportDbJson(sourceUrl);
+    const legacy = { ...source, version: 9, tables: legacyTables(source.tables) };
+    const original = JSON.stringify(legacy);
+    await importDbJson(targetUrl, legacy);
+    expect(JSON.stringify(legacy)).toBe(original);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+  });
+
+  it("round-trips retained local metadata for absent taskspaces", async () => {
+    const sourceUrl = await migratedDbUrl("local-source.db");
+    const targetUrl = await migratedDbUrl("local-target.db");
+    await seedDb(sourceUrl);
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO taskspace_local(taskspace_id,path,path_kind,last_seen_at) VALUES('absent','local/retained','workspace_relative',0)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.tables.taskspace.some((row) => "path" in row || "last_seen_at" in row)).toBe(
+      false,
+    );
+    expect((await importDbJson(targetUrl, source)).taskspace_local).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+  });
+
+  it("round-trips retained manifest owners, refuses unsafe or conflicting identity and imports earlier dumps without pins", async () => {
+    const sourceUrl = await migratedDbUrl("manifest-source.db");
+    const targetUrl = await migratedDbUrl("manifest-target.db");
+    const entry = {
+      name: ".kozane/assets/images/00000000-0000-4000-8000-000000000001.svg",
+      byteLength: 3,
+      sha256: "a".repeat(64),
+    };
+    const manifest = JSON.stringify({ version: 1, entries: [entry] });
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const state of ["pending", "retained", "released"])
+        await client.execute({
+          sql: "INSERT INTO local_asset_manifest(owner_kind,owner_id,manifest,state,created_at,verified_at,released_at,release_reason) VALUES('baseline',?,?,?,?,?,?,?)",
+          args: [
+            state,
+            manifest,
+            state,
+            1,
+            state === "retained" ? 2 : null,
+            state === "released" ? 3 : null,
+            state === "released" ? "History expired" : null,
+          ],
+        });
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(22);
+    expect((await importDbJson(targetUrl, source)).local_asset_manifest).toBe(3);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const unsafe = structuredClone(source);
+    unsafe.tables.local_asset_manifest[0].manifest = JSON.stringify({
+      version: 1,
+      entries: [{ ...entry, name: "../outside.svg" }],
+    });
+    await expect(importDbJson(targetUrl, unsafe)).rejects.toThrow("Invalid asset manifest entry");
+    const conflict = structuredClone(source);
+    conflict.tables.local_asset_manifest[0].manifest = JSON.stringify({
+      version: 1,
+      entries: [{ ...entry, sha256: "b".repeat(64) }],
+    });
+    await expect(importDbJson(targetUrl, conflict)).rejects.toThrow("Conflicting asset bytes");
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const { local_asset_manifest: _manifests, ...tables } = source.tables;
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 15, tables })).local_asset_manifest,
+    ).toBe(0);
+  });
+
+  it("round-trips checkpoint descriptors, preserves historical metadata and rejects invalid catalog identities", async () => {
+    const sourceUrl = await migratedDbUrl("checkpoint-source.db");
+    const targetUrl = await migratedDbUrl("checkpoint-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [
+        "0026_local_asset_manifest",
+        migrations.at(-1)!.id,
+      ].entries()) {
+        const descriptor = {
+          version: 1,
+          identity: {
+            workspaceId: "workspace",
+            deviceId: "device",
+            epochId: "epoch",
+            checkpointId: `checkpoint-${index}`,
+            schemaId,
+          },
+          selection: { baselineId: "baseline", effectSetIds: [] },
+          byteLength: 642,
+          sha256: "a".repeat(64),
+        };
+        await client.execute({
+          sql: "INSERT INTO local_recovery_checkpoint VALUES(?,?,?,?,?,?)",
+          args: [
+            "workspace",
+            "device",
+            "epoch",
+            `checkpoint-${index}`,
+            JSON.stringify(descriptor),
+            1,
+          ],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(22);
+    expect((await importDbJson(targetUrl, source)).local_recovery_checkpoint).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const wrongIdentity = structuredClone(source);
+    wrongIdentity.tables.local_recovery_checkpoint[0].checkpoint_id = "different";
+    await expect(importDbJson(targetUrl, wrongIdentity)).rejects.toThrow("identity mismatch");
+    const malformed = structuredClone(source);
+    const descriptor = JSON.parse(String(malformed.tables.local_recovery_checkpoint[0].descriptor));
+    descriptor.sha256 = "bad";
+    malformed.tables.local_recovery_checkpoint[0].descriptor = JSON.stringify(descriptor);
+    await expect(importDbJson(targetUrl, malformed)).rejects.toThrow();
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const { local_recovery_checkpoint: _catalog, ...tables } = source.tables;
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 16, tables })).local_recovery_checkpoint,
+    ).toBe(0);
+  });
+
+  it("round-trips shared descriptor pairs and preserves historical metadata without installing history", async () => {
+    const sourceUrl = await migratedDbUrl("shared-checkpoint-source.db");
+    const targetUrl = await migratedDbUrl("shared-checkpoint-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [
+        "0027_local_recovery_checkpoint",
+        migrations.at(-1)!.id,
+      ].entries()) {
+        const identity = {
+          workspaceId: "workspace",
+          deviceId: "device",
+          epochId: "epoch",
+          checkpointId: `shared-${index}`,
+          schemaId,
+        };
+        const local = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSetIds: ["a"] },
+          byteLength: 697,
+          sha256: "a".repeat(64),
+        };
+        const shared = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSets: [{ id: "a", effectCount: 0 }] },
+          byteLength: 800,
+          sha256: "b".repeat(64),
+        };
+        const values = [
+          identity.workspaceId,
+          identity.deviceId,
+          identity.epochId,
+          identity.checkpointId,
+        ];
+        await client.execute({
+          sql: "INSERT INTO local_recovery_checkpoint VALUES(?,?,?,?,?,?)",
+          args: [...values, JSON.stringify(local), 1],
+        });
+        await client.execute({
+          sql: "INSERT INTO local_recovery_shared_history VALUES(?,?,?,?,?,?,?)",
+          args: [...values, JSON.stringify(shared), JSON.stringify(local), 1],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(22);
+    expect((await importDbJson(targetUrl, source)).local_recovery_shared_history).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    for (const change of ["identity", "hash", "local-selection"] as const) {
+      const invalid = structuredClone(source);
+      const row = invalid.tables.local_recovery_shared_history[0];
+      if (change === "identity") row.checkpoint_id = "other";
+      if (change === "hash")
+        row.descriptor = JSON.stringify({ ...JSON.parse(String(row.descriptor)), sha256: "bad" });
+      if (change === "local-selection")
+        row.local_descriptor = JSON.stringify({
+          ...JSON.parse(String(row.local_descriptor)),
+          selection: { baselineId: "other", effectSetIds: ["a"] },
+        });
+      await expect(importDbJson(targetUrl, invalid)).rejects.toThrow();
+      expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    }
+    const { local_recovery_shared_history: _shared, ...tables } = source.tables;
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 17, tables }))
+        .local_recovery_shared_history,
+    ).toBe(0);
+  });
+
+  it("round-trips trusted recovery asset expectations and rejects malformed bindings before replacing rows", async () => {
+    const sourceUrl = await migratedDbUrl("recovery-assets-source.db");
+    const targetUrl = await migratedDbUrl("recovery-assets-target.db");
+    await seedDb(targetUrl);
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [migrations.at(-2)!.id, migrations.at(-1)!.id].entries()) {
+        const identity = {
+          workspaceId: "workspace",
+          deviceId: "device",
+          epochId: "epoch",
+          checkpointId: `checkpoint-${index}`,
+          schemaId,
+        };
+        const localCheckpoint = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSetIds: ["empty"] },
+          byteLength: 700,
+          sha256: "a".repeat(64),
+        };
+        const checkpoint = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSets: [{ id: "empty", effectCount: 0 }] },
+          byteLength: 800,
+          sha256: "b".repeat(64),
+        };
+        const descriptor = {
+          version: 1,
+          binding: { checkpoint, localCheckpoint },
+          byteLength: 900,
+          sha256: "c".repeat(64),
+        };
+        // Orphaned metadata remains useful evidence and has no cross-catalog foreign key.
+        await client.execute({
+          sql: "INSERT INTO local_recovery_assets VALUES(?,?,?,?,?,?)",
+          args: [
+            identity.workspaceId,
+            identity.deviceId,
+            identity.epochId,
+            identity.checkpointId,
+            JSON.stringify(descriptor),
+            1,
+          ],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(22);
+    expect((await importDbJson(targetUrl, source)).local_recovery_assets).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    for (const change of [
+      "identity",
+      "hash",
+      "shared-binding",
+      "local-selection",
+      "nested-version",
+    ]) {
+      const invalid = structuredClone(source);
+      const row = invalid.tables.local_recovery_assets[0];
+      const descriptor = JSON.parse(String(row.descriptor));
+      if (change === "identity") row.checkpoint_id = "other";
+      if (change === "hash") descriptor.sha256 = "bad";
+      if (change === "shared-binding") descriptor.binding.checkpoint.identity.deviceId = "other";
+      if (change === "local-selection")
+        descriptor.binding.localCheckpoint.selection.baselineId = "other";
+      if (change === "nested-version") descriptor.binding.localCheckpoint.version = 2;
+      row.descriptor = JSON.stringify(descriptor);
+      await expect(importDbJson(targetUrl, invalid)).rejects.toThrow();
+      expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    }
+    const { local_recovery_assets: _assets, ...tables } = source.tables;
+    await expect(importDbJson(targetUrl, { ...source, tables })).rejects.toThrow(
+      "missing table local_recovery_assets",
+    );
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 18, tables })).local_recovery_assets,
+    ).toBe(0);
+    expect(source.tables.local_recovery_assets).toHaveLength(2);
+  });
+
+  it("round-trips trusted execution expectations and refuses malformed source bindings before replacing rows", async () => {
+    const sourceUrl = await migratedDbUrl("executions-source.db"),
+      targetUrl = await migratedDbUrl("executions-target.db");
+    await seedDb(targetUrl);
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [migrations.at(-2)!.id, migrations.at(-1)!.id].entries()) {
+        const identity = {
+          workspaceId: "workspace",
+          deviceId: "device",
+          epochId: "epoch",
+          checkpointId: `checkpoint-${index}`,
+          schemaId,
+        };
+        const local = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSetIds: ["empty"] },
+          byteLength: 700,
+          sha256: "a".repeat(64),
+        };
+        const shared = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSets: [{ id: "empty", effectCount: 0 }] },
+          byteLength: 800,
+          sha256: "b".repeat(64),
+        };
+        const descriptor = {
+          version: 1,
+          checkpoint: shared,
+          selection: {
+            baselineId: "baseline",
+            effectSets: [{ id: "empty", rootId: "root", executionCount: 2 }],
+          },
+          byteLength: 900,
+          sha256: "c".repeat(64),
+        };
+        await client.execute({
+          sql: "INSERT INTO local_recovery_executions VALUES(?,?,?,?,?,?,?)",
+          args: [
+            identity.workspaceId,
+            identity.deviceId,
+            identity.epochId,
+            identity.checkpointId,
+            JSON.stringify(descriptor),
+            JSON.stringify(local),
+            1,
+          ],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(22);
+    expect((await importDbJson(targetUrl, source)).local_recovery_executions).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    for (const change of [
+      "identity",
+      "hash",
+      "selection",
+      "count",
+      "local-identity",
+      "local-selection",
+    ]) {
+      const invalid = structuredClone(source),
+        row = invalid.tables.local_recovery_executions[0];
+      const descriptor = JSON.parse(String(row.descriptor)),
+        local = JSON.parse(String(row.local_descriptor));
+      if (change === "identity") row.checkpoint_id = "other";
+      if (change === "hash") descriptor.sha256 = "bad";
+      if (change === "selection") descriptor.selection.baselineId = "other";
+      if (change === "count") descriptor.selection.effectSets[0].executionCount = 0;
+      if (change === "local-identity") local.identity.deviceId = "other";
+      if (change === "local-selection") local.selection.effectSetIds = [];
+      row.descriptor = JSON.stringify(descriptor);
+      row.local_descriptor = JSON.stringify(local);
+      await expect(importDbJson(targetUrl, invalid)).rejects.toThrow();
+      expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    }
+    const { local_recovery_executions: _executions, ...tables } = source.tables;
+    await expect(importDbJson(targetUrl, { ...source, tables })).rejects.toThrow(
+      "missing table local_recovery_executions",
+    );
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 19, tables })).local_recovery_executions,
+    ).toBe(0);
+    expect(source.tables.local_recovery_executions).toHaveLength(2);
+  });
+
+  it("round-trips trusted original-action expectations and refuses malformed source bindings before replacing rows", async () => {
+    const sourceUrl = await migratedDbUrl("actions-source.db"),
+      targetUrl = await migratedDbUrl("actions-target.db");
+    await seedDb(targetUrl);
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [migrations.at(-2)!.id, migrations.at(-1)!.id].entries()) {
+        const identity = {
+          workspaceId: "workspace",
+          deviceId: "device",
+          epochId: "epoch",
+          checkpointId: `checkpoint-${index}`,
+          schemaId,
+        };
+        const local = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSetIds: ["empty"] },
+          byteLength: 700,
+          sha256: "a".repeat(64),
+        };
+        const shared = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSets: [{ id: "empty", effectCount: 0 }] },
+          byteLength: 800,
+          sha256: "b".repeat(64),
+        };
+        const execution = {
+          version: 1,
+          checkpoint: shared,
+          selection: {
+            baselineId: "baseline",
+            effectSets: [{ id: "empty", rootId: "root", executionCount: 2 }],
+          },
+          byteLength: 900,
+          sha256: "c".repeat(64),
+        };
+        const descriptor = {
+          version: 1,
+          checkpoint: execution,
+          selection: { actionIds: ["root", "child"] },
+          byteLength: 1000,
+          sha256: "d".repeat(64),
+        };
+        await client.execute({
+          sql: "INSERT INTO local_recovery_actions VALUES(?,?,?,?,?,?,?)",
+          args: [
+            identity.workspaceId,
+            identity.deviceId,
+            identity.epochId,
+            identity.checkpointId,
+            JSON.stringify(descriptor),
+            JSON.stringify(local),
+            1,
+          ],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(22);
+    expect((await importDbJson(targetUrl, source)).local_recovery_actions).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    for (const change of [
+      "identity",
+      "hash",
+      "selection",
+      "count",
+      "local-identity",
+      "local-selection",
+    ]) {
+      const invalid = structuredClone(source),
+        row = invalid.tables.local_recovery_actions[0];
+      const descriptor = JSON.parse(String(row.descriptor)),
+        local = JSON.parse(String(row.local_descriptor));
+      if (change === "identity") row.checkpoint_id = "other";
+      if (change === "hash") descriptor.sha256 = "bad";
+      if (change === "selection") descriptor.selection.actionIds = ["child"];
+      if (change === "count") descriptor.checkpoint.selection.effectSets[0].executionCount = 0;
+      if (change === "local-identity") local.identity.deviceId = "other";
+      if (change === "local-selection") local.selection.effectSetIds = [];
+      row.descriptor = JSON.stringify(descriptor);
+      row.local_descriptor = JSON.stringify(local);
+      await expect(importDbJson(targetUrl, invalid)).rejects.toThrow();
+      expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    }
+    const { local_recovery_actions: _actions, ...tables } = source.tables;
+    await expect(importDbJson(targetUrl, { ...source, tables })).rejects.toThrow(
+      "missing table local_recovery_actions",
+    );
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 20, tables })).local_recovery_actions,
+    ).toBe(0);
+    expect(source.tables.local_recovery_actions).toHaveLength(2);
+  });
+
+  it("round-trips trusted retained-history expectations and refuses malformed source bindings before replacing rows", async () => {
+    const sourceUrl = await migratedDbUrl("retained-source.db"),
+      targetUrl = await migratedDbUrl("retained-target.db");
+    await seedDb(targetUrl);
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, schemaId] of [migrations.at(-2)!.id, migrations.at(-1)!.id].entries()) {
+        const identity = {
+          workspaceId: "workspace",
+          deviceId: "device",
+          epochId: "epoch",
+          checkpointId: `checkpoint-${index}`,
+          schemaId,
+        };
+        const local = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSetIds: ["empty"] },
+          byteLength: 700,
+          sha256: "a".repeat(64),
+        };
+        const shared = {
+          version: 1,
+          identity,
+          selection: { baselineId: "baseline", effectSets: [{ id: "empty", effectCount: 0 }] },
+          byteLength: 800,
+          sha256: "b".repeat(64),
+        };
+        const execution = {
+          version: 1,
+          checkpoint: shared,
+          selection: {
+            baselineId: "baseline",
+            effectSets: [{ id: "empty", rootId: "root", executionCount: 2 }],
+          },
+          byteLength: 900,
+          sha256: "c".repeat(64),
+        };
+        const original = {
+          version: 1,
+          checkpoint: execution,
+          selection: { actionIds: ["root", "child"] },
+          byteLength: 1000,
+          sha256: "d".repeat(64),
+        };
+        const descriptor = {
+          version: 1,
+          checkpoint: original,
+          selection: {
+            effectSets: [
+              {
+                id: "origin",
+                rootId: "root",
+                source: "origin",
+                baselineId: "before-origin",
+                effectCount: 3,
+                executionCount: 2,
+              },
+              {
+                id: "empty",
+                rootId: "root",
+                source: "authoritative",
+                baselineId: "baseline",
+                effectCount: 0,
+                executionCount: 2,
+              },
+            ],
+          },
+          byteLength: 2000,
+          sha256: "e".repeat(64),
+        };
+        await client.execute({
+          sql: "INSERT INTO local_recovery_retained_history VALUES(?,?,?,?,?,?,?)",
+          args: [
+            identity.workspaceId,
+            identity.deviceId,
+            identity.epochId,
+            identity.checkpointId,
+            JSON.stringify(descriptor),
+            JSON.stringify(local),
+            1,
+          ],
+        });
+      }
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(22);
+    expect((await importDbJson(targetUrl, source)).local_recovery_retained_history).toBe(2);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    for (const change of [
+      "identity",
+      "hash",
+      "selection",
+      "count",
+      "local-identity",
+      "local-selection",
+    ]) {
+      const invalid = structuredClone(source),
+        row = invalid.tables.local_recovery_retained_history[0];
+      const descriptor = JSON.parse(String(row.descriptor)),
+        local = JSON.parse(String(row.local_descriptor));
+      if (change === "identity") row.checkpoint_id = "other";
+      if (change === "hash") descriptor.sha256 = "bad";
+      if (change === "selection") descriptor.selection.effectSets.pop();
+      if (change === "count") descriptor.selection.effectSets[1].effectCount = 1;
+      if (change === "local-identity") local.identity.deviceId = "other";
+      if (change === "local-selection") local.selection.effectSetIds = [];
+      row.descriptor = JSON.stringify(descriptor);
+      row.local_descriptor = JSON.stringify(local);
+      await expect(importDbJson(targetUrl, invalid)).rejects.toThrow();
+      expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    }
+    const { local_recovery_retained_history: _actions, ...tables } = source.tables;
+    await expect(importDbJson(targetUrl, { ...source, tables })).rejects.toThrow(
+      "missing table local_recovery_retained_history",
+    );
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 21, tables }))
+        .local_recovery_retained_history,
+    ).toBe(0);
+    expect(source.tables.local_recovery_retained_history).toHaveLength(2);
+  });
+
+  it("round-trips image staging evidence without reading or installing files", async () => {
+    const sourceUrl = await migratedDbUrl("uploads-source.db");
+    const targetUrl = await migratedDbUrl("uploads-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      for (const [index, state] of ["pending", "installed", "completed", "abandoned"].entries())
+        await client.execute({
+          sql: "INSERT INTO local_image_upload(filename,byte_length,sha256,state,created_at,installed_at,completed_at,error,abandoned_at,abandon_reason) VALUES(?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            `00000000-0000-4000-8000-00000000000${index}.svg`,
+            3,
+            "a".repeat(64),
+            state,
+            1,
+            state === "installed" || state === "completed" ? 2 : null,
+            state === "completed" ? 3 : null,
+            state === "abandoned" ? "Original failure" : null,
+            state === "abandoned" ? 4 : null,
+            state === "abandoned" ? "Reviewed" : null,
+          ],
+        });
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(22);
+    expect((await importDbJson(targetUrl, source)).local_image_upload).toBe(4);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    source.tables.local_image_upload[0].filename = "../outside.svg";
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow(
+      "Invalid local image upload metadata",
+    );
+    expect((await exportDbJson(targetUrl)).tables.local_image_upload).toHaveLength(4);
+    const { local_image_upload: _uploads, ...tables } = source.tables;
+    expect(
+      (await importDbJson(targetUrl, { ...source, version: 14, tables })).local_image_upload,
+    ).toBe(0);
+  });
+
+  it("round-trips local file operations whose shared identities are absent", async () => {
+    const sourceUrl = await migratedDbUrl("operations-source.db");
+    const targetUrl = await migratedDbUrl("operations-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('pending','taskspace.claim',1,'missing','missing','local/pending','workspace_relative','pending','{}',1)",
+      );
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at,confirmed_at) VALUES('confirmed','taskspace.claim',1,'missing','missing','local/confirmed','workspace_relative','confirmed','{}',1,2)",
+      );
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('file','taskspace.file',1,'missing','missing','local/file.txt','workspace_relative','pending','{}',1)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect(source.version).toBe(22);
+    expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(3);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    source.tables.local_file_operation[0].path = "../escape";
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow("leaves the workspace");
+    source.tables.local_file_operation[0].path = "/external";
+    source.tables.local_file_operation[0].path_kind = "absolute";
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow("--allow-absolute-paths");
+    await importDbJson(targetUrl, source, { allowAbsolutePaths: true });
+  });
+
+  it("imports version 10 with an empty local operation journal", async () => {
+    const sourceUrl = await migratedDbUrl("operations-v10-source.db");
+    const targetUrl = await migratedDbUrl("operations-v10-target.db");
+    await seedDb(sourceUrl);
+    const source = await exportDbJson(sourceUrl);
+    const { local_file_operation: _operations, ...tables } = source.tables;
+    const legacy = { ...source, version: 10, tables };
+    const original = JSON.stringify(legacy);
+    expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(0);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(JSON.stringify(legacy)).toBe(original);
+  });
+
+  it("imports version 11 claim records unchanged without running them", async () => {
+    const sourceUrl = await migratedDbUrl("v11-source.db");
+    const targetUrl = await migratedDbUrl("v11-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('claim','taskspace.claim',1,'missing','missing','local/pending','workspace_relative','pending','{}',1)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    const legacy = { ...source, version: 11 };
+    const original = JSON.stringify(legacy);
+    expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(1);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(JSON.stringify(legacy)).toBe(original);
+  });
+
+  it("round-trips orphan directory intents and validates their destination before import", async () => {
+    const sourceUrl = await migratedDbUrl("directory-source.db");
+    const targetUrl = await migratedDbUrl("directory-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute({
+        sql: "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('directory','taskspace.directory',1,'missing','missing','local/source','workspace_relative','pending',?,1)",
+        args: [
+          JSON.stringify({
+            operation: "move",
+            name: "target",
+            targetPath: "local/target",
+            before: {},
+            directory: { dev: "0", ino: "0", markerHash: "a".repeat(64) },
+          }),
+        ],
+      });
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(1);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    source.tables.local_file_operation[0].intent = JSON.stringify({ targetPath: "../outside" });
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow("leaves the workspace");
+    const retained = await exportDbJson(targetUrl);
+    expect(retained.tables.local_file_operation).toHaveLength(1);
+    expect(JSON.parse(String(retained.tables.local_file_operation[0].intent)).targetPath).toBe(
+      "local/target",
+    );
+  });
+
+  it("imports version 12 file journals without executing their callbacks", async () => {
+    const sourceUrl = await migratedDbUrl("file-v12-source.db");
+    const targetUrl = await migratedDbUrl("file-v12-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('file','taskspace.file',1,'missing','missing','local/file.txt','workspace_relative','pending','{}',1)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    const legacy = { ...source, version: 12 };
+    const original = JSON.stringify(legacy);
+    expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(1);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(JSON.stringify(legacy)).toBe(original);
+  });
+
+  it("imports version 13 journals with empty abandonment fields without mutating the dump", async () => {
+    const sourceUrl = await migratedDbUrl("v13-source.db");
+    const targetUrl = await migratedDbUrl("v13-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute(
+        "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at) VALUES('pending','taskspace.directory',1,'missing','missing','local/path','workspace_relative','pending','{}',1)",
+      );
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    const legacy = {
+      ...source,
+      version: 13,
+      tables: {
+        ...source.tables,
+        local_file_operation: source.tables.local_file_operation.map(
+          ({ abandoned_at: _at, abandon_reason: _reason, ...row }) => row,
+        ),
+      },
+    };
+    const original = JSON.stringify(legacy);
+    expect((await importDbJson(targetUrl, legacy)).local_file_operation).toBe(1);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    expect(JSON.stringify(legacy)).toBe(original);
+  });
+
+  it("round-trips abandonment evidence and rejects unsafe intermediate layout paths before import", async () => {
+    const sourceUrl = await migratedDbUrl("abandoned-source.db");
+    const targetUrl = await migratedDbUrl("abandoned-target.db");
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute({
+        sql: "INSERT INTO local_file_operation(id,kind,version,taskspace_id,namespace_id,path,path_kind,state,intent,created_at,error,abandoned_at,abandon_reason) VALUES('reviewed','taskspace.directory',1,'missing','missing','local/path','workspace_relative','abandoned',?,1,'Original failure',2,'Reviewed on disk')",
+        args: [
+          JSON.stringify({
+            operation: "layout",
+            targetPath: "local/target",
+            paths: ["local/path", "local/intermediate", "local/target"],
+            before: {},
+            directory: {},
+          }),
+        ],
+      });
+    } finally {
+      client.close();
+    }
+    const source = await exportDbJson(sourceUrl);
+    expect((await importDbJson(targetUrl, source)).local_file_operation).toBe(1);
+    expect((await exportDbJson(targetUrl)).tables).toEqual(source.tables);
+    const intent = JSON.parse(String(source.tables.local_file_operation[0].intent));
+    intent.paths[1] = "../outside";
+    source.tables.local_file_operation[0].intent = JSON.stringify(intent);
+    await expect(importDbJson(targetUrl, source)).rejects.toThrow("leaves the workspace");
+    expect((await exportDbJson(targetUrl)).tables.local_file_operation[0].abandon_reason).toBe(
+      "Reviewed on disk",
+    );
+  });
+
   it("reads a version 7 dump, which predates scope_area, as having no frames", async () => {
     const sourceUrl = await migratedDbUrl("v7-source.db");
     const targetUrl = await migratedDbUrl("v7-target.db");
@@ -209,7 +1062,7 @@ describe("db JSON export/import", () => {
     const legacy = {
       ...dump,
       version: 7,
-      tables: { ...dump.tables, scope_area: undefined },
+      tables: { ...legacyTables(dump.tables), scope_area: undefined },
     };
     delete (legacy.tables as Record<string, unknown>).scope_area;
 
@@ -229,7 +1082,7 @@ describe("db JSON export/import", () => {
     // Version 8 has neither the `inventory` table nor the two columns it added to `card`.
     const dump = await exportDbJson(sourceUrl);
     const tables: Record<string, unknown> = {
-      ...dump.tables,
+      ...legacyTables(dump.tables),
       card: dump.tables.card.map(({ inventory_id: _id, inventory_slot: _slot, ...row }) => row),
     };
     delete tables.inventory;
@@ -541,25 +1394,25 @@ describe("import reference validation", () => {
 
   it("rejects a workspace-relative taskspace path that leaves the workspace", async () => {
     await expectRejectedImport((tables) => {
-      tables.taskspace[0].path = "../../elsewhere";
+      tables.taskspace_local[0].path = "../../elsewhere";
     }, "taskspace taskspace-1: workspace-relative path leaves the workspace");
   });
 
   it("rejects an unknown taskspace path kind", async () => {
     await expectRejectedImport((tables) => {
-      tables.taskspace[0].path_kind = "remote";
+      tables.taskspace_local[0].path_kind = "remote";
     }, 'taskspace taskspace-1: unknown path kind "remote"');
   });
 
   it("rejects absolute taskspace paths unless allowed", async () => {
     await expectRejectedImport((tables) => {
-      tables.taskspace[0].path = "/home/someone";
-      tables.taskspace[0].path_kind = "absolute";
+      tables.taskspace_local[0].path = "/home/someone";
+      tables.taskspace_local[0].path_kind = "absolute";
     }, /--allow-absolute-paths/);
 
     const dump = await seededDump();
-    dump.tables.taskspace[0].path = "/home/someone";
-    dump.tables.taskspace[0].path_kind = "absolute";
+    dump.tables.taskspace_local[0].path = "/home/someone";
+    dump.tables.taskspace_local[0].path_kind = "absolute";
     const targetUrl = await migratedDbUrl(`refs-target-${sequence++}.db`);
     await expect(
       importDbJson(targetUrl, dump, { allowAbsolutePaths: true }),

@@ -114,6 +114,12 @@ Use `createClientFeatures(capabilities, taskspaces)` when constructing a client.
 
 Both built-in clients use this constructor. Every shared contract case checks that the taskspace flag agrees with API availability and that the API has all required methods. Custom clients remain responsible for operation results and access permissions.
 
+`taskspaces.rename` changes the shared label and keeps the local directory in
+place. The HTTP client sends `PATCH` to the taskspace's `/label` endpoint and
+retains the existing rename response fields. Use a server with that endpoint.
+The client does not fall back to the older combined directory rename endpoint.
+File and folder renames continue to use `renameEntry`.
+
 ## How views and transports cooperate
 
 ### HTTP implementation

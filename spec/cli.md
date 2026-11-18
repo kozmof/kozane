@@ -127,7 +127,8 @@ kozane net ssg preview [--out <dir>] [--base <path>] [--host <host>] [--port <po
 ### `kozane doctor`
 
 Check workspace detection, config, database permissions, migrations, card timestamps, SQLite
-integrity and references, workspace limits, inventory consistency, taskspace layout,
+integrity and references, workspace limits, inventory consistency, pending directory claims
+and file or directory operations, taskspace layout,
 `taskspace.namespacePaths` keys, and port availability. Exit 0 when all checks pass, otherwise 1.
 
 Database content checks require current migrations. Invalid timestamps, oversized text or
@@ -138,6 +139,21 @@ the UTF-16 limit through astral characters.
 
 For broken config, run `doctor config`. For database corruption, export readable data before
 restoring a backup.
+
+For interrupted directory creation, inspect the operation ID with
+`taskspace recover <operationId>`. Confirm verified attachments explicitly with `--apply`.
+`doctor --fix` leaves pending claims unchanged.
+
+Unfinished image uploads are reported with up to five full filenames and disk observations.
+Inspect them with `image recover <filename>` or list all with `image uploads`. Recovery
+and abandonment require an explicit command. `--fix` does not retry upload work.
+
+Pending file and managed-directory mutations are reported with operation IDs and disk
+observations. A matching hash, marker or missing entry does not confirm an operation.
+Inspect disk state before repeating a change. `doctor --fix` does not retry these
+operations. `taskspace recover` can explicitly confirm a completed directory mutation
+after verifying its recorded taskspace snapshot and disk evidence.
+File outcomes can also be reviewed and explicitly confirmed without repeating disk work.
 
 `--fix` first fixes the taskspace layout, then runs the checks. It refuses while Kozane is
 running for the workspace.
@@ -177,9 +193,17 @@ The fix updates a legacy config only after all planned moves succeed. Until then
 `kozane open` continues to refuse startup.
 
 A directory whose target is inside itself, such as a taskspace named `taskspaces` at the
-root, moves to a temporary location first. If updating a record fails after a move,
-Kozane tries to restore the directory. If restoration also fails, the report directs you
-to run `kozane taskspace scan --apply`.
+root, moves to a temporary location first. The journal retains source, temporary and
+destination paths before the first move. A failed step or database commit leaves the
+completed disk changes and pending evidence for inspection. It does not move directories
+back automatically. Later layout runs leave pending operations alone.
+
+Review completed moves with `taskspace recover <operationId>` and explicitly confirm
+verified database changes with `--apply`. For other disk states, inspect the recorded
+paths and repair attachments with `kozane taskspace scan --apply` after manual repair.
+Use `taskspace abandon <operationId>` to preview abandonment of reviewed tracking records.
+Applying abandonment removes the operation from pending diagnostics while retaining its
+original intent and errors. Abandonment does not repair or reverse a move.
 
 Moves run in dependency order. If `c` goes into `b` and `b` goes into `a`, `a` moves
 first, followed by `b` and `c`. Circular dependencies, such as `a` going into `b` while
@@ -411,6 +435,9 @@ Use `--type image` to interpret `<content>` as a local JPEG, PNG, or SVG file pa
 Extensions are checked without regard to case. Files must contain between 1 byte
 and 10 MiB. The image is copied to `.kozane/assets/images` with a unique filename.
 The source file is preserved. Other type values are rejected.
+The host records a staging pin before publishing the image and completes it with
+the card transaction. Failed card creation retains the pin and uploaded bytes for
+review. Cleanup leaves unfinished pins alone.
 Image signatures must match the extension. SVG files must have balanced tags and
 quoted attributes. Scripts, event handlers, embedded HTML, and external resource links are rejected. Local fragment references are allowed.
 
@@ -739,6 +766,58 @@ Results are capped at 200 card hits and 200 file hits, with notices when shorten
 kozane tag show <tag> [--namespace <namespaceId>] [--no-files]
 ```
 
+### `kozane image uploads`
+
+List unfinished local image upload records by full filename and state. Recorded errors
+are included. `--all` also includes completed and abandoned records. The command is read-only.
+
+```sh
+kozane image uploads [--all]
+```
+
+### `kozane image recover <filename>`
+
+Preview an upload using the full filename from `image uploads` or `doctor`. The output
+shows byte length, hash, published and temporary file observations, and whether a card
+references the image. The default is read-only.
+
+| Option | Description |
+| --- | --- |
+| `--apply` | Confirm verified local upload bookkeeping without changing files or cards |
+
+Recovery requires matching published bytes, no temporary file and no recorded filesystem
+error. Unsafe paths, symlinks, unreadable or changed files and abandoned uploads are refused.
+Applying repeats verification under the installer and cleanup writer lock. A pending
+upload becomes installed. If a card already references the image, the upload becomes
+completed. An unreferenced installed upload keeps its pin. Repeated confirmation makes
+no changes. Historical completed records do not require the file to remain present.
+
+The command returns the verified URL. Create an image card from it with
+`kozane card add "kozane-image:/api/images/<filename>"`. Recovery never recreates,
+copies, renames or removes files. Interrupted temporary-only or ambiguous publication
+requires manual review. Failed database confirmation retains pending evidence.
+
+### `kozane image abandon <filename>`
+
+Preview release of a reviewed image upload pin. The default is read-only.
+
+| Option | Description |
+| --- | --- |
+| `--reason <reason>` | Required reason of 1–1000 characters without NUL, trimmed before recording |
+| `--apply` | Release only this upload pin and retain its evidence and decision |
+
+Applying records an abandonment time and reason while preserving intent, errors and
+installation evidence. It changes no files or card references and does not run cleanup.
+Live references still protect the bytes. Completed uploads cannot be abandoned.
+Repeating the same decision is idempotent. Another reason cannot replace it. Applying
+shares the installation writer lock and may refuse during contention without retrying
+callbacks. A failed statement or commit leaves the pin intact.
+
+Unreferenced abandoned files become normal cleanup candidates. Regular temporary
+files belonging to abandoned uploads are collected after 24 hours. Queued deletion
+can remove published and temporary files after all references and upload pins are gone.
+`doctor --fix` never applies recovery or abandonment.
+
 ### `kozane db status`
 
 Report migration status and exit 0 only when current.
@@ -768,8 +847,9 @@ kozane db migrate
 ### `kozane db export [file]`
 
 Export database data as JSON to a file or stdout. Requires current migrations. `--compact`
-removes formatting. Writes format version 8. Import also accepts version 7, which has no scope
-frames. Image bytes are not included. Back up `.kozane/assets/images` separately.
+removes formatting. Writes format version 17, including local filesystem operations,
+image upload staging, manifest owners and checkpoint descriptor records. Import
+accepts versions 7 through 17. Image bytes are not included. Back up `.kozane/assets/images` separately.
 
 Older formats use `project` and `bundle` tables and are refused. Import them with Kozane 0.10
 or earlier, then migrate.
@@ -845,6 +925,67 @@ kozane taskspace scan [--apply] [--reattach [--namespace <namespaceId>]] [--clea
 | `--reattach`       | Re-link orphan taskspaces found on disk but missing from DB (needs `--apply`)   |
 | `--cleanup`        | Delete DB records for taskspaces whose marker file is missing (needs `--apply`) |
 | `--namespace <id>` | Namespace for reattached taskspaces (needs `--reattach`)                        |
+
+### `kozane taskspace recover <operationId>`
+
+Inspect a local filesystem operation using the full operation ID printed by
+`kozane doctor`. The default is read-only. The output identifies the taskspace, stored
+path and whether the operation can be confirmed. Completed mutation previews also
+show the action and any destination or new label. File previews include the action
+and any intended content hash or destination.
+
+| Option | Description |
+| --- | --- |
+| `--apply` | Finish verified database changes and confirm the journal entry together |
+
+Claim confirmation requires the exact intended marker bytes, an existing shared taskspace in
+the recorded namespace and no conflicting attachment. It refuses missing or changed
+markers, unsafe paths, symlinks, invalid intent and absent or reassigned taskspaces.
+It records the current local observation time and preserves shared timestamps.
+An already confirmed operation makes no changes.
+
+Directory mutation confirmation requires unchanged shared fields and attachment from the recorded
+snapshot and an existing invoking namespace. A move or layout operation requires the
+recorded marker and directory identity at the destination only. Removal requires an
+absent source. Applying a move commits its recorded label and local path. Layout
+recovery changes only the local path. Removal deletes the shared taskspace, clears
+card links and retains local metadata. Confirmation commits atomically with these
+changes and preserves creation and local observation timestamps.
+
+File confirmation requires a taskspace visible in the recorded namespace and a valid
+current attachment. The requested path must resolve to the exact recorded affected
+path and path kind. Creates and saves require matching content hashes. Directory
+creation requires a directory. Renames require only the destination to exist, and
+removal requires the recorded entry to be absent. Unsafe paths and symbolic links
+are refused. Existing absolute attachments are supported.
+
+Review disk state before confirming file tracking. These checks establish the current
+outcome and do not prove which process produced it. File intents do not retain entry
+identity or directory contents. Applying changes only the journal entry, preserving
+all shared rows, attachments and timestamps. Failed confirmation retains pending
+evidence, and repeated confirmation makes no changes.
+
+Unsafe or ambiguous disk states, recorded filesystem errors and abandoned operations
+are refused. Directory mutations also refuse changed taskspace snapshots. Inspect
+blocked operations and preserve their evidence for manual recovery. The command never repeats filesystem
+work or rewrites markers. `doctor --fix` does not confirm operations. Run it after
+layout confirmation to finish any pending configuration update.
+
+### `kozane taskspace abandon <operationId>`
+
+Preview abandonment of a reviewed pending local filesystem operation. Use the full
+operation ID printed by `doctor`. Finish reviewing disk state and any running work before
+applying this decision.
+
+| Option | Description |
+| --- | --- |
+| `--reason <reason>` | Required reason of 1–1000 characters, without NUL. Surrounding whitespace is removed |
+| `--apply` | Mark abandoned and retain the reason, timestamp, original intent and error |
+
+The default is read-only. Abandonment leaves files, shared rows and attachments unchanged.
+It does not complete, retry, reverse or cancel filesystem work. Confirmed operations are
+refused. Repeating the same abandonment reason makes no changes. A different reason for an
+already abandoned operation is refused.
 
 ### `kozane taskspace create <name>`
 

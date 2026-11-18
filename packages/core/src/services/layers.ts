@@ -1,3 +1,4 @@
+import { withActionService } from "../actions/service-frame.js";
 export type { LayerCreateInput, LayerRenameInput, LayerReorderInput } from "./inputs.js";
 import { withTx } from "../database.js";
 import { prepareInput } from "./prepare-input.js";
@@ -7,50 +8,59 @@ import { requireBoundedName } from "./validation.js";
 import { ConflictError } from "./errors.js";
 import { isUniqueConstraintError } from "../api/utils.js";
 import { addLayer, updateLayerName } from "../api/layer.js";
-import { deleteLayerWithReassign } from "../api/composite.js";
-export async function create(
-  db: DB,
+import { deleteLayerWithReassignInTx } from "../api/composite.js";
+export function createInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const name = requireBoundedName(body);
-  try {
-    const { id, position } = await addLayer({ db, namespaceId, name });
-    return { id, name, position, isDefault: false };
-  } catch (error) {
-    if (isUniqueConstraintError(error))
-      throw new ConflictError(`A layer named "${name}" already exists`, { cause: error });
-    throw error;
-  }
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const name = requireBoundedName(body);
+    try {
+      const { id, position } = await addLayer({ db, namespaceId, name });
+      return { id, name, position, isDefault: false };
+    } catch (error) {
+      if (isUniqueConstraintError(error))
+        throw new ConflictError(`A layer named "${name}" already exists`, { cause: error });
+      throw error;
+    }
+  });
 }
-export async function rename(
-  db: DB,
+export function renameInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   layerId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const name = requireBoundedName(body);
-  try {
-    await updateLayerName({ db, namespaceId, layerId, name });
-  } catch (error) {
-    if (isUniqueConstraintError(error))
-      throw new ConflictError(`A layer named "${name}" already exists`, { cause: error });
-    throw error;
-  }
-  return { ok: true as const };
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const name = requireBoundedName(body);
+    try {
+      await updateLayerName({ db, namespaceId, layerId, name });
+    } catch (error) {
+      if (isUniqueConstraintError(error))
+        throw new ConflictError(`A layer named "${name}" already exists`, { cause: error });
+      throw error;
+    }
+    return { ok: true as const };
+  });
 }
 export async function remove(
   db: DB,
-  _context: ServiceContext,
+  context: ServiceContext,
   namespaceId: string,
   layerId: string,
 ) {
-  const result = await deleteLayerWithReassign({ db, namespaceId, layerId });
-  return { ok: true as const, ...result };
+  return withTx(db, (tx) => removeInTx(tx, context, namespaceId, layerId));
+}
+export function removeInTx(db: Tx, _context: ServiceContext, namespaceId: string, layerId: string) {
+  return withActionService(db, async () => {
+    const result = await deleteLayerWithReassignInTx({ db, namespaceId, layerId });
+    return { ok: true as const, ...result };
+  });
 }
 
 import { reorderLayersInTx, type ReorderRejection } from "../api/layer.js";
@@ -61,17 +71,19 @@ const REORDER_REJECTION_MESSAGE: Record<ReorderRejection, string> = {
   stale: "The namespace's layers changed elsewhere. Reload to see the current order.",
   foreign: "layerIds must only name layers of this namespace",
 };
-export async function reorderInTx(
+export function reorderInTx(
   db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const layerIds = requireStringArray(body, "layerIds");
-  const result = await reorderLayersInTx({ db, namespaceId, layerIds });
-  if (!result.ok) throw new ValidationError(REORDER_REJECTION_MESSAGE[result.reason]);
-  return { ok: true as const };
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const layerIds = requireStringArray(body, "layerIds");
+    const result = await reorderLayersInTx({ db, namespaceId, layerIds });
+    if (!result.ok) throw new ValidationError(REORDER_REJECTION_MESSAGE[result.reason]);
+    return { ok: true as const };
+  });
 }
 
 export async function reorder(
@@ -82,4 +94,24 @@ export async function reorder(
 ) {
   const prepared = prepareInput(body);
   return withTx(db, (tx) => reorderInTx(tx, context, namespaceId, prepared));
+}
+
+export async function create(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => createInTx(tx, context, namespaceId, prepared));
+}
+export async function rename(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  layerId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => renameInTx(tx, context, namespaceId, layerId, prepared));
 }

@@ -22,7 +22,7 @@ import {
   planTaskspaceLayout,
 } from "./taskspace-layout.js";
 
-/** Make the next record update fail, after running `before`, to test the undo. */
+/** Fail the next record update after filesystem work has completed. */
 const updateFailure = vi.hoisted(() => ({
   next: undefined as { before?: () => void } | undefined,
 }));
@@ -230,20 +230,20 @@ describe("applyTaskspaceLayout", () => {
     expect(existsSync(join(root, "taskspaces", TASKSPACE_MARKER_FILE))).toBe(true);
   });
 
-  it("puts the directory back when its record cannot be updated", async () => {
+  it("retains the moved directory and pending evidence when its record cannot be updated", async () => {
     const { db, root, owned, plan } = await workspace({ defaultDir: "." });
     await owned("notes");
     updateFailure.next = {};
 
     const result = await applyTaskspaceLayout(db, root, await plan());
-    expect(result.failed).toMatchObject([{ reason: "database is locked" }]);
+    expect(result.failed[0].reason).toContain("database is locked");
+    expect(result.failed[0].reason).toContain("needs recovery");
     expect(result.config).toBe("kept");
-    expect(existsSync(join(root, "notes", TASKSPACE_MARKER_FILE))).toBe(true);
-    // The folders the move made are gone too.
-    expect(existsSync(join(root, "taskspaces"))).toBe(false);
+    expect(existsSync(join(root, "notes"))).toBe(false);
+    expect(existsSync(join(root, "taskspaces", "main", "notes", TASKSPACE_MARKER_FILE))).toBe(true);
   });
 
-  it("goes on with the other moves when putting a directory back fails", async () => {
+  it("continues independent moves while retaining an earlier interruption", async () => {
     const { db, root, owned, plan } = await workspace({ defaultDir: "." });
     await owned("draft");
     await owned("notes");
@@ -254,8 +254,8 @@ describe("applyTaskspaceLayout", () => {
 
     const result = await applyTaskspaceLayout(db, root, await plan());
     expect(result.failed.map(({ move }) => move.from)).toEqual(["draft"]);
-    expect(result.failed[0].reason).toContain("Could not move it back");
-    expect(result.failed[0].reason).toContain("kozane taskspace scan --apply");
+    expect(result.failed[0].reason).toContain("needs recovery");
+    expect(result.failed[0].reason).toContain("kozane doctor");
     expect(result.moved.map(({ from }) => from)).toEqual(["notes"]);
     expect(result.config).toBe("kept");
   });

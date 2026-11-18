@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { describe, it, expect } from "vitest";
 import {
   createTestDB,
@@ -328,4 +329,46 @@ describe("getScopeRelsByNamespace", () => {
     );
     await expect(getScopeRelsByNamespace({ db, namespaceId })).resolves.toHaveLength(3);
   });
+});
+
+async function recordMembershipInsertAttempts(db: Awaited<ReturnType<typeof createTestDB>>) {
+  await db.run(sql`CREATE TABLE scope_insert_attempt (scope_id TEXT, card_id TEXT)`);
+  await db.run(sql`CREATE TRIGGER record_scope_insert BEFORE INSERT ON scope_rel BEGIN
+    INSERT INTO scope_insert_attempt VALUES(NEW.scope_id,NEW.card_id);
+  END`);
+}
+
+it("avoids BEFORE capture for existing memberships and duplicate inputs", async () => {
+  const { db, scopeId, cardId, namespaceId } = await setup();
+  await recordMembershipInsertAttempts(db);
+  await addScopeRel({ db, scopeId, cardId });
+  await addScopeRel({ db, scopeId, cardId });
+  await addScopeRels({
+    db,
+    scopeId,
+    cardIds: Array.from({ length: INSERT_CHUNK_MAX + 5 }, () => cardId),
+  });
+  await addScopeMembers({ db, namespaceId, scopeId, cardIds: [cardId, cardId] });
+  expect(
+    await db
+      .select({ scopeId: sql<string>`scope_id`, cardId: sql<string>`card_id` })
+      .from(sql`scope_insert_attempt`),
+  ).toEqual([{ scopeId, cardId }]);
+});
+
+it("rolls back prior membership batches and their captures when a later batch fails", async () => {
+  const { db, scopeId, partitionId, namespaceId } = await setup();
+  const { id: layerId } = (await getDefaultLayer({ db, namespaceId }))!;
+  const cardIds = await seedCards(db, {
+    partitionId,
+    layerId,
+    count: INSERT_CHUNK_MAX + 1,
+    prefix: "membership",
+  });
+  await recordMembershipInsertAttempts(db);
+  await expect(
+    addScopeRels({ db, scopeId, cardIds: [...cardIds, "missing-card"] }),
+  ).rejects.toThrow();
+  expect(await db.all(sql`SELECT * FROM scope_insert_attempt`)).toEqual([]);
+  expect(await getAllCardsByScope({ db, scopeId })).toEqual([]);
 });

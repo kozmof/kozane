@@ -18,7 +18,7 @@ import {
   validateDatabaseSchema,
   validateDatabaseMigrationHistory,
 } from "@kozane/core/migrations";
-import { namespaces, cards, snapshot } from "@kozane/core/services";
+import { namespaces, cards, snapshot, taskspaces } from "@kozane/core/services";
 import * as schema from "@kozane/core/schema";
 
 const wasm = await sqlite3InitModule();
@@ -138,6 +138,62 @@ for (const driver of ["libsql", "wasm"]) {
     await cards.removeOne(db, context, ns.id, recovered.id);
     await cards.removeOne(db, context, ns.id, card.id);
     assert.equal((await snapshot.get(db, context, ns.id)).snapshot.cards.length, 0);
+    const taskspaceId = await withTx(db, (tx) =>
+      records.taskspace.addTaskspaceInTx({ db: tx, namespaceId: ns.id, name: "Label" }),
+    );
+    await withTx(db, (tx) =>
+      records.taskspace.updateTaskspaceNameInTx({ db: tx, taskspaceId, name: "Renamed" }),
+    );
+    const taskspace = await records.taskspace.getTaskspace({ db, taskspaceId });
+    assert.equal(taskspace.name, "Renamed");
+    assert.equal(taskspace.path, null);
+    await withTx(db, (tx) =>
+      records.taskspace.updateTaskspaceLocationInTx({
+        db: tx,
+        taskspaceId,
+        path: "local-only",
+        lastSeenAt: new Date(3000000),
+      }),
+    );
+    const attached = await records.taskspace.getTaskspace({ db, taskspaceId });
+    assert.equal(attached.path, "local-only");
+    assert.equal(attached.lastSeenAt.getTime(), 3000000);
+    assert.equal(attached.createdAt.getTime(), taskspace.createdAt.getTime());
+    assert.equal(attached.updatedAt.getTime(), taskspace.updatedAt.getTime());
+    await assert.rejects(
+      withTx(db, async (tx) => {
+        await records.taskspace.deleteTaskspaceInTx({ db: tx, taskspaceId });
+        throw failure;
+      }),
+      (error) => error === failure,
+    );
+    assert.deepEqual(await records.taskspace.getTaskspace({ db, taskspaceId }), attached);
+    await withTx(db, (tx) => records.taskspace.deleteTaskspaceInTx({ db: tx, taskspaceId }));
+    assert.equal(await records.taskspace.getTaskspace({ db, taskspaceId }), undefined);
+    const scopeId = await withTx(db, (tx) =>
+      records.scope.addScope({ db: tx, name: "Shared lifecycle scope" }),
+    );
+    const shared = await taskspaces.create(db, context, ns.id, {
+      name: "  Shared / label  ",
+      scopeId,
+    });
+    assert.equal(shared.name, "Shared / label");
+    assert.equal("path" in shared, false);
+    await records.taskspace.updateTaskspaceLocation({
+      db,
+      taskspaceId: shared.id,
+      path: "device-attachment",
+      lastSeenAt: new Date(1000),
+    });
+    const local = await records.taskspace.getAllTaskspaceLocalMetadata({ db });
+    const renamed = await withTx(db, (tx) =>
+      taskspaces.renameInTx(tx, context, ns.id, shared.id, { name: "Renamed / label" }),
+    );
+    assert.equal(renamed.name, "Renamed / label");
+    assert.equal("lastSeenAt" in renamed, false);
+    await taskspaces.remove(db, context, ns.id, shared.id);
+    assert.equal(await records.taskspace.getTaskspace({ db, taskspaceId: shared.id }), undefined);
+    assert.deepEqual(await records.taskspace.getAllTaskspaceLocalMetadata({ db }), local);
   } finally {
     engine.close();
   }

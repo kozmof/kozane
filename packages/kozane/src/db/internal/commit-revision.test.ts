@@ -2,6 +2,31 @@ import { expect, it } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
 import { nodeCommitRevision, withTx, withReadTx } from "../tx.js";
 import { namespaceTable } from "../schema.js";
+import { sql } from "drizzle-orm";
+
+it("recovers from deferred commit failures without advancing the revision or retaining a lock", async () => {
+  const db = await createTestDB();
+  await db.run(
+    sql`CREATE TABLE deferred_failure(namespace_id TEXT REFERENCES namespace(id) DEFERRABLE INITIALLY DEFERRED)`,
+  );
+  const before = nodeCommitRevision(db);
+  await expect(
+    withTx(db, async (tx) => {
+      await tx.insert(namespaceTable).values({ id: "rolled-back", name: "Uncommitted" });
+      await tx.run(sql`INSERT INTO deferred_failure VALUES('missing')`);
+    }),
+  ).rejects.toBeInstanceOf(Error);
+  expect(nodeCommitRevision(db)).toEqual(before);
+  expect(await db.select().from(namespaceTable)).toEqual([]);
+  expect(await db.all(sql`SELECT * FROM deferred_failure`)).toEqual([]);
+  await withTx(db, (tx) =>
+    tx.insert(namespaceTable).values({ id: "committed", name: "Committed" }),
+  );
+  expect(nodeCommitRevision(db).revision).toBe(before.revision + 1);
+  expect(await db.select({ id: namespaceTable.id }).from(namespaceTable)).toEqual([
+    { id: "committed" },
+  ]);
+});
 it("advances once per outer commit and for standalone writes, preserving read/rollback stamps", async () => {
   const db = await createTestDB();
   const initial = nodeCommitRevision(db);

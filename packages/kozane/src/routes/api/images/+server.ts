@@ -15,7 +15,7 @@ export const POST: RequestHandler = apiHandler(async ({ request, locals }) => {
   if (!root) error(500, "Workspace not found");
   let url: string;
   try {
-    url = await storeImage(root, file.name, new Uint8Array(await file.arrayBuffer()));
+    url = await storeImage(root, locals.db, file.name, new Uint8Array(await file.arrayBuffer()));
   } catch (cause) {
     if (cause instanceof ImageValidationError) error(400, cause.message);
     error(500, "Unable to store image");

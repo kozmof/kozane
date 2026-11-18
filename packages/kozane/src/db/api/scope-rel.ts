@@ -23,3 +23,8 @@ export const getScopeRelsByNamespace: typeof records.scopeRel.getScopeRelsByName
   records.scopeRel.getScopeRelsByNamespace;
 export type CardWithPartitionName = records.scopeRel.CardWithPartitionName;
 export type ScopeMemberResult = records.scopeRel.ScopeMemberResult;
+
+export const addScopeRelInTx: typeof records.scopeRel.addScopeRelInTx =
+  records.scopeRel.addScopeRelInTx;
+export const addScopeRelsInTx: typeof records.scopeRel.addScopeRelsInTx =
+  records.scopeRel.addScopeRelsInTx;

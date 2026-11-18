@@ -1,0 +1,203 @@
+# Images for saved recovery checkpoints
+
+The Node host can protect images required by saved recovery payloads and manifests.
+Use `reserveRegisteredRecoveryCheckpointImages` and
+`retainRegisteredRecoveryCheckpointImages` in
+`lib/server/recovery-checkpoint-images.ts` after saving the matching
+[local snapshot](local-recovery-payloads.md) and
+[shared row history](shared-recovery-payloads.md).
+
+## Prepare trusted requirements
+
+Supply `root`, the trusted catalog `db`, the host's `expected` checkpoint identity
+and a separate `createValidationDatabase` factory. Set `localMaxBytes` and
+`sharedMaxBytes` to positive safe integers. Each limit bounds its payload's input
+bytes. Parsing and validation require additional memory.
+
+Choose either registered saved manifests or host-supplied history manifests.
+Supplying both `assetMaxBytes` and `history` is refused.
+
+## Use registered saved manifests
+
+Save the matching [asset payload](recovery-asset-payloads.md) and supply
+`assetMaxBytes` as a positive safe integer. The workflow resolves its expectation
+from the trusted asset catalog and loads its published bytes within that limit.
+
+```ts
+const retained = await retainRegisteredRecoveryCheckpointImages({
+  root,
+  db,
+  expected,
+  localMaxBytes,
+  sharedMaxBytes,
+  assetMaxBytes,
+  createValidationDatabase,
+});
+```
+
+Loading verifies the asset descriptor and both saved source payloads, including
+isolated SQL validation and exact manifest coverage. The result adds the
+original trusted `assetCheckpoint` beside the shared/local `binding`. Per-record
+requirements remain covered by the asset payload hash even when their combined
+image manifest would be unchanged.
+
+The original asset, shared and local catalog bindings and all three saved files
+are checked under the image writer lock before and after reservation. The same
+checks surround image verification. Missing files, changed bytes, temporary
+evidence and changed bindings refuse success. A new reservation rolls back if
+owner publication changes a required binding. Earlier protection survives
+failed loading or verification.
+
+## Check saved execution images
+
+Save the matching [execution payload](shared-recovery-execution-payloads.md) and
+add `executionMaxBytes` to the registered saved-manifest path. The positive safe
+integer limit bounds the execution file independently of the other payloads.
+Supplying this option with host history manifests is refused.
+
+```ts
+const retained = await retainRegisteredRecoveryCheckpointImages({
+  root,
+  db,
+  expected,
+  localMaxBytes,
+  sharedMaxBytes,
+  assetMaxBytes,
+  executionMaxBytes,
+  createValidationDatabase,
+});
+```
+
+Loading checks trusted execution contents and attribution, then requires each
+effect-set manifest to cover its root and all child inputs. No-op children and
+zero-effect roots remain covered. Entries in another set do not satisfy missing
+coverage, even if the combined manifest contains the image.
+
+The result adds the original `executionBinding`. All four original catalog
+bindings and saved files are checked under the image writer lock before and
+after reservation and byte verification. Changed execution metadata, missing or
+changed execution bytes and temporary evidence refuse success. New reservations
+roll back after a failed recheck. Earlier pending or retained protection survives
+failed loading, verification or commits.
+
+The asset descriptor and image owner format remain unchanged. Supply
+`executionMaxBytes` for every call that requires this coverage. Neither record
+serves as a durable receipt for execution coverage or complete bundle publication.
+
+## Check saved original invocation images
+
+Save the matching [original-action payload](shared-recovery-action-payloads.md)
+and add `actionMaxBytes` with `executionMaxBytes` to the saved-manifest path.
+The positive safe integer limit bounds original bytes independently. This option
+requires the execution read limit and is refused with host history manifests.
+
+```ts
+const retained = await retainRegisteredRecoveryCheckpointImages({
+  root,
+  db,
+  expected,
+  localMaxBytes,
+  sharedMaxBytes,
+  assetMaxBytes,
+  executionMaxBytes,
+  actionMaxBytes,
+  createValidationDatabase,
+});
+```
+
+The combined saved manifest must cover all first-recorded inputs, including
+earlier child arguments and skipped children. Keep these additional entries
+when preparing the asset descriptor. Current execution inputs still require
+their own per-set coverage. Checks verify the trusted original contents and
+their exact execution, shared and local source bindings before reservation.
+
+The result adds the original `actionBinding` beside `executionBinding` and
+`assetCheckpoint`. All five original catalog bindings and saved files are
+checked under the image writer lock before and after reservation and byte
+verification. Changed originals or temporary evidence refuse success. New
+reservations roll back after a failed recheck. Earlier pending or retained
+protection survives failed loading, verification or commits.
+
+The reservation commits before any image bytes are read. First-recorded and
+skipped-child images remain protected through cleanup after earlier owners are
+released. Matching archived images can be verified without reinstalling them.
+Missing or changed required bytes leave the earlier protection intact.
+
+The image owner and asset descriptor formats remain unchanged. Supply
+`actionMaxBytes` and `executionMaxBytes` for every call that requires original
+coverage. A retained owner does not record that coverage policy or serve as a
+receipt for complete bundle publication.
+
+## Supply host manifests
+
+Supply `history` with a baseline and an ordered `effectSets` array. Each entry
+contains an `id` and an image `manifest`. Obtain these manifests from complete
+retained records, including original invocations. Keep their earlier image pins
+until the recovery reservation commits.
+
+The workflow copies identity and manifest metadata before awaiting work. It
+loads and validates both saved payloads sequentially and requires the same
+original local descriptor in both catalog bindings. The validation factory must
+own a separate empty database and its disposal for each call.
+
+The shared coverage check requires the baseline manifest to cover every image
+reference in its rows. Each effect-set manifest must cover that set's full before
+and after images, including intermediate and deleted references. Manifest IDs
+must match the saved selection in order. Extra manifest entries remain required,
+including invocation-only images in sets with no row effects.
+
+Shared row history contains no invocation or execution records. Coverage checks
+cannot infer their image requirements or authenticate host manifests. Retain
+trusted complete records and their manifests separately.
+
+Local requirements include active uploads and manifest owners from the saved
+snapshot. All local identity records, including inactive ones, are checked for
+conflicting immutable names when merging requirements.
+
+## Reserve before verifying bytes
+
+`reserveRegisteredRecoveryCheckpointImages` returns the original shared/local
+`binding`, stable recovery `owner`, combined `manifest`, owner `state` and a
+`changed` flag. The saved-manifest path also returns `assetCheckpoint` and adds
+`executionBinding` when execution coverage is requested. Original coverage also
+returns `actionBinding`. It checks
+the required catalog bindings and published files under the image writer lock
+before and after owner publication. Missing or changed payload bytes and any
+temporary evidence refuse reservation. This operation does not read image bytes.
+
+The owner uses the same checkpoint key as the
+[local payload image workflow](local-recovery-payloads.md#protect-checkpoint-images).
+An existing owner can be reused only with the exact same manifest. Repeating a
+reservation preserves its timestamps. Changed requirements cannot replace it,
+and released owner IDs cannot be reused.
+
+`retainRegisteredRecoveryCheckpointImages` first commits that reservation. A
+separate writer transaction verifies every required live or archived image.
+Archived bytes are accepted without reinstalling them. Required catalog bindings
+and payload files are checked before and after image verification. Cleanup and
+competing owner releases serialize with verification through the same lock.
+
+Missing, unsafe or changed image bytes refuse success. Failed verification or
+its final commit leaves the earlier pending protection intact. A failed recheck
+of an already retained owner preserves its earlier record and protection.
+Explicit retries verify image bytes again. Neither helper changes payload files,
+installs images or releases earlier owners.
+
+## Retain the checkpoint
+
+Core [content-bound recovery image requirements](recovery-asset-checkpoints.md)
+bind per-record requirements and the combined manifest to the exact local/shared
+descriptor pair. The saved-manifest path carries that expectation through image
+reservation and verification. An earlier host reservation can be reused only
+when its combined manifest matches exactly. Changed requirements preserve the
+earlier owner and refuse replacement.
+
+Pending and retained recovery owners both protect their manifests during cleanup.
+Release an owner only through an explicit ledger retirement decision after the
+checkpoint is no longer needed. Earlier staging owners can be released after
+the new reservation commits.
+
+These operations protect image requirements for saved recovery payloads. Complete
+action and execution retention, complete bundle publication and one-time
+installation remain pending. A retained image owner
+does not serve as a bundle publication or activation receipt.

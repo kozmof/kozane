@@ -195,7 +195,10 @@ export function listTaskspaceDirectory({
  * real-path containment, and reject dot-prefixed entries so hidden files cannot be accessed
  * by typing their names.
  */
-function resolveTaskspaceEntry(baseDir: string, subPath: string): { real: string; base: string } {
+export function resolveTaskspaceEntry(
+  baseDir: string,
+  subPath: string,
+): { real: string; base: string } {
   let realBase: string;
   try {
     realBase = realpathSync(baseDir);

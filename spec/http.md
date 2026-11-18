@@ -608,6 +608,9 @@ decoding pixels. Invalid files return 400.
 
 Returns `{ "url": "/api/images/<uuid>.<extension>" }` with status 200.
 Files are stored in the active workspace under `.kozane/assets/images`.
+The host records a local staging pin before publishing a filename and verifies
+installed bytes before returning the URL. Card creation or update completes the
+installed pin in the same transaction as the reference. Failed writes retain it.
 A missing workspace or a storage failure returns 500. Storage failures use a generic message.
 
 ### Storage and deletion
@@ -615,13 +618,22 @@ A missing workspace or a storage failure returns 500. Storage failures use a gen
 Uploads and CLI card creation trigger maintenance at most once per hour per
 workspace in each process. Memory sessions preserve workspace image files.
 
-Maintenance moves images with no card reference to
+Maintenance moves images with no card reference or unfinished upload pin to
 `.kozane/assets/images/.retained` after 24 hours. Archived images remain readable
 at their original URLs. Maintenance does not permanently delete archives.
 
 Deleting a card through the card endpoints or CLI removes its image from both
 directories when the last card reference is deleted. CLI namespace deletion uses
-the same cleanup. The database deletion commits before file removal.
+the same cleanup. The database deletion commits before file removal. Unfinished
+upload pins prevent removal even when no card refers to the file. Installation,
+pin transfer and cleanup share the database writer lock. Upload pins have no
+automatic expiry. The [image recovery commands](cli.md#kozane-image-uploads)
+preview verification and explicit release of reviewed upload pins. Abandonment
+leaves files and card references unchanged. Unreferenced abandoned temporary
+files become eligible for normal cleanup after 24 hours.
+Pending and retained manifest owners also protect their images. Releasing an
+upload pin does not release independent history or recovery ownership. Cleanup
+refuses malformed active manifests before changing files.
 
 Failed file removals are recorded in `.kozane/assets/images/.pending-delete`.
 Subsequent deletions and maintenance retry them. Maintenance failures do not fail

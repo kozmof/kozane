@@ -10,6 +10,10 @@ import type {
   TakenCard,
   Footprint,
   SlotPlacement,
+  SharedTaskspace,
+  ActionInputsV2,
+  LocalRecoveryCheckpoint,
+  LocalRecoveryCheckpointKey,
 } from "@kozane/core";
 import {
   planStow,
@@ -23,6 +27,8 @@ import {
   isPlainObject,
   entryNameIssue,
   errorMessage,
+  parseLocalRecoveryCheckpoint,
+  parseLocalRecoveryCheckpointRecord,
   type BoardRect,
   type CardContentCheck,
   type PathKind,
@@ -30,7 +36,99 @@ import {
   type TagHit,
 } from "@kozane/core";
 import { createServiceContext, withTx, withReadTx, records, type DB } from "@kozane/core/database";
-import { cards, namespaces } from "@kozane/core/services";
+import { cards, namespaces, taskspaces } from "@kozane/core/services";
+import {
+  captureLocalRecoveryCheckpoint,
+  validateStoredLocalRecoveryCheckpoint,
+  rememberLocalRecoveryCheckpoint,
+  parseLocalRecoveryIdentity,
+  type LocalRecoveryIdentity,
+  type LocalRecoverySnapshot,
+  parseSharedRecoveryProjection,
+  validateSharedRecoveryProjection,
+  reconstructSharedRecoveryProjection,
+  type SharedRecoveryProjection,
+  type SharedRecoveryHistory,
+  type SharedRecoverySelection,
+  type SharedRecoveryEffect,
+  describeSharedRecoveryHistory,
+  parseSharedRecoveryCheckpoint,
+  parseSharedRecoveryHistoryPayload,
+  requireSharedRecoveryCheckpoint,
+  validateSharedRecoveryCheckpoint,
+  type SharedRecoveryCheckpoint,
+  type SharedRecoveryHistoryPayload,
+  rememberSharedRecoveryCheckpoint,
+  inspectSharedRecoveryCheckpoint,
+  validateStoredSharedRecoveryCheckpoint,
+  type SharedRecoveryCheckpointBinding,
+  parseSharedRecoveryHistoryImages,
+  sharedRecoveryAssetManifest,
+  type SharedRecoveryHistoryImages,
+  describeRecoveryAssets,
+  parseRecoveryAssetPayload,
+  parseRecoveryAssetCheckpoint,
+  requireRecoveryAssetCheckpoint,
+  type RecoveryAssetPayload,
+  type RecoveryAssetCheckpoint,
+  parseRecoveryAssetCheckpointRecord,
+  rememberRecoveryAssetCheckpoint,
+  rememberRecoveryAssetCheckpointInTx,
+  readRecoveryAssetCheckpoint,
+  inspectRecoveryAssetCheckpoint,
+  requireStoredRecoveryAssetCheckpoint,
+  describeSharedRecoveryExecutions,
+  parseSharedRecoveryExecutionHistory,
+  parseSharedRecoveryExecutionCheckpoint,
+  requireSharedRecoveryExecutionCheckpoint,
+  sharedRecoveryExecutionAssetManifest,
+  type SharedRecoveryExecutionSelection,
+  type SharedRecoveryExecutionSet,
+  type SharedRecoveryExecutionHistory,
+  type SharedRecoveryExecutionCheckpoint,
+  parseSharedRecoveryExecutionCheckpointRecord,
+  rememberSharedRecoveryExecutionCheckpoint,
+  rememberSharedRecoveryExecutionCheckpointInTx,
+  readSharedRecoveryExecutionCheckpoint,
+  inspectSharedRecoveryExecutionCheckpoint,
+  requireStoredSharedRecoveryExecutionCheckpoint,
+  type SharedRecoveryExecutionCheckpointBinding,
+  describeSharedRecoveryActions,
+  parseSharedRecoveryActionHistory,
+  parseSharedRecoveryActionCheckpoint,
+  requireSharedRecoveryActionCheckpoint,
+  sharedRecoveryActionAssetManifest,
+  type SharedRecoveryActionSelection,
+  type SharedRecoveryActionRecord,
+  type SharedRecoveryActionHistory,
+  type SharedRecoveryActionCheckpoint,
+  parseSharedRecoveryActionCheckpointRecord,
+  rememberSharedRecoveryActionCheckpoint,
+  rememberSharedRecoveryActionCheckpointInTx,
+  readSharedRecoveryActionCheckpoint,
+  inspectSharedRecoveryActionCheckpoint,
+  requireStoredSharedRecoveryActionCheckpoint,
+  type SharedRecoveryActionCheckpointBinding,
+  describeSharedRecoveryRetainedHistory,
+  parseSharedRecoveryRetainedHistory,
+  parseSharedRecoveryRetainedCheckpoint,
+  requireSharedRecoveryRetainedCheckpoint,
+  validateSharedRecoveryRetainedHistory,
+  sharedRecoveryRetainedAssetManifest,
+  type SharedRecoveryEffectSetSource,
+  type SharedRecoveryRetainedSelection,
+  type SharedRecoveryRetainedSet,
+  type SharedRecoveryRetainedHistory,
+  type SharedRecoveryRetainedCheckpoint,
+  type SharedRecoveryRetainedImages,
+  parseSharedRecoveryRetainedCheckpointRecord,
+  rememberSharedRecoveryRetainedCheckpoint,
+  rememberSharedRecoveryRetainedCheckpointInTx,
+  readSharedRecoveryRetainedCheckpoint,
+  inspectSharedRecoveryRetainedCheckpoint,
+  requireStoredSharedRecoveryRetainedCheckpoint,
+  type SharedRecoveryRetainedCheckpointBinding,
+} from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
   migrations,
@@ -130,6 +228,47 @@ void invalidBatch;
 void cards.create(db, context, "n", input);
 void namespaces.list(db, context).then((rows: Namespace[]) => rows);
 void withTx(db, (tx) => cards.createInTx(tx, context, "n", input));
+void withTx(db, async (tx) => {
+  const shared: SharedTaskspace = await taskspaces.createInTx(tx, context, "n", {
+    name: "Shared label",
+    scopeId: "s",
+  });
+  // @ts-expect-error Shared taskspace service responses exclude device-local attachments.
+  void shared.path;
+  await taskspaces.renameInTx(tx, context, "n", shared.id, { name: "Renamed" });
+  await taskspaces.removeInTx(tx, context, "n", shared.id);
+  const envelope: ActionInputsV2["taskspaces.create"] = {
+    args: { namespaceId: "n" },
+    body: { name: "Shared", scopeId: "s" },
+  };
+  void envelope;
+  const taskspaceId: string = await records.taskspace.addTaskspaceInTx({
+    db: tx,
+    namespaceId: "n",
+    name: "Label",
+  });
+  await records.taskspace.updateTaskspaceNameInTx({ db: tx, taskspaceId, name: "Renamed" });
+  await records.taskspace.updateTaskspaceLocationInTx({
+    db: tx,
+    taskspaceId,
+    path: "local",
+    lastSeenAt: new Date(),
+  });
+  // @ts-expect-error Shared database creation cannot attach a local path.
+  await records.taskspace.addTaskspaceInTx({ db: tx, path: "local" });
+  await records.taskspace.updateTaskspaceNameInTx({
+    db: tx,
+    taskspaceId,
+    name: "Label",
+    // @ts-expect-error A label change cannot also move the local directory.
+    path: "local",
+  });
+  // @ts-expect-error Local observations cannot rename the shared label.
+  await records.taskspace.updateTaskspaceLocationInTx({ db: tx, taskspaceId, name: "Label" });
+  await records.taskspace.deleteTaskspaceInTx({ db: tx, taskspaceId });
+});
+// @ts-expect-error Caller-owned taskspace transaction methods require a Tx handle.
+void records.taskspace.addTaskspaceInTx({ db, name: "Requires transaction" });
 void withReadTx(db, async (tx) => {
   // @ts-expect-error Read handles cannot enter a write service.
   await cards.createInTx(tx, context, "n", input);
@@ -151,5 +290,338 @@ void compareSchemaManifests(canonicalSchemaManifest);
 canonicalSchemaManifest.push({});
 // @ts-expect-error Database history checks require an explicit supported mode.
 void validateDatabaseMigrationHistory(db, "automatic");
+const checkpoint: LocalRecoveryCheckpoint = {
+  version: 1,
+  identity: {
+    workspaceId: "workspace",
+    deviceId: "device",
+    epochId: "epoch",
+    checkpointId: "checkpoint",
+    schemaId: migrations.at(-1)!.id,
+  },
+  selection: { baselineId: "baseline", effectSetIds: [] },
+  byteLength: 642,
+  sha256: "a".repeat(64),
+};
+const checkpointKey: LocalRecoveryCheckpointKey = {
+  workspaceId: "workspace",
+  deviceId: "device",
+  epochId: "epoch",
+  checkpointId: "checkpoint",
+};
+void parseLocalRecoveryCheckpoint(checkpoint).sha256;
+const parsedIdentity: LocalRecoveryIdentity = parseLocalRecoveryIdentity(checkpoint.identity);
+const sharedProjection: SharedRecoveryProjection = parseSharedRecoveryProjection({
+  version: 1,
+  rowEncodingVersion: 1,
+  schemaId: migrations.at(-1)!.id,
+  tables: [],
+});
+void validateSharedRecoveryProjection(async () => db, sharedProjection).then(
+  (validated: SharedRecoveryProjection) => validated,
+);
+const sharedSelection: SharedRecoverySelection = {
+  baselineId: "baseline",
+  effectSets: [{ id: "empty", effectCount: 0 }],
+};
+const sharedHistory: SharedRecoveryHistory = {
+  baseline: { id: "baseline", projection: sharedProjection },
+  effectSets: [{ id: "empty", effects: [] }],
+};
+const reconstructed: SharedRecoveryProjection = reconstructSharedRecoveryProjection(
+  sharedHistory,
+  sharedSelection,
+);
+const sharedEffect: SharedRecoveryEffect = {
+  ord: 0,
+  table: "namespace",
+  key: { id: ["text", "n"] },
+  op: "D",
+  before: { id: ["text", "n"], name: ["text", "Main"], is_default: ["integer", "0"] },
+  after: null,
+};
+void reconstructed;
+void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelection).then(
+  async ({ payload, checkpoint, projection }) => {
+    const savedPayload: SharedRecoveryHistoryPayload = parseSharedRecoveryHistoryPayload(payload);
+    const descriptor: SharedRecoveryCheckpoint = parseSharedRecoveryCheckpoint(checkpoint);
+    const prepared = await requireSharedRecoveryCheckpoint(
+      savedPayload,
+      descriptor,
+      parsedIdentity,
+    );
+    const validated = await validateSharedRecoveryCheckpoint(
+      async () => db,
+      savedPayload,
+      descriptor,
+      parsedIdentity,
+    );
+    const target: SharedRecoveryProjection = validated.projection;
+    const historyImages: SharedRecoveryHistoryImages = parseSharedRecoveryHistoryImages({
+      baseline: { id: "baseline", manifest: { version: 1, entries: [] } },
+      effectSets: [{ id: "empty", manifest: { version: 1, entries: [] } }],
+    });
+    const required = sharedRecoveryAssetManifest(savedPayload, historyImages);
+    const executionSelection: SharedRecoveryExecutionSelection = {
+      baselineId: "baseline",
+      effectSets: [{ id: "empty", rootId: "empty-root", executionCount: 1 }],
+    };
+    const root = { id: "empty-root", kind: "future.noop", contractVersion: 99, input: {} };
+    const executionSet: SharedRecoveryExecutionSet = {
+      id: "empty",
+      invocation: root,
+      generated: {},
+      executions: [{ ...root, parentId: null, executionOrd: 0, generated: {} }],
+      effects: [],
+    };
+    void describeSharedRecoveryExecutions({
+      checkpoint: descriptor,
+      selection: executionSelection,
+      sharedHistory: savedPayload,
+      effectSets: [executionSet],
+    }).then(async ({ payload, checkpoint }) => {
+      const history: SharedRecoveryExecutionHistory = parseSharedRecoveryExecutionHistory(payload);
+      const expected: SharedRecoveryExecutionCheckpoint =
+        parseSharedRecoveryExecutionCheckpoint(checkpoint);
+      const result: SharedRecoveryExecutionHistory = await requireSharedRecoveryExecutionCheckpoint(
+        history,
+        expected,
+        parsedIdentity,
+        savedPayload,
+      );
+      void sharedRecoveryExecutionAssetManifest(result, historyImages).entries;
+      const originalSelection: SharedRecoveryActionSelection = { actionIds: ["empty-root"] };
+      const original: SharedRecoveryActionRecord = {
+        ...root,
+        rootId: root.id,
+        parentId: null,
+        generated: {},
+        seq: "9007199254740993",
+        hlc: "opaque:first-record",
+        deviceId: parsedIdentity.deviceId,
+        epochId: parsedIdentity.epochId,
+        schemaId: parsedIdentity.schemaId,
+      };
+      const originals = await describeSharedRecoveryActions({
+        actions: [original],
+        selection: originalSelection,
+        checkpoint: expected,
+        executions: result,
+        sharedHistory: savedPayload,
+      });
+      const originalPayload: SharedRecoveryActionHistory = parseSharedRecoveryActionHistory(
+        originals.payload,
+      );
+      const originalCheckpoint: SharedRecoveryActionCheckpoint =
+        parseSharedRecoveryActionCheckpoint(originals.checkpoint);
+      const verifiedOriginals: SharedRecoveryActionHistory =
+        await requireSharedRecoveryActionCheckpoint(
+          originalPayload,
+          originalCheckpoint,
+          parsedIdentity,
+          result,
+          savedPayload,
+        );
+      void sharedRecoveryActionAssetManifest(verifiedOriginals, { version: 1, entries: [] })
+        .entries;
+      const source: SharedRecoveryEffectSetSource = "authoritative";
+      const retainedSelection: SharedRecoveryRetainedSelection = {
+        effectSets: [
+          {
+            id: "empty",
+            rootId: root.id,
+            source,
+            baselineId: "baseline",
+            effectCount: 0,
+            executionCount: 1,
+          },
+        ],
+      };
+      const retainedSet: SharedRecoveryRetainedSet = {
+        id: "empty",
+        rootId: root.id,
+        source,
+        history: savedPayload,
+        executions: result,
+      };
+      const retained = await describeSharedRecoveryRetainedHistory({
+        checkpoint: originalCheckpoint,
+        selection: retainedSelection,
+        effectSets: [retainedSet],
+        originals: verifiedOriginals,
+        executions: result,
+        sharedHistory: savedPayload,
+      });
+      const retainedPayload: SharedRecoveryRetainedHistory = parseSharedRecoveryRetainedHistory(
+        retained.payload,
+      );
+      const retainedCheckpoint: SharedRecoveryRetainedCheckpoint =
+        parseSharedRecoveryRetainedCheckpoint(retained.checkpoint);
+      const retainedImages: SharedRecoveryRetainedImages = {
+        effectSets: [{ id: "empty", history: historyImages }],
+      };
+      void sharedRecoveryRetainedAssetManifest(retainedPayload, retainedImages).entries;
+      const verifiedRetained: SharedRecoveryRetainedHistory =
+        await requireSharedRecoveryRetainedCheckpoint(
+          retainedPayload,
+          retainedCheckpoint,
+          parsedIdentity,
+          verifiedOriginals,
+          result,
+          savedPayload,
+        );
+      void validateSharedRecoveryRetainedHistory(
+        async () => db,
+        verifiedRetained,
+        retainedCheckpoint,
+        parsedIdentity,
+        verifiedOriginals,
+        result,
+        savedPayload,
+      );
+      // @ts-expect-error Retained provenance has a closed vocabulary.
+      const invalidSource: SharedRecoveryEffectSetSource = "future";
+      void invalidSource;
+      // @ts-expect-error Retained inventory is immutable.
+      retainedCheckpoint.selection.effectSets.push(retainedSelection.effectSets[0]);
+      // @ts-expect-error First-record metadata is immutable.
+      verifiedOriginals.actions[0].seq = "1";
+      // @ts-expect-error Trusted original action selection is immutable.
+      originalCheckpoint.selection.actionIds.push("other");
+      const registered = await rememberSharedRecoveryExecutionCheckpoint(db, expected);
+      const binding: SharedRecoveryExecutionCheckpointBinding = registered.binding;
+      const registeredOriginals = await rememberSharedRecoveryActionCheckpoint(
+        db,
+        originalCheckpoint,
+      );
+      const originalBinding: SharedRecoveryActionCheckpointBinding = registeredOriginals.binding;
+      void parseSharedRecoveryActionCheckpointRecord(
+        checkpointKey,
+        JSON.stringify(originalCheckpoint),
+        JSON.stringify(originalBinding.localCheckpoint),
+      );
+      void withTx(db, (tx) => rememberSharedRecoveryActionCheckpointInTx(tx, originalCheckpoint));
+      void readSharedRecoveryActionCheckpoint(db, checkpointKey);
+      void inspectSharedRecoveryActionCheckpoint(db, checkpointKey);
+      const storedOriginals: SharedRecoveryActionHistory =
+        await requireStoredSharedRecoveryActionCheckpoint(
+          db,
+          originalPayload,
+          parsedIdentity,
+          result,
+          savedPayload,
+        );
+      void storedOriginals.actions;
+      const registeredRetained = await rememberSharedRecoveryRetainedCheckpoint(
+        db,
+        retainedCheckpoint,
+      );
+      const retainedBinding: SharedRecoveryRetainedCheckpointBinding = registeredRetained.binding;
+      void parseSharedRecoveryRetainedCheckpointRecord(
+        checkpointKey,
+        JSON.stringify(retainedCheckpoint),
+        JSON.stringify(retainedBinding.localCheckpoint),
+      );
+      void withTx(db, (tx) => rememberSharedRecoveryRetainedCheckpointInTx(tx, retainedCheckpoint));
+      void readSharedRecoveryRetainedCheckpoint(db, checkpointKey);
+      void inspectSharedRecoveryRetainedCheckpoint(db, checkpointKey);
+      const storedRetained: SharedRecoveryRetainedHistory =
+        await requireStoredSharedRecoveryRetainedCheckpoint(
+          db,
+          retainedPayload,
+          parsedIdentity,
+          originalPayload,
+          result,
+          savedPayload,
+        );
+      void storedRetained.effectSets;
+      void parseSharedRecoveryExecutionCheckpointRecord(
+        checkpointKey,
+        JSON.stringify(expected),
+        JSON.stringify(binding.localCheckpoint),
+      );
+      void withTx(db, (tx) => rememberSharedRecoveryExecutionCheckpointInTx(tx, expected));
+      void readSharedRecoveryExecutionCheckpoint(db, checkpointKey);
+      void inspectSharedRecoveryExecutionCheckpoint(db, checkpointKey);
+      const stored: SharedRecoveryExecutionHistory =
+        await requireStoredSharedRecoveryExecutionCheckpoint(
+          db,
+          result,
+          parsedIdentity,
+          savedPayload,
+        );
+      void stored.effectSets;
+      // @ts-expect-error Execution histories are immutable.
+      result.effectSets[0].executions.push(root);
+      // @ts-expect-error Retained execution counts are immutable.
+      expected.selection.effectSets[0].executionCount = 0;
+    });
+    void required.entries;
+    // @ts-expect-error Parsed history manifests are immutable.
+    historyImages.effectSets.push({ id: "extra", manifest: { version: 1, entries: [] } });
+    const remembered = await rememberSharedRecoveryCheckpoint(db, descriptor);
+    const binding: SharedRecoveryCheckpointBinding = remembered.binding;
+    void inspectSharedRecoveryCheckpoint(db, checkpointKey);
+    void validateStoredSharedRecoveryCheckpoint(db, async () => db, savedPayload, parsedIdentity);
+    void binding;
+    void projection;
+    void prepared;
+    void target;
+    // @ts-expect-error Shared content descriptors are immutable.
+    descriptor.sha256 = "b".repeat(64);
+    // @ts-expect-error Shared history payloads are immutable.
+    savedPayload.history.effectSets.push({ id: "extra", effects: [] });
+  },
+);
+// @ts-expect-error Reconstruction effects are immutable.
+sharedEffect.ord = 1;
+// @ts-expect-error Materialization selections are immutable.
+sharedSelection.effectSets.push({ id: "extra", effectCount: 0 });
+// @ts-expect-error Parsed shared projections are immutable.
+sharedProjection.schemaId = "other";
+// @ts-expect-error Parsed host identities are immutable.
+parsedIdentity.deviceId = "other";
+void captureLocalRecoveryCheckpoint(db, checkpoint.identity, async () => checkpoint.selection).then(
+  ({ snapshot, checkpoint }) => {
+    const captured: LocalRecoverySnapshot = snapshot;
+    void rememberLocalRecoveryCheckpoint(db, checkpoint);
+    void validateStoredLocalRecoveryCheckpoint(db, async () => db, captured, checkpoint.identity);
+    void describeRecoveryAssets({
+      localSnapshot: captured,
+      sharedHistory,
+      binding: { localCheckpoint: checkpoint, checkpoint: {} },
+      history: {},
+    }).then(async ({ payload, checkpoint: assets }) => {
+      const parsed: RecoveryAssetPayload = parseRecoveryAssetPayload(payload);
+      const descriptor: RecoveryAssetCheckpoint = parseRecoveryAssetCheckpoint(assets);
+      const verified: RecoveryAssetPayload = await requireRecoveryAssetCheckpoint(
+        parsed,
+        descriptor,
+        captured.identity,
+        { localSnapshot: captured, sharedHistory },
+      );
+      void verified.manifest.entries;
+      void parseRecoveryAssetCheckpointRecord(checkpointKey, JSON.stringify(descriptor));
+      void rememberRecoveryAssetCheckpoint(db, descriptor);
+      void withTx(db, (tx) => rememberRecoveryAssetCheckpointInTx(tx, descriptor));
+      void readRecoveryAssetCheckpoint(db, checkpointKey);
+      void inspectRecoveryAssetCheckpoint(db, checkpointKey);
+      const stored: RecoveryAssetPayload = await requireStoredRecoveryAssetCheckpoint(
+        db,
+        parsed,
+        captured.identity,
+        { localSnapshot: captured, sharedHistory },
+      );
+      void stored.manifest;
+      // @ts-expect-error Asset descriptors retain immutable checkpoint bindings.
+      descriptor.binding.localCheckpoint.sha256 = "b".repeat(64);
+      // @ts-expect-error Per-record asset requirements are immutable.
+      parsed.history.effectSets.push({ id: "extra", manifest: { version: 1, entries: [] } });
+    });
+  },
+);
+void parseLocalRecoveryCheckpointRecord(checkpointKey, JSON.stringify(checkpoint)).identity;
+// @ts-expect-error Checkpoint descriptors are immutable.
+checkpoint.sha256 = "b".repeat(64);
 // @ts-expect-error History checks require an explicit supported mode.
 void validateMigrationHistory([], "automatic");

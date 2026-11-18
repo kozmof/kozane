@@ -1,6 +1,7 @@
 /** Card inserts, with the namespace checks foreign keys cannot make. */
 
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { boundCardTimestamp, boundEntityId } from "../../actions/allocations.js";
 import {
   cardTable,
   inventoryTable,
@@ -13,7 +14,7 @@ import type { CardData } from "../../types.js";
 import { INVENTORY_SLOT_MAX, chunked } from "../../constants/index.js";
 import { cardSpan, lastCell, overlappingCards, type Footprint } from "../../inventory.js";
 import { NotFoundError, columnCount, readByIds } from "../utils.js";
-import { withTx, type DB } from "../../database.js";
+import { withTx, type DB, type Tx } from "../../database.js";
 import { heldFootprints } from "../inventory/slots.js";
 import { defaultLayerIdForPartition } from "./read.js";
 import { inventoryColumns } from "./placement.js";
@@ -36,9 +37,13 @@ type AddCardInTx = NeedsTx & AddCardFields;
  *
  * Call once per batch so cards created together also share timestamps across insert
  * statements.
+ * Pass the guarded transaction to use the owning action's clock binding.
  */
-export function newCardStamps(): { createdAt: Date; updatedAt: Date } {
-  const now = new Date();
+export function newCardStamps(
+  db?: Tx,
+  path: readonly string[] = ["create"],
+): { createdAt: Date; updatedAt: Date } {
+  const now = (db && boundCardTimestamp(db, ...path)) ?? new Date();
   return { createdAt: now, updatedAt: now };
 }
 
@@ -187,7 +192,8 @@ export async function addCardInTx({
   const [row] = await db
     .insert(cardTable)
     .values({
-      ...newCardStamps(),
+      id: boundEntityId(db, "card"),
+      ...newCardStamps(db),
       partitionId,
       layerId: resolvedLayerId,
       content,
@@ -246,10 +252,15 @@ export async function addCardsInTx({
   });
   await assertSlotsFit(db, cards);
   // Share one timestamp across all chunks. See {@link newCardStamps}.
-  const stamps = newCardStamps();
+  const stamps = newCardStamps(db, ["batch"]);
+  // These ordinals belong to the original input, before chunking or database reads.
+  const planned = cards.map((card, index) => ({
+    ...card,
+    id: boundEntityId(db, "card", "batch", String(index)),
+  }));
   let zIndex = await nextLayerZIndexInTx({ db, layerId });
   const ids: string[] = [];
-  for (const batch of chunked(cards, { columnsPerRow: columnCount(cardTable) })) {
+  for (const batch of chunked(planned, { columnsPerRow: columnCount(cardTable) })) {
     const rows = await db
       .insert(cardTable)
       .values(

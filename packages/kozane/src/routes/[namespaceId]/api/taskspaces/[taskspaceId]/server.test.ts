@@ -165,15 +165,15 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       );
     });
 
-    it("moves the directory back when the record cannot be updated", async () => {
+    it("preserves the moved directory and pending journal when the record cannot be updated", async () => {
       failUpdate.next = true;
 
       await expect(
         PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "final" })),
       ).rejects.toBeDefined();
 
-      expect(existsSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"))).toBe(true);
-      expect(existsSync(join(tmpRoot, "tasks", "final"))).toBe(false);
+      expect(existsSync(join(tmpRoot, "tasks", "final", "notes", "a.md"))).toBe(true);
+      expect(existsSync(join(tmpRoot, "tasks", "draft"))).toBe(false);
       expect(await getTaskspace({ db, taskspaceId })).toMatchObject({
         name: "draft",
         path: join("tasks", "draft"),

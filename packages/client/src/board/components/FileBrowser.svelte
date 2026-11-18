@@ -203,17 +203,8 @@
     return null;
   }
 
-  /**
-   * Open the name field for a taskspace, unless its file is open in the editor. The rename
-   * may move the directory under the editor, and the editor's label would go stale.
-   */
+  /** A shared label change keeps the directory and any open editor file in place. */
   function startRenameTaskspace(id: string): void {
-    const blocked = blockedByEditor(editorFile, id);
-    if (blocked) {
-      clearMessages();
-      error = blocked;
-      return;
-    }
     begin({ kind: "taskspace", id });
   }
 

@@ -23,7 +23,74 @@ The `core-0.1.0-rc3-wasm-boundaries` and `core-0.1.0-rc4-libsql-boundaries` coho
 two fixtures per driver. One retains harmless whitespace and comments in the migrated
 schema plus SQLite-owned statistics created by `ANALYZE`. The other holds exactly
 2,097,152 bytes of valid SQLite data populated through public card services. It has
-no appended file padding. The full corpus has twelve databases and 26 view outcomes.
+no appended file padding. These four earlier cohorts retain twelve databases and
+26 recorded view outcomes.
+
+The `core-0.2.0-migration20-wasm` cohort retains four new databases produced by the
+packed candidate at source revision `5e16037`. It uses migration
+`0020_taskspace_local` and records eleven view outcomes. Its manifest pins the
+producer archive and driver versions.
+These eleven outcomes now join the earlier-ID checks.
+
+The `core-0.2.0-migration21-wasm` cohort retains four databases produced by the
+packed candidate at source revision `4ff3e6b`. It uses migration
+`0021_local_file_operation` and records eleven view outcomes.
+
+The `core-0.2.0-migration22-wasm` cohort retains four databases produced by the
+packed candidate at source revision `489f261`. It uses migration
+`0022_taskspace_file_operations` and records eleven view outcomes.
+
+The `core-0.2.0-migration23-wasm` cohort retains four databases produced by the
+packed candidate at source revision `4d4737f`. It uses migration
+`0023_taskspace_directory_operations` and records eleven view outcomes.
+
+The `core-0.2.0-migration24-wasm` cohort retains four databases produced by the
+packed candidate at source revision `17b6269`. It uses migration
+`0024_local_operation_abandonment` and records eleven view outcomes. These earlier
+cohorts retain thirty-two databases.
+
+The `core-0.2.0-migration25-wasm` cohort retains two boundary databases produced by
+the packed candidate at source revision `28c1e83`. It uses migration
+`0025_local_image_upload` and records two view outcomes. The fixtures preserve
+schema formatting and SQLite statistics and the exact recovery-size boundary.
+
+The `core-0.2.0-migration25-wasm-basic` cohort adds four databases from the same
+source revision with eleven service-scenario outcomes. The corpus now has
+thirty-eight databases at migration 25.
+
+The `core-0.2.0-migration26-wasm` cohort adds four databases produced by the
+packed candidate at source revision `1504311`. It uses migration
+`0026_local_asset_manifest` and records eleven service-scenario outcomes. These
+earlier cohorts retain forty-two databases.
+
+The `core-0.2.0-migration27-wasm` cohort adds four databases produced by the
+packed candidate at source revision `a7a4fc6`. It uses
+`0027_local_recovery_checkpoint` and records eleven service-scenario outcomes.
+These earlier cohorts retain forty-six databases.
+
+The `core-0.2.0-migration28-wasm` cohort adds four databases produced by the
+packed candidate at source revision `33c1ee4`. It uses
+`0028_local_recovery_shared_history` and records eleven service-scenario outcomes.
+These earlier cohorts retain fifty databases.
+
+The `core-0.2.0-migration29-wasm` cohort adds four databases produced by the
+packed candidate at source revision `c5766f9`. It uses
+`0029_local_recovery_assets` and records eleven service-scenario outcomes.
+These earlier cohorts retain fifty-four databases.
+
+The `core-0.2.0-migration30-wasm` cohort adds four databases produced by the
+packed candidate at source revision `63e0f39`. It uses
+`0030_local_recovery_executions` and records eleven service-scenario outcomes.
+These earlier cohorts retain fifty-eight databases.
+
+The `core-0.2.0-migration31-wasm` cohort adds four databases produced by the
+packed candidate at source revision `4bce222`. It uses
+`0031_local_recovery_actions` and records eleven service-scenario outcomes.
+The corpus now has seventeen cohorts and sixty-two databases. Packed core and
+client checks verify eleven current-ID outcomes and 149 earlier-ID envelope
+outcomes without changing older fixtures.
+Each manifest pins its producer archive, database hashes and driver versions.
+Chromium execution for the schema-20 through schema-31 cohorts remains pending.
 
 Add a new cohort explicitly after building the intended candidate.
 

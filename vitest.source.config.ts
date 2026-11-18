@@ -26,7 +26,7 @@ export default defineConfig({
         find: "@kozane/client/base.css",
         replacement: path.resolve("./packages/client/src/styles/base.css"),
       },
-      ...["index", "database", "schema", "services", "migrations"].map((name) => ({
+      ...["index", "database", "schema", "services", "migrations", "recovery"].map((name) => ({
         find: new RegExp("^@kozane/core" + (name === "index" ? "" : "/" + name) + "$"),
         replacement: path.resolve("./packages/core/src/" + name + ".ts"),
       })),
