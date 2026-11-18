@@ -371,6 +371,15 @@ competing writers and failed commits. Original action retention, complete
 execution history and complete bundle publication remain pending. See
 [saved execution image coverage](recovery-checkpoint-images.md#check-saved-execution-images).
 
+Core can now prepare original action records beside selected executions. An
+independently trusted ID selection preserves first-recorded invocations,
+bindings, exact SQLite sequence strings and provenance. Verification requires
+matching root inputs and full provider maps while allowing later child inputs
+and used binding subsets to differ. Skipped original children remain retained
+and their image requirements can be checked separately. Durable original-record
+storage, origin and deselected effect sets and complete bundle publication
+remain pending. See [original recovery actions](shared-recovery-actions.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -476,6 +485,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Persist trusted execution descriptors with original local checkpoint bindings. Require live matching shared and local expectations, recheck all three catalogs after verification and retain exact metadata through shared replacement, local validation and version 20 JSON exports. Verify orphaned inspection, migration, rollback and competing connections.
 - [x] Save and reopen registered execution payloads with synced exclusive publication and independent limits for execution, shared and local reads. Validate both saved sources and execution attribution, recheck all three original catalog bindings and files, and preserve evidence after filesystem or commit failures. Verify unsafe paths, large inputs, exact source SQL values and competing writers without invoking handlers or installing rows.
 - [x] Connect saved execution payloads to asset save/load and protected image verification through an explicit host byte limit. Require per-set root and child image coverage, including no-op and zero-effect records. Carry all four original catalog bindings and files through publication, reservation and verification while preserving interruption evidence and earlier owners after failures.
+- [x] Prepare original action records with an independently trusted ID selection, first-recorded inputs and bindings, exact local sequence strings and provenance. Bind contents to the original execution descriptor, require stable root inputs and provider maps, preserve changed and skipped child inputs separately and check original invocation image requirements without running handlers.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

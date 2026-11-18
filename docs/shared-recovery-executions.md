@@ -166,8 +166,11 @@ contract. Unknown kinds and positive contract versions remain data for exact
 restoration and audit. Trusted capture establishes causal attribution and shared
 eligibility. Structural verification provides neither authorization.
 
-Original per-action records, origin and deselected execution sets, provenance
-metadata and retention policy remain separate requirements for complete history.
+Core can prepare [original action records](shared-recovery-actions.md) with first
+inputs, binding maps, exact local sequence values and provenance. These records
+remain distinct from later execution inputs. Durable original-record storage,
+origin and deselected execution sets and retention policy remain requirements
+for complete history.
 The Node host can retain [saved execution payloads](shared-recovery-execution-payloads.md)
 with both saved sources and all three original catalog bindings. The
 [saved asset workflow](recovery-asset-payloads.md#check-saved-execution-coverage)

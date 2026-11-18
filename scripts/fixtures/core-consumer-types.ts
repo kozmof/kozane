@@ -93,6 +93,15 @@ import {
   inspectSharedRecoveryExecutionCheckpoint,
   requireStoredSharedRecoveryExecutionCheckpoint,
   type SharedRecoveryExecutionCheckpointBinding,
+  describeSharedRecoveryActions,
+  parseSharedRecoveryActionHistory,
+  parseSharedRecoveryActionCheckpoint,
+  requireSharedRecoveryActionCheckpoint,
+  sharedRecoveryActionAssetManifest,
+  type SharedRecoveryActionSelection,
+  type SharedRecoveryActionRecord,
+  type SharedRecoveryActionHistory,
+  type SharedRecoveryActionCheckpoint,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -355,6 +364,44 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
         savedPayload,
       );
       void sharedRecoveryExecutionAssetManifest(result, historyImages).entries;
+      const originalSelection: SharedRecoveryActionSelection = { actionIds: ["empty-root"] };
+      const original: SharedRecoveryActionRecord = {
+        ...root,
+        rootId: root.id,
+        parentId: null,
+        generated: {},
+        seq: "9007199254740993",
+        hlc: "opaque:first-record",
+        deviceId: parsedIdentity.deviceId,
+        epochId: parsedIdentity.epochId,
+        schemaId: parsedIdentity.schemaId,
+      };
+      const originals = await describeSharedRecoveryActions({
+        actions: [original],
+        selection: originalSelection,
+        checkpoint: expected,
+        executions: result,
+        sharedHistory: savedPayload,
+      });
+      const originalPayload: SharedRecoveryActionHistory = parseSharedRecoveryActionHistory(
+        originals.payload,
+      );
+      const originalCheckpoint: SharedRecoveryActionCheckpoint =
+        parseSharedRecoveryActionCheckpoint(originals.checkpoint);
+      const verifiedOriginals: SharedRecoveryActionHistory =
+        await requireSharedRecoveryActionCheckpoint(
+          originalPayload,
+          originalCheckpoint,
+          parsedIdentity,
+          result,
+          savedPayload,
+        );
+      void sharedRecoveryActionAssetManifest(verifiedOriginals, { version: 1, entries: [] })
+        .entries;
+      // @ts-expect-error First-record metadata is immutable.
+      verifiedOriginals.actions[0].seq = "1";
+      // @ts-expect-error Trusted original action selection is immutable.
+      originalCheckpoint.selection.actionIds.push("other");
       const registered = await rememberSharedRecoveryExecutionCheckpoint(db, expected);
       const binding: SharedRecoveryExecutionCheckpointBinding = registered.binding;
       void parseSharedRecoveryExecutionCheckpointRecord(

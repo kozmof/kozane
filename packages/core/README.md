@@ -65,6 +65,12 @@ shared row checkpoint. Trusted descriptors can be retained in a local catalog.
 The Node host can retain [saved execution payloads](../../docs/shared-recovery-execution-payloads.md)
 after validating both saved source payloads and their original catalog bindings.
 
+[Original recovery actions](../../docs/shared-recovery-actions.md) preserve
+first-recorded inputs, bindings, local sequence values and provenance beside
+selected executions. Their verification permits changed child inputs while
+requiring the original root input and provider map. Durable original-record
+storage and complete history retention remain pending.
+
 ## Application operations
 
 Use resource services for application writes. They own domain validation, configured

@@ -87,8 +87,9 @@ filesystem writes or live row installation.
 
 ## Continue bundle preparation
 
-These files retain selected finalized scope data. Original per-action records,
-origin and deselected execution sets, provenance and retention policy remain
+These files retain selected finalized scope data. Core can prepare
+[original action records](shared-recovery-actions.md) separately. Their durable
+storage, origin and deselected execution sets and retention policy remain
 requirements for complete history.
 
 Saving or loading execution files does not read images or create image
