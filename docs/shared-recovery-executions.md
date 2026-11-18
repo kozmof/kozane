@@ -150,7 +150,7 @@ allowed. Received catalog rows never establish their own trusted expectation.
 Local snapshots include this eighth local table with exact tagged values.
 Isolated local validation checks nested execution descriptors and their original
 local bindings before allocating a database. Shared capture and replacement
-exclude the catalog. JSON version 22 includes its records. Versions 7 through 19
+exclude the catalog. JSON version 23 includes its records. Versions 7 through 19
 import with an empty execution catalog when omitted. Import preserves coherent
 historical and orphaned metadata without installing execution records or images.
 

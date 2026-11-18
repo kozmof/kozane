@@ -108,7 +108,7 @@ remain allowed.
 
 Local snapshots capture this seventh local table with exact tagged values.
 Isolated local validation checks every nested asset descriptor before allocating
-a database. Shared capture and replacement exclude the table. JSON version 22
+a database. Shared capture and replacement exclude the table. JSON version 23
 includes these expectations. Supported versions 7 through 18 import with an
 empty asset catalog when omitted. Import validates descriptor shape, row
 identity and the embedded pair without installing manifests or images. Orphaned

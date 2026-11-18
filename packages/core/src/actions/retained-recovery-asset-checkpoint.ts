@@ -164,7 +164,7 @@ export function parseRetainedRecoveryAssetPayload(input: unknown): RetainedRecov
     manifest,
   });
 }
-function sources(input: RetainedRecoveryAssetSources) {
+export function parseRetainedRecoveryAssetSources(input: RetainedRecoveryAssetSources) {
   return {
     localSnapshot: parseLocalRecoverySnapshot(input.localSnapshot),
     sharedHistory: parseSharedRecoveryHistoryPayload(input.sharedHistory),
@@ -174,7 +174,7 @@ function sources(input: RetainedRecoveryAssetSources) {
     currentAssets: parseRecoveryAssetPayload(input.currentAssets),
   };
 }
-type Sources = ReturnType<typeof sources>;
+type Sources = ReturnType<typeof parseRetainedRecoveryAssetSources>;
 function collect(source: Sources, history: SharedRecoveryRetainedImages, originals: AssetManifest) {
   return mergeAssetManifests([
     source.currentAssets.manifest,
@@ -226,7 +226,7 @@ export async function describeRetainedRecoveryAssets(
     assetCheckpoint = parseRecoveryAssetCheckpoint(input.assetCheckpoint),
     history = parseSharedRecoveryRetainedImages(input.history),
     originalImages = parseAssetManifest(input.originalImages),
-    source = sources(input);
+    source = parseRetainedRecoveryAssetSources(input);
   requireBinding(binding, assetCheckpoint);
   requireSelection(binding, history);
   const payload = parseRetainedRecoveryAssetPayload({
@@ -260,7 +260,7 @@ export async function requireRetainedRecoveryAssetCheckpoint(
     !same(payload.assetCheckpoint, wanted.assetCheckpoint)
   )
     throw new SharedRecoveryError("Retained asset checkpoint binding mismatch");
-  const source = sources(contents),
+  const source = parseRetainedRecoveryAssetSources(contents),
     actual = (await describe(payload)).checkpoint;
   if (actual.byteLength !== wanted.byteLength || actual.sha256 !== wanted.sha256)
     throw new SharedRecoveryError("Retained asset checkpoint content mismatch");

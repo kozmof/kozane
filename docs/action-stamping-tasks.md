@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–32 and requires
+syncable database kind and `system.compose`. It supports schemas 19–33 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -100,7 +100,7 @@ API. Creation and label clocks use scoped bindings, and caught record failures
 abort their root. Migration 0020 now moves paths and observations to
 `taskspace_local` without a foreign key to shared rows. Readers join metadata
 only for present taskspaces, while local recovery readers retain absent rows.
-Shared capture, validation and replacement exclude that table. JSON version 22
+Shared capture, validation and replacement exclude that table. JSON version 23
 exports local rows separately, including absent taskspaces, and retains local file
 operations. Imports of versions
 7 through 9 split their inline values without changing the original dump.
@@ -114,7 +114,7 @@ revision `d90261c`. All older cohorts remain unchanged. Browser execution of
 these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–32. These shared services reject local metadata inputs,
+and removal on schemas 20–33. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -189,7 +189,7 @@ tests verify atomic owner publication and staging preservation after publication
 and commit failures. This remains a prototype integration rather than production
 action routing.
 
-An internal local recovery snapshot now captures all ten local tables and the
+An internal local recovery snapshot now captures all eleven local tables and the
 shared baseline and effect-set selection in one adapter read transaction. It
 preserves tagged SQLite values and absent taskspace metadata, requires complete
 table coverage and checks workspace, device, epoch, checkpoint and schema identity.
@@ -224,7 +224,7 @@ mutation while hashing. Installation receipts remain pending.
 Migration 0027 adds a durable local descriptor catalog. Registration is idempotent
 for the same contents and refuses reuse of an identity with another descriptor.
 The catalog survives shared restoration and is included in local snapshots and
-version 22 JSON exports. Historical descriptors remain readable as metadata
+version 23 JSON exports. Historical descriptors remain readable as metadata
 without authorizing old-schema snapshot loading. Registration does not store
 payload bytes, retain history or pin images. Bundle publication and one-time
 installation remain pending.
@@ -285,7 +285,7 @@ Migration 0028 now persists trusted shared-history descriptors together with the
 original registered local snapshot expectation. Registration checks identity and
 selected IDs, is idempotent for the same pair and refuses replacement. Both
 catalog bindings are rechecked after shared hash and SQL validation. Local
-snapshots and version 22 JSON exports preserve this sixth local table. Complete
+snapshots and version 23 JSON exports preserve this sixth local table. Complete
 history retention, bundle publication and installation remain pending.
 
 Registered shared row-history payloads can now be saved and reopened through the
@@ -316,7 +316,7 @@ Migration 0029 now retains trusted asset descriptors under immutable checkpoint
 keys. Registration requires both original source bindings, and catalog-backed
 verification rechecks all three records after hashing. Shared restoration keeps
 the new local catalog, and local validation checks nested expectations before
-SQL allocation. JSON version 22 preserves current and historical metadata.
+SQL allocation. JSON version 23 preserves current and historical metadata.
 Native and Node WASM tests cover rollback and changed bindings. Native tests also
 cover competing registrations across connections. Complete action and execution
 retention and complete bundle publication remain pending.
@@ -349,7 +349,7 @@ remain pending. See [shared recovery executions](shared-recovery-executions.md).
 Migration 0030 now retains trusted execution descriptors and their original local
 bindings. Registration requires both live source catalogs and refuses identity
 reuse with changed contents. Catalog-backed verification rechecks all three
-records after hashing. Exact local snapshots and JSON version 22 preserve
+records after hashing. Exact local snapshots and JSON version 23 preserve
 historical and orphaned metadata. Native and Node WASM tests cover rollback and
 changed bindings, and native tests cover competing registrations.
 
@@ -382,7 +382,7 @@ and their image requirements can be checked separately. See
 Migration 0031 now retains trusted original-action descriptors with exact
 original local bindings. Registration requires the execution, shared and local
 catalogs, and catalog-backed verification rechecks all four expectations after
-hashing. Local snapshots and JSON version 22 preserve historical and orphaned
+hashing. Local snapshots and JSON version 23 preserve historical and orphaned
 metadata without timestamp conversion. Native and Node WASM tests cover changed
 bindings, shared replacement, local validation and migration rollback. Native
 tests cover competing registrations and JSON import rollback.
@@ -420,7 +420,7 @@ Migration 0032 now retains trusted retained-history descriptors with the exact
 original local binding and all nested source expectations. Registration requires
 all four source catalogs and content verification rechecks all five original
 bindings after hashing. This tenth local table survives shared replacement.
-Local validation and version 22 JSON exports preserve historical and orphaned
+Local validation and version 23 JSON exports preserve historical and orphaned
 metadata without timestamp conversion. Native and Node WASM tests cover content
 changes, coherent replacement, migration and rollback. Native tests cover
 competing registrations and JSON import rollback.
@@ -443,6 +443,15 @@ also retain independent coverage, while the combined manifest preserves current
 local requirements and host extras. Durable manifest storage and protected image
 integration remain pending. See
 [retained asset checkpoints](retained-recovery-asset-checkpoints.md).
+
+Migration 0033 now retains trusted retained-manifest descriptors with all six
+original source bindings. Registration requires matching live catalogs and
+content verification rechecks all seven expectations after hashing. This
+eleventh local table survives shared replacement. Local validation and version
+23 JSON exports preserve historical and orphaned metadata without timestamp
+conversion. Native and Node WASM tests cover changed bindings, coherent
+replacement, migration and rollback. Native tests cover competing registrations
+and JSON import rollback. Manifest files and protected images remain pending.
 
 ## Version one
 
@@ -520,7 +529,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.
-- [x] Persist shared-history descriptors with their original registered local checkpoint expectations. Serialize immutable registration, recheck both trusted catalog bindings after isolated validation, preserve records through local snapshots and version 22 JSON exports, and verify rollback, migration and competing connections.
+- [x] Persist shared-history descriptors with their original registered local checkpoint expectations. Serialize immutable registration, recheck both trusted catalog bindings after isolated validation, preserve records through local snapshots and version 23 JSON exports, and verify rollback, migration and competing connections.
 - [x] Save registered shared row-history payloads with synced exclusive publication and read-only interruption inspection. Reopen only published bytes within a host size limit, validate exact SQL values and recheck the original catalog pair and file identity without installing rows or consuming temporary evidence.
 - [ ] Validate target rows in an isolated database with the epoch's constraints, foreign keys and trigger-enforced invariants.
 - [x] Expose complete shared projection parsing and isolated SQL validation for the bundled schema. Keep validation constraints active, compare exact tagged read-back and roll back temporary rows and business-trigger changes before success on native and Node WASM adapters.
@@ -542,22 +551,23 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Connect saved registered payloads to stable recovery image owners. Check selected history IDs, commit pending protection before byte verification and preserve it after missing files or failed verification commits. Verify cleanup handoff and competing releases without publishing incomplete bundles.
 - [x] Check shared manifests against baseline and full effect images while preserving extra invocation requirements. Validate both saved payloads before image reservation, recheck both files and catalog bindings under the image writer lock, and preserve earlier protection after verification or commit failures.
 - [x] Bind per-record history manifests and combined image requirements to the original shared/local descriptor pair with canonical asset payloads. Verify independently retained content expectations, both source hashes and exact coverage while owning inputs before hashing.
-- [x] Persist trusted asset descriptors with immutable original checkpoint bindings. Require both live source catalogs before registration, recheck all three catalogs after content verification and preserve orphaned metadata, exact local snapshots and version 22 JSON exports. Verify migration, rollback and competing connections.
+- [x] Persist trusted asset descriptors with immutable original checkpoint bindings. Require both live source catalogs before registration, recheck all three catalogs after content verification and preserve orphaned metadata, exact local snapshots and version 23 JSON exports. Verify migration, rollback and competing connections.
 - [x] Save and reopen registered asset-manifest payloads with synced exclusive publication and independent host limits for all three payloads. Validate both saved sources, canonical manifest contents and exact coverage, recheck all original bindings and files, and preserve interruption evidence after filesystem or commit failures without installing images.
 - [x] Connect registered saved manifests to image reservation and protected byte verification. Carry all three original catalog bindings and files through reservation and verification, reject ambiguous inputs and preserve earlier owners after changed requirements, failed reads, verification or commits. Verify cleanup handoff, archived invocation-only bytes and competing writes.
 - [x] Prepare selected execution records with independently trusted root IDs and counts. Bind finalized invocations, used and unused allocations, no-op children and complete effect attribution to the original shared checkpoint. Verify sequential trees, invocation image coverage, transport ownership and real captured scopes on native and Node WASM adapters without invoking handlers.
-- [x] Persist trusted execution descriptors with original local checkpoint bindings. Require live matching shared and local expectations, recheck all three catalogs after verification and retain exact metadata through shared replacement, local validation and version 22 JSON exports. Verify orphaned inspection, migration, rollback and competing connections.
+- [x] Persist trusted execution descriptors with original local checkpoint bindings. Require live matching shared and local expectations, recheck all three catalogs after verification and retain exact metadata through shared replacement, local validation and version 23 JSON exports. Verify orphaned inspection, migration, rollback and competing connections.
 - [x] Save and reopen registered execution payloads with synced exclusive publication and independent limits for execution, shared and local reads. Validate both saved sources and execution attribution, recheck all three original catalog bindings and files, and preserve evidence after filesystem or commit failures. Verify unsafe paths, large inputs, exact source SQL values and competing writers without invoking handlers or installing rows.
 - [x] Connect saved execution payloads to asset save/load and protected image verification through an explicit host byte limit. Require per-set root and child image coverage, including no-op and zero-effect records. Carry all four original catalog bindings and files through publication, reservation and verification while preserving interruption evidence and earlier owners after failures.
 - [x] Prepare original action records with an independently trusted ID selection, first-recorded inputs and bindings, exact local sequence strings and provenance. Bind contents to the original execution descriptor, require stable root inputs and provider maps, preserve changed and skipped child inputs separately and check original invocation image requirements without running handlers.
-- [x] Persist trusted original-action descriptors with exact original local bindings. Require matching live execution, shared and local sources, recheck all four catalogs after verification and preserve historical or orphaned expectations through shared replacement, exact local validation and version 22 JSON exports. Verify migration, rollback and competing registrations.
+- [x] Persist trusted original-action descriptors with exact original local bindings. Require matching live execution, shared and local sources, recheck all four catalogs after verification and preserve historical or orphaned expectations through shared replacement, exact local validation and version 23 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered original-action payloads with synced exclusive publication and independent read limits for originals and all three saved sources. Verify original contents, source hashes, attribution and exact source SQL values. Recheck all four original catalog bindings and files, preserve interrupted evidence and refuse changed originals without running handlers or installing rows.
 - [x] Connect saved originals to manifest storage and protected image verification through an explicit host byte limit that requires saved execution coverage. Check first-recorded and skipped inputs against the combined manifest while preserving current per-set coverage. Carry all five original catalog bindings and files through publication, reservation and verification and preserve earlier protection after failures.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [x] Prepare retained origin, superseded rebase and authoritative effect sets for selected roots with a separately trusted inventory, complete per-run before-states and row and execution records. Bind original and selected source hashes, check selected contexts against materialization, validate both endpoints in isolated SQL databases and collect per-run image requirements without applying deselected runs.
-- [x] Persist trusted retained-history descriptors with exact original local bindings and nested original, execution and shared expectations. Require all four live source catalogs, recheck all five bindings after content verification and preserve historical and orphaned metadata through shared replacement, local validation and version 22 JSON exports. Verify migration, rollback and competing registrations.
+- [x] Persist trusted retained-history descriptors with exact original local bindings and nested original, execution and shared expectations. Require all four live source catalogs, recheck all five bindings after content verification and preserve historical and orphaned metadata through shared replacement, local validation and version 23 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered retained-history payloads with synced exclusive publication and independent read limits for retained data and all four sources. Validate per-run before and after SQL states, original and selected source contents, all five original catalog bindings and four saved source files. Preserve interrupted evidence after changed files, unsafe paths, competing writers and publication or commit failures.
 - [x] Bind canonical per-run retained manifests and first-recorded input requirements to the exact retained-history binding and current asset descriptor. Verify all six source payloads, independent baseline and effect coverage for every run, original and selected invocation coverage, and the exact combined manifest including local requirements and host extras. Own all sources before hashing and preserve historical descriptors as metadata.
+- [x] Persist trusted retained-manifest descriptors with exact original retained-history, local and current asset bindings. Require all six live source catalogs, recheck all seven expectations after content verification and preserve historical and orphaned metadata through shared replacement, isolated local validation and version 23 JSON exports. Verify migration, rollback and competing registrations.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

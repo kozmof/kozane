@@ -369,7 +369,7 @@ it("preserves exact execution records through shared restoration and isolated lo
     { ...identity, checkpointId: "later" },
     async () => selection,
   );
-  expect(snapshot.tables).toHaveLength(10);
+  expect(snapshot.tables).toHaveLength(11);
   expect(
     snapshot.tables.find(({ name }) => name === "local_recovery_executions")!.rows[0].created_at,
   ).toEqual(["integer", "9223372036854775807"]);
@@ -459,6 +459,7 @@ it.each([false, true])(
     const f = await fixture(false),
       migration = migrations.find(({ tag }) => tag === "0030_local_recovery_executions")!;
     await withMigration(f.db, async () => [
+      { sql: "DROP TABLE local_recovery_retained_assets", args: [] },
       { sql: "DROP TABLE local_recovery_retained_history", args: [] },
       { sql: "DROP TABLE local_recovery_actions", args: [] },
       { sql: "DROP TABLE local_recovery_executions", args: [] },

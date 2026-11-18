@@ -90,8 +90,50 @@ schema. Unknown action kinds and positive contract versions remain data.
 
 ## Current scope
 
-The helpers perform no SQL validation, catalog registration, file publication or
-physical image verification. They cover the retained roots in the selected
-checkpoint. Durable retained-manifest catalogs and payload files, protected image
-integration, additional roots and complete bundle publication remain pending.
+Preparation helpers perform no SQL validation, file publication or physical image
+verification. They cover the retained roots in the selected checkpoint. Trusted
+descriptors can be registered in the catalog described below. Retained-manifest
+payload files, protected image integration, additional roots and complete bundle
+publication remain pending.
 The existing current asset payload format stays at version 1.
+
+## Retain trusted descriptors
+
+Migration 0033 adds `local_recovery_retained_assets`. Register expectations from
+trusted preparation with `rememberRetainedRecoveryAssetCheckpoint(db, checkpoint)`.
+Use `rememberRetainedRecoveryAssetCheckpointInTx` for a host-owned transaction.
+Registration stores the complete descriptor, including the exact original
+retained-history, local and current asset bindings.
+
+All six source catalogs must be present and match the nested expectations.
+Repeating the same descriptor preserves its registration timestamp. Changed
+contents, inventories or bindings under the same workspace, device, epoch and
+checkpoint key are refused. The result contains `checkpoint` and `changed`.
+Do not register an expectation solely because it accompanied received data.
+
+`readRetainedRecoveryAssetCheckpoint`, `inspectRetainedRecoveryAssetCheckpoint`
+and `parseRetainedRecoveryAssetCheckpointRecord` return the immutable descriptor.
+They validate row identity and nested metadata without converting registration
+timestamps to JavaScript dates. Historical and orphaned records remain
+inspectable. There are no source foreign keys, automatic expiration or deletion
+helpers.
+
+Call `requireStoredRetainedRecoveryAssetCheckpoint(catalog, input,
+expectedIdentity, sources)` to verify contents against the catalog. It owns the
+payload and all six sources before the first catalog read. It resolves the
+trusted descriptor and all source bindings in one consistent read boundary,
+then verifies hashes and exact coverage outside that boundary. Before success,
+it rechecks all seven exact original expectations in a second consistent read
+boundary. Missing, changed or coherently rebound records cause failure.
+Equivalent descriptor formatting and unrelated registrations do not change an
+expectation.
+
+Shared capture and replacement exclude this eleventh local table. Local
+snapshots preserve its exact rows and timestamps. Isolated local validation
+parses every nested descriptor before allocating SQL. JSON export version 23
+preserves current, historical and orphaned metadata. Earlier supported dumps
+import with an empty catalog when absent. Import validates metadata without
+loading manifest payloads or installing images.
+
+The catalog stores expectations. Manifest files, physical image verification,
+protection and complete bundle publication remain separate requirements.

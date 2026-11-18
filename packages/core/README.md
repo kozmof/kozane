@@ -91,7 +91,9 @@ Complete bundles remain pending.
 bind per-run and original-input manifests to the retained history and current
 asset descriptor. Verification checks all six source payloads and independent
 row and invocation coverage before accepting the combined image requirements.
-Durable retained-manifest storage and image protection remain pending.
+Trusted descriptors can be registered with all six original source bindings.
+Catalog-backed verification rechecks all seven records after hashing. Retained
+manifest payload files and image protection remain pending.
 
 ## Application operations
 

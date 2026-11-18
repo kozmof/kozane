@@ -138,6 +138,12 @@ import {
   type RetainedRecoveryAssetPayload,
   type RetainedRecoveryAssetCheckpoint,
   type RetainedRecoveryAssetSources,
+  parseRetainedRecoveryAssetCheckpointRecord,
+  rememberRetainedRecoveryAssetCheckpoint,
+  rememberRetainedRecoveryAssetCheckpointInTx,
+  readRetainedRecoveryAssetCheckpoint,
+  inspectRetainedRecoveryAssetCheckpoint,
+  requireStoredRetainedRecoveryAssetCheckpoint,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -562,6 +568,29 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
           retainedAssetSources,
         );
       void verifiedRetainedAssets.manifest.entries;
+      const registeredRetainedAssets = await rememberRetainedRecoveryAssetCheckpoint(
+        db,
+        retainedAssetCheckpoint,
+      );
+      const storedRetainedAssetDescriptor: RetainedRecoveryAssetCheckpoint =
+        registeredRetainedAssets.checkpoint;
+      void parseRetainedRecoveryAssetCheckpointRecord(
+        checkpointKey,
+        JSON.stringify(storedRetainedAssetDescriptor),
+      );
+      void withTx(db, (tx) =>
+        rememberRetainedRecoveryAssetCheckpointInTx(tx, storedRetainedAssetDescriptor),
+      );
+      void readRetainedRecoveryAssetCheckpoint(db, checkpointKey);
+      void inspectRetainedRecoveryAssetCheckpoint(db, checkpointKey);
+      const storedRetainedAssets: RetainedRecoveryAssetPayload =
+        await requireStoredRetainedRecoveryAssetCheckpoint(
+          db,
+          retainedAssetPayload,
+          parsedIdentity,
+          retainedAssetSources,
+        );
+      void storedRetainedAssets.history;
       // @ts-expect-error Per-run manifests remain immutable.
       verifiedRetainedAssets.history.effectSets.push(retainedImages.effectSets[0]);
       // @ts-expect-error Original input requirements remain immutable.

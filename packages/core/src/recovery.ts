@@ -168,3 +168,11 @@ export {
   type RetainedRecoveryAssetCheckpoint,
   type RetainedRecoveryAssetSources,
 } from "./actions/retained-recovery-asset-checkpoint.js";
+export {
+  parseRetainedRecoveryAssetCheckpointRecord,
+  readRetainedRecoveryAssetCheckpoint,
+  inspectRetainedRecoveryAssetCheckpoint,
+  rememberRetainedRecoveryAssetCheckpoint,
+  rememberRetainedRecoveryAssetCheckpointInTx,
+  requireStoredRetainedRecoveryAssetCheckpoint,
+} from "./actions/retained-recovery-asset-store.js";

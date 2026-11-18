@@ -78,7 +78,7 @@ export function inspectSharedRecoveryRetainedCheckpoint(db: DB, input: LocalReco
   const key = parseLocalRecoveryCheckpointKey(input);
   return withReadTx(db, (tx) => readSharedRecoveryRetainedCheckpoint(tx, key));
 }
-async function requireSources(
+export async function requireSharedRecoveryRetainedSources(
   db: DB | Tx | ReadTx,
   binding: SharedRecoveryRetainedCheckpointBinding,
 ) {
@@ -121,7 +121,7 @@ export async function rememberSharedRecoveryRetainedCheckpointInTx(tx: Tx, input
   if (!source)
     throw new SharedRecoveryError("Trusted original action checkpoint is not registered");
   const binding = Object.freeze({ checkpoint, localCheckpoint: source.localCheckpoint });
-  await requireSources(tx, binding);
+  await requireSharedRecoveryRetainedSources(tx, binding);
   const existing = await readSharedRecoveryRetainedCheckpoint(tx, key);
   if (existing) {
     if (JSON.stringify(existing) !== JSON.stringify(binding))
@@ -146,7 +146,7 @@ async function trusted(db: DB, key: LocalRecoveryCheckpointKey) {
   return withReadTx(db, async (tx) => {
     const binding = await readSharedRecoveryRetainedCheckpoint(tx, key);
     if (!binding) throw new SharedRecoveryError("Trusted retained checkpoint is not registered");
-    await requireSources(tx, binding);
+    await requireSharedRecoveryRetainedSources(tx, binding);
     return binding;
   });
 }
