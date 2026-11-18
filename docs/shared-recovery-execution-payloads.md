@@ -89,8 +89,9 @@ filesystem writes or live row installation.
 
 These files retain selected finalized scope data. The Node host can also retain
 [original action payloads](shared-recovery-action-payloads.md) with first-recorded
-inputs and provenance. Origin and deselected execution sets, original invocation
-manifest integration and retention policy remain requirements for complete history.
+inputs and provenance. Supplying `actionMaxBytes` with `executionMaxBytes` connects
+original inputs to saved manifest checks and image protection. Origin and
+deselected execution sets and retention policy remain requirements for complete history.
 
 Saving or loading execution files does not read images or create image
 reservations. Supply `executionMaxBytes` to the

@@ -367,8 +367,8 @@ root and child inputs, including no-op children and zero-effect roots. All four
 original catalog bindings and files remain checked through publication,
 reservation and verification. Native tests cover unchanged combined manifests,
 changed execution evidence, archived invocation images, cleanup handoff,
-competing writers and failed commits. Original invocation manifest integration,
-complete execution history and complete bundle publication remain pending. See
+competing writers and failed commits. Complete execution history and complete
+bundle publication remain pending. See
 [saved execution image coverage](recovery-checkpoint-images.md#check-saved-execution-images).
 
 Core can now prepare original action records beside selected executions. An
@@ -377,7 +377,7 @@ bindings, exact SQLite sequence strings and provenance. Verification requires
 matching root inputs and full provider maps while allowing later child inputs
 and used binding subsets to differ. Skipped original children remain retained
 and their image requirements can be checked separately. Origin and deselected
-effect sets, manifest integration and complete bundle publication
+effect sets and complete bundle publication
 remain pending. See [original recovery actions](shared-recovery-actions.md).
 
 Migration 0031 now retains trusted original-action descriptors with exact
@@ -395,9 +395,18 @@ and exact SQL validation. All four original catalog bindings and source files
 remain checked around file work. Native tests preserve first-recorded and
 skipped child inputs, exact sequence strings and provenance through reopening.
 They also cover unsafe paths, large inputs, changed files, competing writers
-and failed publication or commits. Original invocation manifest integration,
-origin and deselected effect sets and complete bundle publication remain
-pending. See [saved original actions](shared-recovery-action-payloads.md).
+and failed publication or commits. Origin and deselected effect sets and complete
+bundle publication remain pending. See [saved original actions](shared-recovery-action-payloads.md).
+
+Saved manifest storage and image protection now accept `actionMaxBytes` with
+the execution read limit. They check all first-recorded inputs against the
+combined manifest, including earlier child arguments and skipped children,
+while preserving per-set coverage for current executions. All five original
+catalog bindings and files remain checked through publication, reservation and
+verification. Native tests cover missing original-only requirements, archived
+bytes, cleanup handoff, changed evidence, competing writers and failed commits.
+Complete history retention and complete bundle publication remain pending. See
+[original invocation image protection](recovery-checkpoint-images.md#check-saved-original-invocation-images).
 
 ## Version one
 
@@ -507,6 +516,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Prepare original action records with an independently trusted ID selection, first-recorded inputs and bindings, exact local sequence strings and provenance. Bind contents to the original execution descriptor, require stable root inputs and provider maps, preserve changed and skipped child inputs separately and check original invocation image requirements without running handlers.
 - [x] Persist trusted original-action descriptors with exact original local bindings. Require matching live execution, shared and local sources, recheck all four catalogs after verification and preserve historical or orphaned expectations through shared replacement, exact local validation and version 21 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered original-action payloads with synced exclusive publication and independent read limits for originals and all three saved sources. Verify original contents, source hashes, attribution and exact source SQL values. Recheck all four original catalog bindings and files, preserve interrupted evidence and refuse changed originals without running handlers or installing rows.
+- [x] Connect saved originals to manifest storage and protected image verification through an explicit host byte limit that requires saved execution coverage. Check first-recorded and skipped inputs against the combined manifest while preserving current per-set coverage. Carry all five original catalog bindings and files through publication, reservation and verification and preserve earlier protection after failures.
 - [ ] Retain required history and assets while assembling recovery bundles. Publish only complete bundles.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.

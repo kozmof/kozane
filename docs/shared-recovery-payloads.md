@@ -92,8 +92,9 @@ requirements and verify protected bytes. It can also retain
 roots, counts and row-effect attribution. Supplying `executionMaxBytes` connects
 these records to saved manifest coverage and protected image verification.
 The host can also save [original action payloads](shared-recovery-action-payloads.md)
-with first-recorded inputs and provenance. Complete history retention and
-original invocation manifest integration remain pending.
+with first-recorded inputs and provenance. Supplying `actionMaxBytes` with
+`executionMaxBytes` checks their image requirements before protected byte
+verification. Complete history retention remains pending.
 A complete bundle also needs the matching local payload and a durable publication
 boundary.
 Installation and activation remain pending. Startup does not repeat file work.

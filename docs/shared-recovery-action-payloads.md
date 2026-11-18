@@ -98,7 +98,11 @@ bundle publication remain pending.
 
 Saving or loading originals does not read images or create image reservations.
 Original inputs can reference images absent from selected executions and shared
-rows. Saved manifest integration must still protect those additional
-requirements. Retain their manifests and earlier image pins separately until
-that workflow commits protection. Installation and activation remain pending.
+rows. Supply `actionMaxBytes` with `executionMaxBytes` to the
+[saved asset workflow](recovery-asset-payloads.md#check-saved-original-actions)
+to check the combined manifest against those original inputs. The
+[saved checkpoint image workflow](recovery-checkpoint-images.md#check-saved-original-invocation-images)
+carries all five original catalog bindings and files through reservation and
+byte verification. Keep earlier image pins until the new reservation commits.
+Installation and activation remain pending.
 Startup does not automatically repeat file work.

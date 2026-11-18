@@ -71,7 +71,9 @@ selected executions. Their verification permits changed child inputs while
 requiring the original root input and provider map. Trusted action expectations
 can be retained in a local catalog with their original source bindings. Original
 payloads can be retained by the [Node host](../../docs/shared-recovery-action-payloads.md).
-Original invocation manifest integration and complete history retention remain pending.
+The host can check original invocation images against saved manifests and carry
+all five original expectations through image protection. Complete history
+retention remains pending.
 
 ## Application operations
 

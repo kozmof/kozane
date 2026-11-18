@@ -84,6 +84,50 @@ The asset descriptor and image owner format remain unchanged. Supply
 `executionMaxBytes` for every call that requires this coverage. Neither record
 serves as a durable receipt for execution coverage or complete bundle publication.
 
+## Check saved original invocation images
+
+Save the matching [original-action payload](shared-recovery-action-payloads.md)
+and add `actionMaxBytes` with `executionMaxBytes` to the saved-manifest path.
+The positive safe integer limit bounds original bytes independently. This option
+requires the execution read limit and is refused with host history manifests.
+
+```ts
+const retained = await retainRegisteredRecoveryCheckpointImages({
+  root,
+  db,
+  expected,
+  localMaxBytes,
+  sharedMaxBytes,
+  assetMaxBytes,
+  executionMaxBytes,
+  actionMaxBytes,
+  createValidationDatabase,
+});
+```
+
+The combined saved manifest must cover all first-recorded inputs, including
+earlier child arguments and skipped children. Keep these additional entries
+when preparing the asset descriptor. Current execution inputs still require
+their own per-set coverage. Checks verify the trusted original contents and
+their exact execution, shared and local source bindings before reservation.
+
+The result adds the original `actionBinding` beside `executionBinding` and
+`assetCheckpoint`. All five original catalog bindings and saved files are
+checked under the image writer lock before and after reservation and byte
+verification. Changed originals or temporary evidence refuse success. New
+reservations roll back after a failed recheck. Earlier pending or retained
+protection survives failed loading, verification or commits.
+
+The reservation commits before any image bytes are read. First-recorded and
+skipped-child images remain protected through cleanup after earlier owners are
+released. Matching archived images can be verified without reinstalling them.
+Missing or changed required bytes leave the earlier protection intact.
+
+The image owner and asset descriptor formats remain unchanged. Supply
+`actionMaxBytes` and `executionMaxBytes` for every call that requires original
+coverage. A retained owner does not record that coverage policy or serve as a
+receipt for complete bundle publication.
+
 ## Supply host manifests
 
 Supply `history` with a baseline and an ordered `effectSets` array. Each entry
@@ -115,7 +159,8 @@ conflicting immutable names when merging requirements.
 `reserveRegisteredRecoveryCheckpointImages` returns the original shared/local
 `binding`, stable recovery `owner`, combined `manifest`, owner `state` and a
 `changed` flag. The saved-manifest path also returns `assetCheckpoint` and adds
-`executionBinding` when execution coverage is requested. It checks
+`executionBinding` when execution coverage is requested. Original coverage also
+returns `actionBinding`. It checks
 the required catalog bindings and published files under the image writer lock
 before and after owner publication. Missing or changed payload bytes and any
 temporary evidence refuse reservation. This operation does not read image bytes.

@@ -170,12 +170,13 @@ Core can prepare [original action records](shared-recovery-actions.md) with firs
 inputs, binding maps, exact local sequence values and provenance. These records
 remain distinct from later execution inputs. The Node host can retain
 [saved originals](shared-recovery-action-payloads.md) with their trusted sources.
-Origin and deselected execution sets, original invocation manifest integration
-and retention policy remain requirements for complete history.
+Origin and deselected execution sets and retention policy remain requirements
+for complete history.
 The Node host can retain [saved execution payloads](shared-recovery-execution-payloads.md)
 with both saved sources and all three original catalog bindings. The
 [saved asset workflow](recovery-asset-payloads.md#check-saved-execution-coverage)
 can check invocation image coverage and carry all four original expectations
-through image reservation and verification. Complete bundle publication and
+through image reservation and verification. Original coverage adds its fifth
+expectation and file through `actionMaxBytes`. Complete bundle publication and
 installation remain pending. Production capture remains subject to the
 [adapter verification gate](action-capture-prototype.md).

@@ -122,6 +122,58 @@ Omitting `executionMaxBytes` leaves invocation coverage to the host's retained
 records and manifests. Inspection observes asset evidence without checking
 execution coverage.
 
+## Check saved original actions
+
+Save the matching [original-action payload](shared-recovery-action-payloads.md)
+and pass `actionMaxBytes` with `executionMaxBytes` to either save or load.
+The original-action limit must be a positive safe integer. A missing execution
+limit is refused. Registered source lengths above their respective limits are
+refused before file opens. Loading also requires the asset payload's `maxBytes`
+limit.
+
+Include images from every original input when preparing the history manifests
+passed to `describeRecoveryAssets`. This includes first-recorded child inputs
+that later change and children skipped by selected executions. Register the
+complete asset descriptor before publication. Changed requirements cannot
+replace an existing checkpoint under the same key.
+
+```ts
+const saved = await saveRegisteredRecoveryAssetPayload({
+  root,
+  db,
+  expected,
+  input: assets.payload,
+  localMaxBytes,
+  sharedMaxBytes,
+  executionMaxBytes,
+  actionMaxBytes,
+  createValidationDatabase,
+});
+```
+
+The workflow loads and verifies the registered original payload before checking
+every first-recorded input against the combined asset manifest. Original records
+are independent of later execution sets, so their image entries can appear in
+any supplied history manifest. Current execution inputs still require coverage
+in their own selected effect-set manifest. Supplying `actionMaxBytes` preserves
+that check too. Extra supplied requirements remain required.
+
+Original bytes, their execution and shared hashes, attribution and exact source
+SQL values are checked through the composed loaders. These loaders can validate
+the same source more than once. Own a separate empty database and its disposal
+for every validation factory call. Missing or changed original bytes and any
+original temporary evidence refuse success.
+
+The result adds the original `actionBinding` beside `executionBinding`. All five
+original catalog bindings and the four saved source files are rechecked around
+asset publication or before loading returns. Failed publication or final commits
+preserve temporary or published evidence for explicit review.
+
+The asset descriptor format remains unchanged. Original coverage is an explicit
+check for each call. Omitting `actionMaxBytes` leaves first-recorded input
+coverage to the host. Inspection observes asset evidence without checking
+original coverage.
+
 ## Continue bundle preparation
 
 Saved manifests preserve requirements for both source payloads. These operations
@@ -133,7 +185,8 @@ The [saved checkpoint image workflow](recovery-checkpoint-images.md#use-register
 accepts `assetMaxBytes` to load these manifests and commit their image protection
 before byte verification. Supplying `executionMaxBytes` also checks saved
 execution coverage and carries all four original catalog expectations and files
-through the image writer boundary. Complete action and execution
-retention, complete bundle publication, one-time installation and activation
-remain pending. A saved manifest is not a bundle publication or installation
-receipt.
+through the image writer boundary. Adding `actionMaxBytes` also checks original
+inputs and carries all five original expectations and saved files through image
+protection. Complete history retention, complete bundle publication, one-time
+installation and activation remain pending. A saved manifest is not a bundle
+publication or installation receipt.

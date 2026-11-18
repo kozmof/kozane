@@ -112,10 +112,12 @@ extra supplied requirements and refuses missing original references or
 conflicting immutable names. It reads no image bytes.
 
 Original inputs can reference images absent from both later execution inputs
-and shared rows. The existing saved checkpoint workflow's `executionMaxBytes`
-checks selected execution inputs. It does not cover these additional original
-records. Retain their manifests and earlier image pins separately until a
-durable workflow protects the combined requirements.
+and shared rows. Supply `actionMaxBytes` with `executionMaxBytes` to the
+[saved asset workflow](recovery-asset-payloads.md#check-saved-original-actions)
+to check original input coverage alongside current execution coverage. The
+[saved checkpoint image workflow](recovery-checkpoint-images.md#check-saved-original-invocation-images)
+can then reserve and verify those combined requirements. Keep earlier image pins
+until its reservation commits.
 
 ## Retain trusted action descriptors
 
@@ -171,7 +173,7 @@ These helpers prepare original records for roots named by the selected execution
 checkpoint. Preparation and content checks perform no SQL validation, file
 writes, image reservation or live installation.
 
-Saved manifest integration, origin and deselected effect sets, complete history
-retention and complete bundle publication remain pending. Production capture
+Origin and deselected effect sets, complete history retention and complete
+bundle publication remain pending. Production capture
 remains subject to the
 [adapter verification gate](action-capture-prototype.md).
