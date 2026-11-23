@@ -143,6 +143,8 @@ Broader content-bound manifests and image protection remain pending.
 
 Run archives are a separate version 1 format. Existing selected-root retained
 history, catalogs and saved files retain their existing scope. Trusted run-archive
-descriptors can be registered locally. Run payload files, complete bundle
-publication and installation remain pending. Production capture remains subject to the
+descriptors can be registered locally. The Node host can retain
+[saved run payloads](shared-recovery-run-archive-payloads.md) after validating all
+five saved sources and every run's SQL endpoints. Complete bundle publication
+and installation remain pending. Production capture remains subject to the
 [adapter verification gate](action-capture-prototype.md).

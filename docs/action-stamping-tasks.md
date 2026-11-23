@@ -512,8 +512,8 @@ materialization. Additional origin, rebase and authoritative runs reconstruct
 independently. SQL validation checks each run's complete before and after states
 and checks the current baseline when no runs are selected. Native and Node WASM
 tests cover nested and skipped children, source changes, truncation, input
-ownership, exact SQL states, rollback and image metadata. Run payload files,
-broader image protection and complete bundles remain pending. See
+ownership, exact SQL states, rollback and image metadata. Broader manifests,
+image protection and complete bundles remain pending. See
 [run archives](shared-recovery-run-archives.md).
 
 Migration 0035 now retains trusted run-archive descriptors with exact original
@@ -524,7 +524,18 @@ thirteenth local table survives shared replacement, exact local snapshots and
 version 25 JSON exports. Native and Node WASM tests cover changed sources,
 immutable registration, exact timestamps, historical and orphaned metadata,
 migration and rollback. Native tests cover competing registrations and JSON
-import rollback. Run payload files remain pending.
+import rollback. Broader image protection remains pending.
+
+The Node host now saves and reopens registered run archives through synced
+exclusive publication. Independent limits bound the run file and all five saved
+sources. All six original catalog bindings and source files remain checked around
+publication and reopening. Source loaders validate exact SQL values, and run
+validation checks each complete before and after state. Native tests cover
+additional origin, rebase and authoritative runs, nested and skipped executions,
+checkpoints without selected actions, changed evidence, unsafe paths, competing
+writers and publication or validation commit failures. Broader manifests, image
+protection and complete bundles remain pending. See
+[saved run archives](shared-recovery-run-archive-payloads.md).
 
 ## Version one
 
@@ -648,6 +659,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Save and reopen registered action archives through synced exclusive publication with independent limits for the archive and all four saved sources. Validate source SQL states, complete first-record inventories and exact current originals. Recheck all five original catalog bindings and saved source files, preserve archive file identity and retain interrupted evidence after unsafe paths, changed contents, competing writes and publication or commit failures.
 - [x] Prepare run archives bound to broader original-action expectations with independent trusted run inventories. Preserve selected contexts, validate all four sources and every nested run hash, check exact original root inputs and provider maps, validate all before and after SQL states and the current baseline when no runs are selected, and collect per-run image requirements without applying additional runs.
 - [x] Persist trusted run-archive descriptors with exact original local bindings. Require all five live source catalogs, own inputs before reads and recheck all six original expectations after content verification. Preserve historical and orphaned metadata through shared replacement, exact local snapshots and version 25 JSON exports. Verify migration, rollback and competing registrations.
+- [x] Save and reopen registered run archives through synced exclusive publication with independent limits for the run file and all five sources. Validate exact source SQL values and every independent run endpoint, recheck all six original catalog bindings and saved source files, preserve run file identity and retain interrupted evidence after unsafe paths, changed contents, competing writers and publication or validation commit failures.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

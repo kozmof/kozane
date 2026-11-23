@@ -87,7 +87,10 @@ origin, rebase and authoritative runs to those originals. They check each run's
 independent context and both SQL endpoints while preserving current selected
 contents. Trusted run descriptors can be registered locally with all five
 original source bindings. Catalog verification rechecks all six expectations
-after hashing. Run payload files and broader image protection remain pending.
+after hashing. The Node host can retain
+[saved run payloads](../../docs/shared-recovery-run-archive-payloads.md) after
+validating all saved sources and independent SQL endpoints. Broader manifests,
+image protection and complete bundles remain pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

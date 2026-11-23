@@ -17,6 +17,7 @@ type Area =
   | "executions"
   | "actions"
   | "action-archives"
+  | "run-archives"
   | "retained-history"
   | "retained-asset-manifests";
 type RecoveryPayloadDescriptor = Readonly<{ sha256: string; byteLength: number }>;
