@@ -95,7 +95,9 @@ verification. They cover the retained roots in the selected checkpoint. Trusted
 descriptors can be registered in the catalog described below. The Node host can
 also retain [saved manifest files](retained-recovery-asset-payloads.md) and
 [protect their images](recovery-checkpoint-images.md#check-saved-retained-run-images).
-Additional roots and complete bundle publication remain pending.
+[Run archive asset checkpoints](run-archive-asset-checkpoints.md) prepare
+requirements for additional roots in a separate format. Complete bundle
+publication remains pending.
 The existing current asset payload format stays at version 1.
 
 ## Retain trusted descriptors

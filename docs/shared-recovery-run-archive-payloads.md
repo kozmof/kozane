@@ -99,8 +99,10 @@ with matching bytes. The immutable result contains `payload` and the original
 
 ## Continue bundle preparation
 
-Saved run archives preserve broader execution and effect records. Content-bound
-manifests for these runs and their original inputs, image protection, complete
-bundle publication and installation remain pending. These helpers do not select
+Saved run archives preserve broader execution and effect records.
+[Run archive asset checkpoints](run-archive-asset-checkpoints.md) prepare
+content-bound manifests for these runs and all archived original inputs. Durable
+manifest storage, image protection, complete bundle publication and installation
+remain pending. These helpers do not select
 additional runs or invoke handlers. Startup does not automatically repeat
 filesystem work.

@@ -125,6 +125,8 @@ effect contexts for these additional roots. Their
 after source and SQL validation. Row installation and complete bundle publication
 remain pending. Existing saved original and retained-history formats still cover
 roots in the current selected checkpoint.
-Connecting broader run archives to manifests and image protection remains
-pending. Production capture remains subject to the
+[Run archive asset checkpoints](run-archive-asset-checkpoints.md) bind broader
+per-run and first-recorded input requirements to the exact source expectations.
+Durable manifest storage and image protection remain pending. Production capture
+remains subject to the
 [adapter verification gate](action-capture-prototype.md).

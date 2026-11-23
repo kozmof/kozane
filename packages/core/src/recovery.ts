@@ -220,3 +220,14 @@ export {
   requireStoredSharedRecoveryRunArchiveCheckpoint,
   type SharedRecoveryRunArchiveCheckpointBinding,
 } from "./actions/shared-recovery-run-archive-store.js";
+export {
+  RUN_ARCHIVE_ASSET_PAYLOAD_VERSION,
+  RUN_ARCHIVE_ASSET_CHECKPOINT_VERSION,
+  parseRunArchiveAssetPayload,
+  parseRunArchiveAssetCheckpoint,
+  describeRunArchiveAssets,
+  requireRunArchiveAssetCheckpoint,
+  type RunArchiveAssetPayload,
+  type RunArchiveAssetCheckpoint,
+  type RunArchiveAssetSources,
+} from "./actions/run-archive-asset-checkpoint.js";

@@ -137,7 +137,9 @@ image identities cause failure.
 The collector checks metadata without reading bytes or reserving images. Current
 shared/local requirements remain separate. First-recorded inputs, including
 children that never execute, need the action archive's image collector too.
-Broader content-bound manifests and image protection remain pending.
+[Run archive asset checkpoints](run-archive-asset-checkpoints.md) bind these
+requirements and all archived original inputs to the exact run and current asset
+expectations. Their durable storage and image protection remain pending.
 
 ## Current scope
 

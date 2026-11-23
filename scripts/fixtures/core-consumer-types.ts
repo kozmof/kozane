@@ -173,6 +173,15 @@ import {
   type SharedRecoveryRunArchive,
   type SharedRecoveryRunArchiveCheckpoint,
   type SharedRecoveryRunArchiveSources,
+  RUN_ARCHIVE_ASSET_PAYLOAD_VERSION,
+  RUN_ARCHIVE_ASSET_CHECKPOINT_VERSION,
+  describeRunArchiveAssets,
+  parseRunArchiveAssetPayload,
+  parseRunArchiveAssetCheckpoint,
+  requireRunArchiveAssetCheckpoint,
+  type RunArchiveAssetPayload,
+  type RunArchiveAssetCheckpoint,
+  type RunArchiveAssetSources,
   rememberSharedRecoveryRunArchiveCheckpoint,
   rememberSharedRecoveryRunArchiveCheckpointInTx,
   readSharedRecoveryRunArchiveCheckpoint,
@@ -738,6 +747,47 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
           retainedAssetSources,
         );
       void verifiedRetainedAssets.manifest.entries;
+      const runAssetVersion: 1 = RUN_ARCHIVE_ASSET_PAYLOAD_VERSION;
+      const runAssetCheckpointVersion: 1 = RUN_ARCHIVE_ASSET_CHECKPOINT_VERSION;
+      void runAssetVersion;
+      void runAssetCheckpointVersion;
+      const runAssetSources: RunArchiveAssetSources = {
+        localSnapshot: retainedAssetLocalSnapshot,
+        sharedHistory: savedPayload,
+        executions: result,
+        originalActions: verifiedOriginals,
+        actionArchive: verifiedArchive,
+        runArchive: runArchivePayload,
+        currentAssets: retainedAssetCurrentPayload,
+      };
+      const runAssets = await describeRunArchiveAssets({
+        ...runAssetSources,
+        binding: runBinding,
+        assetCheckpoint: retainedAssetCurrentCheckpoint,
+        history: retainedImages,
+        originalImages: { version: 1, entries: [] },
+      });
+      const runAssetPayload: RunArchiveAssetPayload = parseRunArchiveAssetPayload(
+        runAssets.payload,
+      );
+      const runAssetCheckpoint: RunArchiveAssetCheckpoint = parseRunArchiveAssetCheckpoint(
+        runAssets.checkpoint,
+      );
+      const verifiedRunAssets: RunArchiveAssetPayload = await requireRunArchiveAssetCheckpoint(
+        runAssetPayload,
+        runAssetCheckpoint,
+        parsedIdentity,
+        runAssetSources,
+      );
+      void verifiedRunAssets.manifest.entries;
+      // @ts-expect-error Broader manifest sources require the original archive and run archive.
+      const missingBroaderSources: RunArchiveAssetSources = retainedAssetSources;
+      void missingBroaderSources;
+      // @ts-expect-error Broader source expectations remain immutable.
+      runAssetCheckpoint.binding.localCheckpoint.sha256 = "changed";
+      // @ts-expect-error Per-run image requirements remain immutable.
+      verifiedRunAssets.history.effectSets.push(retainedImages.effectSets[0]);
+
       const registeredRetainedAssets = await rememberRetainedRecoveryAssetCheckpoint(
         db,
         retainedAssetCheckpoint,

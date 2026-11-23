@@ -512,7 +512,7 @@ materialization. Additional origin, rebase and authoritative runs reconstruct
 independently. SQL validation checks each run's complete before and after states
 and checks the current baseline when no runs are selected. Native and Node WASM
 tests cover nested and skipped children, source changes, truncation, input
-ownership, exact SQL states, rollback and image metadata. Broader manifests,
+ownership, exact SQL states, rollback and image metadata. Durable manifest storage,
 image protection and complete bundles remain pending. See
 [run archives](shared-recovery-run-archives.md).
 
@@ -533,9 +533,21 @@ publication and reopening. Source loaders validate exact SQL values, and run
 validation checks each complete before and after state. Native tests cover
 additional origin, rebase and authoritative runs, nested and skipped executions,
 checkpoints without selected actions, changed evidence, unsafe paths, competing
-writers and publication or validation commit failures. Broader manifests, image
+writers and publication or validation commit failures. Durable manifest storage, image
 protection and complete bundles remain pending. See
 [saved run archives](shared-recovery-run-archive-payloads.md).
+
+Core now prepares asset checkpoints for broader run archives. Descriptors bind
+the exact original run and local expectations, current asset descriptor and
+canonical contents. Verification owns all seven sources before hashing, checks
+every source hash and requires independent per-run row and actual input coverage.
+Original-input requirements cover every archived action, including children that
+never execute. The exact combined manifest preserves current local images,
+pending uploads and host extras. Native and Node WASM tests cover additional
+roots, nested and skipped inputs, baseline-only materializations, changed
+bindings and source contents, missing coverage, conflicts and input ownership.
+Trusted manifest catalogs, payload files, image protection and complete bundles
+remain pending. See [run archive assets](run-archive-asset-checkpoints.md).
 
 ## Version one
 
@@ -660,6 +672,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Prepare run archives bound to broader original-action expectations with independent trusted run inventories. Preserve selected contexts, validate all four sources and every nested run hash, check exact original root inputs and provider maps, validate all before and after SQL states and the current baseline when no runs are selected, and collect per-run image requirements without applying additional runs.
 - [x] Persist trusted run-archive descriptors with exact original local bindings. Require all five live source catalogs, own inputs before reads and recheck all six original expectations after content verification. Preserve historical and orphaned metadata through shared replacement, exact local snapshots and version 25 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered run archives through synced exclusive publication with independent limits for the run file and all five sources. Validate exact source SQL values and every independent run endpoint, recheck all six original catalog bindings and saved source files, preserve run file identity and retain interrupted evidence after unsafe paths, changed contents, competing writers and publication or validation commit failures.
+- [x] Bind per-run manifests and all archived first-record input requirements to the exact run archive binding and current asset descriptor. Verify all seven source payloads, independent baseline, full effect and actual invocation coverage, and the exact union with current local requirements and host extras. Preserve never-executed inputs, own all sources before hashing and keep historical descriptors readable as metadata.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

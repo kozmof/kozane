@@ -649,6 +649,69 @@ await assert.rejects(
   recovery.SharedRecoveryError,
 );
 assert.deepEqual(retainedAssets.payload.manifest, { version: 1, entries: [] });
+const runAssetSources = {
+  ...assetSources,
+  executions: executionDescription.payload,
+  originalActions: actionDescription.payload,
+  actionArchive: actionArchive.payload,
+  runArchive: runArchive.payload,
+  currentAssets: assets.payload,
+};
+const runAssetImages = {
+  effectSets: [
+    {
+      id: "unselected-origin",
+      history: {
+        baseline: { id: "unselected-before", manifest: { version: 1, entries: [] } },
+        effectSets: [{ id: "unselected-origin", manifest: { version: 1, entries: [] } }],
+      },
+    },
+    { id: "empty", history: sharedHistoryImages },
+  ],
+};
+const runAssets = await recovery.describeRunArchiveAssets({
+  ...runAssetSources,
+  binding: { checkpoint: runArchive.checkpoint, localCheckpoint: assetLocal.checkpoint },
+  assetCheckpoint: assets.checkpoint,
+  history: runAssetImages,
+  originalImages: { version: 1, entries: [] },
+});
+assert.equal(runAssets.payload.version, recovery.RUN_ARCHIVE_ASSET_PAYLOAD_VERSION);
+assert.equal(runAssets.checkpoint.version, recovery.RUN_ARCHIVE_ASSET_CHECKPOINT_VERSION);
+assert.equal(
+  runAssets.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(runAssets.payload), "utf8"),
+);
+assert.equal(
+  runAssets.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(runAssets.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(recovery.parseRunArchiveAssetPayload(runAssets.payload), runAssets.payload);
+assert.deepEqual(
+  recovery.parseRunArchiveAssetCheckpoint(runAssets.checkpoint),
+  runAssets.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireRunArchiveAssetCheckpoint(
+    runAssets.payload,
+    runAssets.checkpoint,
+    sharedIdentity,
+    runAssetSources,
+  ),
+  runAssets.payload,
+);
+await assert.rejects(
+  recovery.requireRunArchiveAssetCheckpoint(
+    runAssets.payload,
+    { ...runAssets.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    runAssetSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(runAssets.payload.manifest, { version: 1, entries: [] });
+assert.equal("parseRunArchiveAssetSources" in recovery, false);
+
 assert.deepEqual(
   recovery.parseRetainedRecoveryAssetCheckpointRecord(
     {
