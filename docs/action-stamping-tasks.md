@@ -473,6 +473,17 @@ The stable checkpoint owner refuses changed requirements while preserving earlie
 pins. Complete bundles and additional roots remain pending. See
 [retained-run image protection](recovery-checkpoint-images.md#check-saved-retained-run-images).
 
+Core now prepares original-action archives for roots outside the current
+materialization. A separately trusted root and action inventory retains complete
+first-record metadata and requires every current original record to remain exact.
+Verification owns records and sources before hashing and checks all three current
+source payloads. Archives can be nonempty when the current checkpoint has no
+actions. Native and Node WASM tests cover unselected roots, nested and skipped
+children, sequence strings beyond JavaScript's safe integer range, changed
+evidence and image metadata.
+Durable archive storage and execution and effect retention for these additional
+roots remain pending. See [action archives](shared-recovery-action-archives.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -590,6 +601,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Persist trusted retained-manifest descriptors with exact original retained-history, local and current asset bindings. Require all six live source catalogs, recheck all seven expectations after content verification and preserve historical and orphaned metadata through shared replacement, isolated local validation and version 23 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered retained manifests through synced exclusive publication with independent read limits for the manifest and all six saved sources. Check all seven original catalog bindings, validate exact source SQL states and per-record coverage, recheck source and manifest files and preserve interrupted evidence after unsafe paths, changed bytes, competing writers and publication or commit failures.
 - [x] Connect saved retained manifests to image reservation and protected byte verification through explicit retained-history and retained-manifest read limits with all saved source limits. Carry all seven original catalog bindings and files through reservation and verification. Commit pending pins before physical reads and preserve earlier protection after changed evidence, failed verification or commits, cleanup handoff and competing writes.
+- [x] Prepare original-action archives with independent root and action inventories, including roots outside the current materialization and skipped descendants. Preserve every current original record exactly, validate first-record order and provider relations, bind canonical contents to the current original descriptor and verify all three source payloads. Collect complete archived-input image requirements without selecting or executing additional roots.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

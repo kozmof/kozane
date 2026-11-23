@@ -144,6 +144,17 @@ import {
   readRetainedRecoveryAssetCheckpoint,
   inspectRetainedRecoveryAssetCheckpoint,
   requireStoredRetainedRecoveryAssetCheckpoint,
+  SHARED_RECOVERY_ACTION_ARCHIVE_VERSION,
+  SHARED_RECOVERY_ACTION_ARCHIVE_CHECKPOINT_VERSION,
+  describeSharedRecoveryActionArchive,
+  parseSharedRecoveryActionArchive,
+  parseSharedRecoveryActionArchiveCheckpoint,
+  requireSharedRecoveryActionArchiveCheckpoint,
+  sharedRecoveryActionArchiveAssetManifest,
+  type SharedRecoveryActionArchiveSelection,
+  type SharedRecoveryActionArchive,
+  type SharedRecoveryActionArchiveCheckpoint,
+  type SharedRecoveryActionArchiveSources,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -441,6 +452,51 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
           result,
           savedPayload,
         );
+      const archiveVersion: 1 = SHARED_RECOVERY_ACTION_ARCHIVE_VERSION;
+      const archiveCheckpointVersion: 1 = SHARED_RECOVERY_ACTION_ARCHIVE_CHECKPOINT_VERSION;
+      void archiveVersion;
+      void archiveCheckpointVersion;
+      const archiveSources: SharedRecoveryActionArchiveSources = {
+        originals: verifiedOriginals,
+        executions: result,
+        sharedHistory: savedPayload,
+      };
+      const archiveSelection: SharedRecoveryActionArchiveSelection = {
+        rootIds: [root.id, "unselected-root"],
+        actionIds: [root.id, "unselected-root"],
+      };
+      const archive = await describeSharedRecoveryActionArchive({
+        ...archiveSources,
+        checkpoint: originalCheckpoint,
+        selection: archiveSelection,
+        actions: [
+          original,
+          {
+            ...original,
+            id: "unselected-root",
+            rootId: "unselected-root",
+            seq: "9223372036854775807",
+          },
+        ],
+      });
+      const archived: SharedRecoveryActionArchive = parseSharedRecoveryActionArchive(
+        archive.payload,
+      );
+      const archiveCheckpoint: SharedRecoveryActionArchiveCheckpoint =
+        parseSharedRecoveryActionArchiveCheckpoint(archive.checkpoint);
+      const verifiedArchive: SharedRecoveryActionArchive =
+        await requireSharedRecoveryActionArchiveCheckpoint(
+          archived,
+          archiveCheckpoint,
+          parsedIdentity,
+          archiveSources,
+        );
+      void sharedRecoveryActionArchiveAssetManifest(verifiedArchive, { version: 1, entries: [] })
+        .entries;
+      // @ts-expect-error Archive inventory is immutable.
+      archiveCheckpoint.selection.rootIds.push("other");
+      // @ts-expect-error First-record archive metadata is immutable.
+      verifiedArchive.actions[0].seq = "2";
       void sharedRecoveryActionAssetManifest(verifiedOriginals, { version: 1, entries: [] })
         .entries;
       const source: SharedRecoveryEffectSetSource = "authoritative";

@@ -216,6 +216,77 @@ const sharedHistoryImages = {
   baseline: { id: "baseline", manifest: { version: 1, entries: [] } },
   effectSets: [{ id: "empty", manifest: { version: 1, entries: [] } }],
 };
+const actionArchiveSources = {
+  originals: actionDescription.payload,
+  executions: executionDescription.payload,
+  sharedHistory: sharedDescription.payload,
+};
+const actionArchive = await recovery.describeSharedRecoveryActionArchive({
+  ...actionArchiveSources,
+  checkpoint: actionDescription.checkpoint,
+  selection: {
+    rootIds: ["empty-root", "unselected-root"],
+    actionIds: ["empty-root", "unselected-root"],
+  },
+  actions: [
+    ...actionDescription.payload.actions,
+    {
+      ...actionDescription.payload.actions[0],
+      id: "unselected-root",
+      rootId: "unselected-root",
+      kind: "future.unselected",
+      contractVersion: 77,
+      input: { text: "Archived 🪁" },
+      seq: "9223372036854775807",
+    },
+  ],
+});
+assert.equal(actionArchive.payload.version, recovery.SHARED_RECOVERY_ACTION_ARCHIVE_VERSION);
+assert.equal(
+  actionArchive.checkpoint.version,
+  recovery.SHARED_RECOVERY_ACTION_ARCHIVE_CHECKPOINT_VERSION,
+);
+assert.equal(
+  actionArchive.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(actionArchive.payload), "utf8"),
+);
+assert.equal(
+  actionArchive.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(actionArchive.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryActionArchive(actionArchive.payload),
+  actionArchive.payload,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryActionArchiveCheckpoint(actionArchive.checkpoint),
+  actionArchive.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryActionArchiveCheckpoint(
+    actionArchive.payload,
+    actionArchive.checkpoint,
+    sharedIdentity,
+    actionArchiveSources,
+  ),
+  actionArchive.payload,
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryActionArchiveCheckpoint(
+    actionArchive.payload,
+    { ...actionArchive.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    actionArchiveSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(
+  recovery.sharedRecoveryActionArchiveAssetManifest(actionArchive.payload, {
+    version: 1,
+    entries: [],
+  }),
+  { version: 1, entries: [] },
+);
 const retainedDescription = await recovery.describeSharedRecoveryRetainedHistory({
   checkpoint: actionDescription.checkpoint,
   selection: {

@@ -113,6 +113,10 @@ checkpoint and complete recovery
 bundle publication remain pending. The production log format and authority policy
 remain subject to the [adapter verification gate](action-capture-prototype.md).
 
+[Action archives](shared-recovery-action-archives.md) prepare original records
+for additional roots. Connecting their executions and effects to this retained
+history format remains pending.
+
 ## Retain trusted descriptors
 
 Migration 0032 adds `local_recovery_retained_history`. Register descriptors

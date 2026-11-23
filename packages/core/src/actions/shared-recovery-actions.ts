@@ -123,18 +123,37 @@ export function parseSharedRecoveryActionHistory(input: unknown): SharedRecovery
   const checkpoint = parseSharedRecoveryExecutionCheckpoint(value.checkpoint);
   const identity = parseLocalRecoveryIdentity(checkpoint.checkpoint.identity);
   const selected = selection(value.selection, checkpoint);
-  const selectedIds = new Set(selected.actionIds),
+  return Object.freeze({
+    version: SHARED_RECOVERY_ACTIONS_VERSION,
+    checkpoint,
+    selection: selected,
+    actions: parseRecoveryOriginalActionRecords(
+      value.actions,
+      selected.actionIds,
+      checkpoint.selection.effectSets.map(({ rootId }) => rootId),
+      identity,
+    ),
+  });
+}
+/** Internal canonical first-record checks shared by current originals and broader archives. Inputs name trusted IDs. */
+export function parseRecoveryOriginalActionRecords(
+  input: unknown,
+  selectedIdsInOrder: readonly string[],
+  rootIds: readonly string[],
+  identity: LocalRecoveryIdentity,
+): readonly SharedRecoveryActionRecord[] {
+  const selectedIds = new Set(selectedIdsInOrder),
     byId = new Map<string, SharedRecoveryActionRecord>();
-  for (const input of array(value.actions)) {
-    const original = action(input);
+  for (const value of array(input)) {
+    const original = action(value);
     if (byId.has(original.id) || !selectedIds.has(original.id))
       throw new SharedRecoveryError("Duplicate or unselected original recovery action");
     byId.set(original.id, original);
   }
-  if (byId.size !== selected.actionIds.length)
+  if (byId.size !== selectedIdsInOrder.length)
     throw new SharedRecoveryError("Missing original recovery action");
-  const actions = selected.actionIds.map((id) => byId.get(id)!);
-  const roots = new Set(checkpoint.selection.effectSets.map(({ rootId }) => rootId));
+  const actions = selectedIdsInOrder.map((id) => byId.get(id)!);
+  const roots = new Set(rootIds);
   const childIds = new Map<string, ReadonlySet<string>>();
   for (const rootId of roots) {
     const root = byId.get(rootId);
@@ -181,12 +200,7 @@ export function parseSharedRecoveryActionHistory(input: unknown): SharedRecovery
           "Original recovery action allocation differs from root bindings",
         );
   }
-  return Object.freeze({
-    version: SHARED_RECOVERY_ACTIONS_VERSION,
-    checkpoint,
-    selection: selected,
-    actions: Object.freeze(actions),
-  });
+  return Object.freeze(actions);
 }
 
 /** Known historical expectations remain metadata. Actual action payloads require the bundled schema. */

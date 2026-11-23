@@ -176,3 +176,16 @@ export {
   rememberRetainedRecoveryAssetCheckpointInTx,
   requireStoredRetainedRecoveryAssetCheckpoint,
 } from "./actions/retained-recovery-asset-store.js";
+export {
+  SHARED_RECOVERY_ACTION_ARCHIVE_VERSION,
+  SHARED_RECOVERY_ACTION_ARCHIVE_CHECKPOINT_VERSION,
+  parseSharedRecoveryActionArchive,
+  parseSharedRecoveryActionArchiveCheckpoint,
+  describeSharedRecoveryActionArchive,
+  requireSharedRecoveryActionArchiveCheckpoint,
+  sharedRecoveryActionArchiveAssetManifest,
+  type SharedRecoveryActionArchiveSelection,
+  type SharedRecoveryActionArchive,
+  type SharedRecoveryActionArchiveCheckpoint,
+  type SharedRecoveryActionArchiveSources,
+} from "./actions/shared-recovery-action-archive.js";

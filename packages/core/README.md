@@ -74,6 +74,12 @@ payloads can be retained by the [Node host](../../docs/shared-recovery-action-pa
 The host can check original invocation images against saved manifests and carry
 all five original expectations through image protection.
 
+[Action archives](../../docs/shared-recovery-action-archives.md) prepare
+first-recorded roots and descendants outside the current materialization. Their
+trusted inventory preserves current originals exactly while retaining additional
+inputs, bindings, sequence strings and provenance. Durable broader history
+integration remains pending.
+
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.
 It checks each run against its own complete before-state and can validate both

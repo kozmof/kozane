@@ -173,6 +173,10 @@ These helpers prepare original records for roots named by the selected execution
 checkpoint. Preparation and content checks perform no SQL validation, file
 writes, image reservation or live installation.
 
+[Action archives](shared-recovery-action-archives.md) can prepare additional
+first-recorded roots and descendants against these exact current originals.
+They retain separate trusted inventories without selecting or executing those roots.
+
 [Retained recovery history](shared-recovery-retained-history.md) prepares origin,
 superseded rebase and authoritative runs for the same selected roots. Durable
 complete history retention and bundle publication remain pending. Production
