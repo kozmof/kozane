@@ -139,7 +139,9 @@ shared/local requirements remain separate. First-recorded inputs, including
 children that never execute, need the action archive's image collector too.
 [Run archive asset checkpoints](run-archive-asset-checkpoints.md) bind these
 requirements and all archived original inputs to the exact run and current asset
-expectations. Their durable storage and image protection remain pending.
+expectations. The Node host can retain
+[saved broader manifests](run-archive-asset-payloads.md) after validating all seven
+sources. Broader image protection remains pending.
 
 ## Current scope
 

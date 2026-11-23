@@ -100,10 +100,11 @@ image verification or reservations. Use the run archive validator or
 [saved run loader](shared-recovery-run-archive-payloads.md) to validate independent
 SQL endpoints separately.
 
-Trusted descriptors can be registered in the catalog described below. Saved
-manifest files, broader image protection and complete bundle publication remain
-pending. Existing current and selected-root
-retained asset formats stay at version 1 and retain their existing scope.
+Trusted descriptors can be registered in the catalog described below. The Node
+host can retain [saved manifest files](run-archive-asset-payloads.md). Broader image
+protection and complete bundle publication remain pending. Existing current and
+selected-root retained asset formats stay at version 1 and retain their existing
+scope.
 
 ## Retain trusted descriptors
 
@@ -139,4 +140,5 @@ parses every nested descriptor before allocating SQL. JSON export version 26
 preserves current, historical and orphaned metadata. Earlier supported dumps
 import with an empty catalog when absent. Import validates metadata without
 loading manifest payloads or installing images. The catalog stores expectations
-without manifest payloads, image bytes or physical image protection.
+without manifest payloads, image bytes or physical image protection. Manifest
+files use [separate host storage](run-archive-asset-payloads.md).

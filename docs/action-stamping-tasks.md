@@ -557,8 +557,20 @@ hashing. This fourteenth local table survives shared replacement, exact local
 snapshots and version 26 JSON exports. Native and Node WASM tests cover immutable
 registration, changed sources, historical and orphaned metadata, exact timestamps,
 migration and rollback. Native tests cover competing registrations and JSON import
-rollback. Saved manifest files, broader image protection and complete bundles
-remain pending.
+rollback. Saved manifest files now use the host workflow described below.
+Broader image protection and complete bundles remain pending.
+
+The Node host now saves and reopens registered broader run manifests through
+synced exclusive publication. Independent byte limits bound the manifest and all
+seven saved sources. All eight original catalog bindings and every source file
+remain checked around publication and reopening. Source loaders validate exact
+SQL values and every independent run endpoint. Manifest verification checks
+per-run coverage, every first-recorded input and the exact combined requirements.
+Native tests cover additional runs, never-executed inputs, empty run inventories,
+checkpoints without selected actions, changed evidence, unsafe paths, competing
+writers and publication or validation commit failures. Broader image protection
+and complete bundles remain pending. See
+[saved run manifests](run-archive-asset-payloads.md).
 
 ## Version one
 
@@ -685,6 +697,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Save and reopen registered run archives through synced exclusive publication with independent limits for the run file and all five sources. Validate exact source SQL values and every independent run endpoint, recheck all six original catalog bindings and saved source files, preserve run file identity and retain interrupted evidence after unsafe paths, changed contents, competing writers and publication or validation commit failures.
 - [x] Bind per-run manifests and all archived first-record input requirements to the exact run archive binding and current asset descriptor. Verify all seven source payloads, independent baseline, full effect and actual invocation coverage, and the exact union with current local requirements and host extras. Preserve never-executed inputs, own all sources before hashing and keep historical descriptors readable as metadata.
 - [x] Persist trusted broader run-manifest descriptors with exact original bindings. Require all seven live source catalogs, own inputs before reads and recheck all eight expectations after verification. Preserve historical and orphaned metadata through shared replacement, exact local validation and version 26 JSON exports. Verify migration, rollback and competing registrations.
+- [x] Save and reopen registered broader run manifests through synced exclusive publication with independent limits for the manifest and all seven sources. Validate exact source SQL values, every independent run endpoint and complete per-record image coverage. Recheck all eight original catalog bindings and every source file, preserve manifest file identity and retain interrupted evidence after unsafe paths, changed contents, competing writes and publication or validation commit failures.
+- [ ] Connect saved broader run manifests to image reservation and protected byte verification. Carry all eight original catalog bindings and files through reservation and verification, preserve current and per-run invocation coverage, and retain earlier protection after failures.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

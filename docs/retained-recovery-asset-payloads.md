@@ -103,6 +103,6 @@ These files retain metadata for roots in the selected recovery checkpoint.
 Saving and loading do not read image bytes or reserve images. Use the
 [retained image workflow](recovery-checkpoint-images.md#check-saved-retained-run-images)
 to reserve and verify their requirements against all seven original expectations.
-Covering additional roots and publishing complete bundles remain pending.
-Installation and activation remain
-pending. Startup does not automatically repeat filesystem work.
+Use [saved run archive manifests](run-archive-asset-payloads.md) for additional
+roots. Complete bundle publication, installation and activation remain pending.
+Startup does not automatically repeat filesystem work.

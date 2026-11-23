@@ -91,9 +91,11 @@ after hashing. The Node host can retain
 [saved run payloads](../../docs/shared-recovery-run-archive-payloads.md) after
 validating all saved sources and independent SQL endpoints.
 [Run archive asset checkpoints](../../docs/run-archive-asset-checkpoints.md) retain
-trusted descriptors in a local catalog and bind all per-run and first-recorded input requirements to those original expectations
-and the current assets. Durable manifest storage, image protection and complete
-bundles remain pending.
+trusted descriptors in a local catalog and bind per-run and first-recorded input
+requirements to those original expectations and the current assets. The Node host can retain
+[saved broader manifests](../../docs/run-archive-asset-payloads.md) after validating
+all seven saved sources. Broader image protection and complete bundles remain
+pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.
