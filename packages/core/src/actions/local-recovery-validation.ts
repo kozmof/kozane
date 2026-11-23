@@ -13,6 +13,7 @@ import { parseRecoveryAssetCheckpointRecord } from "./recovery-asset-store.js";
 import { parseSharedRecoveryExecutionCheckpointRecord } from "./shared-recovery-execution-store.js";
 import { parseSharedRecoveryActionCheckpointRecord } from "./shared-recovery-action-store.js";
 import { parseRetainedRecoveryAssetCheckpointRecord } from "./retained-recovery-asset-store.js";
+import { parseSharedRecoveryActionArchiveCheckpointRecord } from "./shared-recovery-action-archive-store.js";
 import { parseSharedRecoveryRetainedCheckpointRecord } from "./shared-recovery-retained-store.js";
 import {
   requireLocalRecoveryCheckpoint,
@@ -222,6 +223,26 @@ export async function validateLocalRecoverySnapshot(
           return value[1];
         };
         parseSharedRecoveryRetainedCheckpointRecord(
+          {
+            workspaceId: text("workspace_id"),
+            deviceId: text("device_id"),
+            epochId: text("epoch_id"),
+            checkpointId: text("checkpoint_id"),
+          },
+          text("descriptor"),
+          text("local_descriptor"),
+        );
+      }
+  for (const table of snapshot.tables)
+    if (table.name === "local_recovery_action_archives")
+      for (const row of table.rows) {
+        const text = (column: string) => {
+          const value = row[column];
+          if (value[0] !== "text")
+            throw new LocalRecoveryError(`Stored archive checkpoint requires TEXT: ${column}`);
+          return value[1];
+        };
+        parseSharedRecoveryActionArchiveCheckpointRecord(
           {
             workspaceId: text("workspace_id"),
             deviceId: text("device_id"),

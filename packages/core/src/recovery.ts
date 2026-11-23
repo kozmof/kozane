@@ -189,3 +189,12 @@ export {
   type SharedRecoveryActionArchiveCheckpoint,
   type SharedRecoveryActionArchiveSources,
 } from "./actions/shared-recovery-action-archive.js";
+export {
+  parseSharedRecoveryActionArchiveCheckpointRecord,
+  readSharedRecoveryActionArchiveCheckpoint,
+  inspectSharedRecoveryActionArchiveCheckpoint,
+  rememberSharedRecoveryActionArchiveCheckpoint,
+  rememberSharedRecoveryActionArchiveCheckpointInTx,
+  requireStoredSharedRecoveryActionArchiveCheckpoint,
+  type SharedRecoveryActionArchiveCheckpointBinding,
+} from "./actions/shared-recovery-action-archive-store.js";

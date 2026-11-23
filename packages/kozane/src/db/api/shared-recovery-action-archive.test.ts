@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
+import { sharedRecoveryActionArchiveFixture as fixture } from "../../test-utils/shared-recovery-action-archive.js";
 import { migrations } from "@kozane/core/migrations";
 import {
   describeSharedRecoveryActionArchive,
@@ -11,13 +12,7 @@ import {
   describeSharedRecoveryExecutions,
   describeSharedRecoveryHistory,
 } from "@kozane/core/recovery";
-import {
-  retainedRecoveryAssetFixture,
-  identity,
-  manifest,
-  reference,
-  clone,
-} from "../../test-utils/retained-recovery-assets.js";
+import { identity, manifest, reference, clone } from "../../test-utils/retained-recovery-assets.js";
 beforeEach(async () => {
   if (!globalThis.crypto?.subtle) vi.stubGlobal("crypto", (await import("node:crypto")).webcrypto);
 });
@@ -25,78 +20,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-async function fixture() {
-  const f = await retainedRecoveryAssetFixture(),
-    current = clone(f.originalActions.actions),
-    provenance = {
-      deviceId: "other-device",
-      epochId: identity.epochId,
-      schemaId: identity.schemaId,
-      hlc: "opaque:unselected",
-    };
-  const generated = {
-    child: { type: "child-id", value: "detached-child" },
-    grand: { type: "child-id", value: "detached-grand" },
-    skipped: { type: "child-id", value: "detached-skipped" },
-    unused: { type: "entity-id", value: "unused" },
-    clock: { type: "clock", value: -100 },
-  };
-  const detached = [
-    {
-      id: "detached",
-      rootId: "detached",
-      parentId: null,
-      kind: "future.unselected",
-      contractVersion: 77,
-      input: { ref: reference(17), text: '\ufeff{"exact":true}\0🪁' },
-      generated,
-      seq: "3",
-      ...provenance,
-    },
-    {
-      id: "detached-child",
-      rootId: "detached",
-      parentId: "detached",
-      kind: "future.child",
-      contractVersion: 77,
-      input: { ref: reference(18) },
-      generated: { grand: generated.grand },
-      seq: "4",
-      ...provenance,
-    },
-    {
-      id: "detached-grand",
-      rootId: "detached",
-      parentId: "detached-child",
-      kind: "future.grand",
-      contractVersion: 77,
-      input: { ref: reference(19) },
-      generated: {},
-      seq: "5",
-      ...provenance,
-    },
-    {
-      id: "detached-skipped",
-      rootId: "detached",
-      parentId: "detached",
-      kind: "future.skipped",
-      contractVersion: 77,
-      input: { ref: reference(20) },
-      generated: {},
-      seq: "9223372036854775807",
-      ...provenance,
-    },
-  ];
-  const actions = [...current.slice(0, 2), ...detached.slice(0, 3), current[2], detached[3]];
-  return {
-    checkpoint: f.binding.checkpoint.checkpoint,
-    selection: { rootIds: ["root", "detached"], actionIds: actions.map((action) => action.id) },
-    actions,
-    originals: f.originalActions,
-    executions: f.executions,
-    sharedHistory: f.sharedHistory,
-  };
-}
 function descriptor(payload: ReturnType<typeof parseSharedRecoveryActionArchive>) {
   const bytes = Buffer.from(JSON.stringify(payload));
   return {

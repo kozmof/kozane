@@ -538,7 +538,7 @@ it("preserves retained metadata through shared restoration and exact local SQL v
     { ...identity, checkpointId: "later" },
     async () => selected,
   );
-  expect(snapshot.tables).toHaveLength(11);
+  expect(snapshot.tables).toHaveLength(12);
   expect(snapshot.tables.find(({ name }) => name === tables.retained)!.rows[0].created_at).toEqual([
     "integer",
     "9223372036854775807",
@@ -645,6 +645,7 @@ it.each([false, true])(
     const f = await fixture(false),
       migration = migrations.find(({ id }) => id === "0032_local_recovery_retained_history")!;
     await withMigration(f.db, async () => [
+      { sql: "DROP TABLE local_recovery_action_archives", args: [] },
       { sql: "DROP TABLE local_recovery_retained_assets", args: [] },
       { sql: "DROP TABLE local_recovery_retained_history", args: [] },
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },
@@ -665,7 +666,9 @@ it.each([false, true])(
       ).rejects.toThrow();
       await f.db.run(sql`DROP TRIGGER reject_upgrade`);
     }
-    expect((await applyMigrations(f.db)).appliedIds).toEqual([migration.id, migrations.at(-1)!.id]);
+    expect((await applyMigrations(f.db)).appliedIds).toEqual(
+      migrations.filter(({ idx }) => idx >= migration.idx).map(({ id }) => id),
+    );
     expect(
       await f.db.values(
         sql`SELECT descriptor,local_descriptor,CAST(created_at AS TEXT) FROM local_recovery_actions`,

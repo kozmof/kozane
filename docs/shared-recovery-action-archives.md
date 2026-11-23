@@ -71,6 +71,37 @@ the trusted action inventory. Inventory order itself is preserved.
 `parseSharedRecoveryActionArchiveCheckpoint` permits known historical source
 descriptors as metadata. Actual archive records require the bundled schema.
 
+## Retain trusted archive descriptors
+
+Register the independently trusted descriptor with
+`rememberSharedRecoveryActionArchiveCheckpoint(db, checkpoint)`. Registration
+requires matching live original, execution, shared and local catalogs. It retains
+the exact original local descriptor alongside the archive expectation in
+`local_recovery_action_archives`. The transaction variant
+`rememberSharedRecoveryActionArchiveCheckpointInTx` shares a caller's transaction.
+
+Registration is immutable per workspace, device, epoch and checkpoint key. An
+identical registration preserves its timestamp. Changed contents, inventory or
+source bindings require a new key. Registration stores metadata without payload
+bytes or image protection.
+
+Use `requireStoredSharedRecoveryActionArchiveCheckpoint(catalog, input,
+expectedIdentity, sources)` to verify against the retained expectation. It owns
+all inputs before reading catalogs, resolves the archive and all four original
+sources in one read boundary, hashes outside it and rechecks all five original
+expectations afterward. Missing or changed sources refuse verification.
+
+`readSharedRecoveryActionArchiveCheckpoint` and
+`inspectSharedRecoveryActionArchiveCheckpoint` return the descriptor and original
+local binding. Inspection preserves historical and orphaned metadata without
+requiring live source catalogs or converting registration timestamps through
+JavaScript dates. `parseSharedRecoveryActionArchiveCheckpointRecord` validates
+stored record coherence before SQL allocation during local validation.
+
+Migration 0034 adds this twelfth local table. Shared replacement preserves it.
+Exact local snapshots and JSON export version 24 retain current, historical and
+orphaned metadata. Catalog entries do not expire automatically.
+
 ## Collect image requirements
 
 `sharedRecoveryActionArchiveAssetManifest(input, images)` requires image metadata
@@ -84,9 +115,9 @@ Baseline, full effect and resolved execution images remain separate requirements
 
 ## Current scope
 
-Archives prepare first-recorded actions for additional roots. They do not retain
-those roots' executions or effects, store trusted catalog records or payload
-files, install rows or publish complete bundles. Existing saved original and
+Archives prepare first-recorded actions for additional roots and retain trusted
+catalog expectations. Payload files, those roots' executions and effects, row
+installation and complete bundle publication remain pending. Existing saved original and
 retained-history formats still cover roots in the current selected checkpoint.
 Connecting broader archives to durable history retention, manifests and image
 protection remains pending. Production capture remains subject to the

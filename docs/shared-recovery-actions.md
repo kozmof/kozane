@@ -157,7 +157,7 @@ registrations and equivalent descriptor JSON formatting remain allowed.
 
 Local snapshots include this ninth local table with exact tagged values.
 Isolated local validation checks every nested action descriptor before database
-allocation. Shared capture and replacement exclude the table. JSON version 23
+allocation. Shared capture and replacement exclude the table. JSON version 24
 includes its records. Versions 7 through 20 import with an empty action catalog
 when omitted. Import preserves coherent historical and orphaned metadata without
 installing original action records or reading images.

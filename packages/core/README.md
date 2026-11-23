@@ -77,8 +77,10 @@ all five original expectations through image protection.
 [Action archives](../../docs/shared-recovery-action-archives.md) prepare
 first-recorded roots and descendants outside the current materialization. Their
 trusted inventory preserves current originals exactly while retaining additional
-inputs, bindings, sequence strings and provenance. Durable broader history
-integration remains pending.
+inputs, bindings, sequence strings and provenance. Trusted archive descriptors
+can be registered with all four original source bindings. Catalog verification
+rechecks all five expectations after hashing. Archive payload files and execution
+and effect retention for additional roots remain pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

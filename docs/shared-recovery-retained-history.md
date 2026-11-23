@@ -154,7 +154,7 @@ expectation.
 
 Shared capture and replacement exclude this tenth local table. Local snapshots
 retain its exact rows and timestamps. Isolated local validation parses every
-nested descriptor before allocating SQL. JSON export version 23 preserves current,
+nested descriptor before allocating SQL. JSON export version 24 preserves current,
 historical and orphaned records. Earlier supported dumps import with an empty
 retained-history catalog when absent. Imports validate metadata without loading
 retained payloads or installing history.

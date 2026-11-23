@@ -155,6 +155,13 @@ import {
   type SharedRecoveryActionArchive,
   type SharedRecoveryActionArchiveCheckpoint,
   type SharedRecoveryActionArchiveSources,
+  rememberSharedRecoveryActionArchiveCheckpoint,
+  rememberSharedRecoveryActionArchiveCheckpointInTx,
+  readSharedRecoveryActionArchiveCheckpoint,
+  inspectSharedRecoveryActionArchiveCheckpoint,
+  parseSharedRecoveryActionArchiveCheckpointRecord,
+  requireStoredSharedRecoveryActionArchiveCheckpoint,
+  type SharedRecoveryActionArchiveCheckpointBinding,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -570,6 +577,30 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
         originalCheckpoint,
       );
       const originalBinding: SharedRecoveryActionCheckpointBinding = registeredOriginals.binding;
+      const registeredArchive = await rememberSharedRecoveryActionArchiveCheckpoint(
+        db,
+        archiveCheckpoint,
+      );
+      const archiveBinding: SharedRecoveryActionArchiveCheckpointBinding =
+        registeredArchive.binding;
+      void parseSharedRecoveryActionArchiveCheckpointRecord(
+        checkpointKey,
+        JSON.stringify(archiveBinding.checkpoint),
+        JSON.stringify(archiveBinding.localCheckpoint),
+      );
+      void withTx(db, (tx) =>
+        rememberSharedRecoveryActionArchiveCheckpointInTx(tx, archiveCheckpoint),
+      );
+      void readSharedRecoveryActionArchiveCheckpoint(db, checkpointKey);
+      void inspectSharedRecoveryActionArchiveCheckpoint(db, checkpointKey);
+      const storedArchive: SharedRecoveryActionArchive =
+        await requireStoredSharedRecoveryActionArchiveCheckpoint(
+          db,
+          verifiedArchive,
+          parsedIdentity,
+          archiveSources,
+        );
+      void storedArchive.actions;
       void parseSharedRecoveryActionCheckpointRecord(
         checkpointKey,
         JSON.stringify(originalCheckpoint),

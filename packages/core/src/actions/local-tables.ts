@@ -11,4 +11,5 @@ export const localTableNames: readonly string[] = Object.freeze([
   "local_recovery_actions",
   "local_recovery_retained_history",
   "local_recovery_retained_assets",
+  "local_recovery_action_archives",
 ]);
