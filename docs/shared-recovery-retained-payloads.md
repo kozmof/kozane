@@ -96,7 +96,7 @@ with matching bytes. The immutable result contains `payload` and the original
 ## Continue bundle preparation
 
 These files preserve runs for roots in the current selected checkpoint. Roots
-outside that checkpoint, retained manifest storage and complete bundle
+outside that checkpoint, protected image integration and complete bundle
 publication remain pending.
 
 Saving and loading retained history do not read images or reserve them. Use
@@ -104,7 +104,8 @@ Saving and loading retained history do not read images or reserve them. Use
 including deselected rows and execution inputs. Original invocation and current
 shared/local requirements remain separate inputs to the combined manifest.
 [Retained asset checkpoints](retained-recovery-asset-checkpoints.md) prepare
-content-bound manifests for these sources. Durable manifest storage and connecting
-saved retained files to protected image verification remain pending.
+content-bound manifests for these sources. The Node host can retain
+[saved manifest files](retained-recovery-asset-payloads.md). Connecting them to
+protected image verification remains pending.
 Installation and activation remain pending. Startup does not automatically
 repeat filesystem work.

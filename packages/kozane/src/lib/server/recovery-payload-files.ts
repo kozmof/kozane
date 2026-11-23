@@ -16,7 +16,8 @@ type Area =
   | "asset-manifests"
   | "executions"
   | "actions"
-  | "retained-history";
+  | "retained-history"
+  | "retained-asset-manifests";
 type RecoveryPayloadDescriptor = Readonly<{ sha256: string; byteLength: number }>;
 const code = (error: unknown) => (error instanceof Error && "code" in error ? error.code : null);
 export const paths = (directory: string, checkpoint: RecoveryPayloadDescriptor) => ({

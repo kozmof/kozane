@@ -92,9 +92,9 @@ schema. Unknown action kinds and positive contract versions remain data.
 
 Preparation helpers perform no SQL validation, file publication or physical image
 verification. They cover the retained roots in the selected checkpoint. Trusted
-descriptors can be registered in the catalog described below. Retained-manifest
-payload files, protected image integration, additional roots and complete bundle
-publication remain pending.
+descriptors can be registered in the catalog described below. The Node host can
+also retain [saved manifest files](retained-recovery-asset-payloads.md). Protected
+image integration, additional roots and complete bundle publication remain pending.
 The existing current asset payload format stays at version 1.
 
 ## Retain trusted descriptors
@@ -135,5 +135,6 @@ preserves current, historical and orphaned metadata. Earlier supported dumps
 import with an empty catalog when absent. Import validates metadata without
 loading manifest payloads or installing images.
 
-The catalog stores expectations. Manifest files, physical image verification,
-protection and complete bundle publication remain separate requirements.
+The catalog stores expectations. Manifest files use
+[separate host storage](retained-recovery-asset-payloads.md). Physical image
+verification, protection and complete bundle publication remain separate requirements.

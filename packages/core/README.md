@@ -92,8 +92,9 @@ bind per-run and original-input manifests to the retained history and current
 asset descriptor. Verification checks all six source payloads and independent
 row and invocation coverage before accepting the combined image requirements.
 Trusted descriptors can be registered with all six original source bindings.
-Catalog-backed verification rechecks all seven records after hashing. Retained
-manifest payload files and image protection remain pending.
+Catalog-backed verification rechecks all seven records after hashing. The Node
+host can retain [saved manifest files](../../docs/retained-recovery-asset-payloads.md)
+after validating all six saved sources. Image protection remains pending.
 
 ## Application operations
 
