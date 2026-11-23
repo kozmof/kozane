@@ -481,8 +481,8 @@ source payloads. Archives can be nonempty when the current checkpoint has no
 actions. Native and Node WASM tests cover unselected roots, nested and skipped
 children, sequence strings beyond JavaScript's safe integer range, changed
 evidence and image metadata.
-Archive payload files and execution and effect retention for these additional
-roots remain pending. See [action archives](shared-recovery-action-archives.md).
+Execution and effect retention for these additional roots remain pending. See
+[action archives](shared-recovery-action-archives.md).
 
 Migration 0034 now retains trusted action-archive descriptors with exact original
 local bindings. Registration requires all four matching source catalogs.
@@ -492,6 +492,17 @@ exact local snapshots and version 24 JSON exports. Native and Node WASM tests
 cover changed sources, immutable registration, exact timestamp preservation,
 historical and orphaned metadata, rollback and migration. Native tests also
 cover competing connections and JSON import rollback.
+
+The Node host now saves and reopens registered action archives through synced
+exclusive publication. Independent limits bound the archive and all four saved
+sources. Source loaders validate exact SQL states, and archive verification
+preserves complete first-record inventories and every current original. All five
+original catalog bindings and all four source files remain checked around
+publication and reopening. Native tests cover unselected roots, nested and
+skipped children, checkpoints without selected actions, unsafe paths, changed
+evidence, competing writes and publication or commit failures. Complete bundles,
+broader execution and effect retention and image protection remain pending. See
+[saved archives](shared-recovery-action-archive-payloads.md).
 
 ## Version one
 
@@ -610,8 +621,9 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Persist trusted retained-manifest descriptors with exact original retained-history, local and current asset bindings. Require all six live source catalogs, recheck all seven expectations after content verification and preserve historical and orphaned metadata through shared replacement, isolated local validation and version 24 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered retained manifests through synced exclusive publication with independent read limits for the manifest and all six saved sources. Check all seven original catalog bindings, validate exact source SQL states and per-record coverage, recheck source and manifest files and preserve interrupted evidence after unsafe paths, changed bytes, competing writers and publication or commit failures.
 - [x] Connect saved retained manifests to image reservation and protected byte verification through explicit retained-history and retained-manifest read limits with all saved source limits. Carry all seven original catalog bindings and files through reservation and verification. Commit pending pins before physical reads and preserve earlier protection after changed evidence, failed verification or commits, cleanup handoff and competing writes.
-- [x] Persist trusted action-archive descriptors with exact original local bindings. Require all four live source catalogs, own inputs before reads and recheck all five expectations after verification. Preserve historical and orphaned metadata through shared replacement, exact local snapshots and version 24 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Prepare original-action archives with independent root and action inventories, including roots outside the current materialization and skipped descendants. Preserve every current original record exactly, validate first-record order and provider relations, bind canonical contents to the current original descriptor and verify all three source payloads. Collect complete archived-input image requirements without selecting or executing additional roots.
+- [x] Persist trusted action-archive descriptors with exact original local bindings. Require all four live source catalogs, own inputs before reads and recheck all five expectations after verification. Preserve historical and orphaned metadata through shared replacement, exact local snapshots and version 24 JSON exports. Verify migration, rollback and competing registrations.
+- [x] Save and reopen registered action archives through synced exclusive publication with independent limits for the archive and all four saved sources. Validate source SQL states, complete first-record inventories and exact current originals. Recheck all five original catalog bindings and saved source files, preserve archive file identity and retain interrupted evidence after unsafe paths, changed contents, competing writes and publication or commit failures.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

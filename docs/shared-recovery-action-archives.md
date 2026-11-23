@@ -116,9 +116,12 @@ Baseline, full effect and resolved execution images remain separate requirements
 ## Current scope
 
 Archives prepare first-recorded actions for additional roots and retain trusted
-catalog expectations. Payload files, those roots' executions and effects, row
-installation and complete bundle publication remain pending. Existing saved original and
-retained-history formats still cover roots in the current selected checkpoint.
+catalog expectations. The Node host can retain
+[saved archive payloads](shared-recovery-action-archive-payloads.md) after validating
+all four saved sources and all five original catalog expectations. Execution and
+effect retention for additional roots, row installation and complete bundle
+publication remain pending. Existing saved original and retained-history formats
+still cover roots in the current selected checkpoint.
 Connecting broader archives to durable history retention, manifests and image
 protection remains pending. Production capture remains subject to the
 [adapter verification gate](action-capture-prototype.md).

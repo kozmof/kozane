@@ -79,8 +79,10 @@ first-recorded roots and descendants outside the current materialization. Their
 trusted inventory preserves current originals exactly while retaining additional
 inputs, bindings, sequence strings and provenance. Trusted archive descriptors
 can be registered with all four original source bindings. Catalog verification
-rechecks all five expectations after hashing. Archive payload files and execution
-and effect retention for additional roots remain pending.
+rechecks all five expectations after hashing. The Node host can retain
+[saved archive payloads](../../docs/shared-recovery-action-archive-payloads.md)
+after validating all four saved sources. Execution and effect retention for
+additional roots remain pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.
