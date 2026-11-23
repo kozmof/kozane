@@ -504,6 +504,18 @@ evidence, competing writes and publication or commit failures. Complete bundles,
 broader execution and effect retention and image protection remain pending. See
 [saved archives](shared-recovery-action-archive-payloads.md).
 
+Core now prepares run archives for roots outside the current materialization.
+Descriptors bind the trusted original-action archive, full run inventory and
+canonical contents. Verification owns all four sources before hashing, preserves
+original root inputs and provider maps, and checks selected runs against current
+materialization. Additional origin, rebase and authoritative runs reconstruct
+independently. SQL validation checks each run's complete before and after states
+and checks the current baseline when no runs are selected. Native and Node WASM
+tests cover nested and skipped children, source changes, truncation, input
+ownership, exact SQL states, rollback and image metadata. Durable run catalogs,
+payload files, broader image protection and complete bundles remain pending. See
+[run archives](shared-recovery-run-archives.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -624,6 +636,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Prepare original-action archives with independent root and action inventories, including roots outside the current materialization and skipped descendants. Preserve every current original record exactly, validate first-record order and provider relations, bind canonical contents to the current original descriptor and verify all three source payloads. Collect complete archived-input image requirements without selecting or executing additional roots.
 - [x] Persist trusted action-archive descriptors with exact original local bindings. Require all four live source catalogs, own inputs before reads and recheck all five expectations after verification. Preserve historical and orphaned metadata through shared replacement, exact local snapshots and version 24 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered action archives through synced exclusive publication with independent limits for the archive and all four saved sources. Validate source SQL states, complete first-record inventories and exact current originals. Recheck all five original catalog bindings and saved source files, preserve archive file identity and retain interrupted evidence after unsafe paths, changed contents, competing writes and publication or commit failures.
+- [x] Prepare run archives bound to broader original-action expectations with independent trusted run inventories. Preserve selected contexts, validate all four sources and every nested run hash, check exact original root inputs and provider maps, validate all before and after SQL states and the current baseline when no runs are selected, and collect per-run image requirements without applying additional runs.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

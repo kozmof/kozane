@@ -198,3 +198,16 @@ export {
   requireStoredSharedRecoveryActionArchiveCheckpoint,
   type SharedRecoveryActionArchiveCheckpointBinding,
 } from "./actions/shared-recovery-action-archive-store.js";
+export {
+  SHARED_RECOVERY_RUN_ARCHIVE_VERSION,
+  SHARED_RECOVERY_RUN_ARCHIVE_CHECKPOINT_VERSION,
+  parseSharedRecoveryRunArchive,
+  parseSharedRecoveryRunArchiveCheckpoint,
+  describeSharedRecoveryRunArchive,
+  requireSharedRecoveryRunArchiveCheckpoint,
+  validateSharedRecoveryRunArchive,
+  sharedRecoveryRunArchiveAssetManifest,
+  type SharedRecoveryRunArchive,
+  type SharedRecoveryRunArchiveCheckpoint,
+  type SharedRecoveryRunArchiveSources,
+} from "./actions/shared-recovery-run-archive.js";

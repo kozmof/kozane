@@ -81,8 +81,11 @@ inputs, bindings, sequence strings and provenance. Trusted archive descriptors
 can be registered with all four original source bindings. Catalog verification
 rechecks all five expectations after hashing. The Node host can retain
 [saved archive payloads](../../docs/shared-recovery-action-archive-payloads.md)
-after validating all four saved sources. Execution and effect retention for
-additional roots remain pending.
+after validating all four saved sources.
+[Run archives](../../docs/shared-recovery-run-archives.md) bind additional roots'
+origin, rebase and authoritative runs to those originals. They check each run's
+independent context and both SQL endpoints while preserving current selected
+contents. Durable run storage and broader image protection remain pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

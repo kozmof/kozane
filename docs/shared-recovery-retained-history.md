@@ -114,8 +114,9 @@ bundle publication remain pending. The production log format and authority polic
 remain subject to the [adapter verification gate](action-capture-prototype.md).
 
 [Action archives](shared-recovery-action-archives.md) prepare original records
-for additional roots. Connecting their executions and effects to this retained
-history format remains pending.
+for additional roots. [Run archives](shared-recovery-run-archives.md) bind their
+independent executions and effects to those original expectations in a separate
+format. This retained-history format continues to cover selected roots.
 
 ## Retain trusted descriptors
 

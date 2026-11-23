@@ -16,6 +16,7 @@ import {
   parseSharedRecoveryExecutionHistory,
   sharedRecoveryExecutionAssetManifest,
   type SharedRecoveryExecutionHistory,
+  type SharedRecoveryExecutionCheckpoint,
 } from "./shared-recovery-executions.js";
 import {
   parseSharedRecoveryActionCheckpoint,
@@ -24,6 +25,7 @@ import {
   requireRecoveryActionOriginals,
   type SharedRecoveryActionCheckpoint,
   type SharedRecoveryActionHistory,
+  type SharedRecoveryActionRecord,
 } from "./shared-recovery-actions.js";
 import {
   parseSharedRecoveryHistoryImages,
@@ -77,12 +79,13 @@ function source(input: unknown): SharedRecoveryEffectSetSource {
     throw new SharedRecoveryError("Invalid retained recovery effect-set source");
   return input;
 }
-function selection(
+export function parseRecoveryRetainedSelection(
   input: unknown,
-  checkpoint: SharedRecoveryActionCheckpoint,
+  checkpoint: SharedRecoveryExecutionCheckpoint,
+  rootIds: readonly string[] = checkpoint.selection.effectSets.map(({ rootId }) => rootId),
 ): SharedRecoveryRetainedSelection {
   const value = fields(input, ["effectSets"]);
-  const roots = new Set(checkpoint.checkpoint.selection.effectSets.map(({ rootId }) => rootId));
+  const roots = new Set(rootIds);
   const seen = new Map<string, SharedRecoveryRetainedSelection["effectSets"][number]>();
   const effectSets = array(value.effectSets).map((input) => {
     const value = fields(input, [
@@ -106,14 +109,13 @@ function selection(
     seen.set(entry.id, entry);
     return entry;
   });
-  for (const [index, current] of checkpoint.checkpoint.selection.effectSets.entries()) {
+  for (const [index, current] of checkpoint.selection.effectSets.entries()) {
     const retained = seen.get(current.id);
     if (
       !retained ||
       retained.rootId !== current.rootId ||
       retained.executionCount !== current.executionCount ||
-      retained.effectCount !==
-        checkpoint.checkpoint.checkpoint.selection.effectSets[index].effectCount
+      retained.effectCount !== checkpoint.checkpoint.selection.effectSets[index].effectCount
     )
       throw new SharedRecoveryError(
         "Retained inventory does not cover the selected execution history",
@@ -168,25 +170,33 @@ export function parseSharedRecoveryRetainedHistory(input: unknown): SharedRecove
     throw new SharedRecoveryError("Unsupported retained recovery history version");
   const checkpoint = parseSharedRecoveryActionCheckpoint(value.checkpoint);
   const identity = parseLocalRecoveryIdentity(checkpoint.checkpoint.checkpoint.identity);
-  const selected = selection(value.selection, checkpoint),
-    expected = new Map(selected.effectSets.map((entry) => [entry.id, entry]));
-  const sets = new Map<string, SharedRecoveryRetainedSet>();
-  for (const input of array(value.effectSets)) {
-    const value = fields(input, ["id", "rootId", "source", "history", "executions"]),
-      key = id(value.id),
-      wanted = expected.get(key);
-    if (!wanted || sets.has(key))
-      throw new SharedRecoveryError("Unselected or duplicate retained recovery set");
-    sets.set(key, retainedSet(input, wanted, identity));
-  }
-  if (sets.size !== selected.effectSets.length)
-    throw new SharedRecoveryError("Missing retained recovery set");
+  const selected = parseRecoveryRetainedSelection(value.selection, checkpoint.checkpoint);
   return Object.freeze({
     version: SHARED_RECOVERY_RETAINED_HISTORY_VERSION,
     checkpoint,
     selection: selected,
-    effectSets: Object.freeze(selected.effectSets.map(({ id }) => sets.get(id)!)),
+    effectSets: parseRecoveryRetainedSets(value.effectSets, selected, identity),
   });
+}
+/** Internal owned per-run parser shared with broader archives. */
+export function parseRecoveryRetainedSets(
+  input: unknown,
+  selected: SharedRecoveryRetainedSelection,
+  identity: LocalRecoveryIdentity,
+) {
+  const expected = new Map(selected.effectSets.map((entry) => [entry.id, entry]));
+  const sets = new Map<string, SharedRecoveryRetainedSet>();
+  for (const entry of array(input)) {
+    const value = fields(entry, ["id", "rootId", "source", "history", "executions"]),
+      key = id(value.id),
+      wanted = expected.get(key);
+    if (!wanted || sets.has(key))
+      throw new SharedRecoveryError("Unselected or duplicate retained recovery set");
+    sets.set(key, retainedSet(entry, wanted, identity));
+  }
+  if (sets.size !== selected.effectSets.length)
+    throw new SharedRecoveryError("Missing retained recovery set");
+  return Object.freeze(selected.effectSets.map(({ id }) => sets.get(id)!));
 }
 /** Historical expectations remain inspectable metadata. Actual retained contexts require the bundled schema. */
 export function parseSharedRecoveryRetainedCheckpoint(
@@ -204,7 +214,7 @@ export function parseSharedRecoveryRetainedCheckpoint(
   return Object.freeze({
     version: SHARED_RECOVERY_RETAINED_CHECKPOINT_VERSION,
     checkpoint,
-    selection: selection(value.selection, checkpoint),
+    selection: parseRecoveryRetainedSelection(value.selection, checkpoint.checkpoint),
     byteLength: integer(value.byteLength, 1),
     sha256: value.sha256,
   });
@@ -218,7 +228,16 @@ function relations(
   executions: SharedRecoveryExecutionHistory,
   history: SharedRecoveryHistoryPayload,
 ) {
-  const checkpoint = payload.checkpoint;
+  requireRecoveryRetainedSourceRelations(payload.checkpoint, originals, executions, history);
+  requireRecoveryRetainedRelations(payload.effectSets, originals.actions, executions, history);
+}
+/** Internal current-source binding check shared with broader archives. */
+export function requireRecoveryRetainedSourceRelations(
+  checkpoint: SharedRecoveryActionCheckpoint,
+  originals: SharedRecoveryActionHistory,
+  executions: SharedRecoveryExecutionHistory,
+  history: SharedRecoveryHistoryPayload,
+) {
   if (
     !same(originals.checkpoint, checkpoint.checkpoint) ||
     !same(originals.selection, checkpoint.selection) ||
@@ -228,9 +247,16 @@ function relations(
     !same(history.selection, checkpoint.checkpoint.checkpoint.selection)
   )
     throw new SharedRecoveryError("Retained recovery original source binding mismatch");
-  for (const set of payload.effectSets)
-    requireRecoveryActionOriginals(originals.actions, set.executions);
-  const retained = new Map(payload.effectSets.map((set) => [set.id, set]));
+}
+/** Internal relation checks use complete originals supplied by either retained format. */
+export function requireRecoveryRetainedRelations(
+  effectSets: readonly SharedRecoveryRetainedSet[],
+  actions: readonly SharedRecoveryActionRecord[],
+  executions: SharedRecoveryExecutionHistory,
+  history: SharedRecoveryHistoryPayload,
+) {
+  for (const set of effectSets) requireRecoveryActionOriginals(actions, set.executions);
+  const retained = new Map(effectSets.map((set) => [set.id, set]));
   let before = history.history.baseline.projection;
   for (const [index, selected] of history.history.effectSets.entries()) {
     const set = retained.get(selected.id)!;
@@ -259,7 +285,13 @@ async function requireContents(
     executions,
     history,
   );
-  for (const set of payload.effectSets)
+  await requireRecoveryRetainedContents(payload.effectSets);
+}
+/** Internal per-run hash checks after all caller-owned inputs are copied. */
+export async function requireRecoveryRetainedContents(
+  effectSets: readonly SharedRecoveryRetainedSet[],
+) {
+  for (const set of effectSets)
     await requireSharedRecoveryCheckpoint(
       set.history,
       set.executions.checkpoint,
@@ -348,13 +380,21 @@ export async function validateSharedRecoveryRetainedHistory(
     executions,
     history,
   );
-  if (!payload.effectSets.length)
+  await validateRecoveryRetainedSets(createDatabase, payload.effectSets, history);
+  return payload;
+}
+/** Internal endpoint validation shared by selected-root and broader run archives. */
+export async function validateRecoveryRetainedSets(
+  createDatabase: () => Promise<DB>,
+  effectSets: readonly SharedRecoveryRetainedSet[],
+  history: SharedRecoveryHistoryPayload,
+) {
+  if (!effectSets.length || !history.history.effectSets.length)
     await validateSharedRecoveryProjection(createDatabase, history.history.baseline.projection);
-  for (const set of payload.effectSets) {
+  for (const set of effectSets) {
     await validateSharedRecoveryProjection(createDatabase, set.history.history.baseline.projection);
     await validateSharedRecoveryProjection(createDatabase, after(set));
   }
-  return payload;
 }
 /** Own per-run image metadata without invoking transport hooks. Selection and coverage need the retained history. */
 export function parseSharedRecoveryRetainedImages(input: unknown): SharedRecoveryRetainedImages {
@@ -373,8 +413,14 @@ export function sharedRecoveryRetainedAssetManifest(
   input: unknown,
   images: unknown,
 ): AssetManifest {
-  const payload = parseSharedRecoveryRetainedHistory(input),
-    entries = parseSharedRecoveryRetainedImages(images).effectSets;
+  return recoveryRetainedAssetManifest(parseSharedRecoveryRetainedHistory(input), images);
+}
+/** Internal collector checks already parsed run inventories and owns supplied image metadata. */
+export function recoveryRetainedAssetManifest(
+  payload: Pick<SharedRecoveryRetainedHistory, "selection" | "effectSets">,
+  images: unknown,
+) {
+  const entries = parseSharedRecoveryRetainedImages(images).effectSets;
   if (
     !same(
       entries.map(({ id }) => id),

@@ -162,6 +162,17 @@ import {
   parseSharedRecoveryActionArchiveCheckpointRecord,
   requireStoredSharedRecoveryActionArchiveCheckpoint,
   type SharedRecoveryActionArchiveCheckpointBinding,
+  SHARED_RECOVERY_RUN_ARCHIVE_VERSION,
+  SHARED_RECOVERY_RUN_ARCHIVE_CHECKPOINT_VERSION,
+  describeSharedRecoveryRunArchive,
+  parseSharedRecoveryRunArchive,
+  parseSharedRecoveryRunArchiveCheckpoint,
+  requireSharedRecoveryRunArchiveCheckpoint,
+  validateSharedRecoveryRunArchive,
+  sharedRecoveryRunArchiveAssetManifest,
+  type SharedRecoveryRunArchive,
+  type SharedRecoveryRunArchiveCheckpoint,
+  type SharedRecoveryRunArchiveSources,
 } from "@kozane/core/recovery";
 import { cardTable } from "@kozane/core/schema";
 import {
@@ -561,6 +572,47 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
         result,
         savedPayload,
       );
+      const runArchiveVersion: 1 = SHARED_RECOVERY_RUN_ARCHIVE_VERSION;
+      const runArchiveCheckpointVersion: 1 = SHARED_RECOVERY_RUN_ARCHIVE_CHECKPOINT_VERSION;
+      void runArchiveVersion;
+      void runArchiveCheckpointVersion;
+      const runArchiveSources: SharedRecoveryRunArchiveSources = {
+        ...archiveSources,
+        actionArchive: verifiedArchive,
+      };
+      const runArchive = await describeSharedRecoveryRunArchive({
+        ...runArchiveSources,
+        checkpoint: archiveCheckpoint,
+        selection: retainedSelection,
+        effectSets: [retainedSet],
+      });
+      const runArchivePayload: SharedRecoveryRunArchive = parseSharedRecoveryRunArchive(
+        runArchive.payload,
+      );
+      const runArchiveCheckpoint: SharedRecoveryRunArchiveCheckpoint =
+        parseSharedRecoveryRunArchiveCheckpoint(runArchive.checkpoint);
+      const verifiedRunArchive: SharedRecoveryRunArchive =
+        await requireSharedRecoveryRunArchiveCheckpoint(
+          runArchivePayload,
+          runArchiveCheckpoint,
+          parsedIdentity,
+          runArchiveSources,
+        );
+      void validateSharedRecoveryRunArchive(
+        async () => db,
+        verifiedRunArchive,
+        runArchiveCheckpoint,
+        parsedIdentity,
+        runArchiveSources,
+      );
+      void sharedRecoveryRunArchiveAssetManifest(verifiedRunArchive, retainedImages).entries;
+      // @ts-expect-error Run archive inventories are immutable.
+      runArchiveCheckpoint.selection.effectSets.push(retainedSelection.effectSets[0]);
+      // @ts-expect-error Run archive contexts are immutable.
+      verifiedRunArchive.effectSets[0].rootId = "other";
+      // @ts-expect-error Run archive source payloads include the broader original archive.
+      const missingArchiveSource: SharedRecoveryRunArchiveSources = archiveSources;
+      void missingArchiveSource;
       // @ts-expect-error Retained provenance has a closed vocabulary.
       const invalidSource: SharedRecoveryEffectSetSource = "future";
       void invalidSource;

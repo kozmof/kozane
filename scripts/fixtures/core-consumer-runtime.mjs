@@ -367,6 +367,128 @@ assert.deepEqual(
   { version: 1, entries: [] },
 );
 assert.equal(typeof recovery.validateSharedRecoveryRetainedHistory, "function");
+const archivedInvocation = {
+  id: "unselected-root",
+  kind: "future.unselected",
+  contractVersion: 77,
+  input: { text: "Archived 🪁" },
+};
+const archivedHistory = await recovery.describeSharedRecoveryHistory(
+  {
+    baseline: { id: "unselected-before", projection: sharedProjection },
+    effectSets: [{ id: "unselected-origin", effects: [] }],
+  },
+  sharedIdentity,
+  { baselineId: "unselected-before", effectSets: [{ id: "unselected-origin", effectCount: 0 }] },
+);
+const archivedExecutions = await recovery.describeSharedRecoveryExecutions({
+  checkpoint: archivedHistory.checkpoint,
+  sharedHistory: archivedHistory.payload,
+  selection: {
+    baselineId: "unselected-before",
+    effectSets: [{ id: "unselected-origin", rootId: "unselected-root", executionCount: 1 }],
+  },
+  effectSets: [
+    {
+      id: "unselected-origin",
+      invocation: archivedInvocation,
+      generated: {},
+      executions: [{ ...archivedInvocation, parentId: null, executionOrd: 0, generated: {} }],
+      effects: [],
+    },
+  ],
+});
+const runArchiveSources = { ...actionArchiveSources, actionArchive: actionArchive.payload };
+const runArchive = await recovery.describeSharedRecoveryRunArchive({
+  ...runArchiveSources,
+  checkpoint: actionArchive.checkpoint,
+  selection: {
+    effectSets: [
+      {
+        id: "unselected-origin",
+        rootId: "unselected-root",
+        source: "origin",
+        baselineId: "unselected-before",
+        effectCount: 0,
+        executionCount: 1,
+      },
+      ...retainedDescription.payload.selection.effectSets,
+    ],
+  },
+  effectSets: [
+    {
+      id: "unselected-origin",
+      rootId: "unselected-root",
+      source: "origin",
+      history: archivedHistory.payload,
+      executions: archivedExecutions.payload,
+    },
+    ...retainedDescription.payload.effectSets,
+  ],
+});
+assert.equal(runArchive.payload.version, recovery.SHARED_RECOVERY_RUN_ARCHIVE_VERSION);
+assert.equal(
+  runArchive.checkpoint.version,
+  recovery.SHARED_RECOVERY_RUN_ARCHIVE_CHECKPOINT_VERSION,
+);
+assert.equal(
+  runArchive.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(runArchive.payload), "utf8"),
+);
+assert.equal(
+  runArchive.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(runArchive.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(recovery.parseSharedRecoveryRunArchive(runArchive.payload), runArchive.payload);
+assert.deepEqual(
+  recovery.parseSharedRecoveryRunArchiveCheckpoint(runArchive.checkpoint),
+  runArchive.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryRunArchiveCheckpoint(
+    runArchive.payload,
+    runArchive.checkpoint,
+    sharedIdentity,
+    runArchiveSources,
+  ),
+  runArchive.payload,
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryRunArchiveCheckpoint(
+    runArchive.payload,
+    { ...runArchive.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    runArchiveSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(
+  recovery.sharedRecoveryRunArchiveAssetManifest(runArchive.payload, {
+    effectSets: [
+      {
+        id: "unselected-origin",
+        history: {
+          baseline: { id: "unselected-before", manifest: { version: 1, entries: [] } },
+          effectSets: [{ id: "unselected-origin", manifest: { version: 1, entries: [] } }],
+        },
+      },
+      { id: "empty", history: sharedHistoryImages },
+    ],
+  }),
+  { version: 1, entries: [] },
+);
+assert.equal(typeof recovery.validateSharedRecoveryRunArchive, "function");
+for (const name of [
+  "parseRecoveryRetainedSelection",
+  "parseRecoveryRetainedSets",
+  "requireRecoveryRetainedSourceRelations",
+  "requireRecoveryRetainedRelations",
+  "requireRecoveryRetainedContents",
+  "validateRecoveryRetainedSets",
+  "recoveryRetainedAssetManifest",
+])
+  assert.equal(name in recovery, false);
+
 assert.deepEqual(
   recovery.sharedRecoveryExecutionAssetManifest(executionDescription.payload, sharedHistoryImages),
   { version: 1, entries: [] },

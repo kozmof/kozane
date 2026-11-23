@@ -118,10 +118,11 @@ Baseline, full effect and resolved execution images remain separate requirements
 Archives prepare first-recorded actions for additional roots and retain trusted
 catalog expectations. The Node host can retain
 [saved archive payloads](shared-recovery-action-archive-payloads.md) after validating
-all four saved sources and all five original catalog expectations. Execution and
-effect retention for additional roots, row installation and complete bundle
-publication remain pending. Existing saved original and retained-history formats
+all four saved sources and all five original catalog expectations.
+[Run archives](shared-recovery-run-archives.md) prepare independent execution and
+effect contexts for these additional roots. Their durable storage, row
+installation and complete bundle publication remain pending. Existing saved original and retained-history formats
 still cover roots in the current selected checkpoint.
-Connecting broader archives to durable history retention, manifests and image
+Connecting broader run archives to catalogs, files, manifests and image
 protection remains pending. Production capture remains subject to the
 [adapter verification gate](action-capture-prototype.md).

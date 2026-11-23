@@ -94,7 +94,8 @@ with matching bytes. The immutable result contains `payload` and the original
 
 ## Continue bundle preparation
 
-Saved archives preserve broader original-action records. Execution and effect
-retention for additional roots, their image protection, complete bundle
-publication and installation remain pending. These helpers do not select runs
+Saved archives preserve broader original-action records.
+[Run archives](shared-recovery-run-archives.md) prepare independent executions and
+effects for additional roots. Durable run storage, broader image protection,
+complete bundle publication and installation remain pending. These helpers do not select runs
 or invoke handlers. Startup does not automatically repeat filesystem work.
