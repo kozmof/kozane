@@ -18,6 +18,7 @@ import {
   parseSharedRecoveryActionCheckpointRecord,
   parseSharedRecoveryRetainedCheckpointRecord,
   parseSharedRecoveryActionArchiveCheckpointRecord,
+  parseSharedRecoveryRunArchiveCheckpointRecord,
   parseRetainedRecoveryAssetCheckpointRecord,
 } from "@kozane/core/recovery";
 
@@ -28,6 +29,17 @@ import {
 export function validateDumpRefs(tables: TableRows): void {
   for (const row of tables.local_recovery_action_archives)
     parseSharedRecoveryActionArchiveCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+      row.local_descriptor,
+    );
+  for (const row of tables.local_recovery_run_archives)
+    parseSharedRecoveryRunArchiveCheckpointRecord(
       {
         workspaceId: row.workspace_id,
         deviceId: row.device_id,

@@ -92,6 +92,39 @@ exact tagged read-back and rolls temporary rows and trigger changes back before
 success. Cleanup and outer commit failures refuse success. Validation never
 selects archived runs, invokes handlers or installs live rows.
 
+## Retain trusted run descriptors
+
+Register independently established expectations with
+`rememberSharedRecoveryRunArchiveCheckpoint(db, checkpoint)`. Use
+`rememberSharedRecoveryRunArchiveCheckpointInTx` to share a caller's transaction.
+Registration requires all five matching original source catalogs, including the
+action archive. It retains the exact original local descriptor alongside the run
+expectation in `local_recovery_run_archives`.
+
+The workspace, device, epoch and checkpoint key is immutable. Identical
+registration preserves its timestamp. Changed contents, inventory or source
+bindings require a new key. Registration stores metadata without payload bytes,
+SQL endpoint validation or image protection.
+
+Use `requireStoredSharedRecoveryRunArchiveCheckpoint(catalog, input,
+expectedIdentity, sources)` for catalog-backed content verification. It owns all
+inputs before the first catalog read, resolves the run expectation and all five
+sources in one consistent read boundary, hashes outside it and rechecks all six
+original expectations afterward. Missing, changed and coherently replaced
+bindings refuse verification.
+
+`readSharedRecoveryRunArchiveCheckpoint`,
+`inspectSharedRecoveryRunArchiveCheckpoint` and
+`parseSharedRecoveryRunArchiveCheckpointRecord` return the run descriptor and
+its original local binding. Inspection keeps historical and orphaned metadata
+readable without requiring live sources or converting timestamps through
+JavaScript dates. No source foreign keys or automatic expiration remove records.
+
+Migration 0035 adds this thirteenth local table. Shared replacement preserves it.
+Exact local snapshots and JSON export version 25 retain its metadata. Local
+validation parses every nested descriptor before SQL allocation. Import validates
+catalog metadata without loading or installing run payloads.
+
 ## Collect image requirements
 
 `sharedRecoveryRunArchiveAssetManifest(input, images)` accepts
@@ -110,6 +143,6 @@ Broader content-bound manifests and image protection remain pending.
 
 Run archives are a separate version 1 format. Existing selected-root retained
 history, catalogs and saved files retain their existing scope. Trusted run-archive
-catalogs, payload files, complete bundle publication and installation remain
-pending. Production capture remains subject to the
+descriptors can be registered locally. Run payload files, complete bundle
+publication and installation remain pending. Production capture remains subject to the
 [adapter verification gate](action-capture-prototype.md).

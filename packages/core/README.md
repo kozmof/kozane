@@ -85,7 +85,9 @@ after validating all four saved sources.
 [Run archives](../../docs/shared-recovery-run-archives.md) bind additional roots'
 origin, rebase and authoritative runs to those originals. They check each run's
 independent context and both SQL endpoints while preserving current selected
-contents. Durable run storage and broader image protection remain pending.
+contents. Trusted run descriptors can be registered locally with all five
+original source bindings. Catalog verification rechecks all six expectations
+after hashing. Run payload files and broader image protection remain pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

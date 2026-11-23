@@ -217,7 +217,7 @@ function databaseHandlers<C extends ServiceContext>(): ServiceHandlers<C> {
   };
 }
 
-/** Internal opt-in registry for schemas 19 through 34. Hosts supply local recovery explicitly. */
+/** Internal opt-in registry for schemas 19 through 35. Hosts supply local recovery explicitly. */
 export function createServiceActionRegistryV1<C extends ServiceContext = ServiceContext>(
   recoveryHandlers: LocalRecoveryHandlersV1<C>,
 ) {
@@ -229,7 +229,7 @@ export function createServiceActionRegistryV1<C extends ServiceContext = Service
       throw new TypeError(`Unexpected local recovery handler: ${kind}`);
   }
   const registry = createCompositionRegistryV1<C>(
-    [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34],
+    [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35],
     {
       ...recoveryHandlers,
       ...databaseHandlers<C>(),

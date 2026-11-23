@@ -149,6 +149,7 @@ export async function sharedRecoveryRunArchiveFixture() {
     images.effectSets.splice(1, 0, image);
   }
   return {
+    localCheckpoint: original.localCheckpoint,
     checkpoint: archived.checkpoint,
     selection: { effectSets: inventory },
     effectSets,

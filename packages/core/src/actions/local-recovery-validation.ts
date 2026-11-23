@@ -1,3 +1,4 @@
+import { parseSharedRecoveryRunArchiveCheckpointRecord } from "./shared-recovery-run-archive-store.js";
 /** Internal isolated SQL validation. This boundary never installs a live local snapshot. */
 import { sql } from "drizzle-orm";
 import { withTx, type DB } from "../database.js";
@@ -243,6 +244,26 @@ export async function validateLocalRecoverySnapshot(
           return value[1];
         };
         parseSharedRecoveryActionArchiveCheckpointRecord(
+          {
+            workspaceId: text("workspace_id"),
+            deviceId: text("device_id"),
+            epochId: text("epoch_id"),
+            checkpointId: text("checkpoint_id"),
+          },
+          text("descriptor"),
+          text("local_descriptor"),
+        );
+      }
+  for (const table of snapshot.tables)
+    if (table.name === "local_recovery_run_archives")
+      for (const row of table.rows) {
+        const text = (column: string) => {
+          const value = row[column];
+          if (value[0] !== "text")
+            throw new LocalRecoveryError(`Stored archive checkpoint requires TEXT: ${column}`);
+          return value[1];
+        };
+        parseSharedRecoveryRunArchiveCheckpointRecord(
           {
             workspaceId: text("workspace_id"),
             deviceId: text("device_id"),

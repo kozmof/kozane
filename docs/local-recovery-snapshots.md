@@ -34,6 +34,7 @@ tables, including explicit empty tables.
 | `local_recovery_retained_history` | Retained-run descriptors, original local bindings and registration timestamps |
 | `local_recovery_retained_assets` | Retained-manifest descriptors with exact source bindings and registration timestamps |
 | `local_recovery_action_archives` | Broader original-action archive descriptors, original local bindings and registration timestamps |
+| `local_recovery_run_archives` | Broader run descriptors, original local bindings and registration timestamps |
 
 SQL encodes values before driver conversion. The version 1 tagged row codec keeps
 signed 64-bit integers as decimal strings and preserves finite REAL bits, TEXT,
@@ -129,7 +130,7 @@ Complete bundle publication and activation remain pending.
 Known historical schema descriptors remain readable as metadata. Loading their
 snapshot rows still requires explicit schema compatibility. Unknown schema IDs
 and malformed stored descriptors are refused. The public core entry exports the
-descriptor parsers and types for host bookkeeping. JSON version 24 includes
+descriptor parsers and types for host bookkeeping. JSON version 25 includes
 catalog records, and older supported dumps import with an empty catalog when it
 is absent. Import validates descriptor shape and row identity without installing
 snapshots.
@@ -178,21 +179,28 @@ Migration 0032 adds
 [trusted retained-history expectations](shared-recovery-retained-history.md#retain-trusted-descriptors).
 This tenth local table binds the complete per-run inventory to all four original
 sources. Shared replacement preserves it. Local validation parses every nested
-descriptor before SQL allocation, and JSON export version 24 preserves current,
+descriptor before SQL allocation, and JSON export version 25 preserves current,
 historical and orphaned metadata.
 
 Migration 0033 adds
 [trusted retained-manifest expectations](retained-recovery-asset-checkpoints.md#retain-trusted-descriptors).
 This eleventh local table binds per-run and original-input requirements to all
 six original sources. Shared replacement preserves it. Local validation parses
-every nested descriptor before SQL allocation, and JSON export version 24
+every nested descriptor before SQL allocation, and JSON export version 25
 preserves historical and orphaned records.
 
 Migration 0034 adds
 [trusted action-archive expectations](shared-recovery-action-archives.md#retain-trusted-archive-descriptors).
 This twelfth local table binds broader root and action inventories to all four
 original sources. Shared replacement preserves it. Local validation parses its
-nested descriptors before SQL allocation. JSON export version 24 preserves
+nested descriptors before SQL allocation. JSON export version 25 preserves
+historical and orphaned records.
+
+Migration 0035 adds
+[trusted run-archive expectations](shared-recovery-run-archives.md#retain-trusted-run-descriptors).
+This thirteenth local table binds broader run inventories to all five original
+sources. Shared replacement preserves it. Local validation parses its nested
+descriptors before SQL allocation, and JSON export version 25 preserves
 historical and orphaned records.
 
 ## Validate against a retained catalog binding

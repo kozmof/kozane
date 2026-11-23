@@ -199,7 +199,7 @@ shared restoration preserves them. Pending diagnostics exclude them.
 
 The journal has no foreign keys to shared rows. Shared action capture, isolated
 validation and shared replacement exclude it alongside `taskspace_local`.
-Recovery JSON version 24 includes both tables, local image upload staging,
+Recovery JSON version 25 includes both tables, local image upload staging,
 manifest owners, checkpoint descriptors, shared-history descriptor bindings and
 asset descriptor expectations, execution descriptor bindings and original-action
 descriptor bindings,

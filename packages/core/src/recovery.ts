@@ -211,3 +211,12 @@ export {
   type SharedRecoveryRunArchiveCheckpoint,
   type SharedRecoveryRunArchiveSources,
 } from "./actions/shared-recovery-run-archive.js";
+export {
+  parseSharedRecoveryRunArchiveCheckpointRecord,
+  readSharedRecoveryRunArchiveCheckpoint,
+  inspectSharedRecoveryRunArchiveCheckpoint,
+  rememberSharedRecoveryRunArchiveCheckpoint,
+  rememberSharedRecoveryRunArchiveCheckpointInTx,
+  requireStoredSharedRecoveryRunArchiveCheckpoint,
+  type SharedRecoveryRunArchiveCheckpointBinding,
+} from "./actions/shared-recovery-run-archive-store.js";
