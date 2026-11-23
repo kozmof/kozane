@@ -1,5 +1,6 @@
 /** Undo schema 20 only when building historical migration fixtures. */
 export const UNDO_TASKSPACE_LOCAL_SQL = [
+  "DROP TABLE local_recovery_run_assets",
   "DROP TABLE local_recovery_run_archives",
   "DROP TABLE local_recovery_action_archives",
   "DROP TABLE local_recovery_retained_assets",

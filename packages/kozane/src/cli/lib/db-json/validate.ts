@@ -20,6 +20,7 @@ import {
   parseSharedRecoveryActionArchiveCheckpointRecord,
   parseSharedRecoveryRunArchiveCheckpointRecord,
   parseRetainedRecoveryAssetCheckpointRecord,
+  parseRunArchiveAssetCheckpointRecord,
 } from "@kozane/core/recovery";
 
 /**
@@ -84,6 +85,16 @@ export function validateDumpRefs(tables: TableRows): void {
     );
   for (const row of tables.local_recovery_retained_assets)
     parseRetainedRecoveryAssetCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+    );
+  for (const row of tables.local_recovery_run_assets)
+    parseRunArchiveAssetCheckpointRecord(
       {
         workspaceId: row.workspace_id,
         deviceId: row.device_id,

@@ -121,7 +121,7 @@ readable without requiring live sources or converting timestamps through
 JavaScript dates. No source foreign keys or automatic expiration remove records.
 
 Migration 0035 adds this thirteenth local table. Shared replacement preserves it.
-Exact local snapshots and JSON export version 25 retain its metadata. Local
+Exact local snapshots and JSON export version 26 retain its metadata. Local
 validation parses every nested descriptor before SQL allocation. Import validates
 catalog metadata without loading or installing run payloads.
 

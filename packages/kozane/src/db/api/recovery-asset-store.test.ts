@@ -347,7 +347,7 @@ it("preserves catalog rows through shared restoration and exact local snapshot v
     { ...identity, checkpointId: "later" },
     async () => selection,
   );
-  expect(snapshot.tables).toHaveLength(13);
+  expect(snapshot.tables).toHaveLength(14);
   expect(
     snapshot.tables.find(({ name }) => name === "local_recovery_assets")!.rows[0].created_at,
   ).toEqual(["integer", "9223372036854775807"]);
@@ -425,6 +425,7 @@ it.each([false, true])(
     const f = await fixture(false);
     const migration = migrations.find(({ tag }) => tag === "0029_local_recovery_assets")!;
     await withMigration(f.db, async () => [
+      { sql: "DROP TABLE local_recovery_run_assets", args: [] },
       { sql: "DROP TABLE local_recovery_run_archives", args: [] },
       { sql: "DROP TABLE local_recovery_action_archives", args: [] },
       { sql: "DROP TABLE local_recovery_retained_assets", args: [] },

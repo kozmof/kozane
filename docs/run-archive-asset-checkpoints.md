@@ -100,6 +100,43 @@ image verification or reservations. Use the run archive validator or
 [saved run loader](shared-recovery-run-archive-payloads.md) to validate independent
 SQL endpoints separately.
 
-Trusted manifest catalogs, saved manifest files, broader image protection and
-complete bundle publication remain pending. Existing current and selected-root
+Trusted descriptors can be registered in the catalog described below. Saved
+manifest files, broader image protection and complete bundle publication remain
+pending. Existing current and selected-root
 retained asset formats stay at version 1 and retain their existing scope.
+
+## Retain trusted descriptors
+
+Migration 0036 adds `local_recovery_run_assets`. Register trusted expectations
+with `rememberRunArchiveAssetCheckpoint(db, checkpoint)`. Use
+`rememberRunArchiveAssetCheckpointInTx` for a host-owned transaction. Registration
+stores the complete descriptor and all seven original source bindings.
+
+All seven source catalogs must be present and match those expectations. Repeating
+the same descriptor preserves its registration timestamp. Changed contents,
+inventories or bindings under the same workspace, device, epoch and checkpoint
+key are refused. The result contains `checkpoint` and `changed`. Do not register
+an expectation solely because it accompanied received data.
+
+`readRunArchiveAssetCheckpoint`, `inspectRunArchiveAssetCheckpoint` and
+`parseRunArchiveAssetCheckpointRecord` return immutable descriptors. They validate
+row identity and nested metadata without converting registration timestamps to
+JavaScript dates. Historical and orphaned records remain inspectable. There are
+no source foreign keys, automatic expiration or deletion helpers.
+
+Call `requireStoredRunArchiveAssetCheckpoint(catalog, input, expectedIdentity,
+sources)` to verify contents against the catalog. It owns the payload and all
+seven sources before the first read. It resolves the trusted descriptor and all
+source bindings in one consistent read boundary, then verifies hashes and exact
+coverage outside that boundary. Before success it rechecks all eight exact
+original expectations in a second consistent read boundary. Missing, changed or
+coherently rebound records cause failure. Equivalent descriptor formatting and
+unrelated registrations do not change an expectation.
+
+Shared capture and replacement exclude this fourteenth local table. Local
+snapshots preserve its exact rows and timestamps. Isolated local validation
+parses every nested descriptor before allocating SQL. JSON export version 26
+preserves current, historical and orphaned metadata. Earlier supported dumps
+import with an empty catalog when absent. Import validates metadata without
+loading manifest payloads or installing images. The catalog stores expectations
+without manifest payloads, image bytes or physical image protection.

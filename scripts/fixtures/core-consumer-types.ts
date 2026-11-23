@@ -179,6 +179,12 @@ import {
   parseRunArchiveAssetPayload,
   parseRunArchiveAssetCheckpoint,
   requireRunArchiveAssetCheckpoint,
+  rememberRunArchiveAssetCheckpoint,
+  rememberRunArchiveAssetCheckpointInTx,
+  readRunArchiveAssetCheckpoint,
+  inspectRunArchiveAssetCheckpoint,
+  parseRunArchiveAssetCheckpointRecord,
+  requireStoredRunArchiveAssetCheckpoint,
   type RunArchiveAssetPayload,
   type RunArchiveAssetCheckpoint,
   type RunArchiveAssetSources,
@@ -780,6 +786,24 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
         runAssetSources,
       );
       void verifiedRunAssets.manifest.entries;
+      const registeredRunAssets = await rememberRunArchiveAssetCheckpoint(db, runAssetCheckpoint);
+      const storedRunAssetDescriptor: RunArchiveAssetCheckpoint = registeredRunAssets.checkpoint;
+      const runAssetsChanged: boolean = registeredRunAssets.changed;
+      void runAssetsChanged;
+      void parseRunArchiveAssetCheckpointRecord(
+        checkpointKey,
+        JSON.stringify(storedRunAssetDescriptor),
+      );
+      void withTx(db, (tx) => rememberRunArchiveAssetCheckpointInTx(tx, storedRunAssetDescriptor));
+      void readRunArchiveAssetCheckpoint(db, checkpointKey);
+      void inspectRunArchiveAssetCheckpoint(db, checkpointKey);
+      const storedRunAssets: RunArchiveAssetPayload = await requireStoredRunArchiveAssetCheckpoint(
+        db,
+        runAssetPayload,
+        parsedIdentity,
+        runAssetSources,
+      );
+      void storedRunAssets.history;
       // @ts-expect-error Broader manifest sources require the original archive and run archive.
       const missingBroaderSources: RunArchiveAssetSources = retainedAssetSources;
       void missingBroaderSources;

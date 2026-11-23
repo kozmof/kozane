@@ -133,7 +133,7 @@ expectation.
 
 Shared capture and replacement exclude this eleventh local table. Local
 snapshots preserve its exact rows and timestamps. Isolated local validation
-parses every nested descriptor before allocating SQL. JSON export version 25
+parses every nested descriptor before allocating SQL. JSON export version 26
 preserves current, historical and orphaned metadata. Earlier supported dumps
 import with an empty catalog when absent. Import validates metadata without
 loading manifest payloads or installing images.

@@ -343,7 +343,7 @@ it("preserves archive metadata through shared restoration and exact local SQL va
     { ...identity, checkpointId: "later" },
     async () => selected,
   );
-  expect(snapshot.tables).toHaveLength(13);
+  expect(snapshot.tables).toHaveLength(14);
   expect(snapshot.tables.find(({ name }) => name === tables.archive)!.rows[0].created_at).toEqual([
     "integer",
     "9223372036854775807",
@@ -447,6 +447,7 @@ it.each([false, true])(
     const f = await fixture(false),
       migration = migrations.find((m) => m.id === "0034_local_recovery_action_archives")!;
     await withMigration(f.db, async () => [
+      { sql: "DROP TABLE local_recovery_run_assets", args: [] },
       { sql: "DROP TABLE local_recovery_run_archives", args: [] },
       { sql: "DROP TABLE local_recovery_action_archives", args: [] },
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },

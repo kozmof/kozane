@@ -99,7 +99,7 @@ JavaScript dates. `parseSharedRecoveryActionArchiveCheckpointRecord` validates
 stored record coherence before SQL allocation during local validation.
 
 Migration 0034 adds this twelfth local table. Shared replacement preserves it.
-Exact local snapshots and JSON export version 25 retain current, historical and
+Exact local snapshots and JSON export version 26 retain current, historical and
 orphaned metadata. Catalog entries do not expire automatically.
 
 ## Collect image requirements

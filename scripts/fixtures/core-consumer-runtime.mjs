@@ -538,6 +538,7 @@ const assetLocal = await recovery.describeLocalRecoverySnapshot({
     "local_recovery_retained_assets",
     "local_recovery_action_archives",
     "local_recovery_run_archives",
+    "local_recovery_run_assets",
   ].map((name) => ({ name, rows: [] })),
 });
 const assetSources = {
@@ -711,6 +712,27 @@ await assert.rejects(
 );
 assert.deepEqual(runAssets.payload.manifest, { version: 1, entries: [] });
 assert.equal("parseRunArchiveAssetSources" in recovery, false);
+assert.equal("requireSharedRecoveryRunArchiveSources" in recovery, false);
+assert.deepEqual(
+  recovery.parseRunArchiveAssetCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(runAssets.checkpoint),
+  ),
+  runAssets.checkpoint,
+);
+for (const helper of [
+  recovery.rememberRunArchiveAssetCheckpoint,
+  recovery.rememberRunArchiveAssetCheckpointInTx,
+  recovery.readRunArchiveAssetCheckpoint,
+  recovery.inspectRunArchiveAssetCheckpoint,
+  recovery.requireStoredRunArchiveAssetCheckpoint,
+])
+  assert.equal(typeof helper, "function");
 
 assert.deepEqual(
   recovery.parseRetainedRecoveryAssetCheckpointRecord(
@@ -1095,6 +1117,7 @@ try {
     "local_recovery_retained_assets",
     "local_recovery_action_archives",
     "local_recovery_run_archives",
+    "local_recovery_run_assets",
   ])
     assert.ok(sqlite.prepare("SELECT name FROM sqlite_schema WHERE name=?").get(name));
   assert.ok(

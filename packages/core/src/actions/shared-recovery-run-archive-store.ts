@@ -84,7 +84,8 @@ export function inspectSharedRecoveryRunArchiveCheckpoint(
   const key = parseLocalRecoveryCheckpointKey(input);
   return withReadTx(db, (tx) => readSharedRecoveryRunArchiveCheckpoint(tx, key));
 }
-async function requireSources(
+/** Internal source check reused by broader manifest registration and verification. */
+export async function requireSharedRecoveryRunArchiveSources(
   db: DB | Tx | ReadTx,
   binding: SharedRecoveryRunArchiveCheckpointBinding,
 ) {
@@ -134,7 +135,7 @@ export async function rememberSharedRecoveryRunArchiveCheckpointInTx(tx: Tx, inp
   if (!source)
     throw new SharedRecoveryError("Trusted original-action archive checkpoint is not registered");
   const binding = Object.freeze({ checkpoint, localCheckpoint: source.localCheckpoint });
-  await requireSources(tx, binding);
+  await requireSharedRecoveryRunArchiveSources(tx, binding);
   const existing = await readSharedRecoveryRunArchiveCheckpoint(tx, key);
   if (existing) {
     if (JSON.stringify(existing) !== JSON.stringify(binding))
@@ -159,7 +160,7 @@ async function trusted(db: DB, key: LocalRecoveryCheckpointKey) {
   return withReadTx(db, async (tx) => {
     const binding = await readSharedRecoveryRunArchiveCheckpoint(tx, key);
     if (!binding) throw new SharedRecoveryError("Trusted archive checkpoint is not registered");
-    await requireSources(tx, binding);
+    await requireSharedRecoveryRunArchiveSources(tx, binding);
     return binding;
   });
 }

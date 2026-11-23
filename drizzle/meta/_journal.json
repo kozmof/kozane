@@ -253,6 +253,13 @@
       "when": 1795440617879,
       "tag": "0035_local_recovery_run_archives",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1795472385656,
+      "tag": "0036_local_recovery_run_assets",
+      "breakpoints": true
     }
   ]
 }

@@ -90,8 +90,8 @@ original source bindings. Catalog verification rechecks all six expectations
 after hashing. The Node host can retain
 [saved run payloads](../../docs/shared-recovery-run-archive-payloads.md) after
 validating all saved sources and independent SQL endpoints.
-[Run archive asset checkpoints](../../docs/run-archive-asset-checkpoints.md) bind
-all per-run and first-recorded input requirements to those original expectations
+[Run archive asset checkpoints](../../docs/run-archive-asset-checkpoints.md) retain
+trusted descriptors in a local catalog and bind all per-run and first-recorded input requirements to those original expectations
 and the current assets. Durable manifest storage, image protection and complete
 bundles remain pending.
 

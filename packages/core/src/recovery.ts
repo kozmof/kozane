@@ -231,3 +231,11 @@ export {
   type RunArchiveAssetCheckpoint,
   type RunArchiveAssetSources,
 } from "./actions/run-archive-asset-checkpoint.js";
+export {
+  parseRunArchiveAssetCheckpointRecord,
+  readRunArchiveAssetCheckpoint,
+  inspectRunArchiveAssetCheckpoint,
+  rememberRunArchiveAssetCheckpoint,
+  rememberRunArchiveAssetCheckpointInTx,
+  requireStoredRunArchiveAssetCheckpoint,
+} from "./actions/run-archive-asset-store.js";
