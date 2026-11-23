@@ -11,11 +11,15 @@ import {
   readRecoveryAssetCheckpoint,
   readSharedRecoveryExecutionCheckpoint,
   readSharedRecoveryActionCheckpoint,
+  readSharedRecoveryRetainedCheckpoint,
+  readRetainedRecoveryAssetCheckpoint,
   type RecoveryAssetCheckpoint,
   type SharedRecoveryCheckpointBinding,
   type SharedRecoveryHistoryImages,
   type SharedRecoveryExecutionCheckpointBinding,
   type SharedRecoveryActionCheckpointBinding,
+  type SharedRecoveryRetainedCheckpointBinding,
+  type RetainedRecoveryAssetCheckpoint,
 } from "@kozane/core/recovery";
 import { lockImageAssetWork } from "../../db/api/image-upload.js";
 import { reserveAssetManifestInTx, readAssetManifest } from "../../db/api/asset-manifest.js";
@@ -23,6 +27,7 @@ import { retainImageManifestInTx } from "./image-manifest-retention.js";
 import { loadRegisteredLocalRecoveryPayload } from "./local-recovery-payload.js";
 import { loadRegisteredSharedRecoveryPayload } from "./shared-recovery-payload.js";
 import { loadRegisteredRecoveryAssetPayload } from "./recovery-asset-payload.js";
+import { loadRegisteredRetainedRecoveryAssetPayload } from "./retained-recovery-asset-payload.js";
 import { registeredLocalRecoveryImageOwner } from "./local-recovery-images.js";
 import { observe } from "./recovery-payload-files.js";
 
@@ -39,9 +44,33 @@ type Options = Omit<
         assetMaxBytes?: never;
         executionMaxBytes?: never;
         actionMaxBytes?: never;
+        retainedMaxBytes?: never;
+        retainedAssetMaxBytes?: never;
       }
-    | { assetMaxBytes: number; executionMaxBytes?: number; actionMaxBytes?: never; history?: never }
-    | { assetMaxBytes: number; executionMaxBytes: number; actionMaxBytes: number; history?: never }
+    | {
+        assetMaxBytes: number;
+        executionMaxBytes?: number;
+        actionMaxBytes?: never;
+        retainedMaxBytes?: never;
+        retainedAssetMaxBytes?: never;
+        history?: never;
+      }
+    | {
+        assetMaxBytes: number;
+        executionMaxBytes: number;
+        actionMaxBytes: number;
+        retainedMaxBytes?: never;
+        retainedAssetMaxBytes?: never;
+        history?: never;
+      }
+    | {
+        assetMaxBytes: number;
+        executionMaxBytes: number;
+        actionMaxBytes: number;
+        retainedMaxBytes: number;
+        retainedAssetMaxBytes: number;
+        history?: never;
+      }
   );
 type Prepared = {
   root: string;
@@ -52,6 +81,8 @@ type Prepared = {
   assetCheckpoint?: RecoveryAssetCheckpoint;
   executionBinding?: SharedRecoveryExecutionCheckpointBinding;
   actionBinding?: SharedRecoveryActionCheckpointBinding;
+  retainedBinding?: SharedRecoveryRetainedCheckpointBinding;
+  retainedAssetCheckpoint?: RetainedRecoveryAssetCheckpoint;
 };
 async function prepare(options: Options): Promise<Prepared> {
   const {
@@ -62,10 +93,56 @@ async function prepare(options: Options): Promise<Prepared> {
     sharedMaxBytes,
     executionMaxBytes,
     actionMaxBytes,
+    retainedMaxBytes,
+    retainedAssetMaxBytes,
   } = options;
   if (![localMaxBytes, sharedMaxBytes].every((value) => Number.isSafeInteger(value) && value > 0))
     throw new RecoveryCheckpointImagesError("Payload read limits must be positive safe integers");
   const expected = parseLocalRecoveryIdentity(options.expected);
+  if (retainedMaxBytes !== undefined || retainedAssetMaxBytes !== undefined) {
+    if (options.history !== undefined)
+      throw new RecoveryCheckpointImagesError("Retained image coverage requires saved manifests");
+    if (
+      retainedMaxBytes === undefined ||
+      retainedAssetMaxBytes === undefined ||
+      options.assetMaxBytes === undefined ||
+      executionMaxBytes === undefined ||
+      actionMaxBytes === undefined
+    )
+      throw new RecoveryCheckpointImagesError(
+        "Retained image coverage requires all saved source read limits",
+      );
+    const { payload, checkpoint } = await loadRegisteredRetainedRecoveryAssetPayload({
+      root,
+      db,
+      expected,
+      localMaxBytes,
+      sharedMaxBytes,
+      executionMaxBytes,
+      actionMaxBytes,
+      retainedMaxBytes,
+      assetMaxBytes: options.assetMaxBytes,
+      maxBytes: retainedAssetMaxBytes,
+      createValidationDatabase,
+    });
+    const retainedBinding = checkpoint.binding,
+      localCheckpoint = retainedBinding.localCheckpoint;
+    return {
+      root,
+      db,
+      binding: checkpoint.assetCheckpoint.binding,
+      manifest: payload.manifest,
+      owner: registeredLocalRecoveryImageOwner(expected),
+      assetCheckpoint: checkpoint.assetCheckpoint,
+      executionBinding: {
+        checkpoint: retainedBinding.checkpoint.checkpoint.checkpoint,
+        localCheckpoint,
+      },
+      actionBinding: { checkpoint: retainedBinding.checkpoint.checkpoint, localCheckpoint },
+      retainedBinding,
+      retainedAssetCheckpoint: checkpoint,
+    };
+  }
   if (options.assetMaxBytes !== undefined) {
     if (options.history !== undefined)
       throw new RecoveryCheckpointImagesError("Choose saved manifests or host history");
@@ -152,6 +229,18 @@ async function requireBinding(tx: Tx, prepared: Prepared) {
     if (!actions || JSON.stringify(actions) !== JSON.stringify(prepared.actionBinding))
       throw new RecoveryCheckpointImagesError("Registered action checkpoint binding changed");
   }
+  if (prepared.retainedBinding) {
+    const retained = await readSharedRecoveryRetainedCheckpoint(tx, key);
+    if (!retained || JSON.stringify(retained) !== JSON.stringify(prepared.retainedBinding))
+      throw new RecoveryCheckpointImagesError("Registered retained checkpoint binding changed");
+  }
+  if (prepared.retainedAssetCheckpoint) {
+    const assets = await readRetainedRecoveryAssetCheckpoint(tx, key);
+    if (!assets || JSON.stringify(assets) !== JSON.stringify(prepared.retainedAssetCheckpoint))
+      throw new RecoveryCheckpointImagesError(
+        "Registered retained asset checkpoint binding changed",
+      );
+  }
 }
 async function requirePayloads(prepared: Prepared) {
   const payloads = [
@@ -165,6 +254,17 @@ async function requirePayloads(prepared: Prepared) {
       : []),
     ...(prepared.actionBinding
       ? [{ area: "actions" as const, checkpoint: prepared.actionBinding.checkpoint }]
+      : []),
+    ...(prepared.retainedBinding
+      ? [{ area: "retained-history" as const, checkpoint: prepared.retainedBinding.checkpoint }]
+      : []),
+    ...(prepared.retainedAssetCheckpoint
+      ? [
+          {
+            area: "retained-asset-manifests" as const,
+            checkpoint: prepared.retainedAssetCheckpoint,
+          },
+        ]
       : []),
   ];
   for (const { area, checkpoint } of payloads) {
@@ -183,6 +283,10 @@ function result(prepared: Prepared, state: "pending" | "retained", changed: bool
     ...(prepared.assetCheckpoint ? { assetCheckpoint: prepared.assetCheckpoint } : {}),
     ...(prepared.executionBinding ? { executionBinding: prepared.executionBinding } : {}),
     ...(prepared.actionBinding ? { actionBinding: prepared.actionBinding } : {}),
+    ...(prepared.retainedBinding ? { retainedBinding: prepared.retainedBinding } : {}),
+    ...(prepared.retainedAssetCheckpoint
+      ? { retainedAssetCheckpoint: prepared.retainedAssetCheckpoint }
+      : {}),
   });
 }
 async function reserve(prepared: Prepared) {

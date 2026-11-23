@@ -94,7 +94,10 @@ row and invocation coverage before accepting the combined image requirements.
 Trusted descriptors can be registered with all six original source bindings.
 Catalog-backed verification rechecks all seven records after hashing. The Node
 host can retain [saved manifest files](../../docs/retained-recovery-asset-payloads.md)
-after validating all six saved sources. Image protection remains pending.
+after validating all six saved sources. The
+[image workflow](../../docs/recovery-checkpoint-images.md#check-saved-retained-run-images)
+can reserve and verify their combined requirements while checking all seven
+original catalog bindings and files. Complete bundles remain pending.
 
 ## Application operations
 

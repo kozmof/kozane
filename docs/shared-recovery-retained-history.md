@@ -107,7 +107,9 @@ These helpers cover roots named by the current selected execution checkpoint.
 Trusted descriptors can be retained in the local catalog described below.
 The Node host can also retain
 [saved payload files](shared-recovery-retained-payloads.md).
-Roots outside that checkpoint, protected image integration and complete recovery
+The [image workflow](recovery-checkpoint-images.md#check-saved-retained-run-images)
+can protect requirements from the saved retained manifests. Roots outside that
+checkpoint and complete recovery
 bundle publication remain pending. The production log format and authority policy
 remain subject to the [adapter verification gate](action-capture-prototype.md).
 

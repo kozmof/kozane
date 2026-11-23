@@ -105,7 +105,7 @@ including deselected rows and execution inputs. Original invocation and current
 shared/local requirements remain separate inputs to the combined manifest.
 [Retained asset checkpoints](retained-recovery-asset-checkpoints.md) prepare
 content-bound manifests for these sources. The Node host can retain
-[saved manifest files](retained-recovery-asset-payloads.md). Connecting them to
-protected image verification remains pending.
+[saved manifest files](retained-recovery-asset-payloads.md) and
+[protect their images](recovery-checkpoint-images.md#check-saved-retained-run-images).
 Installation and activation remain pending. Startup does not automatically
 repeat filesystem work.

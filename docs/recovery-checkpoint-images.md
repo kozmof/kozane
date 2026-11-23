@@ -128,6 +128,59 @@ The image owner and asset descriptor formats remain unchanged. Supply
 coverage. A retained owner does not record that coverage policy or serve as a
 receipt for complete bundle publication.
 
+## Check saved retained-run images
+
+Save the matching [retained runs](shared-recovery-retained-payloads.md) and
+[retained manifests](retained-recovery-asset-payloads.md), then supply both
+`retainedMaxBytes` and `retainedAssetMaxBytes`. This path also requires
+`assetMaxBytes`, `executionMaxBytes` and `actionMaxBytes`. All seven payload limits
+must be positive safe integers. Host `history` manifests are refused with these
+options.
+
+```ts
+const retained = await retainRegisteredRecoveryCheckpointImages({
+  root,
+  db,
+  expected,
+  localMaxBytes,
+  sharedMaxBytes,
+  executionMaxBytes,
+  actionMaxBytes,
+  assetMaxBytes,
+  retainedMaxBytes,
+  retainedAssetMaxBytes,
+  createValidationDatabase,
+});
+```
+
+Loading verifies the retained manifest and all six saved sources, including exact
+SQL checks of local and selected rows and both endpoints of every retained run.
+Each run's own manifests must cover its baseline, full effects and actual inputs.
+Original and skipped inputs retain independent coverage, as do current selected
+no-op invocations. The exact combined manifest includes current local images and
+extra host requirements. Requirements from another run cannot fill a missing
+per-record entry.
+
+The result adds the original `retainedBinding` and `retainedAssetCheckpoint`
+beside the current `assetCheckpoint`, `executionBinding` and `actionBinding`.
+All seven catalog expectations and saved files are rechecked under the image
+writer lock before and after reservation and physical image verification.
+Changed bytes, temporary evidence and missing or changed bindings cause failure.
+Failures preserve earlier pending or retained pins, including failed commits
+and changes caused by owner publication itself.
+
+The reservation commits before any image bytes are read. Images used only by
+origin or superseded runs remain protected through cleanup after earlier staging
+owners are released. Matching archived bytes can be verified without reinstalling
+them. Competing catalog and owner writes serialize with verification.
+
+The stable image owner format remains unchanged. An earlier reservation with a
+smaller current-only manifest cannot be expanded under the same checkpoint key.
+Prepare a new checkpoint identity for different requirements. This refusal
+preserves the earlier pins. Supply the retained read limits on every call that
+requires retained-run coverage. Owner state is not a durable receipt for that
+coverage policy or complete bundle publication.
+
 ## Supply host manifests
 
 Supply `history` with a baseline and an ordered `effectSets` array. Each entry
@@ -160,7 +213,8 @@ conflicting immutable names when merging requirements.
 `binding`, stable recovery `owner`, combined `manifest`, owner `state` and a
 `changed` flag. The saved-manifest path also returns `assetCheckpoint` and adds
 `executionBinding` when execution coverage is requested. Original coverage also
-returns `actionBinding`. It checks
+returns `actionBinding`. Retained-run coverage adds `retainedBinding` and
+`retainedAssetCheckpoint`. It checks
 the required catalog bindings and published files under the image writer lock
 before and after owner publication. Missing or changed payload bytes and any
 temporary evidence refuse reservation. This operation does not read image bytes.

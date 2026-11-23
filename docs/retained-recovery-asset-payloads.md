@@ -100,7 +100,9 @@ original `checkpoint`. Loading performs no filesystem writes.
 ## Continue bundle preparation
 
 These files retain metadata for roots in the selected recovery checkpoint.
-They do not read image bytes or reserve images. Connecting saved retained
-manifests to protected image verification, covering additional roots and
-publishing complete bundles remain pending. Installation and activation remain
+Saving and loading do not read image bytes or reserve images. Use the
+[retained image workflow](recovery-checkpoint-images.md#check-saved-retained-run-images)
+to reserve and verify their requirements against all seven original expectations.
+Covering additional roots and publishing complete bundles remain pending.
+Installation and activation remain
 pending. Startup does not automatically repeat filesystem work.

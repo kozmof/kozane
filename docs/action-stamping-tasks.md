@@ -413,7 +413,7 @@ per-run contexts. Selected runs must match the current materialization, while
 deselected runs reconstruct independently. Content checks bind originals,
 executions and shared rows. Optional isolated SQL validation checks each run's
 before and after states, and per-run manifests cover all rows and actual inputs.
-Additional roots, protected image integration and complete bundles remain pending.
+Additional roots and complete bundles remain pending.
 See [retained recovery history](shared-recovery-retained-history.md).
 
 Migration 0032 now retains trusted retained-history descriptors with the exact
@@ -432,15 +432,15 @@ each retained run undergo content and exact SQL validation. All five original
 catalog bindings and four source files remain checked around file work. Native
 tests cover independent origin and superseded contexts, skipped executions,
 changed evidence, unsafe paths, large inputs, competing writers and publication
-or commit failures. Retained manifests, protected images and complete bundles
-remain pending. See [saved retained history](shared-recovery-retained-payloads.md).
+or commit failures. Complete bundles remain pending. See
+[saved retained history](shared-recovery-retained-payloads.md).
 
 Core now prepares content-bound retained asset payloads with per-run manifests,
 original-input requirements and the exact current asset descriptor. Verification
 checks all six source payloads and requires complete baseline, effect and actual
 invocation coverage in each run's own manifests. Original and selected inputs
 also retain independent coverage, while the combined manifest preserves current
-local requirements and host extras. Protected image integration remains pending. See
+local requirements and host extras. See
 [retained asset checkpoints](retained-recovery-asset-checkpoints.md).
 
 Migration 0033 now retains trusted retained-manifest descriptors with all six
@@ -450,7 +450,7 @@ eleventh local table survives shared replacement. Local validation and version
 23 JSON exports preserve historical and orphaned metadata without timestamp
 conversion. Native and Node WASM tests cover changed bindings, coherent
 replacement, migration and rollback. Native tests cover competing registrations
-and JSON import rollback. Protected images remain pending.
+and JSON import rollback.
 
 The Node host now saves and reopens registered retained manifests through synced
 exclusive publication. Independent limits bound the manifest and all six source
@@ -459,9 +459,19 @@ six saved sources undergo content and isolated SQL validation before coverage
 verification. The original bindings and files remain checked around publication
 and reopening. Native tests cover per-run and original image requirements,
 matching-hash coverage gaps, large manifests, unsafe paths, changed evidence,
-competing writers and publication or commit failures. Protected image integration
-and complete bundles remain pending. See
+competing writers and publication or commit failures. Complete bundles remain
+pending. See
 [saved retained manifests](retained-recovery-asset-payloads.md).
+
+The image workflow now accepts retained-history and retained-manifest read limits
+with all five earlier source limits. It verifies the saved retained manifest and
+all six sources, then carries all seven original catalog bindings and files
+through image reservation and verification. Pending protection commits before
+physical reads. Native tests cover origin and superseded images, archived bytes,
+cleanup handoff, metadata and file changes, failed commits and competing writers.
+The stable checkpoint owner refuses changed requirements while preserving earlier
+pins. Complete bundles and additional roots remain pending. See
+[retained-run image protection](recovery-checkpoint-images.md#check-saved-retained-run-images).
 
 ## Version one
 
@@ -579,6 +589,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Bind canonical per-run retained manifests and first-recorded input requirements to the exact retained-history binding and current asset descriptor. Verify all six source payloads, independent baseline and effect coverage for every run, original and selected invocation coverage, and the exact combined manifest including local requirements and host extras. Own all sources before hashing and preserve historical descriptors as metadata.
 - [x] Persist trusted retained-manifest descriptors with exact original retained-history, local and current asset bindings. Require all six live source catalogs, recheck all seven expectations after content verification and preserve historical and orphaned metadata through shared replacement, isolated local validation and version 23 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered retained manifests through synced exclusive publication with independent read limits for the manifest and all six saved sources. Check all seven original catalog bindings, validate exact source SQL states and per-record coverage, recheck source and manifest files and preserve interrupted evidence after unsafe paths, changed bytes, competing writers and publication or commit failures.
+- [x] Connect saved retained manifests to image reservation and protected byte verification through explicit retained-history and retained-manifest read limits with all saved source limits. Carry all seven original catalog bindings and files through reservation and verification. Commit pending pins before physical reads and preserve earlier protection after changed evidence, failed verification or commits, cleanup handoff and competing writes.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.
