@@ -107,10 +107,10 @@ operations. Imports of versions
 Application lifecycle callers still use the version 1 local-only handlers.
 
 The retained taskspace, upload, manifest and checkpoint cohorts cover migrations
-20–34, through `0034_local_recovery_action_archives`. Twenty cohorts retain
-seventy-four databases. Packed core and client checks pass eleven current-schema view outcomes
-and 182 earlier-schema envelope outcomes. The migration-34 producer pins source
-revision `594484d`. All older cohorts remain unchanged. Browser execution of
+20–35, through `0035_local_recovery_run_archives`. Twenty-one cohorts retain
+seventy-eight databases. Packed core and client checks pass eleven current-schema
+view outcomes and 193 earlier-schema envelope outcomes. The migration-35 producer
+pins source revision `cde1c54`. All older cohorts remain unchanged. Browser execution of
 these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes

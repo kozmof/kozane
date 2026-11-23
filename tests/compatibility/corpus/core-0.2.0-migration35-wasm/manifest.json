@@ -1,0 +1,152 @@
+{
+  "format": 1,
+  "migrationId": "0035_local_recovery_run_archives",
+  "producer": {
+    "scenarios": "basic",
+    "package": "@kozane/core",
+    "version": "0.2.0",
+    "status": "unpublished-candidate",
+    "artifactSha256": "9384ddcedd306395b5209644788a35c89ddcd64cb888fee035ab04673efe0890",
+    "artifactBytes": 218394,
+    "drizzleVersion": "0.45.4",
+    "sourceRevision": "cde1c54f4a4a5568fb1f321ceb6b53c018050d3a",
+    "driver": {
+      "package": "@sqlite.org/sqlite-wasm",
+      "version": "3.54.1-build1",
+      "engine": "3.54.1",
+      "adapter": "drizzle/sqlite-proxy",
+      "runtime": "v26.13.1"
+    }
+  },
+  "fixtures": [
+    {
+      "id": "empty",
+      "file": "empty.sqlite3",
+      "sha256": "dc0c43f0ca3c27dc2378ebaeb1ce09bb802ce21df9c3a67102e1076ed8ab905e",
+      "size": 655360,
+      "expected": [
+        {
+          "view": {
+            "version": 1,
+            "kind": "empty"
+          }
+        },
+        {
+          "namespaceId": "absent-id",
+          "view": {
+            "version": 1,
+            "kind": "missing"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sole",
+      "file": "sole.sqlite3",
+      "sha256": "9caba6c037193ae06ff476e0f5ed2c50d408e44eba6aa6ed15f7ce9ce4c9a977",
+      "size": 1253376,
+      "expected": [
+        {
+          "view": {
+            "version": 1,
+            "kind": "selected",
+            "namespaceId": "01a208a1-c975-71ca-95d6-4b4fb783375a",
+            "namespaceName": "単一 namespace 😀",
+            "cardCount": 2,
+            "dataHash": "825ffdad0df72f580deb90096e2a64cdb8ecb89fb0b134c563e007a8028eafb9"
+          }
+        },
+        {
+          "namespaceId": "01a208a1-c975-71ca-95d6-4b4fb783375a",
+          "view": {
+            "version": 1,
+            "kind": "selected",
+            "namespaceId": "01a208a1-c975-71ca-95d6-4b4fb783375a",
+            "namespaceName": "単一 namespace 😀",
+            "cardCount": 2,
+            "dataHash": "825ffdad0df72f580deb90096e2a64cdb8ecb89fb0b134c563e007a8028eafb9"
+          }
+        },
+        {
+          "namespaceId": "absent-id",
+          "view": {
+            "version": 1,
+            "kind": "missing"
+          }
+        }
+      ]
+    },
+    {
+      "id": "multiple",
+      "file": "multiple.sqlite3",
+      "sha256": "b1900e370decb6eca43623a357bb844cb28341b65065d43461916968e7bede6f",
+      "size": 655360,
+      "expected": [
+        {
+          "view": {
+            "version": 1,
+            "kind": "selection_required"
+          }
+        },
+        {
+          "namespaceId": "01a208a1-c9b2-76f5-b3f1-5e0de27f5e8f",
+          "view": {
+            "version": 1,
+            "kind": "selected",
+            "namespaceId": "01a208a1-c9b2-76f5-b3f1-5e0de27f5e8f",
+            "namespaceName": "Alpha",
+            "cardCount": 1,
+            "dataHash": "636b9e62409853a7e9465f125e2f0c3d3dd5c77bec8fbcdc477c3c19c873d1ce"
+          }
+        },
+        {
+          "namespaceId": "01a208a1-c9b3-726f-bbab-1fa444daa0c1",
+          "view": {
+            "version": 1,
+            "kind": "selected",
+            "namespaceId": "01a208a1-c9b3-726f-bbab-1fa444daa0c1",
+            "namespaceName": "Beta 日本語",
+            "cardCount": 1,
+            "dataHash": "97e59ba59c92ab5ad8245c11e0b9b6427bab77612ba6115c404ca5e46d252ee2"
+          }
+        },
+        {
+          "namespaceId": "absent-id",
+          "view": {
+            "version": 1,
+            "kind": "missing"
+          }
+        }
+      ]
+    },
+    {
+      "id": "default",
+      "file": "default.sqlite3",
+      "sha256": "d8df7a4d5be4394965d8059c689cef807021ef51f0f2be9060390130baf9b363",
+      "size": 655360,
+      "expected": [
+        {
+          "view": {
+            "version": 1,
+            "kind": "selected",
+            "namespaceId": "01a208a1-c9b3-726f-bbab-1fa444daa0c1",
+            "namespaceName": "Beta 日本語",
+            "cardCount": 1,
+            "dataHash": "4d09b9cd290ce2668592fddc5fccbf5414d12569e6d5070e5a64450ba05073f4"
+          }
+        },
+        {
+          "namespaceId": "01a208a1-c9b2-76f5-b3f1-5e0de27f5e8f",
+          "view": {
+            "version": 1,
+            "kind": "selected",
+            "namespaceId": "01a208a1-c9b2-76f5-b3f1-5e0de27f5e8f",
+            "namespaceName": "Alpha",
+            "cardCount": 1,
+            "dataHash": "636b9e62409853a7e9465f125e2f0c3d3dd5c77bec8fbcdc477c3c19c873d1ce"
+          }
+        }
+      ]
+    }
+  ]
+}

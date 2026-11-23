@@ -80,6 +80,10 @@
     {
       "id": "core-0.2.0-migration34-wasm",
       "sha256": "2ff6fb8013f84c135f3bb3f62801f35b077ae657328cae757c4420e6bf48e9ca"
+    },
+    {
+      "id": "core-0.2.0-migration35-wasm",
+      "sha256": "7d60bb2ce6b5a1dc0e8dc9398ecefe302d528b203f132f092c9a7f6bd486f369"
     }
   ]
 }
