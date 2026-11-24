@@ -356,6 +356,7 @@ it("migration 37 preserves portable metadata and starts without installation aut
   const f = await fixture(),
     migration = migrations.find((record) => record.idx === 37)!;
   await withMigration(f.source, async () => [
+    { sql: "DROP TABLE shared_only_recovery_installation", args: [] },
     { sql: "DROP TABLE shared_recovery_installation", args: [] },
     { sql: "DROP TABLE local_recovery_installation", args: [] },
     { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },

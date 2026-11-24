@@ -488,6 +488,7 @@ it.each([false, true])(
     const f = await fixture(false),
       migration = migrations.find((record) => record.idx === 36)!;
     await withMigration(f.db, async () => [
+      { sql: "DROP TABLE shared_only_recovery_installation", args: [] },
       { sql: "DROP TABLE shared_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_run_assets", args: [] },

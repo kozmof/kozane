@@ -266,3 +266,11 @@ export {
   checkSharedRecoveryInstallation,
   installSharedRecoverySnapshot,
 } from "./actions/shared-recovery-installation.js";
+export {
+  parseSharedOnlyRecoveryInstallationRecord,
+  readSharedOnlyRecoveryInstallation,
+  inspectSharedOnlyRecoveryInstallation,
+  checkSharedOnlyRecoveryInstallation,
+  installSharedOnlyRecoverySnapshot,
+  type SharedOnlyRecoveryInstallation,
+} from "./actions/shared-only-recovery-installation.js";

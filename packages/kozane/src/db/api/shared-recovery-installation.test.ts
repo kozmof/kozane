@@ -397,12 +397,15 @@ it("keeps shared installation authority out of portable snapshots and shared pro
 });
 it("migration 38 preserves the original local record and starts without shared authority", async () => {
   const f = await fixture(),
-    migration = migrations.at(-1)!;
+    migration = migrations.find((record) => record.idx === 38)!;
   await withMigration(f.destination, async () => [
+    { sql: "DROP TABLE shared_only_recovery_installation", args: [] },
     { sql: "DROP TABLE shared_recovery_installation", args: [] },
     { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },
   ]);
-  expect((await applyMigrations(f.destination)).appliedIds).toEqual([migration.id]);
+  expect((await applyMigrations(f.destination)).appliedIds).toEqual(
+    migrations.filter((record) => record.idx >= 38).map((record) => record.id),
+  );
   expect(await recovery.inspectLocalRecoveryInstallation(f.destination)).toEqual(f.checkpoint);
   expect(await recovery.inspectSharedRecoveryInstallation(f.destination)).toBeNull();
   expect((await f.install()).changed).toBe(true);

@@ -762,6 +762,24 @@ await assert.rejects(
   recovery.SharedRecoveryError,
 );
 assert.equal("parseRecoveryBundleSources" in recovery, false);
+const receivingIdentity = {
+  ...bundleIndex.checkpoint.runAssetCheckpoint.binding.localCheckpoint.identity,
+  deviceId: "receiving-device",
+};
+assert.deepEqual(
+  recovery.parseSharedOnlyRecoveryInstallationRecord(
+    JSON.stringify(bundleIndex.checkpoint),
+    JSON.stringify(receivingIdentity),
+  ),
+  { checkpoint: bundleIndex.checkpoint, destinationIdentity: receivingIdentity },
+);
+for (const helper of [
+  recovery.readSharedOnlyRecoveryInstallation,
+  recovery.inspectSharedOnlyRecoveryInstallation,
+  recovery.checkSharedOnlyRecoveryInstallation,
+  recovery.installSharedOnlyRecoverySnapshot,
+])
+  assert.equal(typeof helper, "function");
 assert.deepEqual(
   recovery.parseSharedRecoveryInstallationRecord(JSON.stringify(bundleIndex.checkpoint)),
   bundleIndex.checkpoint,
@@ -1193,6 +1211,7 @@ try {
     "local_recovery_run_assets",
     "local_recovery_installation",
     "shared_recovery_installation",
+    "shared_only_recovery_installation",
   ])
     assert.ok(sqlite.prepare("SELECT name FROM sqlite_schema WHERE name=?").get(name));
   assert.ok(

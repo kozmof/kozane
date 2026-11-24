@@ -20,4 +20,5 @@ export const localTableNames: readonly string[] = Object.freeze([
 export const recoveryDestinationTableNames: readonly string[] = Object.freeze([
   "local_recovery_installation",
   "shared_recovery_installation",
+  "shared_only_recovery_installation",
 ]);

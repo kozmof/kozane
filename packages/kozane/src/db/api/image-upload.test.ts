@@ -22,6 +22,7 @@ it.each([false, true])(
     const db = (await createTestDB()) as unknown as DB;
     const migration = migrations.find((migration) => migration.tag === "0025_local_image_upload")!;
     await withMigration(db, async () => [
+      { sql: "DROP TABLE shared_only_recovery_installation", args: [] },
       { sql: "DROP TABLE shared_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_run_assets", args: [] },

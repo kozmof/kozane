@@ -31,6 +31,7 @@ import { saveRegisteredRecoveryBundle, loadRegisteredRecoveryBundle } from "./re
 import {
   installRegisteredRecoveryBundleLocalSnapshot,
   installRegisteredRecoveryBundleSharedSnapshot,
+  installRegisteredRecoveryBundleSharedOnlySnapshot,
 } from "./recovery-bundle-installation.js";
 vi.mock("node:fs/promises", async (original) => ({
   ...(await original<typeof import("node:fs/promises")>()),
@@ -566,4 +567,140 @@ it("refuses conflicting or populated shared staging before reopening source file
   await destination.run(sql`INSERT INTO namespace VALUES('populated','Keep',0)`);
   await expect(installShared()).rejects.toThrow("empty shared tables");
   expect(open).not.toHaveBeenCalled();
+});
+
+const receiving = { ...identity, deviceId: "receiving-device" };
+const installSharedOnly = () =>
+  installRegisteredRecoveryBundleSharedOnlySnapshot({
+    ...bundleOptions(),
+    destination,
+    destinationExpected: receiving,
+  });
+it("stages shared-only recovery on another device without source paths or pending operations", async () => {
+  const before = await catalogs(),
+    ownerBefore = (await inspectOwner()).record;
+  const mkdir = vi.spyOn(fs, "mkdir"),
+    link = vi.spyOn(fs, "link"),
+    unlink = vi.spyOn(fs, "unlink");
+  expect(await installSharedOnly()).toEqual({
+    checkpoint: bundle.checkpoint,
+    destinationIdentity: receiving,
+    changed: true,
+  });
+  const local = await recovery.captureLocalRecoverySnapshot(
+    destination,
+    receiving,
+    async () => source.localSnapshot.selection,
+  );
+  expect(local.tables.every((table) => table.rows.length === 0)).toBe(true);
+  expect(await recovery.inspectLocalRecoveryInstallation(destination)).toBeNull();
+  expect(await recovery.inspectSharedRecoveryInstallation(destination)).toBeNull();
+  expect(await recovery.inspectSharedOnlyRecoveryInstallation(destination)).toEqual({
+    checkpoint: bundle.checkpoint,
+    destinationIdentity: receiving,
+  });
+  expect(await catalogs()).toEqual(before);
+  expect((await inspectOwner()).record).toEqual(ownerBefore);
+  expect(mkdir).not.toHaveBeenCalled();
+  expect(link).not.toHaveBeenCalled();
+  expect(unlink).not.toHaveBeenCalled();
+});
+it("acknowledges shared-only retries without source files and preserves receiving-device edits", async () => {
+  await installSharedOnly();
+  await fs.unlink(published());
+  await destination.run(sql`INSERT INTO namespace VALUES('later','Keep',0)`);
+  await destination.run(
+    sql`INSERT INTO taskspace_local VALUES('own','receiving/only','workspace_relative',1)`,
+  );
+  const open = vi.spyOn(fs, "open"),
+    create = vi.fn(factory);
+  expect(
+    await installRegisteredRecoveryBundleSharedOnlySnapshot({
+      ...bundleOptions(),
+      destination,
+      destinationExpected: receiving,
+      createValidationDatabase: create,
+    }),
+  ).toEqual({ checkpoint: bundle.checkpoint, destinationIdentity: receiving, changed: false });
+  expect(open).not.toHaveBeenCalled();
+  expect(create).not.toHaveBeenCalled();
+  expect(await destination.get(sql`SELECT path FROM taskspace_local`)).toMatchObject({
+    path: "receiving/only",
+  });
+  expect(await destination.get(sql`SELECT name FROM namespace`)).toMatchObject({ name: "Keep" });
+});
+it.each(["missing-index", "missing-local", "missing-shared", "missing-image", "released-owner"])(
+  "refuses %s before shared-only staging",
+  async (defect) => {
+    if (defect === "missing-index") await fs.unlink(published());
+    if (defect === "missing-local") await fs.unlink(path("local"));
+    if (defect === "missing-shared") await fs.unlink(path("shared"));
+    if (defect === "missing-image") await fs.unlink(file(31));
+    if (defect === "released-owner") {
+      const { releaseAssetManifest } = await import("../../db/api/asset-manifest.js");
+      await releaseAssetManifest(db, owner(), "Retired");
+    }
+    await expect(installSharedOnly()).rejects.toThrow();
+    expect(await recovery.inspectSharedOnlyRecoveryInstallation(destination)).toBeNull();
+    expect(await destination.values(sql`SELECT 1 FROM namespace`)).toEqual([]);
+    expect(await destination.values(sql`SELECT 1 FROM taskspace_local`)).toEqual([]);
+  },
+);
+it("checks independently trusted identities before shared-only bundle file reads", async () => {
+  const open = vi.spyOn(fs, "open");
+  await expect(
+    installRegisteredRecoveryBundleSharedOnlySnapshot({
+      ...bundleOptions(),
+      destination,
+      destinationExpected: receiving,
+      expected: { ...identity, deviceId: "other-source" },
+    }),
+  ).rejects.toThrow("source identity mismatch");
+  for (const field of ["workspaceId", "epochId", "checkpointId"] as const)
+    await expect(
+      installRegisteredRecoveryBundleSharedOnlySnapshot({
+        ...bundleOptions(),
+        destination,
+        destinationExpected: { ...receiving, [field]: "other" },
+      }),
+    ).rejects.toThrow("destination identity mismatch");
+  expect(open).not.toHaveBeenCalled();
+});
+it("refuses another receiving device and complete recovery after shared-only staging before reopening files", async () => {
+  await installSharedOnly();
+  const open = vi.spyOn(fs, "open");
+  await expect(
+    installRegisteredRecoveryBundleSharedOnlySnapshot({
+      ...bundleOptions(),
+      destination,
+      destinationExpected: { ...receiving, deviceId: "other-target" },
+    }),
+  ).rejects.toThrow("different shared-only installation");
+  await expect(install()).rejects.toThrow("empty destination");
+  await expect(installShared()).rejects.toThrow("matching local installation");
+  expect(open).not.toHaveBeenCalled();
+});
+it("owns shared-only destination identity and source options before validation yields", async () => {
+  const input = {
+    ...bundleOptions(),
+    destination,
+    destinationExpected: { ...receiving },
+    expected: { ...identity },
+    checkpoint: JSON.parse(JSON.stringify(bundle.checkpoint)),
+  };
+  input.createValidationDatabase = async () => {
+    input.destination = db;
+    input.destinationExpected.deviceId = "Changed";
+    input.expected.deviceId = "Changed";
+    input.root = join(root, "elsewhere");
+    input.checkpoint.sha256 = "b".repeat(64);
+    input.sharedMaxBytes = 0;
+    return factory();
+  };
+  expect((await installRegisteredRecoveryBundleSharedOnlySnapshot(input)).changed).toBe(true);
+  expect(await recovery.inspectSharedOnlyRecoveryInstallation(destination)).toEqual({
+    checkpoint: bundle.checkpoint,
+    destinationIdentity: receiving,
+  });
+  expect(await recovery.inspectSharedOnlyRecoveryInstallation(db)).toBeNull();
 });

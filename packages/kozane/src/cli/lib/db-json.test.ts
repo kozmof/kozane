@@ -1702,7 +1702,11 @@ describe("export table list", () => {
       .map((table) => getTableConfig(table as SQLiteTable))
       .filter(
         (table) =>
-          !["local_recovery_installation", "shared_recovery_installation"].includes(table.name),
+          ![
+            "local_recovery_installation",
+            "shared_recovery_installation",
+            "shared_only_recovery_installation",
+          ].includes(table.name),
       );
 
   /**
@@ -2363,21 +2367,37 @@ it("excludes destination authority from JSON and preserves it through imports in
         sql: `INSERT INTO ${table} VALUES(1,?,9223372036854775807)`,
         args: [descriptor],
       });
+    const destinationIdentity = JSON.stringify({
+      ...source.localSnapshot.identity,
+      deviceId: "receiving-device",
+    });
+    await client.execute({
+      sql: "INSERT INTO shared_only_recovery_installation VALUES(1,?,?,9223372036854775807)",
+      args: [descriptor, destinationIdentity],
+    });
     const dump = await exportDbJson(targetUrl);
     expect(dump.version).toBe(26);
     expect(Object.keys(dump.tables)).toHaveLength(26);
     expect("local_recovery_installation" in dump.tables).toBe(false);
     expect("shared_recovery_installation" in dump.tables).toBe(false);
+    expect("shared_only_recovery_installation" in dump.tables).toBe(false);
     const transported = {
       ...dump,
       tables: {
         ...dump.tables,
         local_recovery_installation: [{ id: 1, descriptor, installed_at: 1 }],
         shared_recovery_installation: [{ id: 1, descriptor, installed_at: 1 }],
+        shared_only_recovery_installation: [
+          { id: 1, descriptor, destination_identity: destinationIdentity, installed_at: 1 },
+        ],
       },
     };
     await importDbJson(targetUrl, transported);
-    for (const table of ["local_recovery_installation", "shared_recovery_installation"])
+    for (const table of [
+      "local_recovery_installation",
+      "shared_recovery_installation",
+      "shared_only_recovery_installation",
+    ])
       expect(
         (
           await client.execute(
@@ -2385,10 +2405,18 @@ it("excludes destination authority from JSON and preserves it through imports in
           )
         ).rows.map((row) => [row.descriptor, row.value]),
       ).toEqual([[descriptor, "9223372036854775807"]]);
+    expect(
+      (await client.execute("SELECT destination_identity FROM shared_only_recovery_installation"))
+        .rows[0].destination_identity,
+    ).toBe(destinationIdentity);
     await importDbJson(otherUrl, transported);
     const other = createClient({ url: otherUrl });
     try {
-      for (const table of ["local_recovery_installation", "shared_recovery_installation"])
+      for (const table of [
+        "local_recovery_installation",
+        "shared_recovery_installation",
+        "shared_only_recovery_installation",
+      ])
         expect((await other.execute(`SELECT 1 FROM ${table}`)).rows).toEqual([]);
     } finally {
       other.close();

@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–38 and requires
+syncable database kind and `system.compose`. It supports schemas 19–39 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -114,7 +114,7 @@ pins source revision `ce01072`. All older cohorts remain unchanged. Browser exec
 these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–38. These shared services reject local metadata inputs,
+and removal on schemas 20–39. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -640,6 +640,21 @@ competing connections, restart and complete published-bundle integration. Requir
 history, materialization bookkeeping, destination images and activation remain
 pending. See [shared installation](shared-recovery-installation.md).
 
+Migration 0039 adds explicit shared-only staging under a separately trusted
+receiving identity. Source and destination must share workspace, epoch,
+checkpoint and schema while device IDs may differ. The destination must be empty
+and canonical with complete migration history. Exact shared rows and an immutable
+source-bundle and receiving-identity record commit together. All fourteen
+portable local tables start empty, including source paths, uploads, manifests and
+pending operations. Matching retries preserve later receiving-device edits and
+never reopen source files. Conflicting bundles, identities and recovery modes are
+refused. Destination authority stays outside portable snapshots, shared
+projections and version 26 JSON exports. Native and Node WASM tests cover exact
+values, constraints, identity checks, metadata isolation and rollback. Native
+tests cover competing connections, restart and complete published-bundle
+integration. Required history, destination images and activation remain pending.
+See [shared-only installation](shared-only-recovery-installation.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -774,7 +789,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Install exact local rows and the destination record in one commit after isolated validation. Preserve absent metadata and pending operations, verify tagged read-back and rollback, serialize competing writers and acknowledge matching retries without replaying later edits.
 - [x] Stage the reconstructed shared projection once after matching local installation. Require empty shared tables, preserve current local rows and migration history, suppress and restore mutating business triggers atomically, verify exact tagged read-back and roll back rows and authority together.
 - [x] Persist immutable shared installation metadata outside portable snapshots, shared projections and JSON dumps. Validate complete published bundles before first staging, serialize competing installations and preserve later edits on matching retries without reopening source files.
-- [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
+- [x] Stage explicit shared-only recovery in a new destination under an independently trusted receiving identity. Install no source local paths, uploads, manifests or pending operations. Refuse populated destinations and conflicting recovery modes, preserve later edits on retry and validate complete published source bundles before first staging.
+- [ ] Inspect pending file operations in staged complete recovery without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.
 - [ ] Implement trusted migrate mode and atomic migration batches covering schema, data, migration history, progress and mode cleanup.
 - [ ] Resume incomplete transitions without rerunning committed repair. Validate guards and rows before atomically activating the new baseline.

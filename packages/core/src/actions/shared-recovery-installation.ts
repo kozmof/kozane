@@ -2,8 +2,10 @@
 import { sql } from "drizzle-orm";
 import { withReadTx, withTx, type DB, type Tx, type ReadTx } from "../database.js";
 import { sharedRecoveryInstallationTable as receipt } from "../schema.js";
-import { canonicalSchemaManifest } from "../generated/schema-manifest.js";
-import { requireRecoveryDestinationSchema } from "./recovery-destination.js";
+import {
+  requireRecoveryDestinationSchema,
+  captureRecoveryDestinationRows,
+} from "./recovery-destination.js";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import {
   readLocalRecoveryInstallation,
@@ -22,16 +24,10 @@ import {
   writeSharedRecoveryProjection,
   verifySharedRecoveryProjection,
 } from "./shared-recovery.js";
-import { captureRowSql } from "./sql-codec.js";
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"';
 const shared = new Set(sharedRecoveryPlan.loadOrder.map((table) => table.name));
-const protectedTables = canonicalSchemaManifest.filter(
-  (entry) =>
-    entry.type === "table" &&
-    entry.name !== "shared_recovery_installation" &&
-    !shared.has(entry.name),
-);
+const mutableTables = new Set([...shared, "shared_recovery_installation"]);
 function wanted(checkpoint: unknown, expected: LocalRecoveryIdentity) {
   const identity = parseLocalRecoveryIdentity(expected),
     value = parseRecoveryBundleCheckpoint(checkpoint);
@@ -78,22 +74,6 @@ export async function checkSharedRecoveryInstallation(
   const input = wanted(checkpoint, expected);
   return withReadTx(db, (tx) => checked(tx, input.checkpoint));
 }
-async function protectedRows(tx: Tx) {
-  const result: Record<string, readonly string[]> = {};
-  for (const table of protectedTables) {
-    const columns = table.columns!.map((column) => String(column[1]));
-    result[table.name] = (
-      await tx.values(sql.raw(`SELECT ${captureRowSql(columns)} FROM ${quote(table.name)}`))
-    )
-      .map((row) => {
-        if (typeof row[0] !== "string")
-          throw new SharedRecoveryError("Shared installation did not return protected row images");
-        return row[0];
-      })
-      .sort();
-  }
-  return result;
-}
 /** Trusted hosts verify the complete bundle before first staging. No history records or images are installed. */
 export async function installSharedRecoverySnapshot(
   destination: DB,
@@ -121,7 +101,7 @@ export async function installSharedRecoverySnapshot(
     if (prior) return Object.freeze({ checkpoint: prior, changed: false });
     const execute = (query: string) => tx.values(sql.raw(query));
     await configureActionConnection(execute);
-    const before = await protectedRows(tx);
+    const before = await captureRecoveryDestinationRows(tx, mutableTables);
     await writeSharedRecoveryProjection(tx, snapshot);
     await tx.insert(receipt).values({
       id: 1,
@@ -129,7 +109,7 @@ export async function installSharedRecoverySnapshot(
       installedAt: Math.floor(Date.now() / 1000),
     });
     await verifySharedRecoveryProjection(tx, snapshot);
-    if (!same(await protectedRows(tx), before))
+    if (!same(await captureRecoveryDestinationRows(tx, mutableTables), before))
       throw new SharedRecoveryError("Shared installation changed protected local metadata");
     if (!same(await readSharedRecoveryInstallation(tx), request.checkpoint))
       throw new SharedRecoveryError("Shared installation receipt changed during installation");

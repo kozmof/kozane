@@ -113,6 +113,10 @@ edits. Continue with [shared projection staging](../../docs/shared-recovery-inst
 after matching local installation. It preserves current local metadata and commits
 exact shared rows with its own immutable destination record. Required history,
 bookkeeping, destination images and activation remain pending.
+[Shared-only staging](../../docs/shared-only-recovery-installation.md) uses an
+independently trusted receiving identity and starts without source-device local
+attachments. It requires a new empty destination and preserves later edits on
+matching retries.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

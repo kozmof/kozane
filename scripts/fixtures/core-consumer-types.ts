@@ -173,6 +173,12 @@ import {
   type SharedRecoveryRunArchive,
   type SharedRecoveryRunArchiveCheckpoint,
   type SharedRecoveryRunArchiveSources,
+  parseSharedOnlyRecoveryInstallationRecord,
+  readSharedOnlyRecoveryInstallation,
+  inspectSharedOnlyRecoveryInstallation,
+  checkSharedOnlyRecoveryInstallation,
+  installSharedOnlyRecoverySnapshot,
+  type SharedOnlyRecoveryInstallation,
   parseSharedRecoveryInstallationRecord,
   readSharedRecoveryInstallation,
   inspectSharedRecoveryInstallation,
@@ -862,6 +868,34 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
       void withReadTx(db, (tx) => readSharedRecoveryInstallation(tx));
       // @ts-expect-error Shared installation expectations remain immutable.
       sharedInstallation.checkpoint.sha256 = "changed";
+      const receivingIdentity = { ...parsedIdentity, deviceId: "receiving-device" };
+      const sharedOnlyInstallation = await installSharedOnlyRecoverySnapshot(
+        db,
+        async () => db,
+        savedPayload,
+        bundleCheckpoint,
+        parsedIdentity,
+        receivingIdentity,
+      );
+      const sharedOnlyRecord: SharedOnlyRecoveryInstallation =
+        parseSharedOnlyRecoveryInstallationRecord(
+          JSON.stringify(sharedOnlyInstallation.checkpoint),
+          JSON.stringify(sharedOnlyInstallation.destinationIdentity),
+        );
+      const sharedOnlyChanged: boolean = sharedOnlyInstallation.changed;
+      void sharedOnlyChanged;
+      void sharedOnlyRecord;
+      void readSharedOnlyRecoveryInstallation(db);
+      void inspectSharedOnlyRecoveryInstallation(db);
+      void checkSharedOnlyRecoveryInstallation(
+        db,
+        bundleCheckpoint,
+        parsedIdentity,
+        receivingIdentity,
+      );
+      void withReadTx(db, (tx) => readSharedOnlyRecoveryInstallation(tx));
+      // @ts-expect-error Receiving identities remain immutable.
+      sharedOnlyInstallation.destinationIdentity.deviceId = "Changed";
       // @ts-expect-error Destination installation expectations remain immutable.
       localInstallation.checkpoint.sha256 = "changed";
       // @ts-expect-error A bundle requires its separately verified broader manifest payload.

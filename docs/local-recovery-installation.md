@@ -22,7 +22,9 @@ const installed = await installRegisteredRecoveryBundleLocalSnapshot({
 Supply the destination host's independently trusted `expected` identity. The
 workspace, device, epoch, checkpoint and schema must all match the bundle and
 local snapshot. A source descriptor does not supply the destination's identity.
-Another device cannot install the source device's paths through this API.
+Another device cannot install the source device's paths through this API. Choose
+[shared-only staging](shared-only-recovery-installation.md) explicitly to recover
+without source local attachments.
 
 The first attempt validates the published index, every saved payload, exact
 source bindings and retained image bytes. It then validates the matching local

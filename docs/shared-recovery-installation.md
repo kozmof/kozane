@@ -23,8 +23,9 @@ const installed = await installRegisteredRecoveryBundleSharedSnapshot({
 The destination must have the complete bundled migration history, the exact
 canonical schema, the matching immutable local installation record and twelve
 empty shared tables. A populated shared destination is refused. This workflow
-uses the originating device's identity and does not provide cross-device or
-shared-only recovery.
+uses the originating device's identity. Choose
+[shared-only staging](shared-only-recovery-installation.md) explicitly to recover
+without source local attachments on this or another device.
 
 The first shared attempt reloads the complete published bundle. It checks all
 eight saved payloads, exact catalog bindings, retained protection and physical
@@ -83,9 +84,9 @@ Inspection reads descriptor metadata without converting the timestamp to a
 JavaScript date. Known historical descriptors remain inspectable, while actual
 installation requires the bundled schema and matching host identity.
 
-Both destination installation records stay outside portable local snapshots,
+Destination installation records stay outside portable local snapshots,
 shared projections and JSON dumps. Portable snapshots retain fourteen tables and
-JSON remains version 26. Imports into the same database preserve both records.
+JSON remains version 26. Imports into the same database preserve these records.
 Extra transported tables cannot create destination installation authority.
 
 ## Compose a trusted core host
