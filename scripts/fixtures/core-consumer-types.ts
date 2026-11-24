@@ -173,6 +173,11 @@ import {
   type SharedRecoveryRunArchive,
   type SharedRecoveryRunArchiveCheckpoint,
   type SharedRecoveryRunArchiveSources,
+  parseLocalRecoveryInstallationRecord,
+  readLocalRecoveryInstallation,
+  inspectLocalRecoveryInstallation,
+  checkLocalRecoveryInstallation,
+  installLocalRecoverySnapshot,
   RECOVERY_BUNDLE_INDEX_VERSION,
   RECOVERY_BUNDLE_CHECKPOINT_VERSION,
   describeRecoveryBundleIndex,
@@ -820,6 +825,23 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
         bundleSources,
       );
       void verifiedBundle.manifest;
+      const localInstallation = await installLocalRecoverySnapshot(
+        db,
+        async () => db,
+        retainedAssetLocalSnapshot,
+        bundleCheckpoint,
+        parsedIdentity,
+      );
+      const localInstallationCheckpoint: RecoveryBundleCheckpoint = localInstallation.checkpoint;
+      const localInstallationChanged: boolean = localInstallation.changed;
+      void localInstallationChanged;
+      void parseLocalRecoveryInstallationRecord(JSON.stringify(localInstallationCheckpoint));
+      void readLocalRecoveryInstallation(db);
+      void inspectLocalRecoveryInstallation(db);
+      void checkLocalRecoveryInstallation(db, bundleCheckpoint, parsedIdentity);
+      void withReadTx(db, (tx) => readLocalRecoveryInstallation(tx));
+      // @ts-expect-error Destination installation expectations remain immutable.
+      localInstallation.checkpoint.sha256 = "changed";
       // @ts-expect-error A bundle requires its separately verified broader manifest payload.
       const missingBundleManifest: RecoveryBundleSources = runAssetSources;
       void missingBundleManifest;

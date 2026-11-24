@@ -459,6 +459,7 @@ it.each([false, true])(
     const f = await fixture(false),
       migration = migrations.find(({ tag }) => tag === "0030_local_recovery_executions")!;
     await withMigration(f.db, async () => [
+      { sql: "DROP TABLE local_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_run_assets", args: [] },
       { sql: "DROP TABLE local_recovery_run_archives", args: [] },
       { sql: "DROP TABLE local_recovery_action_archives", args: [] },

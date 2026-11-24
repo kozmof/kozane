@@ -1,4 +1,4 @@
-/** Trusted recovery preparation. These helpers do not enroll or activate a workspace. */
+/** Trusted recovery validation and local staging. These helpers do not activate a workspace. */
 export {
   SHARED_RECOVERY_RETAINED_HISTORY_VERSION,
   SHARED_RECOVERY_RETAINED_CHECKPOINT_VERSION,
@@ -252,3 +252,10 @@ export {
   type RecoveryBundleCheckpoint,
   type RecoveryBundleSources,
 } from "./actions/recovery-bundle-index.js";
+export {
+  parseLocalRecoveryInstallationRecord,
+  readLocalRecoveryInstallation,
+  inspectLocalRecoveryInstallation,
+  checkLocalRecoveryInstallation,
+  installLocalRecoverySnapshot,
+} from "./actions/local-recovery-installation.js";

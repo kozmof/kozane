@@ -212,6 +212,12 @@ descriptors before SQL allocation. JSON export version 26 preserves current,
 historical and orphaned metadata. Earlier supported dumps import an empty catalog
 when absent.
 
+Migration 0037 adds a separate
+[destination installation record](local-recovery-installation.md). It is excluded
+from portable snapshots, shared projections and JSON exports. Copying source
+metadata cannot authorize or rewind a destination installation. The fourteen
+portable local tables remain unchanged, and JSON stays at version 26.
+
 ## Validate against a retained catalog binding
 
 `validateStoredLocalRecoveryCheckpoint` accepts the trusted catalog database, a

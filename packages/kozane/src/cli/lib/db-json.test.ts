@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { is } from "drizzle-orm";
 import { SQLiteTable, getTableConfig } from "drizzle-orm/sqlite-core";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import * as schema from "../../db/schema";
 import { runMigrations } from "./db";
 import type { DbJsonDump } from "./db-json/format.js";
@@ -1699,13 +1699,14 @@ describe("export table list", () => {
   const schemaTables = () =>
     Object.values(schema)
       .filter((value) => is(value, SQLiteTable))
-      .map((table) => getTableConfig(table as SQLiteTable));
+      .map((table) => getTableConfig(table as SQLiteTable))
+      .filter((table) => table.name !== "local_recovery_installation");
 
   /**
-   * Verify that exported columns include every declared schema column. Omitting one would
+   * Verify that exported columns include every portable schema column. Omitting one would
    * silently lose data from the dump.
    */
-  it("covers every column of every table in the Drizzle schema", () => {
+  it("covers every column of every portable table in the Drizzle schema", () => {
     const exported = new Map<string, readonly string[]>(
       TABLES.map((table) => [table.name, table.columns]),
     );
@@ -1724,7 +1725,7 @@ describe("export table list", () => {
   });
 
   /**
-   * Verify that `TABLE_ORDER` includes every schema table and places referenced tables before
+   * Verify that `TABLE_ORDER` includes every portable schema table and places referenced tables before
    * their dependents. Restore deletes rows in reverse order.
    */
   it("orders every table after the tables its foreign keys point at", () => {
@@ -2330,5 +2331,62 @@ it("advances the shared Node revision once after importing every table", async (
     expect((await exportDbJson(url)).tables).toEqual(dump.tables);
   } finally {
     close();
+  }
+});
+
+it("excludes destination authority from JSON and preserves it through imports into the same database", async () => {
+  const recovery = await import("@kozane/core/recovery");
+  const { runArchiveAssetFixture } = await import("../../test-utils/run-archive-assets.js");
+  if (!globalThis.crypto?.subtle) vi.stubGlobal("crypto", (await import("node:crypto")).webcrypto);
+  const targetUrl = await migratedDbUrl("installation-target.db"),
+    otherUrl = await migratedDbUrl("installation-other.db"),
+    client = createClient({ url: targetUrl });
+  try {
+    const source = await runArchiveAssetFixture(),
+      assets = await recovery.describeRunArchiveAssets(source),
+      bundle = await recovery.describeRecoveryBundleIndex(assets.checkpoint, {
+        localSnapshot: source.localSnapshot,
+        sharedHistory: source.sharedHistory,
+        executions: source.executions,
+        originalActions: source.originalActions,
+        actionArchive: source.actionArchive,
+        runArchive: source.runArchive,
+        currentAssets: source.currentAssets,
+        runAssets: assets.payload,
+      }),
+      descriptor = JSON.stringify(bundle.checkpoint);
+    await client.execute({
+      sql: "INSERT INTO local_recovery_installation VALUES(1,?,9223372036854775807)",
+      args: [descriptor],
+    });
+    const dump = await exportDbJson(targetUrl);
+    expect(dump.version).toBe(26);
+    expect(Object.keys(dump.tables)).toHaveLength(26);
+    expect("local_recovery_installation" in dump.tables).toBe(false);
+    const transported = {
+      ...dump,
+      tables: {
+        ...dump.tables,
+        local_recovery_installation: [{ id: 1, descriptor, installed_at: 1 }],
+      },
+    };
+    await importDbJson(targetUrl, transported);
+    expect(
+      (
+        await client.execute(
+          "SELECT descriptor,CAST(installed_at AS TEXT) AS value FROM local_recovery_installation",
+        )
+      ).rows.map((row) => [row.descriptor, row.value]),
+    ).toEqual([[descriptor, "9223372036854775807"]]);
+    await importDbJson(otherUrl, transported);
+    const other = createClient({ url: otherUrl });
+    try {
+      expect((await other.execute("SELECT 1 FROM local_recovery_installation")).rows).toEqual([]);
+    } finally {
+      other.close();
+    }
+  } finally {
+    client.close();
+    vi.unstubAllGlobals();
   }
 });

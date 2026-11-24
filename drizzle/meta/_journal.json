@@ -260,6 +260,13 @@
       "when": 1795472385656,
       "tag": "0036_local_recovery_run_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1795520399276,
+      "tag": "0037_local_recovery_installation",
+      "breakpoints": true
     }
   ]
 }

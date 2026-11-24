@@ -6,7 +6,7 @@ import { canonicalSchemaManifest } from "../generated/schema-manifest.js";
 import { compareSchemaManifests } from "../migrations/schema.js";
 import { readSchemaManifest } from "../migrations/schema-reader.js";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
-import { localTableNames } from "./local-tables.js";
+import { localTableNames, recoveryDestinationTableNames } from "./local-tables.js";
 import { createRestorationPlan } from "./restoration-plan.js";
 import { createRowProjection, type ProjectionEffect } from "./projection.js";
 import { parseTaggedRow, taggedRowKey, ROW_ENCODING_VERSION, type TaggedRow } from "./row-codec.js";
@@ -46,7 +46,11 @@ const applicationTables = canonicalSchemaManifest.filter(
 const plan = createRestorationPlan(
   canonicalSchemaManifest,
   applicationTables
-    .filter((entry) => !localTableNames.includes(entry.name))
+    .filter(
+      (entry) =>
+        !localTableNames.includes(entry.name) &&
+        !recoveryDestinationTableNames.includes(entry.name),
+    )
     .map(({ name }) => name),
 );
 const sharedTables = new Set(plan.loadOrder.map(({ name }) => name));

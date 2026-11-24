@@ -139,7 +139,8 @@ const schemaColumns = new Map(
 
 /**
  * Exported tables, their schema-derived columns, and row ordering. Export this list so tests
- * can verify that it includes every schema table.
+ * can verify that it includes every portable schema table. Destination installation
+ * authority is deliberately excluded and survives imports into the same database.
  */
 export const TABLES = TABLE_ORDER.map((table) => ({
   ...table,

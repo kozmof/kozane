@@ -645,6 +645,7 @@ it.each([false, true])(
     const f = await fixture(false),
       migration = migrations.find(({ id }) => id === "0032_local_recovery_retained_history")!;
     await withMigration(f.db, async () => [
+      { sql: "DROP TABLE local_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_run_assets", args: [] },
       { sql: "DROP TABLE local_recovery_run_archives", args: [] },
       { sql: "DROP TABLE local_recovery_action_archives", args: [] },

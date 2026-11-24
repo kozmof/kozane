@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–36 and requires
+syncable database kind and `system.compose`. It supports schemas 19–37 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -114,7 +114,7 @@ pins source revision `d31c0e3`. All older cohorts remain unchanged. Browser exec
 these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–36. These shared services reject local metadata inputs,
+and removal on schemas 20–37. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -189,13 +189,13 @@ tests verify atomic owner publication and staging preservation after publication
 and commit failures. This remains a prototype integration rather than production
 action routing.
 
-An internal local recovery snapshot now captures all fourteen local tables and the
+An internal local recovery snapshot now captures all fourteen portable local tables and the
 shared baseline and effect-set selection in one adapter read transaction. It
 preserves tagged SQLite values and absent taskspace metadata, requires complete
 table coverage and checks workspace, device, epoch, checkpoint and schema identity.
 Native and WASM tests cover exact values and malformed input. A native concurrent
-writer test verifies checkpoint consistency. Durable identity enrollment, bundle
-publication and one-time installation remain pending. See
+writer test verifies checkpoint consistency. Durable identity enrollment remains
+pending. Bundle publication and local staging use the host workflows described below. See
 [local recovery snapshots](local-recovery-snapshots.md).
 
 Local snapshots now have an isolated SQL validation boundary. It rejects identity
@@ -203,8 +203,8 @@ mismatches before database allocation, refuses populated or incompatible
 validation databases and compares loaded rows with the exact tagged snapshot.
 Temporary rows are removed before success. Native and WASM tests cover SQL
 constraints, affinity changes, changed read-back and connection flags, savepoint
-cleanup failures and failed commits. Production local installation remains
-pending.
+cleanup failures and failed commits. One-time local staging now uses this boundary
+through the host workflow described below. Workspace activation remains pending.
 
 Local snapshot asset checks now collect pending and installed uploads and every
 active manifest owner. They merge selected shared-history manifests while
@@ -584,7 +584,7 @@ protected through cleanup after earlier owners are released. Native tests cover
 changed evidence, exact source bindings, unsafe or missing images, competing
 writers, owner publication changes and failed commits. Earlier pending and
 retained protection survives failures. Registered bundle publication now uses
-the host workflow described below. Durable installation remains pending. See
+the host workflow described below. Shared-state installation remains pending. See
 [broader run images](recovery-checkpoint-images.md#check-saved-broader-run-images).
 
 Core now prepares recovery bundle indexes from all eight original payloads.
@@ -596,7 +596,7 @@ requirements or rewritten expectations. Native and Node WASM tests cover closed
 inventories, historical metadata, unsafe transport, input ownership and exact
 source verification. Indexes remain metadata without authorizing publication or
 installation. Registered bundle publication now uses the host workflow described
-below. Durable installation remains pending. See [bundle indexes](recovery-bundle-indexes.md).
+below. Shared-state installation remains pending. See [bundle indexes](recovery-bundle-indexes.md).
 
 The Node host now publishes registered bundle indexes only after validating all
 eight saved payloads, independent manifest coverage and protected image bytes.
@@ -608,8 +608,23 @@ file identity through validation. Matching final bytes after a failed commit do
 not bypass pending-owner refusal. Explicit retries preserve interruption evidence
 and earlier pins. Native tests cover missing sources, changed evidence, invalid
 limits, unsafe paths, publication and commit failures, cleanup handoff and
-competing writes. Automatic capture, durable installation and activation remain
+competing writes. Automatic capture, shared-state installation and activation remain
 pending. See [published bundles](recovery-bundles.md).
+
+Migration 0037 adds destination-owned local installation authority. The singleton
+record cannot travel in a portable snapshot or JSON dump and SQL guards prevent
+updates or deletion. Portable snapshots retain fourteen tables and JSON stays at
+version 26. Shared history excludes the destination record. The core installer
+checks complete migration history and canonical destination schema, requires an
+empty staging database, validates local contents separately and atomically
+commits exact rows with the original bundle descriptor. Matching retries preserve
+later edits and conflicting checkpoints are refused. The Node wrapper validates
+a published bundle before the first installation and acknowledges later retries
+without reopening source files. Native and Node WASM tests cover exact values,
+identity mismatches, rollback and metadata isolation. Native tests cover restart,
+competing connections and published-bundle integration. Shared-state staging,
+image installation and activation remain pending. See
+[local installation](local-recovery-installation.md).
 
 ## Version one
 
@@ -740,7 +755,9 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Connect saved broader run manifests to image reservation and protected byte verification. Carry all eight original catalog bindings and files through reservation and verification, preserve current and per-run invocation coverage, and retain earlier protection after failures.
 - [x] Prepare recovery bundle indexes binding all eight exact payload references and complete image requirements to an independently trusted descriptor. Verify every source, fixed role coverage, full host identity and independent per-record requirements while owning inputs before hashing. Preserve historical metadata without authorizing publication or installation.
 - [x] Publish bundle indexes only after all eight saved payloads and required image bytes are validated and protected. Preserve interrupted evidence and refuse incomplete artifacts.
-- [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
+- [x] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
+- [x] Persist one immutable destination installation record outside portable local snapshots, shared projections and JSON exports. Preserve it through JSON imports and refuse transported authority, conflicting descriptors, unsupported schemas and incomplete migration history.
+- [x] Install exact local rows and the destination record in one commit after isolated validation. Preserve absent metadata and pending operations, verify tagged read-back and rollback, serialize competing writers and acknowledge matching retries without replaying later edits.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.
 - [ ] Implement trusted migrate mode and atomic migration batches covering schema, data, migration history, progress and mode cleanup.

@@ -486,8 +486,9 @@ it.each([false, true])(
   "migration 36 preserves source metadata and rolls back failed upgrades (rollback=%s)",
   async (fail) => {
     const f = await fixture(false),
-      migration = migrations.at(-1)!;
+      migration = migrations.find((record) => record.idx === 36)!;
     await withMigration(f.db, async () => [
+      { sql: "DROP TABLE local_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_run_assets", args: [] },
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },
       { sql: "UPDATE local_recovery_run_archives SET created_at=9223372036854775807", args: [] },
@@ -505,7 +506,9 @@ it.each([false, true])(
       await expect(f.db.values(sql`SELECT 1 FROM local_recovery_run_assets`)).rejects.toThrow();
       await f.db.run(sql`DROP TRIGGER reject_upgrade`);
     }
-    expect((await applyMigrations(f.db)).appliedIds).toEqual([migration.id]);
+    expect((await applyMigrations(f.db)).appliedIds).toEqual(
+      migrations.filter((record) => record.idx >= 36).map((record) => record.id),
+    );
     expect(
       await f.db.values(
         sql`SELECT descriptor,local_descriptor,CAST(created_at AS TEXT) FROM local_recovery_run_archives`,

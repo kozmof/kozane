@@ -471,6 +471,7 @@ it.each([false, true])(
     const f = await fixture(false),
       migration = migrations.find((m) => m.id === "0035_local_recovery_run_archives")!;
     await withMigration(f.db, async () => [
+      { sql: "DROP TABLE local_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_run_assets", args: [] },
       { sql: "DROP TABLE local_recovery_run_archives", args: [] },
       { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },

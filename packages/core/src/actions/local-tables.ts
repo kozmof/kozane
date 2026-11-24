@@ -15,3 +15,8 @@ export const localTableNames: readonly string[] = Object.freeze([
   "local_recovery_run_archives",
   "local_recovery_run_assets",
 ]);
+
+/** Destination authority cannot be transported or become shared application data. */
+export const recoveryDestinationTableNames: readonly string[] = Object.freeze([
+  "local_recovery_installation",
+]);

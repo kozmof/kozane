@@ -150,6 +150,7 @@ installs no images or live rows and does not activate a workspace. Use the loade
 again when completeness must be established. A prior observation or retained
 owner state is not a durable publication or installation receipt.
 
-Automatic capture, durable installation receipts, one-time local loading and
-activation remain separate requirements. Pending filesystem operations remain
+The host can [stage the local snapshot once](local-recovery-installation.md)
+in a separate empty destination. Automatic capture, shared-state and image
+installation and activation remain separate requirements. Pending filesystem operations remain
 recovery data and are not executed by publication or loading.
