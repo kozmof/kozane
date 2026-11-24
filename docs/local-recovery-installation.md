@@ -90,8 +90,10 @@ SQL values. The host remains responsible for validating bundle completeness and
 protected bytes before the first call. The Node wrapper performs that source
 validation for registered published bundles.
 
-This step stages local data only. Shared rows and retained history still need
-destination installation before activation. Image bytes are not copied to the
+This step stages local data only. Continue with
+[shared projection staging](shared-recovery-installation.md) using the same bundle.
+Required history and bookkeeping still need destination installation before
+activation. Image bytes are not copied to the
 destination. Pending local operations remain records for later inspection. No
 local-only effects are replayed. Taskspace file bytes and configuration files are
 outside the local snapshot.

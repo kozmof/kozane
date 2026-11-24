@@ -151,6 +151,8 @@ again when completeness must be established. A prior observation or retained
 owner state is not a durable publication or installation receipt.
 
 The host can [stage the local snapshot once](local-recovery-installation.md)
-in a separate empty destination. Automatic capture, shared-state and image
-installation and activation remain separate requirements. Pending filesystem operations remain
+in a separate empty destination, then
+[stage the shared projection](shared-recovery-installation.md) after matching local installation.
+Automatic capture, required history, bookkeeping, destination images and
+activation remain separate requirements. Pending filesystem operations remain
 recovery data and are not executed by publication or loading.

@@ -82,6 +82,10 @@ async function fixture() {
 const database = async () => (await createTestDB()) as unknown as DB;
 // Retain earlier schema vectors when adding new bundled migrations.
 const vectors: Record<string, { byteLength: number; sha256: string }> = {
+  "0038_shared_recovery_installation": {
+    byteLength: 1556,
+    sha256: "95842d2f490a8d275f37c5e6b8c6b5c01eb0c40f79e3497d628c3c1ab992a2c4",
+  },
   "0037_local_recovery_installation": {
     byteLength: 1554,
     sha256: "944382969baf4cfb77584abc4730c155d80c19bbdb17139ebd2cfc928bf880ca",

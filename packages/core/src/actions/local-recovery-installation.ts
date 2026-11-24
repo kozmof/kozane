@@ -3,9 +3,7 @@ import { sql } from "drizzle-orm";
 import { withReadTx, withTx, type DB, type Tx, type ReadTx } from "../database.js";
 import { localRecoveryInstallationTable as receipt } from "../schema.js";
 import { canonicalSchemaManifest } from "../generated/schema-manifest.js";
-import { readSchemaManifest } from "../migrations/schema-reader.js";
-import { compareSchemaManifests } from "../migrations/schema.js";
-import { validateMigrationHistory } from "../migrations/history.js";
+import { requireRecoveryDestinationSchema as schema } from "./recovery-destination.js";
 import { localTableNames } from "./local-tables.js";
 import { createRestorationPlan } from "./restoration-plan.js";
 import { createRowProjection } from "./projection.js";
@@ -58,20 +56,6 @@ export async function readLocalRecoveryInstallation(db: DB | Tx | ReadTx) {
 }
 export function inspectLocalRecoveryInstallation(db: DB) {
   return withReadTx(db, (tx) => readLocalRecoveryInstallation(tx));
-}
-async function schema(tx: Tx | ReadTx) {
-  const actual = await readSchemaManifest(async (query) =>
-    (await tx.values(sql.raw(query))).map((row) => Array.from(row)),
-  );
-  if (!compareSchemaManifests(actual).matches)
-    throw new LocalRecoveryError("Local installation requires the canonical destination schema");
-  const history = await tx.values(
-    sql`SELECT hash,created_at FROM __drizzle_migrations ORDER BY created_at`,
-  );
-  validateMigrationHistory(
-    history.map((row) => ({ hash: row[0], created_at: row[1] })),
-    "complete",
-  );
 }
 async function empty(tx: Tx | ReadTx, names = tables.map((t) => t.name)) {
   for (const name of names)

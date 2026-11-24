@@ -394,6 +394,7 @@ it.each([false, true])(
     const f = await fixture(false);
     const migration = migrations.find(({ tag }) => tag === "0028_local_recovery_shared_history")!;
     await withMigration(f.source, async () => [
+      { sql: "DROP TABLE shared_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_run_assets", args: [] },
       { sql: "DROP TABLE local_recovery_run_archives", args: [] },

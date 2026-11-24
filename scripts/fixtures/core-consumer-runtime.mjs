@@ -763,6 +763,17 @@ await assert.rejects(
 );
 assert.equal("parseRecoveryBundleSources" in recovery, false);
 assert.deepEqual(
+  recovery.parseSharedRecoveryInstallationRecord(JSON.stringify(bundleIndex.checkpoint)),
+  bundleIndex.checkpoint,
+);
+for (const name of [
+  recovery.readSharedRecoveryInstallation,
+  recovery.inspectSharedRecoveryInstallation,
+  recovery.checkSharedRecoveryInstallation,
+  recovery.installSharedRecoverySnapshot,
+])
+  assert.equal(typeof name, "function");
+assert.deepEqual(
   recovery.parseLocalRecoveryInstallationRecord(JSON.stringify(bundleIndex.checkpoint)),
   bundleIndex.checkpoint,
 );
@@ -1181,6 +1192,7 @@ try {
     "local_recovery_run_archives",
     "local_recovery_run_assets",
     "local_recovery_installation",
+    "shared_recovery_installation",
   ])
     assert.ok(sqlite.prepare("SELECT name FROM sqlite_schema WHERE name=?").get(name));
   assert.ok(

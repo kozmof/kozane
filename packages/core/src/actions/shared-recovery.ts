@@ -1,6 +1,6 @@
-/** Validate a reconstructed shared projection without installing or activating a workspace. */
+/** Shared reconstruction, isolated validation and trusted transaction loading. */
 import { sql } from "drizzle-orm";
-import { withTx, type DB } from "../database.js";
+import { withTx, type DB, type Tx } from "../database.js";
 import { migrations } from "../generated/migrations.js";
 import { canonicalSchemaManifest } from "../generated/schema-manifest.js";
 import { compareSchemaManifests } from "../migrations/schema.js";
@@ -43,7 +43,7 @@ export class SharedRecoveryError extends Error {
 const applicationTables = canonicalSchemaManifest.filter(
   (entry) => entry.type === "table" && entry.name !== "__drizzle_migrations",
 );
-const plan = createRestorationPlan(
+export const sharedRecoveryPlan = createRestorationPlan(
   canonicalSchemaManifest,
   applicationTables
     .filter(
@@ -53,6 +53,7 @@ const plan = createRestorationPlan(
     )
     .map(({ name }) => name),
 );
+const plan = sharedRecoveryPlan;
 const sharedTables = new Set(plan.loadOrder.map(({ name }) => name));
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -262,10 +263,6 @@ export async function validateSharedRecoveryProjection(
   input: unknown,
 ): Promise<SharedRecoveryProjection> {
   const snapshot = parseSharedRecoveryProjection(input);
-  const target = createRowProjection(
-    plan.loadOrder,
-    snapshot.tables.flatMap((table) => table.rows.map((row) => ({ table: table.name, row }))),
-  );
   const db = await createDatabase();
   await withTx(db, async (tx) => {
     const execute = (query: string) => tx.values(sql.raw(query));
@@ -280,37 +277,7 @@ export async function validateSharedRecoveryProjection(
         throw new SharedRecoveryError("Shared recovery validation requires an empty database");
     await tx.run(sql`SAVEPOINT shared_recovery_validation`);
     try {
-      // Only these two business triggers mutate loaded rows. Keep validation triggers and constraints.
-      await tx.run(sql`DROP TRIGGER card_inventory_clear_slot`);
-      await tx.run(sql`DROP TRIGGER card_stamp_missing_timestamps`);
-      for (const table of plan.loadOrder)
-        for (const row of target.rows(table.name))
-          await tx.run(statement(installationInsert(table.name, row)));
-      if ((await execute("PRAGMA foreign_key_check")).length)
-        throw new SharedRecoveryError("Shared recovery validation foreign-key check failed");
-      if (
-        (
-          await execute(
-            "SELECT 1 FROM card WHERE (inventory_id IS NULL) <> (inventory_slot IS NULL) LIMIT 1",
-          )
-        ).length
-      )
-        throw new SharedRecoveryError("Shared recovery validation inventory pair invariant failed");
-      for (const table of plan.loadOrder) {
-        const loaded = await execute(
-          `SELECT ${captureRowSql(table.columns)} FROM ${quote(table.name)}`,
-        );
-        target.verifyInstalledRows(
-          table.name,
-          loaded.map((row) => {
-            if (typeof row[0] !== "string")
-              throw new SharedRecoveryError(
-                "Shared recovery validation did not return a row image",
-              );
-            return decodeCapturedRow(row[0]);
-          }),
-        );
-      }
+      await writeSharedRecoveryProjection(tx, snapshot);
       await verifyActionConnection(execute);
     } finally {
       await tx.run(sql`ROLLBACK TO shared_recovery_validation`);
@@ -318,4 +285,59 @@ export async function validateSharedRecoveryProjection(
     }
   });
   return snapshot;
+}
+
+/** Internal exact read-back after staging and receipt publication. */
+export async function verifySharedRecoveryProjection(tx: Tx, snapshot: SharedRecoveryProjection) {
+  const execute = (query: string) => tx.values(sql.raw(query));
+  const target = createRowProjection(
+    plan.loadOrder,
+    snapshot.tables.flatMap((table) => table.rows.map((row) => ({ table: table.name, row }))),
+  );
+  if ((await execute("PRAGMA foreign_key_check")).length)
+    throw new SharedRecoveryError("Shared recovery validation foreign-key check failed");
+  if (
+    (
+      await execute(
+        "SELECT 1 FROM card WHERE (inventory_id IS NULL) <> (inventory_slot IS NULL) LIMIT 1",
+      )
+    ).length
+  )
+    throw new SharedRecoveryError("Shared recovery validation inventory pair invariant failed");
+  for (const table of plan.loadOrder) {
+    const loaded = await execute(
+      `SELECT ${captureRowSql(table.columns)} FROM ${quote(table.name)}`,
+    );
+    target.verifyInstalledRows(
+      table.name,
+      loaded.map((row) => {
+        if (typeof row[0] !== "string")
+          throw new SharedRecoveryError("Shared recovery validation did not return a row image");
+        return decodeCapturedRow(row[0]);
+      }),
+    );
+  }
+}
+
+/** Caller owns the canonical transaction and rolls back any failed load. */
+export async function writeSharedRecoveryProjection(tx: Tx, snapshot: SharedRecoveryProjection) {
+  const target = createRowProjection(
+    plan.loadOrder,
+    snapshot.tables.flatMap((table) => table.rows.map((row) => ({ table: table.name, row }))),
+  );
+  const triggers: string[] = [];
+  for (const name of ["card_inventory_clear_slot", "card_stamp_missing_timestamps"]) {
+    const rows = await tx.values(
+      sql`SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=${name}`,
+    );
+    if (rows.length !== 1 || typeof rows[0][0] !== "string")
+      throw new SharedRecoveryError("Missing shared installation business trigger");
+    triggers.push(rows[0][0]);
+    await tx.run(sql.raw(`DROP TRIGGER ${quote(name)}`));
+  }
+  for (const table of plan.loadOrder)
+    for (const row of target.rows(table.name))
+      await tx.run(statement(installationInsert(table.name, row)));
+  for (const trigger of triggers) await tx.run(sql.raw(trigger));
+  await verifySharedRecoveryProjection(tx, snapshot);
 }

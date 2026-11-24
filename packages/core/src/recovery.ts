@@ -1,4 +1,4 @@
-/** Trusted recovery validation and local staging. These helpers do not activate a workspace. */
+/** Trusted recovery validation and destination staging. These helpers do not activate a workspace. */
 export {
   SHARED_RECOVERY_RETAINED_HISTORY_VERSION,
   SHARED_RECOVERY_RETAINED_CHECKPOINT_VERSION,
@@ -259,3 +259,10 @@ export {
   checkLocalRecoveryInstallation,
   installLocalRecoverySnapshot,
 } from "./actions/local-recovery-installation.js";
+export {
+  parseSharedRecoveryInstallationRecord,
+  readSharedRecoveryInstallation,
+  inspectSharedRecoveryInstallation,
+  checkSharedRecoveryInstallation,
+  installSharedRecoverySnapshot,
+} from "./actions/shared-recovery-installation.js";

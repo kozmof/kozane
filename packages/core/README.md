@@ -102,14 +102,17 @@ original catalog bindings and files.
 payload references and their exact combined image requirements to an independent
 content descriptor. The Node host can
 [publish registered bundles](../../docs/recovery-bundles.md) after verifying all
-source contents, exact original bindings and protected image bytes. Shared-state
-installation and activation remain pending.
+source contents, exact original bindings and protected image bytes. Required
+history and destination image installation and activation remain pending.
 
 [One-time local installation](../../docs/local-recovery-installation.md) stages
 exact local rows and a destination-owned record in one commit. It requires an
 empty canonical destination and complete migration history. The Node host can
 validate a published bundle before this step. Matching retries preserve later
-edits. Shared-state and image installation and activation remain pending.
+edits. Continue with [shared projection staging](../../docs/shared-recovery-installation.md)
+after matching local installation. It preserves current local metadata and commits
+exact shared rows with its own immutable destination record. Required history,
+bookkeeping, destination images and activation remain pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

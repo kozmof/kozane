@@ -1700,7 +1700,10 @@ describe("export table list", () => {
     Object.values(schema)
       .filter((value) => is(value, SQLiteTable))
       .map((table) => getTableConfig(table as SQLiteTable))
-      .filter((table) => table.name !== "local_recovery_installation");
+      .filter(
+        (table) =>
+          !["local_recovery_installation", "shared_recovery_installation"].includes(table.name),
+      );
 
   /**
    * Verify that exported columns include every portable schema column. Omitting one would
@@ -2355,33 +2358,38 @@ it("excludes destination authority from JSON and preserves it through imports in
         runAssets: assets.payload,
       }),
       descriptor = JSON.stringify(bundle.checkpoint);
-    await client.execute({
-      sql: "INSERT INTO local_recovery_installation VALUES(1,?,9223372036854775807)",
-      args: [descriptor],
-    });
+    for (const table of ["local_recovery_installation", "shared_recovery_installation"])
+      await client.execute({
+        sql: `INSERT INTO ${table} VALUES(1,?,9223372036854775807)`,
+        args: [descriptor],
+      });
     const dump = await exportDbJson(targetUrl);
     expect(dump.version).toBe(26);
     expect(Object.keys(dump.tables)).toHaveLength(26);
     expect("local_recovery_installation" in dump.tables).toBe(false);
+    expect("shared_recovery_installation" in dump.tables).toBe(false);
     const transported = {
       ...dump,
       tables: {
         ...dump.tables,
         local_recovery_installation: [{ id: 1, descriptor, installed_at: 1 }],
+        shared_recovery_installation: [{ id: 1, descriptor, installed_at: 1 }],
       },
     };
     await importDbJson(targetUrl, transported);
-    expect(
-      (
-        await client.execute(
-          "SELECT descriptor,CAST(installed_at AS TEXT) AS value FROM local_recovery_installation",
-        )
-      ).rows.map((row) => [row.descriptor, row.value]),
-    ).toEqual([[descriptor, "9223372036854775807"]]);
+    for (const table of ["local_recovery_installation", "shared_recovery_installation"])
+      expect(
+        (
+          await client.execute(
+            `SELECT descriptor,CAST(installed_at AS TEXT) AS value FROM ${table}`,
+          )
+        ).rows.map((row) => [row.descriptor, row.value]),
+      ).toEqual([[descriptor, "9223372036854775807"]]);
     await importDbJson(otherUrl, transported);
     const other = createClient({ url: otherUrl });
     try {
-      expect((await other.execute("SELECT 1 FROM local_recovery_installation")).rows).toEqual([]);
+      for (const table of ["local_recovery_installation", "shared_recovery_installation"])
+        expect((await other.execute(`SELECT 1 FROM ${table}`)).rows).toEqual([]);
     } finally {
       other.close();
     }

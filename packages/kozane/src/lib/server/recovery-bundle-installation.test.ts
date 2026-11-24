@@ -28,7 +28,10 @@ import { saveRegisteredSharedRecoveryActionArchivePayload } from "./shared-recov
 import { saveRegisteredRecoveryAssetPayload } from "./recovery-asset-payload.js";
 import * as files from "./run-archive-asset-payload.js";
 import { saveRegisteredRecoveryBundle, loadRegisteredRecoveryBundle } from "./recovery-bundle.js";
-import { installRegisteredRecoveryBundleLocalSnapshot } from "./recovery-bundle-installation.js";
+import {
+  installRegisteredRecoveryBundleLocalSnapshot,
+  installRegisteredRecoveryBundleSharedSnapshot,
+} from "./recovery-bundle-installation.js";
 vi.mock("node:fs/promises", async (original) => ({
   ...(await original<typeof import("node:fs/promises")>()),
 }));
@@ -463,4 +466,104 @@ it("owns destination, identity, descriptor and source limits before validation c
   expect((await installRegisteredRecoveryBundleLocalSnapshot(input)).changed).toBe(true);
   expect(await recovery.inspectLocalRecoveryInstallation(destination)).toEqual(bundle.checkpoint);
   expect(await recovery.inspectLocalRecoveryInstallation(db)).toBeNull();
+});
+
+const installShared = () =>
+  installRegisteredRecoveryBundleSharedSnapshot({ ...bundleOptions(), destination });
+it("stages shared rows from a complete published bundle after matching local installation", async () => {
+  await install();
+  await destination.run(sql`UPDATE taskspace_local SET path='Local edit'`);
+  const before = await recovery.captureLocalRecoverySnapshot(
+      destination,
+      identity,
+      async () => source.localSnapshot.selection,
+    ),
+    catalogsBefore = await catalogs(),
+    ownerBefore = (await inspectOwner()).record;
+  const mkdir = vi.spyOn(fs, "mkdir"),
+    link = vi.spyOn(fs, "link"),
+    unlink = vi.spyOn(fs, "unlink");
+  expect(await installShared()).toEqual({ checkpoint: bundle.checkpoint, changed: true });
+  expect(await recovery.inspectSharedRecoveryInstallation(destination)).toEqual(bundle.checkpoint);
+  expect(
+    await recovery.captureLocalRecoverySnapshot(
+      destination,
+      identity,
+      async () => source.localSnapshot.selection,
+    ),
+  ).toEqual(before);
+  expect(await catalogs()).toEqual(catalogsBefore);
+  expect((await inspectOwner()).record).toEqual(ownerBefore);
+  expect(mkdir).not.toHaveBeenCalled();
+  expect(link).not.toHaveBeenCalled();
+  expect(unlink).not.toHaveBeenCalled();
+});
+it("requires matching local staging before reopening source files for shared installation", async () => {
+  const open = vi.spyOn(fs, "open");
+  await expect(installShared()).rejects.toThrow("matching local installation");
+  expect(open).not.toHaveBeenCalled();
+  expect(await recovery.inspectSharedRecoveryInstallation(destination)).toBeNull();
+});
+it("acknowledges shared retries without files or validation and preserves later edits", async () => {
+  await install();
+  await installShared();
+  await destination.run(sql`INSERT INTO namespace VALUES('later','Keep',0)`);
+  await destination.run(sql`UPDATE taskspace_local SET path='Keep local'`);
+  await fs.unlink(published());
+  const open = vi.spyOn(fs, "open"),
+    create = vi.fn(factory);
+  expect(
+    await installRegisteredRecoveryBundleSharedSnapshot({
+      ...bundleOptions(),
+      destination,
+      createValidationDatabase: create,
+    }),
+  ).toEqual({ checkpoint: bundle.checkpoint, changed: false });
+  expect(open).not.toHaveBeenCalled();
+  expect(create).not.toHaveBeenCalled();
+  expect(await destination.get(sql`SELECT name FROM namespace`)).toMatchObject({ name: "Keep" });
+  expect(await destination.get(sql`SELECT path FROM taskspace_local`)).toMatchObject({
+    path: "Keep local",
+  });
+});
+it.each(["missing-index", "missing-shared", "missing-image", "released-owner"])(
+  "refuses %s before shared staging and preserves installed local rows",
+  async (defect) => {
+    await install();
+    const before = await recovery.captureLocalRecoverySnapshot(
+      destination,
+      identity,
+      async () => source.localSnapshot.selection,
+    );
+    if (defect === "missing-index") await fs.unlink(published());
+    if (defect === "missing-shared") await fs.unlink(path("shared"));
+    if (defect === "missing-image") await fs.unlink(file(31));
+    if (defect === "released-owner") {
+      const { releaseAssetManifest } = await import("../../db/api/asset-manifest.js");
+      await releaseAssetManifest(db, owner(), "Retired");
+    }
+    await expect(installShared()).rejects.toThrow();
+    expect(await recovery.inspectSharedRecoveryInstallation(destination)).toBeNull();
+    expect(
+      await recovery.captureLocalRecoverySnapshot(
+        destination,
+        identity,
+        async () => source.localSnapshot.selection,
+      ),
+    ).toEqual(before);
+  },
+);
+it("refuses conflicting or populated shared staging before reopening source files", async () => {
+  await install();
+  const open = vi.spyOn(fs, "open");
+  await expect(
+    installRegisteredRecoveryBundleSharedSnapshot({
+      ...bundleOptions(),
+      destination,
+      checkpoint: { ...bundle.checkpoint, sha256: "b".repeat(64) },
+    }),
+  ).rejects.toThrow("matching local installation");
+  await destination.run(sql`INSERT INTO namespace VALUES('populated','Keep',0)`);
+  await expect(installShared()).rejects.toThrow("empty shared tables");
+  expect(open).not.toHaveBeenCalled();
 });

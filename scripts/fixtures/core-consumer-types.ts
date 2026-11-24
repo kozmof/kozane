@@ -173,6 +173,11 @@ import {
   type SharedRecoveryRunArchive,
   type SharedRecoveryRunArchiveCheckpoint,
   type SharedRecoveryRunArchiveSources,
+  parseSharedRecoveryInstallationRecord,
+  readSharedRecoveryInstallation,
+  inspectSharedRecoveryInstallation,
+  checkSharedRecoveryInstallation,
+  installSharedRecoverySnapshot,
   parseLocalRecoveryInstallationRecord,
   readLocalRecoveryInstallation,
   inspectLocalRecoveryInstallation,
@@ -840,6 +845,23 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
       void inspectLocalRecoveryInstallation(db);
       void checkLocalRecoveryInstallation(db, bundleCheckpoint, parsedIdentity);
       void withReadTx(db, (tx) => readLocalRecoveryInstallation(tx));
+      const sharedInstallation = await installSharedRecoverySnapshot(
+        db,
+        async () => db,
+        savedPayload,
+        bundleCheckpoint,
+        parsedIdentity,
+      );
+      const sharedInstallationCheckpoint: RecoveryBundleCheckpoint = sharedInstallation.checkpoint;
+      const sharedInstallationChanged: boolean = sharedInstallation.changed;
+      void sharedInstallationChanged;
+      void parseSharedRecoveryInstallationRecord(JSON.stringify(sharedInstallationCheckpoint));
+      void readSharedRecoveryInstallation(db);
+      void inspectSharedRecoveryInstallation(db);
+      void checkSharedRecoveryInstallation(db, bundleCheckpoint, parsedIdentity);
+      void withReadTx(db, (tx) => readSharedRecoveryInstallation(tx));
+      // @ts-expect-error Shared installation expectations remain immutable.
+      sharedInstallation.checkpoint.sha256 = "changed";
       // @ts-expect-error Destination installation expectations remain immutable.
       localInstallation.checkpoint.sha256 = "changed";
       // @ts-expect-error A bundle requires its separately verified broader manifest payload.

@@ -424,6 +424,27 @@ export const localRecoveryInstallationTable = sqliteTable(
   ],
 );
 
+/** Destination installation authority is never transported in recovery snapshots or JSON dumps. */
+export const sharedRecoveryInstallationTable = sqliteTable(
+  "shared_recovery_installation",
+  {
+    id: integer("id").primaryKey().notNull(),
+    descriptor: text("descriptor").notNull(),
+    installedAt: integer("installed_at").notNull(),
+  },
+  (t) => [
+    check("shared_recovery_installation_singleton", sql`${t.id} IS 1`),
+    check(
+      "shared_recovery_installation_time",
+      sql`typeof(${t.installedAt})='integer' AND ${t.installedAt}>=0`,
+    ),
+    check(
+      "shared_recovery_installation_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.runAssetCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.runAssetCheckpoint.version') IS 1 AND json_type(${t.descriptor},'$.byteLength') IS 'integer' AND json_extract(${t.descriptor},'$.byteLength') BETWEEN 1 AND 9007199254740991 AND json_type(${t.descriptor},'$.sha256') IS 'text' AND length(json_extract(${t.descriptor},'$.sha256')) IS 64 AND json_extract(${t.descriptor},'$.sha256') NOT GLOB '*[^0-9a-f]*'`,
+    ),
+  ],
+);
+
 /** Broader run manifests retain all seven original source expectations. */
 export const localRecoveryRunAssetsTable = sqliteTable(
   "local_recovery_run_assets",

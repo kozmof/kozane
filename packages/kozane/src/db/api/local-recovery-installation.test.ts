@@ -354,13 +354,16 @@ it.each(["slot", "version", "hash", "length", "time"])(
 );
 it("migration 37 preserves portable metadata and starts without installation authority", async () => {
   const f = await fixture(),
-    migration = migrations.at(-1)!;
+    migration = migrations.find((record) => record.idx === 37)!;
   await withMigration(f.source, async () => [
+    { sql: "DROP TABLE shared_recovery_installation", args: [] },
     { sql: "DROP TABLE local_recovery_installation", args: [] },
     { sql: "DELETE FROM __drizzle_migrations WHERE created_at>=?", args: [migration.when] },
   ]);
   const before = await rows(f.source);
-  expect((await applyMigrations(f.source)).appliedIds).toEqual([migration.id]);
+  expect((await applyMigrations(f.source)).appliedIds).toEqual(
+    migrations.filter((record) => record.idx >= 37).map((record) => record.id),
+  );
   expect(await rows(f.source)).toEqual(before);
   expect(await recovery.inspectLocalRecoveryInstallation(f.source)).toBeNull();
 });

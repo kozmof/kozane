@@ -53,7 +53,7 @@ IDs and timestamps to the source card and segment roles. Production stamping
 remains pending.
 
 The opt-in service registry now installs real handlers for every declared
-syncable database kind and `system.compose`. It supports schemas 19–37 and requires
+syncable database kind and `system.compose`. It supports schemas 19–38 and requires
 explicit host recovery registrations for local-only kinds. Application routing,
 system import handlers, durable recovery and persistence remain
 pending.
@@ -114,7 +114,7 @@ pins source revision `4606322`. All older cohorts remain unchanged. Browser exec
 these cohorts remains pending.
 
 Contract version 2 now registers database-only taskspace creation, label changes
-and removal on schemas 20–37. These shared services reject local metadata inputs,
+and removal on schemas 20–38. These shared services reject local metadata inputs,
 validate namespace visibility and return shared fields only. Version 1 retains
 its local-only lifecycle meanings. Version 2 compositions can record and replay
 shared taskspace children while the five file methods remain local-only.
@@ -584,7 +584,7 @@ protected through cleanup after earlier owners are released. Native tests cover
 changed evidence, exact source bindings, unsafe or missing images, competing
 writers, owner publication changes and failed commits. Earlier pending and
 retained protection survives failures. Registered bundle publication now uses
-the host workflow described below. Shared-state installation remains pending. See
+the host workflow described below. Retained history and image installation remain pending. See
 [broader run images](recovery-checkpoint-images.md#check-saved-broader-run-images).
 
 Core now prepares recovery bundle indexes from all eight original payloads.
@@ -596,7 +596,7 @@ requirements or rewritten expectations. Native and Node WASM tests cover closed
 inventories, historical metadata, unsafe transport, input ownership and exact
 source verification. Indexes remain metadata without authorizing publication or
 installation. Registered bundle publication now uses the host workflow described
-below. Shared-state installation remains pending. See [bundle indexes](recovery-bundle-indexes.md).
+below. Retained history and image installation remain pending. See [bundle indexes](recovery-bundle-indexes.md).
 
 The Node host now publishes registered bundle indexes only after validating all
 eight saved payloads, independent manifest coverage and protected image bytes.
@@ -608,7 +608,7 @@ file identity through validation. Matching final bytes after a failed commit do
 not bypass pending-owner refusal. Explicit retries preserve interruption evidence
 and earlier pins. Native tests cover missing sources, changed evidence, invalid
 limits, unsafe paths, publication and commit failures, cleanup handoff and
-competing writes. Automatic capture, shared-state installation and activation remain
+competing writes. Automatic capture, retained history and image installation and activation remain
 pending. See [published bundles](recovery-bundles.md).
 
 Migration 0037 adds destination-owned local installation authority. The singleton
@@ -622,9 +622,23 @@ later edits and conflicting checkpoints are refused. The Node wrapper validates
 a published bundle before the first installation and acknowledges later retries
 without reopening source files. Native and Node WASM tests cover exact values,
 identity mismatches, rollback and metadata isolation. Native tests cover restart,
-competing connections and published-bundle integration. Shared-state staging,
-image installation and activation remain pending. See
+competing connections and published-bundle integration. Shared projection staging now
+uses the boundary described below. Image installation and activation remain pending. See
 [local installation](local-recovery-installation.md).
+
+Migration 0038 adds a separate immutable shared installation record. Shared
+staging requires the same bundle's completed local installation and twelve empty
+shared tables. It verifies the selected history descriptor, reconstructs and
+validates exact SQL rows separately, then commits the projection and record
+together. Business triggers are restored before commit and tagged read-back
+covers the shared rows, current local metadata, local installation authority and
+migration history. Matching retries preserve later shared and local edits without
+reopening source files. Both destination records stay outside portable snapshots,
+shared projections and JSON exports. Native and Node WASM tests cover exact
+values, invalid final states, rollback and metadata isolation. Native tests cover
+competing connections, restart and complete published-bundle integration. Required
+history, materialization bookkeeping, destination images and activation remain
+pending. See [shared installation](shared-recovery-installation.md).
 
 ## Version one
 
@@ -758,6 +772,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [x] Persist one immutable destination installation record outside portable local snapshots, shared projections and JSON exports. Preserve it through JSON imports and refuse transported authority, conflicting descriptors, unsupported schemas and incomplete migration history.
 - [x] Install exact local rows and the destination record in one commit after isolated validation. Preserve absent metadata and pending operations, verify tagged read-back and rollback, serialize competing writers and acknowledge matching retries without replaying later edits.
+- [x] Stage the reconstructed shared projection once after matching local installation. Require empty shared tables, preserve current local rows and migration history, suppress and restore mutating business triggers atomically, verify exact tagged read-back and roll back rows and authority together.
+- [x] Persist immutable shared installation metadata outside portable snapshots, shared projections and JSON dumps. Validate complete published bundles before first staging, serialize competing installations and preserve later edits on matching retries without reopening source files.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.
 - [ ] Implement trusted migrate mode and atomic migration batches covering schema, data, migration history, progress and mode cleanup.

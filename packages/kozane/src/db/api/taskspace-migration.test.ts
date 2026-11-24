@@ -40,6 +40,7 @@ it.each([false, true])(
             "local_recovery_run_archives",
             "local_recovery_run_assets",
             "local_recovery_installation",
+            "shared_recovery_installation",
           ].includes(name),
       )
       .map(({ name }) => name);
@@ -57,6 +58,7 @@ it.each([false, true])(
         "local_recovery_run_archives",
         "local_recovery_run_assets",
         "local_recovery_installation",
+        "shared_recovery_installation",
         "local_asset_manifest",
         "local_recovery_checkpoint",
         "local_image_upload",

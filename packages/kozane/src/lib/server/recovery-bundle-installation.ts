@@ -1,7 +1,9 @@
-/** Explicitly stage one local snapshot from a complete registered bundle. No activation or filesystem actions run. */
+/** Explicitly stage local or shared rows from complete registered bundles without activation. */
 import type { DB } from "../../db/database.js";
 import {
   checkLocalRecoveryInstallation,
+  checkSharedRecoveryInstallation,
+  installSharedRecoverySnapshot,
   installLocalRecoverySnapshot,
   parseLocalRecoveryIdentity,
   parseRecoveryBundleCheckpoint,
@@ -9,7 +11,9 @@ import {
 import { loadRegisteredRecoveryBundle } from "./recovery-bundle.js";
 
 type Options = Parameters<typeof loadRegisteredRecoveryBundle>[0] & { destination: DB };
-export async function installRegisteredRecoveryBundleLocalSnapshot(options: Options) {
+async function installBundleSnapshot(options: Options, kind: "local" | "shared") {
+  const check = kind === "local" ? checkLocalRecoveryInstallation : checkSharedRecoveryInstallation;
+  const install = kind === "local" ? installLocalRecoverySnapshot : installSharedRecoverySnapshot;
   const {
     root,
     db,
@@ -41,7 +45,7 @@ export async function installRegisteredRecoveryBundleLocalSnapshot(options: Opti
     throw new Error("Payload read limits must be positive safe integers");
   const expected = parseLocalRecoveryIdentity(options.expected),
     checkpoint = parseRecoveryBundleCheckpoint(options.checkpoint);
-  const already = await checkLocalRecoveryInstallation(destination, checkpoint, expected);
+  const already = await check(destination, checkpoint, expected);
   if (already) return Object.freeze({ checkpoint: already, changed: false });
   const bundle = await loadRegisteredRecoveryBundle({
     root,
@@ -59,11 +63,19 @@ export async function installRegisteredRecoveryBundleLocalSnapshot(options: Opti
     assetMaxBytes,
     runAssetMaxBytes,
   });
-  return installLocalRecoverySnapshot(
+  return install(
     destination,
     createValidationDatabase,
-    bundle.contents.localSnapshot,
+    kind === "local" ? bundle.contents.localSnapshot : bundle.contents.sharedHistory,
     checkpoint,
     expected,
   );
+}
+
+export function installRegisteredRecoveryBundleLocalSnapshot(options: Options) {
+  return installBundleSnapshot(options, "local");
+}
+/** Stage shared rows after matching local installation. History, images and activation remain separate. */
+export function installRegisteredRecoveryBundleSharedSnapshot(options: Options) {
+  return installBundleSnapshot(options, "shared");
 }

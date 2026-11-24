@@ -234,6 +234,7 @@ it.each([false, true])(
     const db = await database();
     const migration = migrations.find((row) => row.tag === "0027_local_recovery_checkpoint")!;
     await withMigration(db, async () => [
+      { sql: "DROP TABLE shared_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_installation", args: [] },
       { sql: "DROP TABLE local_recovery_run_assets", args: [] },
       { sql: "DROP TABLE local_recovery_run_archives", args: [] },
