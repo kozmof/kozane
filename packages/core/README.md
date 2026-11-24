@@ -117,6 +117,9 @@ bookkeeping, destination images and activation remain pending.
 independently trusted receiving identity and starts without source-device local
 attachments. It requires a new empty destination and preserves later edits on
 matching retries.
+[Staged pending-operation inspection](../../docs/recovery-file-operation-inspection.md)
+reads exact journal evidence without replay or confirmation. It requires matching
+local installation authority and preserves values outside the JavaScript date range.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

@@ -173,6 +173,10 @@ import {
   type SharedRecoveryRunArchive,
   type SharedRecoveryRunArchiveCheckpoint,
   type SharedRecoveryRunArchiveSources,
+  inspectPendingRecoveryFileOperations,
+  readPendingRecoveryFileOperations,
+  type PendingRecoveryFileOperationOptions,
+  type PendingRecoveryFileOperationPage,
   parseSharedOnlyRecoveryInstallationRecord,
   readSharedOnlyRecoveryInstallation,
   inspectSharedOnlyRecoveryInstallation,
@@ -868,6 +872,25 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
       void withReadTx(db, (tx) => readSharedRecoveryInstallation(tx));
       // @ts-expect-error Shared installation expectations remain immutable.
       sharedInstallation.checkpoint.sha256 = "changed";
+      const pendingOptions: PendingRecoveryFileOperationOptions = { limit: 5, offset: 0 };
+      const pendingFiles: PendingRecoveryFileOperationPage =
+        await inspectPendingRecoveryFileOperations(
+          db,
+          bundleCheckpoint,
+          parsedIdentity,
+          pendingOptions,
+        );
+      const pendingCount: string = pendingFiles.total;
+      const nextPendingOffset: number | null = pendingFiles.nextOffset;
+      void pendingCount;
+      void nextPendingOffset;
+      void withReadTx(db, (tx) =>
+        readPendingRecoveryFileOperations(tx, bundleCheckpoint, parsedIdentity, pendingOptions),
+      );
+      // @ts-expect-error A raw read requires its caller's consistent transaction.
+      void readPendingRecoveryFileOperations(db, bundleCheckpoint, parsedIdentity, pendingOptions);
+      // @ts-expect-error Pending evidence remains immutable.
+      pendingFiles.operations.length = 0;
       const receivingIdentity = { ...parsedIdentity, deviceId: "receiving-device" };
       const sharedOnlyInstallation = await installSharedOnlyRecoverySnapshot(
         db,

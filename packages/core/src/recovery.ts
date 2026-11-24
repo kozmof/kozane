@@ -274,3 +274,9 @@ export {
   installSharedOnlyRecoverySnapshot,
   type SharedOnlyRecoveryInstallation,
 } from "./actions/shared-only-recovery-installation.js";
+export {
+  readPendingRecoveryFileOperations,
+  inspectPendingRecoveryFileOperations,
+  type PendingRecoveryFileOperationOptions,
+  type PendingRecoveryFileOperationPage,
+} from "./actions/recovery-file-operations.js";

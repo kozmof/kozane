@@ -9,9 +9,10 @@ import { TASKSPACE_MARKER_FILE, taskspaceMarkerText } from "../taskspace-marker.
 import { resolveTaskspacePath } from "./taskspace-path.js";
 import { errorCode, sameEntry } from "./fs-paths.js";
 
+import type { LocalFileOperationEvidence } from "../local-file-operation-evidence.js";
+
 export const contentHash = (content: string | Buffer) =>
   createHash("sha256").update(content).digest("hex");
-type Operation = typeof localFileOperationTable.$inferSelect;
 type ClaimOptions = { adoptExisting: boolean; parentsInside: boolean; ownIfCreated: boolean };
 function markerHashes(taskspaceId: string, namespaceId: string, options: ClaimOptions) {
   const ownership = options.ownIfCreated
@@ -39,7 +40,10 @@ export type ClaimObservation =
   | "invalid-intent"
   | "unreadable";
 
-export function inspectLocalClaim(operation: Operation, workspaceRoot: string): ClaimObservation {
+export function inspectLocalClaim(
+  operation: LocalFileOperationEvidence,
+  workspaceRoot: string,
+): ClaimObservation {
   let hashes: unknown;
   try {
     if (operation.kind !== "taskspace.claim" || operation.version !== 1) return "invalid-intent";

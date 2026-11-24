@@ -96,6 +96,7 @@ This step stages local data only. Continue with
 [shared projection staging](shared-recovery-installation.md) using the same bundle.
 Required history and bookkeeping still need destination installation before
 activation. Image bytes are not copied to the
-destination. Pending local operations remain records for later inspection. No
+destination. [Inspect staged pending operations](recovery-file-operation-inspection.md) without
+repeating filesystem work or confirming journal entries. No
 local-only effects are replayed. Taskspace file bytes and configuration files are
 outside the local snapshot.

@@ -19,11 +19,12 @@ import { errorCode, isStrictlyInside } from "./fs-paths.js";
 import { taskspacePathIssue } from "./taskspace-path.js";
 import { taskspaceLayoutPaths } from "./taskspace-layout-paths.js";
 
+import type { LocalFileOperationEvidence } from "../local-file-operation-evidence.js";
+
 export type DirectoryIdentity = { dev: string; ino: string; markerHash: string };
 type Evidence =
   | { state: "owned"; identity: DirectoryIdentity }
   | { state: "absent" | "unsafe-path" | "foreign-marker" };
-type Operation = typeof localFileOperationTable.$inferSelect;
 
 export function directoryEvidence(root: string, storedPath: string, taskspaceId: string): Evidence {
   if (taskspacePathIssue(storedPath, "workspace_relative")) return { state: "unsafe-path" };
@@ -123,7 +124,7 @@ export type DirectoryObservation =
   | "both-absent";
 
 export function inspectTaskspaceDirectoryOperation(
-  operation: Operation,
+  operation: LocalFileOperationEvidence,
   root: string,
 ): DirectoryObservation {
   if (

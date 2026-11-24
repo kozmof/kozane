@@ -762,6 +762,8 @@ await assert.rejects(
   recovery.SharedRecoveryError,
 );
 assert.equal("parseRecoveryBundleSources" in recovery, false);
+assert.equal(typeof recovery.inspectPendingRecoveryFileOperations, "function");
+assert.equal(typeof recovery.readPendingRecoveryFileOperations, "function");
 const receivingIdentity = {
   ...bundleIndex.checkpoint.runAssetCheckpoint.binding.localCheckpoint.identity,
   deviceId: "receiving-device",

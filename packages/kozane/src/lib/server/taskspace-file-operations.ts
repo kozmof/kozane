@@ -12,6 +12,8 @@ import { resolveTaskspaceEntry, TaskspaceFilesError } from "./taskspace-files.js
 import { resolveTaskspacePath, storedLocation } from "./taskspace-path.js";
 import { errorCode } from "./fs-paths.js";
 
+import type { LocalFileOperationEvidence } from "../local-file-operation-evidence.js";
+
 export type TaskspaceFileChange = { subPath: string } & (
   | { operation: "create-file" | "create-directory" | "remove-entry" }
   | { operation: "save-file"; content: string; signature: string | null }
@@ -70,7 +72,9 @@ export type FileObservation =
   | "both-absent";
 
 /** Validate relative rename destinations before any path from an imported intent is read. */
-export function parseTaskspaceFileIntent(operation: Operation): TaskspaceFileIntent | null {
+export function parseTaskspaceFileIntent(
+  operation: LocalFileOperationEvidence,
+): TaskspaceFileIntent | null {
   if (operation.kind !== "taskspace.file" || operation.version !== 1) return null;
   try {
     const intent = JSON.parse(operation.intent);
@@ -146,7 +150,10 @@ function entry(path: string) {
   }
 }
 
-export function inspectTaskspaceFileOperation(operation: Operation, root: string): FileObservation {
+export function inspectTaskspaceFileOperation(
+  operation: LocalFileOperationEvidence,
+  root: string,
+): FileObservation {
   const intent = parseTaskspaceFileIntent(operation);
   if (!intent) return "invalid-intent";
   const path = resolveTaskspacePath(operation.path, operation.pathKind, root);

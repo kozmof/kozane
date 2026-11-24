@@ -655,6 +655,19 @@ tests cover competing connections, restart and complete published-bundle
 integration. Required history, destination images and activation remain pending.
 See [shared-only installation](shared-only-recovery-installation.md).
 
+Staged complete recovery now exposes read-only pending file-operation inspection.
+The core reader requires a matching local installation, trusted host identity,
+canonical schema and complete migration history. It captures exact tagged rows
+and decimal-string counts in one read snapshot, with bounded ID-ordered pages.
+The Node host observes claims, files and managed directories, then rereads the
+same journal page before returning. Concurrent evidence changes refuse success.
+No filesystem work is repeated and no operation is confirmed. Full timestamps,
+opaque intent bytes, retained errors and absent taskspace metadata remain intact.
+Absolute paths require an explicit host inspection policy. Native and Node WASM
+tests cover exact evidence and read-only boundaries. Native tests cover disk
+observations, changed evidence and competing commits. Schema and transport
+versions remain unchanged. See [staged file-operation inspection](recovery-file-operation-inspection.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -790,7 +803,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Stage the reconstructed shared projection once after matching local installation. Require empty shared tables, preserve current local rows and migration history, suppress and restore mutating business triggers atomically, verify exact tagged read-back and roll back rows and authority together.
 - [x] Persist immutable shared installation metadata outside portable snapshots, shared projections and JSON dumps. Validate complete published bundles before first staging, serialize competing installations and preserve later edits on matching retries without reopening source files.
 - [x] Stage explicit shared-only recovery in a new destination under an independently trusted receiving identity. Install no source local paths, uploads, manifests or pending operations. Refuse populated destinations and conflicting recovery modes, preserve later edits on retry and validate complete published source bundles before first staging.
-- [ ] Inspect pending file operations in staged complete recovery without automatically repeating filesystem changes.
+- [x] Inspect pending file operations in staged complete recovery without automatically repeating filesystem changes. Require matching local installation authority, preserve exact tagged journal values and unsafe timestamps, bound disk observations and refuse stale reports after concurrent journal changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.
 - [ ] Implement trusted migrate mode and atomic migration batches covering schema, data, migration history, progress and mode cleanup.
 - [ ] Resume incomplete transitions without rerunning committed repair. Validate guards and rows before atomically activating the new baseline.

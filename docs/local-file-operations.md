@@ -9,6 +9,12 @@ combined rename endpoint. Migration `0024_local_operation_abandonment` adds dura
 abandonment metadata. CLI layout moves now use directory intents that include
 all planned paths.
 
+After a complete local recovery snapshot has been staged, use
+[staged inspection](recovery-file-operation-inspection.md) to read exact current
+pending evidence and bounded disk observations. This path requires the matching
+installation record and trusted originating identity. It performs no confirmation
+or filesystem replay.
+
 Creation uses three phases:
 
 1. A database transaction creates the shared taskspace and a pending operation.
