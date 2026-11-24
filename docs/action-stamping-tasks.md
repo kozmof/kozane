@@ -583,8 +583,8 @@ nested and skipped inputs, never-executed originals and local requirements stay
 protected through cleanup after earlier owners are released. Native tests cover
 changed evidence, exact source bindings, unsafe or missing images, competing
 writers, owner publication changes and failed commits. Earlier pending and
-retained protection survives failures. Complete bundle publication and durable
-installation remain pending. See
+retained protection survives failures. Registered bundle publication now uses
+the host workflow described below. Durable installation remains pending. See
 [broader run images](recovery-checkpoint-images.md#check-saved-broader-run-images).
 
 Core now prepares recovery bundle indexes from all eight original payloads.
@@ -595,8 +595,21 @@ independent coverage, and refuses mismatched identities, missing payloads, chang
 requirements or rewritten expectations. Native and Node WASM tests cover closed
 inventories, historical metadata, unsafe transport, input ownership and exact
 source verification. Indexes remain metadata without authorizing publication or
-installation. Complete bundle publication and durable installation remain
-pending. See [bundle indexes](recovery-bundle-indexes.md).
+installation. Registered bundle publication now uses the host workflow described
+below. Durable installation remains pending. See [bundle indexes](recovery-bundle-indexes.md).
+
+The Node host now publishes registered bundle indexes only after validating all
+eight saved payloads, independent manifest coverage and protected image bytes.
+Pending pins commit before physical image reads. All eight original catalog
+bindings and source files remain checked under the image writer lock around byte
+verification and synced exclusive index publication. The bounded loader requires
+retained protection, rechecks all contents and physical bytes, and preserves index
+file identity through validation. Matching final bytes after a failed commit do
+not bypass pending-owner refusal. Explicit retries preserve interruption evidence
+and earlier pins. Native tests cover missing sources, changed evidence, invalid
+limits, unsafe paths, publication and commit failures, cleanup handoff and
+competing writes. Automatic capture, durable installation and activation remain
+pending. See [published bundles](recovery-bundles.md).
 
 ## Version one
 
@@ -726,7 +739,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Save and reopen registered broader run manifests through synced exclusive publication with independent limits for the manifest and all seven sources. Validate exact source SQL values, every independent run endpoint and complete per-record image coverage. Recheck all eight original catalog bindings and every source file, preserve manifest file identity and retain interrupted evidence after unsafe paths, changed contents, competing writes and publication or validation commit failures.
 - [x] Connect saved broader run manifests to image reservation and protected byte verification. Carry all eight original catalog bindings and files through reservation and verification, preserve current and per-run invocation coverage, and retain earlier protection after failures.
 - [x] Prepare recovery bundle indexes binding all eight exact payload references and complete image requirements to an independently trusted descriptor. Verify every source, fixed role coverage, full host identity and independent per-record requirements while owning inputs before hashing. Preserve historical metadata without authorizing publication or installation.
-- [ ] Publish bundle indexes only after all eight saved payloads and required image bytes are validated and protected. Preserve interrupted evidence and refuse incomplete artifacts.
+- [x] Publish bundle indexes only after all eight saved payloads and required image bytes are validated and protected. Preserve interrupted evidence and refuse incomplete artifacts.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

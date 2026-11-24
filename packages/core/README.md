@@ -100,7 +100,10 @@ reserves and verifies their combined requirements while checking all eight
 original catalog bindings and files.
 [Recovery bundle indexes](../../docs/recovery-bundle-indexes.md) bind all eight
 payload references and their exact combined image requirements to an independent
-content descriptor. Complete bundle publication remains pending.
+content descriptor. The Node host can
+[publish registered bundles](../../docs/recovery-bundles.md) after verifying all
+source contents, exact original bindings and protected image bytes. Durable
+installation and activation remain pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

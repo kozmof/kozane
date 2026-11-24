@@ -89,5 +89,6 @@ and every run endpoint. Use the
 [broader image workflow](recovery-checkpoint-images.md#check-saved-broader-run-images)
 to commit image protection and verify physical bytes against all eight original
 bindings and saved files. Neither an index nor a retained image owner authorizes
-publication of an incomplete bundle. Complete bundle publication and durable
-installation remain pending.
+publication of an incomplete bundle. The Node host can
+[publish registered bundles](recovery-bundles.md) after validating all original
+sources and protected bytes. Durable installation remains pending.

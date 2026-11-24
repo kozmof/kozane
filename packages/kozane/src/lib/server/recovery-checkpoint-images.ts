@@ -1,5 +1,5 @@
 /** Verify protected images against saved recovery payloads and exact original bindings. */
-import { withTx, type Tx } from "../../db/database.js";
+import { withTx, type Tx, type ReadTx } from "../../db/database.js";
 import type { AssetManifest } from "@kozane/core";
 import {
   parseLocalRecoveryIdentity,
@@ -29,7 +29,10 @@ import {
 } from "@kozane/core/recovery";
 import { lockImageAssetWork } from "../../db/api/image-upload.js";
 import { reserveAssetManifestInTx, readAssetManifest } from "../../db/api/asset-manifest.js";
-import { retainImageManifestInTx } from "./image-manifest-retention.js";
+import {
+  verifyRetainedImageManifestInTx,
+  retainImageManifestInTx,
+} from "./image-manifest-retention.js";
 import { loadRegisteredLocalRecoveryPayload } from "./local-recovery-payload.js";
 import { loadRegisteredSharedRecoveryPayload } from "./shared-recovery-payload.js";
 import { loadRegisteredRecoveryAssetPayload } from "./recovery-asset-payload.js";
@@ -294,7 +297,11 @@ async function prepare(options: Options): Promise<Prepared> {
     owner: registeredLocalRecoveryImageOwner(expected),
   };
 }
-async function requireBinding(tx: Tx, prepared: Prepared) {
+/** Internal checks for previously verified original source expectations. */
+export async function requireRecoveryCheckpointImageBindings(
+  tx: Tx | ReadTx,
+  prepared: Omit<Prepared, "root" | "db" | "manifest" | "owner">,
+) {
   const { workspaceId, deviceId, epochId, checkpointId } = prepared.binding.checkpoint.identity;
   const key = { workspaceId, deviceId, epochId, checkpointId };
   const binding = await readSharedRecoveryCheckpoint(tx, key);
@@ -412,39 +419,65 @@ function result(prepared: Prepared, state: "pending" | "retained", changed: bool
     ...(prepared.runAssetCheckpoint ? { runAssetCheckpoint: prepared.runAssetCheckpoint } : {}),
   });
 }
-async function reserve(prepared: Prepared) {
+/** Internal reservation after complete saved-source and manifest validation. */
+export async function reservePreparedRecoveryCheckpointImages(prepared: Prepared) {
   return withTx(prepared.db, async (tx) => {
     await lockImageAssetWork(tx);
-    await requireBinding(tx, prepared);
+    await requireRecoveryCheckpointImageBindings(tx, prepared);
     await requirePayloads(prepared);
     const reserved = await reserveAssetManifestInTx(tx, prepared.owner, prepared.manifest);
     if (reserved.record.state === "released")
       throw new RecoveryCheckpointImagesError("Checkpoint image owner was released");
     await requirePayloads(prepared);
-    await requireBinding(tx, prepared);
+    await requireRecoveryCheckpointImageBindings(tx, prepared);
     return result(prepared, reserved.record.state, reserved.changed);
   });
 }
 
 /** Validate saved payloads and manifest coverage, then commit protection before image reads. */
 export async function reserveRegisteredRecoveryCheckpointImages(options: Options) {
-  return reserve(await prepare(options));
+  return reservePreparedRecoveryCheckpointImages(await prepare(options));
 }
 
 /** Failure retains earlier protection. Required payloads and catalog bindings are checked under the image lock. */
 export async function retainRegisteredRecoveryCheckpointImages(options: Options) {
   const prepared = await prepare(options);
-  const reserved = await reserve(prepared);
+  const reserved = await reservePreparedRecoveryCheckpointImages(prepared);
   return withTx(prepared.db, async (tx) => {
-    await lockImageAssetWork(tx);
-    await requireBinding(tx, prepared);
-    await requirePayloads(prepared);
-    const current = await readAssetManifest(tx, prepared.owner);
-    if (JSON.stringify(current.manifest) !== JSON.stringify(prepared.manifest))
-      throw new RecoveryCheckpointImagesError("Checkpoint image manifest changed");
-    const retained = await retainImageManifestInTx(tx, prepared.root, prepared.owner);
-    await requirePayloads(prepared);
-    await requireBinding(tx, prepared);
-    return result(prepared, "retained", reserved.changed || retained.changed);
+    const retained = await retainPreparedRecoveryCheckpointImagesInTx(tx, prepared);
+    return Object.freeze({ ...retained, changed: reserved.changed || retained.changed });
   });
+}
+
+/** Internal composition after full saved-source validation. Caller commits pending protection first. */
+export async function retainPreparedRecoveryCheckpointImagesInTx(tx: Tx, prepared: Prepared) {
+  await lockImageAssetWork(tx);
+  await requireRecoveryCheckpointImageBindings(tx, prepared);
+  await requirePayloads(prepared);
+  const current = await readAssetManifest(tx, prepared.owner);
+  if (JSON.stringify(current.manifest) !== JSON.stringify(prepared.manifest))
+    throw new RecoveryCheckpointImagesError("Checkpoint image manifest changed");
+  const retained = await retainImageManifestInTx(tx, prepared.root, prepared.owner);
+  await requirePayloads(prepared);
+  await requireRecoveryCheckpointImageBindings(tx, prepared);
+  return result(prepared, "retained", retained.changed);
+}
+
+/** Internal read verification. This never creates, expands or promotes an image owner. */
+export async function verifyPreparedRecoveryCheckpointImagesInTx(tx: Tx, prepared: Prepared) {
+  await lockImageAssetWork(tx);
+  await requireRecoveryCheckpointImageBindings(tx, prepared);
+  await requirePayloads(prepared);
+  const current = await readAssetManifest(tx, prepared.owner);
+  if (
+    current.record.state !== "retained" ||
+    JSON.stringify(current.manifest) !== JSON.stringify(prepared.manifest)
+  )
+    throw new RecoveryCheckpointImagesError(
+      "Checkpoint image protection is not retained or changed",
+    );
+  await verifyRetainedImageManifestInTx(tx, prepared.root, prepared.owner);
+  await requirePayloads(prepared);
+  await requireRecoveryCheckpointImageBindings(tx, prepared);
+  return result(prepared, "retained", false);
 }

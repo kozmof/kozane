@@ -122,8 +122,9 @@ all four saved sources and all five original catalog expectations.
 [Run archives](shared-recovery-run-archives.md) prepare independent execution and
 effect contexts for these additional roots. Their
 [saved payloads](shared-recovery-run-archive-payloads.md) retain complete records
-after source and SQL validation. Row installation and complete bundle publication
-remain pending. Existing saved original and retained-history formats still cover
+after source and SQL validation. The host can
+[publish registered bundles](recovery-bundles.md) after validating all sources and
+protected images. Row installation remains pending. Existing saved original and retained-history formats still cover
 roots in the current selected checkpoint.
 [Run archive asset checkpoints](run-archive-asset-checkpoints.md) bind broader
 per-run and first-recorded input requirements to the exact source expectations.

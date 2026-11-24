@@ -302,7 +302,7 @@ export async function saveRegisteredRunArchiveAssetPayload(options: Options & { 
   });
 }
 /** Reopen bounded canonical bytes, validate all seven sources, then recheck all files and eight original expectations. */
-export async function loadRegisteredRunArchiveAssetPayload(
+export async function loadRegisteredRunArchiveAssetContents(
   options: Options & { maxBytes: number },
 ) {
   const ctx = context(options),
@@ -352,5 +352,13 @@ export async function loadRegisteredRunArchiveAssetPayload(
         "Registered run archive asset payload changed during validation",
       );
   });
+  return Object.freeze({ payload, checkpoint, sources: Object.freeze(source) });
+}
+
+/** Reopen the manifest through the same complete source validation used by bundle assembly. */
+export async function loadRegisteredRunArchiveAssetPayload(
+  options: Options & { maxBytes: number },
+) {
+  const { payload, checkpoint } = await loadRegisteredRunArchiveAssetContents(options);
   return Object.freeze({ payload, checkpoint });
 }

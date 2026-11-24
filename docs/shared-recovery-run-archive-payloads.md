@@ -105,6 +105,6 @@ content-bound manifests for these runs and all archived original inputs. The Nod
 host can retain [saved broader manifests](run-archive-asset-payloads.md) after
 validating all seven sources and can
 [protect their images](recovery-checkpoint-images.md#check-saved-broader-run-images).
-Complete bundle publication and installation remain pending. These helpers do not select
-additional runs or invoke handlers. Startup does not automatically repeat
+The host can also [publish registered bundles](recovery-bundles.md). Installation
+remains pending. These helpers do not select additional runs or invoke handlers. Startup does not automatically repeat
 filesystem work.

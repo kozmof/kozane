@@ -150,6 +150,8 @@ Run archives are a separate version 1 format. Existing selected-root retained
 history, catalogs and saved files retain their existing scope. Trusted run-archive
 descriptors can be registered locally. The Node host can retain
 [saved run payloads](shared-recovery-run-archive-payloads.md) after validating all
-five saved sources and every run's SQL endpoints. Complete bundle publication
-and installation remain pending. Production capture remains subject to the
+five saved sources and every run's SQL endpoints. The host can
+[publish registered bundles](recovery-bundles.md) after validating all source
+contents and protected images. Installation remains pending. Production capture
+remains subject to the
 [adapter verification gate](action-capture-prototype.md).
