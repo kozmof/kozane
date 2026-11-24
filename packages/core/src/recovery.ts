@@ -239,3 +239,16 @@ export {
   rememberRunArchiveAssetCheckpointInTx,
   requireStoredRunArchiveAssetCheckpoint,
 } from "./actions/run-archive-asset-store.js";
+export {
+  RECOVERY_BUNDLE_INDEX_VERSION,
+  RECOVERY_BUNDLE_CHECKPOINT_VERSION,
+  parseRecoveryBundleIndex,
+  parseRecoveryBundleCheckpoint,
+  describeRecoveryBundleIndex,
+  requireRecoveryBundleCheckpoint,
+  type RecoveryBundlePayloadKind,
+  type RecoveryBundlePayloadReference,
+  type RecoveryBundleIndex,
+  type RecoveryBundleCheckpoint,
+  type RecoveryBundleSources,
+} from "./actions/recovery-bundle-index.js";

@@ -97,7 +97,10 @@ requirements to those original expectations and the current assets. The Node hos
 all seven saved sources. The
 [broader image workflow](../../docs/recovery-checkpoint-images.md#check-saved-broader-run-images)
 reserves and verifies their combined requirements while checking all eight
-original catalog bindings and files. Complete bundles remain pending.
+original catalog bindings and files.
+[Recovery bundle indexes](../../docs/recovery-bundle-indexes.md) bind all eight
+payload references and their exact combined image requirements to an independent
+content descriptor. Complete bundle publication remains pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

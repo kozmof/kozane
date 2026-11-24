@@ -103,9 +103,10 @@ SQL endpoints separately.
 Trusted descriptors can be registered in the catalog described below. The Node
 host can retain [saved manifest files](run-archive-asset-payloads.md) and
 [protect their images](recovery-checkpoint-images.md#check-saved-broader-run-images).
-Complete bundle publication remains pending. Existing current and
-selected-root retained asset formats stay at version 1 and retain their existing
-scope.
+[Recovery bundle indexes](recovery-bundle-indexes.md) bind all eight payload
+references and their combined requirements. Complete bundle publication remains
+pending. Existing current and selected-root retained asset formats stay at
+version 1 and retain their existing scope.
 
 ## Retain trusted descriptors
 

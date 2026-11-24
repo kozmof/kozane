@@ -711,6 +711,57 @@ await assert.rejects(
   recovery.SharedRecoveryError,
 );
 assert.deepEqual(runAssets.payload.manifest, { version: 1, entries: [] });
+const bundleSources = { ...runAssetSources, runAssets: runAssets.payload };
+const bundleIndex = await recovery.describeRecoveryBundleIndex(runAssets.checkpoint, bundleSources);
+assert.equal(bundleIndex.index.version, recovery.RECOVERY_BUNDLE_INDEX_VERSION);
+assert.equal(bundleIndex.checkpoint.version, recovery.RECOVERY_BUNDLE_CHECKPOINT_VERSION);
+assert.equal(bundleIndex.index.payloads.length, 8);
+assert.deepEqual(
+  bundleIndex.index.payloads.map(({ kind }) => kind),
+  [
+    "local-snapshot",
+    "shared-history",
+    "executions",
+    "original-actions",
+    "action-archive",
+    "run-archive",
+    "current-assets",
+    "run-assets",
+  ],
+);
+assert.deepEqual(bundleIndex.index.manifest, runAssets.payload.manifest);
+assert.equal(
+  bundleIndex.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(bundleIndex.index), "utf8"),
+);
+assert.equal(
+  bundleIndex.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(bundleIndex.index), "utf8").digest("hex"),
+);
+assert.deepEqual(recovery.parseRecoveryBundleIndex(bundleIndex.index), bundleIndex.index);
+assert.deepEqual(
+  recovery.parseRecoveryBundleCheckpoint(bundleIndex.checkpoint),
+  bundleIndex.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireRecoveryBundleCheckpoint(
+    bundleIndex.index,
+    bundleIndex.checkpoint,
+    sharedIdentity,
+    bundleSources,
+  ),
+  bundleIndex.index,
+);
+await assert.rejects(
+  recovery.requireRecoveryBundleCheckpoint(
+    bundleIndex.index,
+    { ...bundleIndex.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    bundleSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.equal("parseRecoveryBundleSources" in recovery, false);
 assert.equal("parseRunArchiveAssetSources" in recovery, false);
 assert.equal("requireSharedRecoveryRunArchiveSources" in recovery, false);
 assert.deepEqual(

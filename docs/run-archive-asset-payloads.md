@@ -105,4 +105,7 @@ These files retain image requirements for broader archived roots and runs.
 Saving and loading do not read image bytes or reserve images. Use the
 [broader image workflow](recovery-checkpoint-images.md#check-saved-broader-run-images)
 to reserve and verify their requirements against all eight original expectations.
-Complete bundle publication, installation and activation remain pending. Startup does not automatically repeat filesystem work.
+[Recovery bundle indexes](recovery-bundle-indexes.md) bind the eight payloads
+and their exact combined image requirements. Complete bundle publication,
+installation and activation remain pending. Startup does not automatically
+repeat filesystem work.

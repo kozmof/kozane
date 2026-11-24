@@ -587,6 +587,17 @@ retained protection survives failures. Complete bundle publication and durable
 installation remain pending. See
 [broader run images](recovery-checkpoint-images.md#check-saved-broader-run-images).
 
+Core now prepares recovery bundle indexes from all eight original payloads.
+The fixed role inventory retains each exact byte length and hash beside the
+trusted broader run-manifest checkpoint and combined image requirements.
+Verification owns all sources before hashing, checks their actual contents and
+independent coverage, and refuses mismatched identities, missing payloads, changed
+requirements or rewritten expectations. Native and Node WASM tests cover closed
+inventories, historical metadata, unsafe transport, input ownership and exact
+source verification. Indexes remain metadata without authorizing publication or
+installation. Complete bundle publication and durable installation remain
+pending. See [bundle indexes](recovery-bundle-indexes.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -714,6 +725,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Persist trusted broader run-manifest descriptors with exact original bindings. Require all seven live source catalogs, own inputs before reads and recheck all eight expectations after verification. Preserve historical and orphaned metadata through shared replacement, exact local validation and version 26 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered broader run manifests through synced exclusive publication with independent limits for the manifest and all seven sources. Validate exact source SQL values, every independent run endpoint and complete per-record image coverage. Recheck all eight original catalog bindings and every source file, preserve manifest file identity and retain interrupted evidence after unsafe paths, changed contents, competing writes and publication or validation commit failures.
 - [x] Connect saved broader run manifests to image reservation and protected byte verification. Carry all eight original catalog bindings and files through reservation and verification, preserve current and per-run invocation coverage, and retain earlier protection after failures.
+- [x] Prepare recovery bundle indexes binding all eight exact payload references and complete image requirements to an independently trusted descriptor. Verify every source, fixed role coverage, full host identity and independent per-record requirements while owning inputs before hashing. Preserve historical metadata without authorizing publication or installation.
+- [ ] Publish bundle indexes only after all eight saved payloads and required image bytes are validated and protected. Preserve interrupted evidence and refuse incomplete artifacts.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

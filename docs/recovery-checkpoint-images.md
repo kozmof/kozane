@@ -239,6 +239,8 @@ cannot be expanded to a different manifest under the same checkpoint key. Keep
 the earlier pins and prepare a new checkpoint identity for changed requirements.
 Supply all broader read limits on every call requiring this coverage. Owner state
 is not a durable receipt for a coverage policy or complete bundle publication.
+[Recovery bundle indexes](recovery-bundle-indexes.md) bind the eight payload
+references and their exact combined requirements before publication.
 
 ## Supply host manifests
 

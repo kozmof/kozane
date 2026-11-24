@@ -173,6 +173,17 @@ import {
   type SharedRecoveryRunArchive,
   type SharedRecoveryRunArchiveCheckpoint,
   type SharedRecoveryRunArchiveSources,
+  RECOVERY_BUNDLE_INDEX_VERSION,
+  RECOVERY_BUNDLE_CHECKPOINT_VERSION,
+  describeRecoveryBundleIndex,
+  parseRecoveryBundleIndex,
+  parseRecoveryBundleCheckpoint,
+  requireRecoveryBundleCheckpoint,
+  type RecoveryBundleIndex,
+  type RecoveryBundleCheckpoint,
+  type RecoveryBundleSources,
+  type RecoveryBundlePayloadKind,
+  type RecoveryBundlePayloadReference,
   RUN_ARCHIVE_ASSET_PAYLOAD_VERSION,
   RUN_ARCHIVE_ASSET_CHECKPOINT_VERSION,
   describeRunArchiveAssets,
@@ -786,6 +797,38 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
         runAssetSources,
       );
       void verifiedRunAssets.manifest.entries;
+      const bundleVersion: 1 = RECOVERY_BUNDLE_INDEX_VERSION;
+      const bundleCheckpointVersion: 1 = RECOVERY_BUNDLE_CHECKPOINT_VERSION;
+      void bundleVersion;
+      void bundleCheckpointVersion;
+      const bundleSources: RecoveryBundleSources = {
+        ...runAssetSources,
+        runAssets: verifiedRunAssets,
+      };
+      const bundle = await describeRecoveryBundleIndex(runAssetCheckpoint, bundleSources);
+      const bundleIndex: RecoveryBundleIndex = parseRecoveryBundleIndex(bundle.index);
+      const bundleCheckpoint: RecoveryBundleCheckpoint = parseRecoveryBundleCheckpoint(
+        bundle.checkpoint,
+      );
+      const bundleReference: RecoveryBundlePayloadReference = bundleIndex.payloads[0];
+      const bundleKind: RecoveryBundlePayloadKind = bundleReference.kind;
+      void bundleKind;
+      const verifiedBundle: RecoveryBundleIndex = await requireRecoveryBundleCheckpoint(
+        bundleIndex,
+        bundleCheckpoint,
+        parsedIdentity,
+        bundleSources,
+      );
+      void verifiedBundle.manifest;
+      // @ts-expect-error A bundle requires its separately verified broader manifest payload.
+      const missingBundleManifest: RecoveryBundleSources = runAssetSources;
+      void missingBundleManifest;
+      // @ts-expect-error Payload references remain immutable.
+      bundleIndex.payloads[0].sha256 = "changed";
+      // @ts-expect-error The closed payload inventory remains immutable.
+      verifiedBundle.payloads.length = 0;
+      // @ts-expect-error Original bundle expectations remain immutable.
+      bundleCheckpoint.runAssetCheckpoint.sha256 = "changed";
       const registeredRunAssets = await rememberRunArchiveAssetCheckpoint(db, runAssetCheckpoint);
       const storedRunAssetDescriptor: RunArchiveAssetCheckpoint = registeredRunAssets.checkpoint;
       const runAssetsChanged: boolean = registeredRunAssets.changed;
