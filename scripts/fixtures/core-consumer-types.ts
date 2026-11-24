@@ -173,6 +173,9 @@ import {
   type SharedRecoveryRunArchive,
   type SharedRecoveryRunArchiveCheckpoint,
   type SharedRecoveryRunArchiveSources,
+  readRecoveryStagingDestination,
+  inspectRecoveryStagingDestination,
+  type RecoveryStagingDestination,
   inspectPendingRecoveryFileOperations,
   readPendingRecoveryFileOperations,
   type PendingRecoveryFileOperationOptions,
@@ -872,6 +875,33 @@ void describeSharedRecoveryHistory(sharedHistory, parsedIdentity, sharedSelectio
       void withReadTx(db, (tx) => readSharedRecoveryInstallation(tx));
       // @ts-expect-error Shared installation expectations remain immutable.
       sharedInstallation.checkpoint.sha256 = "changed";
+      const stagingDestination: RecoveryStagingDestination =
+        await inspectRecoveryStagingDestination(
+          db,
+          bundleCheckpoint,
+          parsedIdentity,
+          parsedIdentity,
+          "complete",
+        );
+      void withReadTx(db, (tx) =>
+        readRecoveryStagingDestination(
+          tx,
+          bundleCheckpoint,
+          parsedIdentity,
+          parsedIdentity,
+          "complete",
+        ),
+      );
+      // @ts-expect-error Staging authority is immutable metadata.
+      stagingDestination.mode = "complete";
+      void readRecoveryStagingDestination(
+        // @ts-expect-error The transaction reader requires a consistent caller-owned boundary.
+        db,
+        bundleCheckpoint,
+        parsedIdentity,
+        parsedIdentity,
+        "complete",
+      );
       const pendingOptions: PendingRecoveryFileOperationOptions = { limit: 5, offset: 0 };
       const pendingFiles: PendingRecoveryFileOperationPage =
         await inspectPendingRecoveryFileOperations(

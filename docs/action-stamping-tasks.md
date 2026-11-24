@@ -584,7 +584,8 @@ protected through cleanup after earlier owners are released. Native tests cover
 changed evidence, exact source bindings, unsafe or missing images, competing
 writers, owner publication changes and failed commits. Earlier pending and
 retained protection survives failures. Registered bundle publication now uses
-the host workflow described below. Retained history and image installation remain pending. See
+the host workflow described below. Image installation now uses the destination workflow below.
+Retained history installation remains pending. See
 [broader run images](recovery-checkpoint-images.md#check-saved-broader-run-images).
 
 Core now prepares recovery bundle indexes from all eight original payloads.
@@ -596,7 +597,8 @@ requirements or rewritten expectations. Native and Node WASM tests cover closed
 inventories, historical metadata, unsafe transport, input ownership and exact
 source verification. Indexes remain metadata without authorizing publication or
 installation. Registered bundle publication now uses the host workflow described
-below. Retained history and image installation remain pending. See [bundle indexes](recovery-bundle-indexes.md).
+below. Image installation now uses the destination workflow below. Retained history
+installation remains pending. See [bundle indexes](recovery-bundle-indexes.md).
 
 The Node host now publishes registered bundle indexes only after validating all
 eight saved payloads, independent manifest coverage and protected image bytes.
@@ -608,8 +610,9 @@ file identity through validation. Matching final bytes after a failed commit do
 not bypass pending-owner refusal. Explicit retries preserve interruption evidence
 and earlier pins. Native tests cover missing sources, changed evidence, invalid
 limits, unsafe paths, publication and commit failures, cleanup handoff and
-competing writes. Automatic capture, retained history and image installation and activation remain
-pending. See [published bundles](recovery-bundles.md).
+competing writes. Image installation now uses the destination workflow below.
+Automatic capture, retained history installation and activation remain pending.
+See [published bundles](recovery-bundles.md).
 
 Migration 0037 adds destination-owned local installation authority. The singleton
 record cannot travel in a portable snapshot or JSON dump and SQL guards prevent
@@ -623,7 +626,8 @@ a published bundle before the first installation and acknowledges later retries
 without reopening source files. Native and Node WASM tests cover exact values,
 identity mismatches, rollback and metadata isolation. Native tests cover restart,
 competing connections and published-bundle integration. Shared projection staging now
-uses the boundary described below. Image installation and activation remain pending. See
+uses the boundary described below. Image installation now uses the destination
+workflow below. Activation remains pending. See
 [local installation](local-recovery-installation.md).
 
 Migration 0038 adds a separate immutable shared installation record. Shared
@@ -637,8 +641,8 @@ reopening source files. Both destination records stay outside portable snapshots
 shared projections and JSON exports. Native and Node WASM tests cover exact
 values, invalid final states, rollback and metadata isolation. Native tests cover
 competing connections, restart and complete published-bundle integration. Required
-history, materialization bookkeeping, destination images and activation remain
-pending. See [shared installation](shared-recovery-installation.md).
+history, materialization bookkeeping and activation remain pending. Image
+installation now uses the destination workflow below. See [shared installation](shared-recovery-installation.md).
 
 Migration 0039 adds explicit shared-only staging under a separately trusted
 receiving identity. Source and destination must share workspace, epoch,
@@ -652,7 +656,8 @@ refused. Destination authority stays outside portable snapshots, shared
 projections and version 26 JSON exports. Native and Node WASM tests cover exact
 values, constraints, identity checks, metadata isolation and rollback. Native
 tests cover competing connections, restart and complete published-bundle
-integration. Required history, destination images and activation remain pending.
+integration. Image installation now uses the destination workflow below. Required
+history and activation remain pending.
 See [shared-only installation](shared-only-recovery-installation.md).
 
 Staged complete recovery now exposes read-only pending file-operation inspection.
@@ -667,6 +672,20 @@ Absolute paths require an explicit host inspection policy. Native and Node WASM
 tests cover exact evidence and read-only boundaries. Native tests cover disk
 observations, changed evidence and competing commits. Schema and transport
 versions remain unchanged. See [staged file-operation inspection](recovery-file-operation-inspection.md).
+
+Destination image installation now accepts explicit complete or shared-only
+staging metadata with independently trusted source and receiving identities.
+It reloads the complete published bundle, commits a stable destination manifest
+reservation before filesystem work and publishes exact required image bytes under
+the image writer lock. Existing verified live and archived files can be reused.
+Conflicting names, unsafe paths and temporary evidence refuse publication without
+overwriting or deleting earlier evidence. Final verification retains destination
+protection in the same transaction as its checks. Failed commits leave earlier
+pending pins and reusable published bytes intact. Source protection is not
+released. Native tests cover both modes, interrupted publication, rollback,
+cleanup and competing writes. Schema, portable snapshot and JSON versions remain
+unchanged. Required history, bookkeeping and activation remain pending. See
+[destination images](recovery-image-installation.md).
 
 ## Version one
 
@@ -832,6 +851,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Serialize local upload installation, card-reference pin transfer and cleanup with the database writer lock. Preserve pending files and deletion requests during contention and rollback.
 - [ ] Protect assets needed by live rows, uploads, staged transfers, pending work, retained history and recovery records.
 - [x] Add durable local manifest reservations, protected byte verification and explicit owner release. Make cleanup honor every registered owner and preserve local protection through shared restoration.
+- [x] Copy complete published-bundle image requirements into a staged destination under explicit complete or shared-only identities. Commit protection before file creation, publish exact immutable bytes without overwrites, reuse verified finals and archives, preserve interruption evidence and pending pins after failures, and serialize final retention with cleanup.
 - [x] Connect prototype baseline and effect-set publication to local manifest ownership. Verify protected files, atomic staging handoff and upload completion, cleanup contention and retained images after history is deselected.
 - [x] Recover verified published uploads or explicitly abandon reviewed pins without repeating filesystem work. Preserve intent, errors and decisions, and keep live references protected during cleanup.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.

@@ -102,8 +102,8 @@ original catalog bindings and files.
 payload references and their exact combined image requirements to an independent
 content descriptor. The Node host can
 [publish registered bundles](../../docs/recovery-bundles.md) after verifying all
-source contents, exact original bindings and protected image bytes. Required
-history and destination image installation and activation remain pending.
+source contents, exact original bindings and protected image bytes. Destination
+image installation is described below. Required history and activation remain pending.
 
 [One-time local installation](../../docs/local-recovery-installation.md) stages
 exact local rows and a destination-owned record in one commit. It requires an
@@ -111,12 +111,16 @@ empty canonical destination and complete migration history. The Node host can
 validate a published bundle before this step. Matching retries preserve later
 edits. Continue with [shared projection staging](../../docs/shared-recovery-installation.md)
 after matching local installation. It preserves current local metadata and commits
-exact shared rows with its own immutable destination record. Required history,
-bookkeeping, destination images and activation remain pending.
+exact shared rows with its own immutable destination record. Continue with
+destination images below. Required history, bookkeeping and activation remain pending.
 [Shared-only staging](../../docs/shared-only-recovery-installation.md) uses an
 independently trusted receiving identity and starts without source-device local
 attachments. It requires a new empty destination and preserves later edits on
 matching retries.
+[Destination image installation](../../docs/recovery-image-installation.md)
+copies required bytes under committed manifest protection, preserves interrupted
+evidence and reuses verified files on retry. History, bookkeeping and activation
+remain separate requirements.
 [Staged pending-operation inspection](../../docs/recovery-file-operation-inspection.md)
 reads exact journal evidence without replay or confirmation. It requires matching
 local installation authority and preserves values outside the JavaScript date range.

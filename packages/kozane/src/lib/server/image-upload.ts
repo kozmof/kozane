@@ -11,15 +11,22 @@ import { assertImageAssetIdentityInTx } from "../../db/api/asset-manifest.js";
 
 export const imageDirectory = (root: string) => join(root, ".kozane", "assets", "images");
 
-async function directory(root: string) {
+/** Check managed image directories without following component symlinks. Create only when requested. */
+export async function imageAssetDirectory(root: string, create = true) {
   let path = await fs.realpath(root);
   for (const name of [".kozane", "assets", "images"]) {
     path = join(path, name);
-    let created = true;
-    await fs.mkdir(path).catch((error) => {
-      if (error.code !== "EEXIST") throw error;
-      created = false;
-    });
+    let created = false;
+    if (create) {
+      await fs
+        .mkdir(path)
+        .then(() => {
+          created = true;
+        })
+        .catch((error) => {
+          if (error.code !== "EEXIST") throw error;
+        });
+    }
     const stat = await fs.lstat(path);
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error("Image directory is unsafe");
     if (created) await syncDirectory(dirname(path));
@@ -119,7 +126,7 @@ export async function installImageUpload(
       )
         throw new Error("Image upload reservation changed");
       attempted = true;
-      const dir = await directory(root);
+      const dir = await imageAssetDirectory(root);
       const temporary = join(dir, `.upload-${filename}`);
       const target = join(dir, filename);
       const handle = await fs.open(

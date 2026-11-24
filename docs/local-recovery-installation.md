@@ -100,3 +100,7 @@ destination. [Inspect staged pending operations](recovery-file-operation-inspect
 repeating filesystem work or confirming journal entries. No
 local-only effects are replayed. Taskspace file bytes and configuration files are
 outside the local snapshot.
+
+Continue with [destination image installation](recovery-image-installation.md)
+after the required row staging completes. It retains destination image protection
+without activating the workspace or repeating taskspace filesystem operations.

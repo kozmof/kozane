@@ -80,8 +80,9 @@ recovery path. There is no overwrite or reset operation in these APIs.
 
 The record acknowledges initial shared-only staging. It does not establish that
 current rows still equal the original projection or authorize activation.
-Required history, materialization bookkeeping, destination images and activation
-remain separate requirements. This workflow does not join a sync hub by itself.
+Continue with [destination image installation](recovery-image-installation.md)
+to copy and verify required bytes. Required history, materialization bookkeeping
+and activation remain separate requirements. This workflow does not join a sync hub by itself.
 
 ## Inspect destination authority
 
@@ -110,3 +111,7 @@ A trusted core host must verify complete source contents and protected bytes
 before the first call. The Node wrapper performs those checks for registered
 published bundles. This API stages only the selected shared projection and does
 not install broader archived actions, executions or retained runs.
+
+Continue with [destination image installation](recovery-image-installation.md)
+after the required row staging completes. It retains destination image protection
+without activating the workspace or repeating taskspace filesystem operations.

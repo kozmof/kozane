@@ -280,3 +280,8 @@ export {
   type PendingRecoveryFileOperationOptions,
   type PendingRecoveryFileOperationPage,
 } from "./actions/recovery-file-operations.js";
+export {
+  readRecoveryStagingDestination,
+  inspectRecoveryStagingDestination,
+  type RecoveryStagingDestination,
+} from "./actions/recovery-staging-destination.js";

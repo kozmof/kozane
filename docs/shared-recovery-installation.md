@@ -72,8 +72,9 @@ reset operation in this API.
 
 The record acknowledges the initial projection installation. It does not assert
 that current rows still equal the recovered projection or that the workspace is
-ready for activation. Required history, bookkeeping and destination image bytes
-still need installation and validation. Neither staging call activates a
+ready for activation. Continue with [destination image installation](recovery-image-installation.md)
+to copy and verify required image bytes. Required history and bookkeeping still
+need installation and validation. Neither staging call activates a
 workspace or repeats pending filesystem operations.
 
 ## Inspect destination metadata
@@ -103,3 +104,7 @@ before the first core call. The Node wrapper performs those checks for registere
 published bundles. These APIs install only the selected shared projection.
 Broader original actions, executions, deselected runs, retained history and
 materialization bookkeeping remain separate destination requirements.
+
+Continue with [destination image installation](recovery-image-installation.md)
+after the required row staging completes. It retains destination image protection
+without activating the workspace or repeating taskspace filesystem operations.

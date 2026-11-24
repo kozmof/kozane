@@ -155,6 +155,8 @@ in a separate empty destination, then
 [stage the shared projection](shared-recovery-installation.md) after matching local installation.
 Choose [shared-only staging](shared-only-recovery-installation.md) explicitly
 for a new destination without source-device attachments.
-Automatic capture, required history, bookkeeping, destination images and
+[Install destination images](recovery-image-installation.md) after row staging
+while retaining the source bundle and its existing protection.
+Automatic capture, required history, bookkeeping and
 activation remain separate requirements. Pending filesystem operations remain
 recovery data and are not executed by publication or loading.
