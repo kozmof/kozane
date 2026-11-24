@@ -92,6 +92,10 @@
     {
       "id": "core-0.2.0-migration37-wasm",
       "sha256": "6d8453147efde7174ce472531ace992e2d7fba42514d7333836cdf18bc57809d"
+    },
+    {
+      "id": "core-0.2.0-migration38-wasm",
+      "sha256": "8c27a3835291cd2cadb6c11ff4dd29026d04fae6a556aadcad3bfc89fc939b09"
     }
   ]
 }
