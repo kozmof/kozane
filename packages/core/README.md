@@ -94,8 +94,10 @@ validating all saved sources and independent SQL endpoints.
 trusted descriptors in a local catalog and bind per-run and first-recorded input
 requirements to those original expectations and the current assets. The Node host can retain
 [saved broader manifests](../../docs/run-archive-asset-payloads.md) after validating
-all seven saved sources. Broader image protection and complete bundles remain
-pending.
+all seven saved sources. The
+[broader image workflow](../../docs/recovery-checkpoint-images.md#check-saved-broader-run-images)
+reserves and verifies their combined requirements while checking all eight
+original catalog bindings and files. Complete bundles remain pending.
 
 [Retained recovery history](../../docs/shared-recovery-retained-history.md)
 prepares origin, superseded rebase and authoritative runs for selected roots.

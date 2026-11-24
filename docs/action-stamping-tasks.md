@@ -470,7 +470,8 @@ through image reservation and verification. Pending protection commits before
 physical reads. Native tests cover origin and superseded images, archived bytes,
 cleanup handoff, metadata and file changes, failed commits and competing writers.
 The stable checkpoint owner refuses changed requirements while preserving earlier
-pins. Complete bundles and additional roots remain pending. See
+pins. Broader roots now use the separate archive workflow described below.
+Complete bundles remain pending. See
 [retained-run image protection](recovery-checkpoint-images.md#check-saved-retained-run-images).
 
 Core now prepares original-action archives for roots outside the current
@@ -481,7 +482,7 @@ source payloads. Archives can be nonempty when the current checkpoint has no
 actions. Native and Node WASM tests cover unselected roots, nested and skipped
 children, sequence strings beyond JavaScript's safe integer range, changed
 evidence and image metadata.
-Execution and effect retention for these additional roots remain pending. See
+Broader execution and effect retention now uses the run archives described below. See
 [action archives](shared-recovery-action-archives.md).
 
 Migration 0034 now retains trusted action-archive descriptors with exact original
@@ -500,8 +501,8 @@ preserves complete first-record inventories and every current original. All five
 original catalog bindings and all four source files remain checked around
 publication and reopening. Native tests cover unselected roots, nested and
 skipped children, checkpoints without selected actions, unsafe paths, changed
-evidence, competing writes and publication or commit failures. Complete bundles,
-broader execution and effect retention and image protection remain pending. See
+evidence, competing writes and publication or commit failures. Complete bundles
+remain pending. See
 [saved archives](shared-recovery-action-archive-payloads.md).
 
 Core now prepares run archives for roots outside the current materialization.
@@ -512,8 +513,9 @@ materialization. Additional origin, rebase and authoritative runs reconstruct
 independently. SQL validation checks each run's complete before and after states
 and checks the current baseline when no runs are selected. Native and Node WASM
 tests cover nested and skipped children, source changes, truncation, input
-ownership, exact SQL states, rollback and image metadata. Durable manifest storage,
-image protection and complete bundles remain pending. See
+ownership, exact SQL states, rollback and image metadata. Saved manifests and
+image protection now use the host workflows described below. Complete bundles
+remain pending. See
 [run archives](shared-recovery-run-archives.md).
 
 Migration 0035 now retains trusted run-archive descriptors with exact original
@@ -524,7 +526,7 @@ thirteenth local table survives shared replacement, exact local snapshots and
 version 26 JSON exports. Native and Node WASM tests cover changed sources,
 immutable registration, exact timestamps, historical and orphaned metadata,
 migration and rollback. Native tests cover competing registrations and JSON
-import rollback. Broader image protection remains pending.
+import rollback. Image protection now uses the broader workflow described below.
 
 The Node host now saves and reopens registered run archives through synced
 exclusive publication. Independent limits bound the run file and all five saved
@@ -533,8 +535,8 @@ publication and reopening. Source loaders validate exact SQL values, and run
 validation checks each complete before and after state. Native tests cover
 additional origin, rebase and authoritative runs, nested and skipped executions,
 checkpoints without selected actions, changed evidence, unsafe paths, competing
-writers and publication or validation commit failures. Durable manifest storage, image
-protection and complete bundles remain pending. See
+writers and publication or validation commit failures. Complete bundles remain
+pending. See
 [saved run archives](shared-recovery-run-archive-payloads.md).
 
 Core now prepares asset checkpoints for broader run archives. Descriptors bind
@@ -546,8 +548,8 @@ never execute. The exact combined manifest preserves current local images,
 pending uploads and host extras. Native and Node WASM tests cover additional
 roots, nested and skipped inputs, baseline-only materializations, changed
 bindings and source contents, missing coverage, conflicts and input ownership.
-Trusted manifest descriptors can now be registered as described below. Payload
-files, image protection and complete bundles remain pending. See
+Trusted manifest descriptors, saved files and image protection now use the
+workflows described below. Complete bundles remain pending. See
 [run archive assets](run-archive-asset-checkpoints.md).
 
 Migration 0036 now retains trusted broader run-manifest descriptors. Registration
@@ -558,7 +560,8 @@ snapshots and version 26 JSON exports. Native and Node WASM tests cover immutabl
 registration, changed sources, historical and orphaned metadata, exact timestamps,
 migration and rollback. Native tests cover competing registrations and JSON import
 rollback. Saved manifest files now use the host workflow described below.
-Broader image protection and complete bundles remain pending.
+Broader image protection now uses the workflow described below. Complete bundles
+remain pending.
 
 The Node host now saves and reopens registered broader run manifests through
 synced exclusive publication. Independent byte limits bound the manifest and all
@@ -568,9 +571,21 @@ SQL values and every independent run endpoint. Manifest verification checks
 per-run coverage, every first-recorded input and the exact combined requirements.
 Native tests cover additional runs, never-executed inputs, empty run inventories,
 checkpoints without selected actions, changed evidence, unsafe paths, competing
-writers and publication or validation commit failures. Broader image protection
-and complete bundles remain pending. See
+writers and publication or validation commit failures. Complete bundles remain
+pending. See
 [saved run manifests](run-archive-asset-payloads.md).
+
+The image workflow now accepts explicit broader run and manifest read limits
+alongside all saved source limits. It validates complete saved requirements and
+carries all eight original catalog bindings and files through reservation and
+verification. Pending pins commit before image byte reads. Additional run images,
+nested and skipped inputs, never-executed originals and local requirements stay
+protected through cleanup after earlier owners are released. Native tests cover
+changed evidence, exact source bindings, unsafe or missing images, competing
+writers, owner publication changes and failed commits. Earlier pending and
+retained protection survives failures. Complete bundle publication and durable
+installation remain pending. See
+[broader run images](recovery-checkpoint-images.md#check-saved-broader-run-images).
 
 ## Version one
 
@@ -698,7 +713,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Bind per-run manifests and all archived first-record input requirements to the exact run archive binding and current asset descriptor. Verify all seven source payloads, independent baseline, full effect and actual invocation coverage, and the exact union with current local requirements and host extras. Preserve never-executed inputs, own all sources before hashing and keep historical descriptors readable as metadata.
 - [x] Persist trusted broader run-manifest descriptors with exact original bindings. Require all seven live source catalogs, own inputs before reads and recheck all eight expectations after verification. Preserve historical and orphaned metadata through shared replacement, exact local validation and version 26 JSON exports. Verify migration, rollback and competing registrations.
 - [x] Save and reopen registered broader run manifests through synced exclusive publication with independent limits for the manifest and all seven sources. Validate exact source SQL values, every independent run endpoint and complete per-record image coverage. Recheck all eight original catalog bindings and every source file, preserve manifest file identity and retain interrupted evidence after unsafe paths, changed contents, competing writes and publication or validation commit failures.
-- [ ] Connect saved broader run manifests to image reservation and protected byte verification. Carry all eight original catalog bindings and files through reservation and verification, preserve current and per-run invocation coverage, and retain earlier protection after failures.
+- [x] Connect saved broader run manifests to image reservation and protected byte verification. Carry all eight original catalog bindings and files through reservation and verification, preserve current and per-run invocation coverage, and retain earlier protection after failures.
 - [ ] Validate device, workspace, epoch and checkpoint identities before loading a local snapshot once. Refuse complete recovery with a missing or mismatched snapshot.
 - [ ] Support explicit shared-only recovery and inspect pending file operations without automatically repeating filesystem changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.

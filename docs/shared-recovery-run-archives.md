@@ -141,7 +141,8 @@ children that never execute, need the action archive's image collector too.
 requirements and all archived original inputs to the exact run and current asset
 expectations. The Node host can retain
 [saved broader manifests](run-archive-asset-payloads.md) after validating all seven
-sources. Broader image protection remains pending.
+sources. The [broader image workflow](recovery-checkpoint-images.md#check-saved-broader-run-images)
+reserves and verifies complete requirements.
 
 ## Current scope
 

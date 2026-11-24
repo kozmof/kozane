@@ -1,4 +1,4 @@
-/** Verify image protection against both saved checkpoint payloads. Complete bundle publication is separate. */
+/** Verify protected images against saved recovery payloads and exact original bindings. */
 import { withTx, type Tx } from "../../db/database.js";
 import type { AssetManifest } from "@kozane/core";
 import {
@@ -13,6 +13,9 @@ import {
   readSharedRecoveryActionCheckpoint,
   readSharedRecoveryRetainedCheckpoint,
   readRetainedRecoveryAssetCheckpoint,
+  readSharedRecoveryActionArchiveCheckpoint,
+  readSharedRecoveryRunArchiveCheckpoint,
+  readRunArchiveAssetCheckpoint,
   type RecoveryAssetCheckpoint,
   type SharedRecoveryCheckpointBinding,
   type SharedRecoveryHistoryImages,
@@ -20,6 +23,9 @@ import {
   type SharedRecoveryActionCheckpointBinding,
   type SharedRecoveryRetainedCheckpointBinding,
   type RetainedRecoveryAssetCheckpoint,
+  type SharedRecoveryActionArchiveCheckpointBinding,
+  type SharedRecoveryRunArchiveCheckpointBinding,
+  type RunArchiveAssetCheckpoint,
 } from "@kozane/core/recovery";
 import { lockImageAssetWork } from "../../db/api/image-upload.js";
 import { reserveAssetManifestInTx, readAssetManifest } from "../../db/api/asset-manifest.js";
@@ -27,6 +33,7 @@ import { retainImageManifestInTx } from "./image-manifest-retention.js";
 import { loadRegisteredLocalRecoveryPayload } from "./local-recovery-payload.js";
 import { loadRegisteredSharedRecoveryPayload } from "./shared-recovery-payload.js";
 import { loadRegisteredRecoveryAssetPayload } from "./recovery-asset-payload.js";
+import { loadRegisteredRunArchiveAssetPayload } from "./run-archive-asset-payload.js";
 import { loadRegisteredRetainedRecoveryAssetPayload } from "./retained-recovery-asset-payload.js";
 import { registeredLocalRecoveryImageOwner } from "./local-recovery-images.js";
 import { observe } from "./recovery-payload-files.js";
@@ -40,6 +47,9 @@ type Options = Omit<
 > &
   (
     | {
+        actionArchiveMaxBytes?: never;
+        runArchiveMaxBytes?: never;
+        runAssetMaxBytes?: never;
         history: SharedRecoveryHistoryImages;
         assetMaxBytes?: never;
         executionMaxBytes?: never;
@@ -53,6 +63,9 @@ type Options = Omit<
         actionMaxBytes?: never;
         retainedMaxBytes?: never;
         retainedAssetMaxBytes?: never;
+        actionArchiveMaxBytes?: never;
+        runArchiveMaxBytes?: never;
+        runAssetMaxBytes?: never;
         history?: never;
       }
     | {
@@ -61,6 +74,9 @@ type Options = Omit<
         actionMaxBytes: number;
         retainedMaxBytes?: never;
         retainedAssetMaxBytes?: never;
+        actionArchiveMaxBytes?: never;
+        runArchiveMaxBytes?: never;
+        runAssetMaxBytes?: never;
         history?: never;
       }
     | {
@@ -69,6 +85,20 @@ type Options = Omit<
         actionMaxBytes: number;
         retainedMaxBytes: number;
         retainedAssetMaxBytes: number;
+        actionArchiveMaxBytes?: never;
+        runArchiveMaxBytes?: never;
+        runAssetMaxBytes?: never;
+        history?: never;
+      }
+    | {
+        assetMaxBytes: number;
+        executionMaxBytes: number;
+        actionMaxBytes: number;
+        actionArchiveMaxBytes: number;
+        runArchiveMaxBytes: number;
+        runAssetMaxBytes: number;
+        retainedMaxBytes?: never;
+        retainedAssetMaxBytes?: never;
         history?: never;
       }
   );
@@ -83,6 +113,9 @@ type Prepared = {
   actionBinding?: SharedRecoveryActionCheckpointBinding;
   retainedBinding?: SharedRecoveryRetainedCheckpointBinding;
   retainedAssetCheckpoint?: RetainedRecoveryAssetCheckpoint;
+  actionArchiveBinding?: SharedRecoveryActionArchiveCheckpointBinding;
+  runArchiveBinding?: SharedRecoveryRunArchiveCheckpointBinding;
+  runAssetCheckpoint?: RunArchiveAssetCheckpoint;
 };
 async function prepare(options: Options): Promise<Prepared> {
   const {
@@ -95,10 +128,69 @@ async function prepare(options: Options): Promise<Prepared> {
     actionMaxBytes,
     retainedMaxBytes,
     retainedAssetMaxBytes,
+    actionArchiveMaxBytes,
+    runArchiveMaxBytes,
+    runAssetMaxBytes,
   } = options;
   if (![localMaxBytes, sharedMaxBytes].every((value) => Number.isSafeInteger(value) && value > 0))
     throw new RecoveryCheckpointImagesError("Payload read limits must be positive safe integers");
   const expected = parseLocalRecoveryIdentity(options.expected);
+  if (
+    actionArchiveMaxBytes !== undefined ||
+    runArchiveMaxBytes !== undefined ||
+    runAssetMaxBytes !== undefined
+  ) {
+    if (options.history !== undefined)
+      throw new RecoveryCheckpointImagesError(
+        "Run archive image coverage requires saved manifests",
+      );
+    if (retainedMaxBytes !== undefined || retainedAssetMaxBytes !== undefined)
+      throw new RecoveryCheckpointImagesError(
+        "Choose run archive or selected-root retained coverage",
+      );
+    if (
+      actionArchiveMaxBytes === undefined ||
+      runArchiveMaxBytes === undefined ||
+      runAssetMaxBytes === undefined ||
+      options.assetMaxBytes === undefined ||
+      executionMaxBytes === undefined ||
+      actionMaxBytes === undefined
+    )
+      throw new RecoveryCheckpointImagesError(
+        "Run archive image coverage requires all saved source read limits",
+      );
+    const { payload, checkpoint } = await loadRegisteredRunArchiveAssetPayload({
+      root,
+      db,
+      expected,
+      localMaxBytes,
+      sharedMaxBytes,
+      executionMaxBytes,
+      actionMaxBytes,
+      actionArchiveMaxBytes,
+      runArchiveMaxBytes,
+      assetMaxBytes: options.assetMaxBytes,
+      maxBytes: runAssetMaxBytes,
+      createValidationDatabase,
+    });
+    const runArchiveBinding = checkpoint.binding,
+      localCheckpoint = runArchiveBinding.localCheckpoint,
+      actionArchive = runArchiveBinding.checkpoint.checkpoint,
+      original = actionArchive.checkpoint;
+    return {
+      root,
+      db,
+      binding: checkpoint.assetCheckpoint.binding,
+      manifest: payload.manifest,
+      owner: registeredLocalRecoveryImageOwner(expected),
+      assetCheckpoint: checkpoint.assetCheckpoint,
+      executionBinding: { checkpoint: original.checkpoint, localCheckpoint },
+      actionBinding: { checkpoint: original, localCheckpoint },
+      actionArchiveBinding: { checkpoint: actionArchive, localCheckpoint },
+      runArchiveBinding,
+      runAssetCheckpoint: checkpoint,
+    };
+  }
   if (retainedMaxBytes !== undefined || retainedAssetMaxBytes !== undefined) {
     if (options.history !== undefined)
       throw new RecoveryCheckpointImagesError("Retained image coverage requires saved manifests");
@@ -241,6 +333,23 @@ async function requireBinding(tx: Tx, prepared: Prepared) {
         "Registered retained asset checkpoint binding changed",
       );
   }
+  if (prepared.actionArchiveBinding) {
+    const archive = await readSharedRecoveryActionArchiveCheckpoint(tx, key);
+    if (!archive || JSON.stringify(archive) !== JSON.stringify(prepared.actionArchiveBinding))
+      throw new RecoveryCheckpointImagesError(
+        "Registered action archive checkpoint binding changed",
+      );
+  }
+  if (prepared.runArchiveBinding) {
+    const archive = await readSharedRecoveryRunArchiveCheckpoint(tx, key);
+    if (!archive || JSON.stringify(archive) !== JSON.stringify(prepared.runArchiveBinding))
+      throw new RecoveryCheckpointImagesError("Registered run archive checkpoint binding changed");
+  }
+  if (prepared.runAssetCheckpoint) {
+    const assets = await readRunArchiveAssetCheckpoint(tx, key);
+    if (!assets || JSON.stringify(assets) !== JSON.stringify(prepared.runAssetCheckpoint))
+      throw new RecoveryCheckpointImagesError("Registered run asset checkpoint binding changed");
+  }
 }
 async function requirePayloads(prepared: Prepared) {
   const payloads = [
@@ -266,6 +375,15 @@ async function requirePayloads(prepared: Prepared) {
           },
         ]
       : []),
+    ...(prepared.actionArchiveBinding
+      ? [{ area: "action-archives" as const, checkpoint: prepared.actionArchiveBinding.checkpoint }]
+      : []),
+    ...(prepared.runArchiveBinding
+      ? [{ area: "run-archives" as const, checkpoint: prepared.runArchiveBinding.checkpoint }]
+      : []),
+    ...(prepared.runAssetCheckpoint
+      ? [{ area: "run-asset-manifests" as const, checkpoint: prepared.runAssetCheckpoint }]
+      : []),
   ];
   for (const { area, checkpoint } of payloads) {
     const evidence = await observe(prepared.root, checkpoint, area);
@@ -287,6 +405,11 @@ function result(prepared: Prepared, state: "pending" | "retained", changed: bool
     ...(prepared.retainedAssetCheckpoint
       ? { retainedAssetCheckpoint: prepared.retainedAssetCheckpoint }
       : {}),
+    ...(prepared.actionArchiveBinding
+      ? { actionArchiveBinding: prepared.actionArchiveBinding }
+      : {}),
+    ...(prepared.runArchiveBinding ? { runArchiveBinding: prepared.runArchiveBinding } : {}),
+    ...(prepared.runAssetCheckpoint ? { runAssetCheckpoint: prepared.runAssetCheckpoint } : {}),
   });
 }
 async function reserve(prepared: Prepared) {

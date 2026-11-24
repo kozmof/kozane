@@ -101,8 +101,9 @@ image verification or reservations. Use the run archive validator or
 SQL endpoints separately.
 
 Trusted descriptors can be registered in the catalog described below. The Node
-host can retain [saved manifest files](run-archive-asset-payloads.md). Broader image
-protection and complete bundle publication remain pending. Existing current and
+host can retain [saved manifest files](run-archive-asset-payloads.md) and
+[protect their images](recovery-checkpoint-images.md#check-saved-broader-run-images).
+Complete bundle publication remains pending. Existing current and
 selected-root retained asset formats stay at version 1 and retain their existing
 scope.
 

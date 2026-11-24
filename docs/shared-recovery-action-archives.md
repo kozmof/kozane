@@ -128,6 +128,7 @@ roots in the current selected checkpoint.
 [Run archive asset checkpoints](run-archive-asset-checkpoints.md) bind broader
 per-run and first-recorded input requirements to the exact source expectations.
 The Node host can retain [saved broader manifests](run-archive-asset-payloads.md)
-after validating all seven sources. Broader image protection remains pending.
+after validating all seven sources and can
+[protect their images](recovery-checkpoint-images.md#check-saved-broader-run-images).
 Production capture remains subject to the
 [adapter verification gate](action-capture-prototype.md).
