@@ -214,6 +214,12 @@ The full original binding map remains available. Replayed child arguments and
 entry order belong to the new execution records. Earlier returned records and
 the root invocation remain unchanged.
 
+Binding providers retain their initial mode and allocation callbacks. Changing
+the caller's options after creation cannot switch replay into recording or
+replace the sources used for recorded IDs and clock readings. Replay also copies
+its original binding map. An unbound replay allocation fails the root even when
+the handler catches the error after earlier writes.
+
 `actions/allocations.ts` connects guarded handles to their handler's binding
 provider. Covered record helpers supply IDs and card timestamps explicitly before
 SQL execution. Handles outside an action retain their existing defaults. A closed

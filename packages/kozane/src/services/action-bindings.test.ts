@@ -72,6 +72,49 @@ describe("action allocation bindings", () => {
     expect(earlier).toEqual({});
   });
 
+  it("keeps replay mode after the caller changes the provider options", () => {
+    const options = {
+      mode: "replay" as const,
+      bindings: { [path("original")]: { type: "entity-id", value: "original" } } as const,
+    };
+    const replay = createActionBindings(options);
+    const allocateId = vi.fn(() => "unexpected-id");
+    const now = vi.fn(() => 123);
+    Reflect.set(options, "mode", "record");
+    Reflect.set(options, "allocateId", allocateId);
+    Reflect.set(options, "now", now);
+    expect(replay.mode).toBe("replay");
+    expect(replay.entityId(path("original"))).toBe("original");
+    for (const allocate of [replay.entityId, replay.childId, replay.clock])
+      expect(() => allocate(path("new"))).toThrow("Unbound replay allocation");
+    expect(replay.snapshot()).toEqual({
+      [path("original")]: { type: "entity-id", value: "original" },
+    });
+    expect(allocateId).not.toHaveBeenCalled();
+    expect(now).not.toHaveBeenCalled();
+  });
+
+  it("keeps recording sources after the caller replaces them or changes the mode", () => {
+    let next = 0;
+    const allocateId = vi.fn(() => `original-${++next}`);
+    const now = vi.fn(() => 123);
+    const options = { mode: "record" as const, allocateId, now };
+    const record = createActionBindings(options);
+    const replacementId = vi.fn(() => "replacement");
+    const replacementTime = vi.fn(() => 456);
+    options.allocateId = replacementId;
+    options.now = replacementTime;
+    expect(record.entityId(path("entity"))).toBe("original-1");
+    expect(record.clock(path("time"))).toBe(123);
+    Reflect.set(options, "mode", "replay");
+    expect(record.childId(path("child"))).toBe("original-2");
+    expect(record.mode).toBe("record");
+    expect(allocateId).toHaveBeenCalledTimes(2);
+    expect(now).toHaveBeenCalledOnce();
+    expect(replacementId).not.toHaveBeenCalled();
+    expect(replacementTime).not.toHaveBeenCalled();
+  });
+
   it.each([
     { type: "entity-id", value: "" },
     { type: "child-id", value: 5 },

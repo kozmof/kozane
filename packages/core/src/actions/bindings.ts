@@ -35,9 +35,14 @@ export function createActionBindings(
     | { readonly mode: "record"; readonly allocateId: () => string; readonly now: () => number }
     | { readonly mode: "replay"; readonly bindings: ActionBindingMap },
 ) {
+  // Own the mode and allocation sources for the provider's entire lifetime.
+  const source =
+    options.mode === "record"
+      ? Object.freeze({ mode: options.mode, allocateId: options.allocateId, now: options.now })
+      : Object.freeze({ mode: options.mode, bindings: options.bindings });
   const bindings = new Map<string, ActionBinding>();
-  if (options.mode === "replay") {
-    for (const [path, binding] of Object.entries(options.bindings)) {
+  if (source.mode === "replay") {
+    for (const [path, binding] of Object.entries(source.bindings)) {
       if (!path || !binding || !validBinding(binding))
         throw new ActionBindingError(path, "Invalid recorded binding");
       bindings.set(
@@ -53,16 +58,16 @@ export function createActionBindings(
       if (existing.type !== type) throw new ActionBindingError(path, "Binding type changed");
       return existing.value;
     }
-    if (options.mode === "replay") throw new ActionBindingError(path, "Unbound replay allocation");
+    if (source.mode === "replay") throw new ActionBindingError(path, "Unbound replay allocation");
     const binding = (
-      type === "clock" ? { type, value: options.now() } : { type, value: options.allocateId() }
+      type === "clock" ? { type, value: source.now() } : { type, value: source.allocateId() }
     ) as ActionBinding;
     if (!validBinding(binding)) throw new ActionBindingError(path, "Invalid allocation");
     bindings.set(path, Object.freeze(binding));
     return binding.value;
   }
   return Object.freeze({
-    mode: options.mode,
+    mode: source.mode,
     entityId: (path: string): string => resolve(path, "entity-id") as string,
     childId: (path: string): string => resolve(path, "child-id") as string,
     /** Epoch seconds, matching SQLite timestamp columns. Inject a source that returns seconds. */

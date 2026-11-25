@@ -22,6 +22,7 @@ import {
   ActionBindingError,
   createActionBindings,
   type ActionBindingMap,
+  type ActionBindings,
 } from "../../../../core/src/actions/bindings.js";
 import { runActionGroup, type ActionFrameAccess } from "../../../../core/src/actions/execution.js";
 import { defineActionRegistry, type ActionHandler } from "../../../../core/src/actions/registry.js";
@@ -87,16 +88,17 @@ async function fixture(root: ActionHandler<Input, Context>) {
   let next = 0;
   const allocate = vi.fn(() => `allocated-${++next}`);
   const now = vi.fn(() => 1700000000);
-  const run = (input: Input = {}, generated?: ActionBindingMap) =>
+  const run = (input: Input = {}, generated?: ActionBindingMap, provider?: ActionBindings) =>
     runActionGroup({
       db,
       registry,
       schemaVersion: 19,
       invocation: { id: "root-id", kind: "root", contractVersion: 1, input },
       bindings:
-        generated === undefined
+        provider ??
+        (generated === undefined
           ? createActionBindings({ mode: "record", allocateId: allocate, now })
-          : createActionBindings({ mode: "replay", bindings: generated }),
+          : createActionBindings({ mode: "replay", bindings: generated })),
       createContext: (actions, db) => ({ actions, db }),
       complete: async (tx, group) => {
         await tx.run(sql`INSERT INTO allocation_log VALUES(${JSON.stringify(group.generated)})`);
@@ -107,6 +109,63 @@ async function fixture(root: ActionHandler<Input, Context>) {
 async function cardRows(db: DB | Tx) {
   return db.select().from(schema.cardTable).orderBy(schema.cardTable.id);
 }
+
+it("rolls back caught replay allocations after provider options change while SQL is awaited", async () => {
+  const options = { mode: "replay" as const, bindings: {} };
+  const provider = createActionBindings(options);
+  const allocateId = vi.fn(() => "unexpected-id");
+  const now = vi.fn(() => 1700000000);
+  const caught = vi.fn();
+  const f = await fixture(async (_input, { context: execution, bindings }) => {
+    await execution.db
+      .update(schema.cardTable)
+      .set({ content: "pending edit" })
+      .where(eq(schema.cardTable.id, "first"));
+    Reflect.set(options, "mode", "record");
+    Reflect.set(options, "allocateId", allocateId);
+    Reflect.set(options, "now", now);
+    try {
+      bindings.entityId("new-branch");
+    } catch (cause) {
+      caught(cause);
+    }
+  });
+  const before = await cardRows(f.db);
+  await expect(f.run({}, undefined, provider)).rejects.toThrow("Unbound replay allocation");
+  expect(caught).toHaveBeenCalledOnce();
+  expect(allocateId).not.toHaveBeenCalled();
+  expect(now).not.toHaveBeenCalled();
+  expect(provider.snapshot()).toEqual({});
+  expect(await cardRows(f.db)).toEqual(before);
+  expect(await f.db.all(sql`SELECT * FROM allocation_log`)).toEqual([]);
+});
+
+it("keeps recorded service IDs and clocks tied to the initial sources across awaited SQL", async () => {
+  const allocateId = vi.fn(() => "original-id");
+  const now = vi.fn(() => 1700000000);
+  const options = { mode: "record" as const, allocateId, now };
+  const provider = createActionBindings(options);
+  const replacementId = vi.fn(() => "replacement-id");
+  const replacementTime = vi.fn(() => 1800000000);
+  const f = await fixture(async (_input, { context: execution }) => {
+    await execution.db.select().from(schema.namespaceTable);
+    Reflect.set(options, "mode", "replay");
+    options.allocateId = replacementId;
+    options.now = replacementTime;
+    return cards.createInTx(execution.db, context, "n", { partitionId: "p", content: "Created" });
+  });
+  const result = await f.run({}, undefined, provider);
+  expect(result.result).toMatchObject({ id: "original-id" });
+  expect((await cardRows(f.db)).find(({ id }) => id === "original-id")).toMatchObject({
+    createdAt: new Date(1700000000000),
+    updatedAt: new Date(1700000000000),
+  });
+  expect(provider.mode).toBe("record");
+  expect(allocateId).toHaveBeenCalledOnce();
+  expect(now).toHaveBeenCalledOnce();
+  expect(replacementId).not.toHaveBeenCalled();
+  expect(replacementTime).not.toHaveBeenCalled();
+});
 
 const cases = [
   {

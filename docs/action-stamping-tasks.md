@@ -764,6 +764,13 @@ Caught child errors retain the root failure and roll back earlier writes and
 history. Production routing and filesystem workflow separation remain pending.
 See [execution scope checks](action-execution-scopes.md#root-boundary-and-failure-handling).
 
+Binding providers now retain their initial recording or replay mode and their
+original allocation callbacks. Caller changes cannot enable fresh allocations
+during replay or substitute recorded ID and clock sources. Regression tests
+reproduce both earlier failures. Native and Node WASM service tests verify source
+stability across awaited SQL and full rollback after a caught unbound replay
+allocation. See [allocation ownership](action-execution-scopes.md#invocations-and-allocations).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -783,6 +790,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Bind IDs in the covered record helpers and clocks in single and batch card creation and text updates when called through opt-in action handles.
 - [x] Bind squash inventory and piece IDs and their shared timestamp to the source card and segment roles.
 - [x] Bind taskspace record IDs, creation timestamps and label clocks through opt-in execution handles without allocating clocks for location updates.
+- [x] Retain each binding provider's initial mode and allocation callbacks. Verify caller mutation cannot enable replay allocations or replace recorded ID and clock sources, including across awaited service SQL on native and Node WASM adapters.
 - [ ] Persist `contract_ver` from the first execution and dispatch the whole group through its compatible registry.
 - [ ] Refuse unbound replay allocations without changing the binding map. Preserve original invocations when replay resolves child arguments differently.
 - [ ] Replace migration 0019's timestamp fallback with explicit bindings and record-mode validation. Preserve historical timestamps during restoration.
