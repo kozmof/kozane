@@ -9,7 +9,11 @@ import {
   createActionBindings,
   type ActionBindingMap,
 } from "../../../../core/src/actions/bindings.js";
-import { runActionGroup, type ActionFrameAccess } from "../../../../core/src/actions/execution.js";
+import {
+  runActionGroup,
+  runActionGroupAtBoundary,
+  type ActionFrameAccess,
+} from "../../../../core/src/actions/execution.js";
 import { defineActionRegistry, type ActionHandler } from "../../../../core/src/actions/registry.js";
 
 type Inputs = {
@@ -41,6 +45,25 @@ async function fixture(
   );
   await db.run(sql`CREATE TABLE execution_group(root_id TEXT,generated TEXT,executions TEXT)`);
   let raw: Tx;
+  const allocateId = vi.fn((next: number) => `allocated-${next}`);
+  const enter = vi.fn(
+    async (
+      tx: Tx,
+      entry: {
+        id: string;
+        parentId: string | null;
+        kind: string;
+        executionOrd: number;
+        input: unknown;
+      },
+    ) => {
+      raw = tx;
+      await tx.run(
+        sql`INSERT INTO execution_entry VALUES(${entry.id},${entry.parentId},${entry.kind},${entry.executionOrd},${JSON.stringify(entry.input)})`,
+      );
+      await tx.run(sql`UPDATE execution_marker SET action_id=${entry.id}`);
+    },
+  );
   const registry = defineActionRegistry<Inputs, Context>({
     contractVersion: 1,
     schemaVersions: [19],
@@ -100,7 +123,7 @@ async function fixture(
       invocation: { id: "root-id", kind: "root", contractVersion, input },
       bindings:
         mode === "record"
-          ? createActionBindings({ mode, allocateId: () => `allocated-${++next}`, now: () => 123 })
+          ? createActionBindings({ mode, allocateId: () => allocateId(++next), now: () => 123 })
           : createActionBindings({ mode, bindings: generated }),
       createContext: (actions, handle) => ({
         db: handle,
@@ -110,13 +133,7 @@ async function fixture(
           await raw.run(sql`RELEASE child_work`);
         },
       }),
-      enter: async (tx, entry) => {
-        raw = tx;
-        await tx.run(
-          sql`INSERT INTO execution_entry VALUES(${entry.id},${entry.parentId},${entry.kind},${entry.executionOrd},${JSON.stringify(entry.input)})`,
-        );
-        await tx.run(sql`UPDATE execution_marker SET action_id=${entry.id}`);
-      },
+      enter,
       leave: async (tx, _id, parentId) => {
         await tx.run(sql`UPDATE execution_marker SET action_id=${parentId}`);
       },
@@ -129,7 +146,7 @@ async function fixture(
       },
     });
   };
-  return { db, execute };
+  return { db, execute, allocateId, enter };
 }
 async function stored(f: Awaited<ReturnType<typeof fixture>>) {
   // Mapped selects keep the test independent of raw driver row shapes.
@@ -367,6 +384,87 @@ it("refuses local-only children and preserves the first failure after later disp
   expect(recover).not.toHaveBeenCalled();
   expect(await stored(f)).toEqual([]);
 });
+
+it.each(["record", "replay"] as const)(
+  "refuses ineligible roots before opening the %s boundary or calling hooks",
+  async (mode) => {
+    const prepareInput = vi.fn((input: unknown) => input);
+    const handler = vi.fn(async () => "not called");
+    const registry = defineActionRegistry<{ file: unknown }, unknown>({
+      contractVersion: 1,
+      schemaVersions: [19],
+      definitions: { file: { eligibility: "local-only", prepare: prepareInput, recover: handler } },
+    });
+    const boundary = vi.fn(async () => {
+      throw new Error("Boundary must not open");
+    });
+    const hook = vi.fn(async () => {});
+    const createContext = vi.fn(() => ({}));
+    const allocateId = vi.fn(() => "unused");
+    const bindings =
+      mode === "record"
+        ? createActionBindings({ mode, allocateId, now: () => 123 })
+        : createActionBindings({ mode, bindings: {} });
+    for (const [kind, message] of [
+      ["file", "Action is local-only: file"],
+      ["__proto__", "Unknown action kind: __proto__"],
+    ]) {
+      await expect(
+        runActionGroupAtBoundary(
+          {
+            schemaVersion: 19,
+            registry,
+            invocation: { id: "root", kind, contractVersion: 1, input: {} },
+            bindings,
+            createContext,
+            enter: hook,
+            leave: hook,
+            complete: hook,
+          },
+          boundary,
+        ),
+      ).rejects.toThrow(message);
+    }
+    for (const callback of [boundary, hook, createContext, allocateId, prepareInput, handler])
+      expect(callback).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["record", "replay"] as const)(
+  "rejects ineligible children before allocation and persistence during %s, even when caught",
+  async (mode) => {
+    for (const method of ["child", "dispatch"] as const) {
+      for (const [kind, message] of [
+        ["file", "Action is local-only: file"],
+        ["__proto__", "Unknown action kind: __proto__"],
+      ]) {
+        const recover = vi.fn(async () => "not called");
+        const caught = vi.fn();
+        const f = await fixture({
+          file: recover,
+          root: async (_input, { context }) => {
+            await context.db.run(sql`INSERT INTO execution_value VALUES('parent',1)`);
+            try {
+              await context.actions[method](["invalid"], kind, { path: "local.md" });
+            } catch (cause) {
+              caught(cause);
+            }
+          },
+        });
+        await expect(f.execute(mode)).rejects.toThrow(message);
+        expect(caught).toHaveBeenCalledOnce();
+        expect(String(caught.mock.calls[0][0])).toContain(message);
+        expect(f.allocateId).not.toHaveBeenCalled();
+        expect(f.enter).toHaveBeenCalledOnce();
+        expect(f.enter.mock.calls[0][1].kind).toBe("root");
+        expect(recover).not.toHaveBeenCalled();
+        expect(await stored(f)).toEqual([]);
+        expect(await audit(f)).toEqual([]);
+        expect(await marker(f)).toEqual([{ id: null }]);
+      }
+    }
+  },
+);
 
 it("preserves origin inputs and bindings while replay records changed child arguments", async () => {
   let resolvedValue = 1;

@@ -110,6 +110,7 @@ export async function runActionGroupAtBoundary<Inputs extends object, C>(
     typeof invocation.kind !== "string"
   )
     throw new ActionExecutionError("Root action requires an ID and kind");
+  registry.assertSyncable(invocation.kind);
   return boundary(async (tx) => {
     const executeConnection = (statement: string) => tx.values(sql.raw(statement));
     await configureActionConnection(executeConnection);
@@ -287,6 +288,7 @@ export async function runActionGroupAtBoundary<Inputs extends object, C>(
         assertOwner(parent);
         if (parent.sql.size)
           throw new ActionExecutionError("Cannot enter a child while parent SQL is outstanding");
+        registry.assertSyncable(kind);
         const prepared = freezeActionInput(prepareInput(input));
         if (!path.length) throw new ActionExecutionError("Child action requires a stable path");
         const stablePath = [...parent.path, actionBindingPath(kind, ...path)];

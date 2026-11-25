@@ -106,6 +106,8 @@ async function fixture() {
     }),
   };
   const registry = createCompositionRegistryV1([19], handlers);
+  const allocateId = vi.fn((next: number) => `id-${next}`);
+  const enter = vi.fn(async () => {});
   const complete = async (
     handle: Parameters<NonNullable<Parameters<typeof composeActions>[0]["complete"]>>[0],
     group: ActionGroupResult,
@@ -126,10 +128,11 @@ async function fixture() {
       operation,
       bindings: createActionBindings({
         mode: "record",
-        allocateId: () => `id-${++counter}`,
+        allocateId: () => allocateId(++counter),
         now: () => 123,
       }),
       complete,
+      enter,
     });
   };
   const replay = (group: ActionGroupResult, session?: ActionReplaySession) =>
@@ -155,7 +158,21 @@ async function fixture() {
         executions: sql<string>`executions`,
       })
       .from(sql`composition_log`);
-  return { db, record, replay, rows, logs, created, updated, read, handlers, registry, readers };
+  return {
+    db,
+    record,
+    replay,
+    rows,
+    logs,
+    created,
+    updated,
+    read,
+    handlers,
+    registry,
+    readers,
+    allocateId,
+    enter,
+  };
 }
 
 it("records complete direct calls and resolved read arguments, then replays without the callback", async () => {
@@ -281,6 +298,9 @@ it("rolls back earlier calls when a local-only child is caught by the callback",
   expect(await f.rows()).toEqual([]);
   expect(await f.logs()).toEqual([]);
   expect(f.handlers["taskspaces.createFile"].recover).not.toHaveBeenCalled();
+  // Only the successful card's child ID and entity ID were allocated.
+  expect(f.allocateId).toHaveBeenCalledTimes(2);
+  expect(f.enter).toHaveBeenCalledTimes(2);
 });
 
 it("rolls back caught reader validation errors after an earlier child write", async () => {

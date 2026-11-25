@@ -107,6 +107,27 @@ describe("versioned action registry", () => {
     expect(replacement).not.toHaveBeenCalled();
   });
 
+  it("checks eligibility against copied definitions without preparing input or invoking handlers", () => {
+    const prepare = vi.fn((input: unknown) => input);
+    const handler = vi.fn(async () => "not called");
+    const definitions: ActionDefinitions<{ edit: unknown; file: unknown }, unknown> = {
+      edit: { eligibility: "syncable", prepare, replay: handler },
+      file: { eligibility: "local-only", prepare, recover: handler },
+    };
+    const registry = defineActionRegistry({
+      contractVersion: 1,
+      schemaVersions: [19],
+      definitions,
+    });
+    Reflect.set(definitions.edit, "eligibility", "local-only");
+    Reflect.set(definitions.file, "eligibility", "syncable");
+    expect(() => registry.assertSyncable("edit")).not.toThrow();
+    expect(() => registry.assertSyncable("file")).toThrow("Action is local-only: file");
+    expect(() => registry.assertSyncable("__proto__")).toThrow("Unknown action kind: __proto__");
+    expect(prepare).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it("refuses duplicate versions and invalid version declarations", () => {
     const f = version(1, [19]);
     expect(() => createActionRegistryCatalog([f.registry, f.registry])).toThrow(

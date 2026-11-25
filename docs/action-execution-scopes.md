@@ -114,6 +114,15 @@ File recovery remains a separate registry operation. The
 [composition API](action-composition.md) uses this scope to record direct child
 IDs and enforce callback and reader access.
 
+The selected registry checks syncable eligibility before the root opens its
+transaction. Child dispatch checks eligibility before allocating a child ID,
+creating a frame or calling persistence hooks. Unknown and local-only kinds
+fail in recording and replay, including calls from named handlers and generic
+compositions. Catching a child rejection leaves the root's failure latch set,
+so earlier application writes and history still roll back. The registry's
+`assertSyncable` check uses its copied definitions without preparing input or
+invoking replay or file recovery handlers.
+
 Before entering a handler, the scope enables and verifies `foreign_keys` and
 `recursive_triggers` on its transaction connection. The host must enable foreign
 keys before opening the transaction because SQLite cannot change that flag within

@@ -756,6 +756,14 @@ failure boundaries. Native file tests cover restart and competing writers,
 cleanup and owner release. Production enrollment and browser runtime verification
 remain pending. See [initial capture staging](prototype-capture-initialization.md).
 
+Opt-in action scopes now reject local-only and unknown roots before opening the
+transaction. Child checks run before ID allocation and persistence hooks, using
+the selected registry's copied definitions. Native and Node WASM tests cover
+recording and replay, named-handler child calls and caught composition failures.
+Caught child errors retain the root failure and roll back earlier writes and
+history. Production routing and filesystem workflow separation remain pending.
+See [execution scope checks](action-execution-scopes.md#root-boundary-and-failure-handling).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -816,6 +824,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Integrate fresh execution scopes with root replay savepoints and check the latch before savepoint release in opt-in replay transactions.
 - [x] Wait for outstanding children and service work to settle before rollback and discard each failed root's execution scope.
 - [ ] Separate filesystem handlers from syncable database handlers. Refuse local-only children in generic compositions and named syncable handlers.
+- [x] Reject local-only and unknown roots before opening opt-in action boundaries, and reject children before allocating IDs or calling persistence hooks. Verify caught failures still roll back named handlers and generic compositions on native and Node WASM adapters.
 - [x] Move taskspace paths and observations into local metadata storage before baseline capture. Preserve metadata for absent taskspaces without cascading deletion.
 - [x] Keep shared taskspace rename independent of directory movement and local observation timestamps.
 - [ ] Verify write coverage, caught failures, overlapping calls, outstanding children, nested execution order and serialized composition replay.

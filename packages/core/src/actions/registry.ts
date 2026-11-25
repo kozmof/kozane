@@ -78,19 +78,26 @@ export function defineActionRegistry<Inputs extends object, C>(options: {
     if (typeof handler !== "function") throw new TypeError(`Missing action handler: ${kind}`);
     definitions.set(kind, Object.freeze({ ...entry }));
   }
+  function syncableDefinition(kind: string) {
+    const definition = definitions.get(kind);
+    if (!definition) throw new TypeError(`Unknown action kind: ${kind}`);
+    if (definition.eligibility !== "syncable") throw new TypeError(`Action is local-only: ${kind}`);
+    return definition;
+  }
   return Object.freeze({
     contractVersion: version,
     supportsSchema: (schemaVersion: number) => schemas.has(schemaVersion),
+    /** Check dispatch eligibility without preparing input or invoking a handler. */
+    assertSyncable(kind: string): void {
+      syncableDefinition(kind);
+    },
     /** First execution uses the same intent handler with a recording binding provider. */
     async execute<K extends keyof Inputs & string>(
       kind: K,
       input: unknown,
       execution: ActionHandlerContext<C>,
     ): Promise<unknown> {
-      const definition = definitions.get(kind);
-      if (!definition) throw new TypeError(`Unknown action kind: ${kind}`);
-      if (definition.eligibility !== "syncable")
-        throw new TypeError(`Action is local-only: ${kind}`);
+      const definition = syncableDefinition(kind);
       if (execution.bindings.mode !== "record")
         throw new TypeError("First execution requires recording bindings");
       const prepared = definition.prepare(prepareInput(input));
@@ -102,10 +109,7 @@ export function defineActionRegistry<Inputs extends object, C>(options: {
       input: unknown,
       execution: ActionHandlerContext<C>,
     ): Promise<unknown> {
-      const definition = definitions.get(kind);
-      if (!definition) throw new TypeError(`Unknown action kind: ${kind}`);
-      if (definition.eligibility !== "syncable")
-        throw new TypeError(`Action is local-only: ${kind}`);
+      const definition = syncableDefinition(kind);
       if (execution.bindings.mode !== "replay")
         throw new TypeError("Intent replay requires recorded bindings");
       const prepared = definition.prepare(prepareInput(input));
