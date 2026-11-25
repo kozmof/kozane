@@ -56,8 +56,8 @@ await repairCaptureInitialization(db, initialization);
 ```
 
 The helper runs the same inventory repair implementation used by `system.repair`
-as the pinned `initial-inventory-repair:v1` migration batch. It clears half placements, resolves
-overlaps and removes stored cards from glue groups. It preserves exact card
+as the pinned `initial-inventory-repair:v1` migration batch. It clears half
+placements, resolves overlaps and removes stored cards from glue groups. It preserves exact card
 timestamps, local taskspace metadata and the provisional baseline. It publishes
 no action executions or effects. The first active baseline includes the repaired
 rows.
@@ -81,9 +81,8 @@ blocked for separate recovery.
 ## Validate the initial baseline
 
 Prepare the candidate with a separate empty validation database factory and a
-trusted image reader. Requested repair batches must already be complete.
-An incomplete batch refuses
-preparation before allocating a validation database or reserving a candidate pin.
+trusted image reader. Preparation refuses incomplete repair batches before
+allocating a validation database or reserving a candidate pin.
 
 ```ts
 const prepared = await prepareCaptureInitialization(
@@ -95,6 +94,18 @@ The helper reuses [epoch baseline preparation](prototype-epoch-transitions.md).
 It commits a stable candidate baseline pin before image reads or isolated SQL
 validation. Exact rows, image bytes, schema, guards and connection settings must
 pass before the retained candidate commits.
+
+Preparation rechecks the initial staging record and pin in the candidate read
+and in the transactions that reserve protection and publish the candidate.
+Publication checks repeat after final image callbacks and after the candidate
+metadata write. The candidate descriptor, completed batch progress, retained
+baseline owner and empty execution context must still match before commit.
+
+Releasing the initial pin during validation refuses publication. The reviewed
+release stays committed, and any earlier candidate pin remains available for
+inspection. Changes made inside the final publication transaction roll back
+with its candidate and retention updates. Preparation does not recreate released
+protection, remove image evidence or activate writes.
 
 Failed validation leaves shared writes blocked. A failed candidate commit
 preserves both the original staging pin and the earlier committed candidate pin.
@@ -135,7 +146,9 @@ writes, invalid rows, exact identities, temporary schema refusal, image
 verification and failure at each commit. Repair tests cover overlaps, glue groups,
 legacy half placements, exact timestamps including unsafe integers, explicit plan
 selection, incomplete batches, failed repair and commit rollback, and retained
-staging protection. It runs in the
+staging protection. Publication tests cover pin release before reservation and
+during validation, changed protection during final callbacks, and candidate and
+owner changes during metadata publication. It runs in the
 [fixed capture gate](action-capture-prototype.md#run-the-checks) on native and
 Node WASM adapters.
 
@@ -145,6 +158,8 @@ after candidate preparation and after failed activation. Competing writes,
 cleanup and owner release cannot cross a held staging or activation transaction.
 Repair tests reopen before and after its commit, recover a failed repair commit
 and refuse competing writes, cleanup and pin release during a held repair batch.
+Preparation tests refuse pin release from another connection during validation
+and serialize final publication with application writes, cleanup and pin release.
 
 Browser runtime verification and production initialization integration remain
 pending. The existing fixture installer remains an immediate setup helper for

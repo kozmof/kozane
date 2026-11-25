@@ -246,26 +246,78 @@ it("preserves blocking and image protection after failed activation commit and c
   expect((await inspectAssetManifest(resumed.db, staged.owner)).record.state).toBe("released");
   await (await openCapturePrototype(core)).verify();
 });
-it.each(["stage", "repair", "activation"] as const)(
+it("refuses initial candidate publication after another connection releases its staging pin during validation", async () => {
+  const f = await fixture();
+  const staged = await stageCaptureInitialization(f.core, identity, f.catalog);
+  const other = await open(f.path);
+  const entered = Promise.withResolvers<void>();
+  const proceed = Promise.withResolvers<void>();
+  const pending = prepareCaptureInitialization(
+    f.core,
+    identity,
+    async () => {
+      entered.resolve();
+      await proceed.promise;
+      return factory();
+    },
+    f.catalog,
+    f.read,
+  );
+  const settled = pending.then(
+    (result) => ({ result, error: null }),
+    (error) => ({ result: null, error }),
+  );
+  try {
+    await Promise.race([
+      entered.promise,
+      settled.then(({ error }) => {
+        throw error ?? Error("Preparation ended early");
+      }),
+    ]);
+    await releaseAssetManifest(other.db, staged.owner, "Cancelled while validating");
+    proceed.resolve();
+    await expect(pending).rejects.toThrow("staging protection is not active");
+    expect((await inspectAssetManifest(f.db, staged.owner)).record.state).toBe("released");
+    expect(
+      (
+        await f.db.values(sql`SELECT state FROM local_asset_manifest WHERE owner_kind='baseline'`)
+      )[0][0],
+    ).toBe("pending");
+    expect(
+      (await f.db.values(sql`SELECT candidate FROM capture_epoch_transition`))[0][0],
+    ).toBeNull();
+    expect(new TextDecoder().decode(await f.read(f.name))).toBe(new TextDecoder().decode(f.data));
+    await expect(f.db.run(sql`INSERT INTO scope VALUES('raw','unstamped')`)).rejects.toThrow();
+  } finally {
+    proceed.resolve();
+    await settled;
+  }
+});
+
+it.each(["stage", "repair", "preparation", "activation"] as const)(
   "serializes %s with another connection's application writes and cleanup",
   async (phase) => {
     const f = await fixture(),
       other = await open(f.path);
     const requested = phase === "repair" ? repairing : identity;
-    if (phase === "repair") await stageCaptureInitialization(f.core, requested, f.catalog);
+    if (phase === "repair" || phase === "preparation")
+      await stageCaptureInitialization(f.core, requested, f.catalog);
     if (phase === "activation") {
       await stageCaptureInitialization(f.core, identity, f.catalog);
       await prepareCaptureInitialization(f.core, identity, factory, f.catalog, f.read);
     }
     const entered = Promise.withResolvers<void>(),
       proceed = Promise.withResolvers<void>();
+    let writes = 0;
     const wrapped = createDatabaseAdapter(new Proxy(f.core, {}), {
       read: (work) => withReadTx(f.core, (tx) => work(tx as unknown as DatabaseHandle)),
       write: (work) =>
         withTx(f.core, async (tx) => {
           const result = await work(tx);
-          entered.resolve();
-          await proceed.promise;
+          if (phase !== "preparation" || ++writes === 2) {
+            entered.resolve();
+            await proceed.promise;
+          }
           return result;
         }),
     });
@@ -274,7 +326,9 @@ it.each(["stage", "repair", "activation"] as const)(
         ? stageCaptureInitialization(wrapped, identity, f.catalog)
         : phase === "repair"
           ? repairCaptureInitialization(wrapped, requested)
-          : activateCaptureInitialization(wrapped, identity, f.read);
+          : phase === "preparation"
+            ? prepareCaptureInitialization(wrapped, requested, factory, f.catalog, f.read)
+            : activateCaptureInitialization(wrapped, identity, f.read);
     const settled = pending.then(
       (result) => ({ result, error: null }),
       (error) => ({ result: null, error }),

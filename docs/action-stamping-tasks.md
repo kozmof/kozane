@@ -807,6 +807,16 @@ rollback and explicit plan selection. Native file tests cover restart and
 competing writes, cleanup and pin release. Production initialization remains
 pending. See [initial inventory repair](prototype-capture-initialization.md#run-requested-inventory-repair).
 
+Initial candidate preparation now keeps staging authority checked through the
+candidate read, protection reservation and publication transactions. It refuses
+source-pin releases during validation and rechecks authority after final image
+callbacks and candidate metadata writes. Final publication also requires the exact
+candidate, completed progress, retained baseline owner and empty context. Native
+and Node WASM tests cover cancellation and metadata changes without losing earlier
+pins or evidence. Native file tests cover release from another connection and
+writer serialization during publication. Production initialization remains
+pending. See [initial candidate validation](prototype-capture-initialization.md#validate-the-initial-baseline).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -888,6 +898,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Implement restartable initial baseline capture for populated and seeded databases with application writes blocked until activation.
 - [x] Prototype initial baseline staging with atomic guard installation, persistent write blocking and pending image protection. Validate candidates separately and atomically activate the first epoch with staging completion. Verify initialization and failure boundaries on native and Node WASM adapters, plus native restart and cleanup contention.
 - [x] Support an explicitly requested inventory repair batch during prototype initialization. Commit repair and progress atomically, require completion before candidate validation, preserve initial protection and exact timestamps, and verify committed retries, failure rollback, restart and writer contention without repeating repair.
+- [x] Recheck initial staging authority during candidate reads and locked reservation and publication. Verify final descriptor, progress, retained ownership and context after metadata writes, and refuse concurrent cancellation or changed publication metadata while preserving earlier protection and evidence.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.

@@ -1,6 +1,6 @@
 /** Test-only restartable enablement. Production enrollment remains disabled. */
 import { sql } from "drizzle-orm";
-import { withReadTx, withTx, type DB, type Tx, type ReadTx } from "../../../core/src/database.js";
+import { withTx, type DB, type Tx, type ReadTx } from "../../../core/src/database.js";
 import {
   configureActionConnection,
   verifyActionConnection,
@@ -210,11 +210,17 @@ export async function prepareCaptureInitialization(
   const { identity, request } = own(input),
     assets = parseAssetManifest(catalog),
     owner = await captureInitializationOwner(identity);
-  await withReadTx(db, async (tx) => {
-    const current = await record(tx, request, owner);
-    if (current.state !== "active") throw Error("Initial capture is already active");
-  });
-  return prepareCaptureEpochBaseline(db, request, createValidationDatabase, assets, readAsset);
+  return prepareCaptureEpochBaseline(
+    db,
+    request,
+    createValidationDatabase,
+    assets,
+    readAsset,
+    async (tx) => {
+      const current = await record(tx, request, owner);
+      if (current.state !== "active") throw Error("Initial capture is already active");
+    },
+  );
 }
 /** First activation and release of the initial staging pin share one commit. */
 export async function activateCaptureInitialization(

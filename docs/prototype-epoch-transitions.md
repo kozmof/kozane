@@ -65,6 +65,13 @@ again, retains protection and stores the candidate together. Cleanup and owner
 release share the database writer lock. A failed validation or final commit
 preserves the earlier pending pin. An explicit retry reuses matching protection.
 
+After writing candidate metadata, preparation verifies the exact descriptor,
+complete batch progress, retained baseline owner and empty execution context
+before commit. Metadata changes at publication roll back the candidate and
+retention updates together. Initial capture also supplies staging checks inside
+the candidate read and locked publication boundaries, including after final
+image callbacks and the metadata write.
+
 The helper rechecks source history, rows, schema and guards after isolated
 validation. Changed evidence refuses the candidate. Failed validation or baseline
 publication leaves writes blocked and committed batch progress intact. A matching

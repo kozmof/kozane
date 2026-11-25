@@ -382,10 +382,12 @@ export async function prepareCaptureEpochBaseline(
   createValidationDatabase: () => Promise<DB>,
   catalog: AssetManifest = { version: 1, entries: [] },
   readAsset: ReadAsset = missingAsset,
+  verifyStaging?: (tx: Handle) => Promise<void>,
 ) {
   const request = own(input),
     assets = parseAssetManifest(catalog);
   const candidate = await withReadTx(db, async (tx) => {
+    await verifyStaging?.(tx);
     await empty(tx);
     const stored = await active(tx, request);
     if (stored.next !== request.batches.length) throw Error("Migration batches are incomplete");
@@ -405,6 +407,7 @@ export async function prepareCaptureEpochBaseline(
     descriptor = JSON.stringify({ ...candidate, sha256 }),
     owner = await captureEpochBaselineOwner(request, sha256);
   const checkCandidate = async (tx: Tx) => {
+    await verifyStaging?.(tx);
     const stored = await active(tx, request);
     await guards(tx);
     if (
@@ -443,6 +446,12 @@ export async function prepareCaptureEpochBaseline(
     await tx.run(
       sql`UPDATE capture_epoch_transition SET candidate=${descriptor} WHERE id=${request.id}`,
     );
+    await verifyStaging?.(tx);
+    const published = await active(tx, request);
+    if (published.next !== request.batches.length || published.candidate !== descriptor)
+      throw Error("Epoch baseline publication changed");
+    await requireBaselineOwner(tx, owner, candidate.assets, true);
+    await empty(tx);
     await verifyActionConnection((query) => tx.values(sql.raw(query)));
     return Object.freeze({ changed: stored.candidate === null, sha256, owner });
   });

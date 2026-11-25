@@ -263,6 +263,120 @@ it("keeps initial repair explicit and rejects changed or unsupported repair plan
   );
 });
 
+it.each(["reservation", "validation"] as const)(
+  "refuses candidate publication if initial protection is released during %s",
+  async (phase) => {
+    const db = await fixture();
+    await stageCaptureInitialization(db, identity);
+    const original = await rows(db, "SELECT rows FROM capture_baseline");
+    const release = () =>
+      db.run(
+        sql`UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Cancelled' WHERE owner_kind='pending-work'`,
+      );
+    let writes = 0;
+    const wrapped = createDatabaseAdapter(new Proxy(db, {}), {
+      read: (work) => withReadTx(db, (tx) => work(tx as unknown as DatabaseHandle)),
+      write: async (work) => {
+        if (phase === "reservation" && ++writes === 1) await release();
+        return withTx(db, (tx) => work(tx));
+      },
+    });
+    const validation = vi.fn(async () => {
+      if (phase === "validation") await release();
+      return factory();
+    });
+    await expect(prepareCaptureInitialization(wrapped, identity, validation)).rejects.toThrow(
+      "staging protection is not active",
+    );
+    expect(validation).toHaveBeenCalledTimes(phase === "reservation" ? 0 : 1);
+    expect(await state(db)).toEqual([[0, "active", 0]]);
+    expect(await rows(db, "SELECT rows FROM capture_baseline")).toEqual(original);
+    expect(
+      await rows(db, "SELECT owner_kind,state FROM local_asset_manifest ORDER BY owner_kind"),
+    ).toEqual(
+      phase === "reservation"
+        ? [["pending-work", "released"]]
+        : [
+            ["baseline", "pending"],
+            ["pending-work", "released"],
+          ],
+    );
+    await expect(run(db, await openCapturePrototype(db), null)).rejects.toThrow("blocked");
+  },
+);
+
+it.each(["image read", "candidate write", "candidate metadata", "baseline owner"] as const)(
+  "rechecks preparation after %s and rolls back candidate retention",
+  async (phase) => {
+    const db = await fixture();
+    const filename = "00000000-0000-4000-8000-000000000001.png";
+    const name = ".kozane/assets/images/" + filename;
+    const data = new TextEncoder().encode("initial image");
+    const catalog = await buildAssetManifest([name], async () => data);
+    await db.run(sql`INSERT INTO namespace(id,name) VALUES('n','Main')`);
+    await db.run(sql`INSERT INTO layer(id,namespace_id,name) VALUES('l','n','Base')`);
+    await db.run(sql`INSERT INTO partition(id,namespace_id,name) VALUES('p','n','Inbox')`);
+    await db.run(
+      sql`INSERT INTO card(id,partition_id,layer_id,content) VALUES('c','p','l',${"kozane-image:/api/images/" + filename})`,
+    );
+    await stageCaptureInitialization(db, identity, catalog);
+    if (phase === "candidate write")
+      await db.run(
+        sql`CREATE TRIGGER cancel_initial_on_candidate AFTER UPDATE OF candidate ON capture_epoch_transition WHEN NEW.candidate IS NOT NULL BEGIN UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Changed during publication' WHERE owner_kind='pending-work'; END`,
+      );
+    if (phase === "candidate metadata")
+      await db.run(
+        sql`CREATE TRIGGER clear_initial_candidate AFTER UPDATE OF candidate ON capture_epoch_transition WHEN NEW.candidate IS NOT NULL BEGIN UPDATE capture_epoch_transition SET candidate=NULL WHERE id=NEW.id; END`,
+      );
+    if (phase === "baseline owner")
+      await db.run(
+        sql`CREATE TRIGGER release_initial_baseline AFTER UPDATE OF candidate ON capture_epoch_transition WHEN NEW.candidate IS NOT NULL BEGIN UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Changed during publication' WHERE owner_kind='baseline'; END`,
+      );
+    let current: Tx | undefined;
+    const wrapped = createDatabaseAdapter(new Proxy(db, {}), {
+      read: (work) => withReadTx(db, (tx) => work(tx as unknown as DatabaseHandle)),
+      write: (work) =>
+        withTx(db, async (tx) => {
+          current = tx;
+          try {
+            return await work(tx);
+          } finally {
+            current = undefined;
+          }
+        }),
+    });
+    const read = vi.fn(async () => {
+      if (current && phase === "image read")
+        await current.run(
+          sql`UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Changed during verification' WHERE owner_kind='pending-work'`,
+        );
+      return data;
+    });
+    await expect(
+      prepareCaptureInitialization(wrapped, identity, factory, catalog, read),
+    ).rejects.toThrow(
+      phase === "candidate metadata"
+        ? "Epoch baseline publication changed"
+        : phase === "baseline owner"
+          ? "Epoch baseline image protection is not active"
+          : "staging protection is not active",
+    );
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(await state(db)).toEqual([[0, "active", 0]]);
+    expect(
+      await rows(db, "SELECT owner_kind,state FROM local_asset_manifest ORDER BY owner_kind"),
+    ).toEqual([
+      ["baseline", "pending"],
+      ["pending-work", "pending"],
+    ]);
+    if (phase === "candidate write") await db.run(sql`DROP TRIGGER cancel_initial_on_candidate`);
+    if (phase === "candidate metadata") await db.run(sql`DROP TRIGGER clear_initial_candidate`);
+    if (phase === "baseline owner") await db.run(sql`DROP TRIGGER release_initial_baseline`);
+    await prepareCaptureInitialization(db, identity, factory, catalog, async () => data);
+    await activateCaptureInitialization(db, identity, async () => data);
+  },
+);
+
 it("owns the requested repair plan before asynchronous staging and repair", async () => {
   const db = await repairFixture();
   const input: { id: string; epochId: string; schemaId: string; repair?: "inventories" } = {
