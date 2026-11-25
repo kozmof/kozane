@@ -687,6 +687,18 @@ cleanup and competing writes. Schema, portable snapshot and JSON versions remain
 unchanged. Required history, bookkeeping and activation remain pending. See
 [destination images](recovery-image-installation.md).
 
+Staged destinations now retain all eight bundle payloads and their index after
+matching image installation. The Node host validates the complete source bundle,
+then publishes exact canonical artifacts under the destination image writer lock.
+The destination loader works without source catalogs or files. It checks every
+bounded payload, independently trusted identities and descriptors, isolated SQL
+states, retained destination images and file identities before success. Temporary
+evidence, changed bytes, concurrent releases and failed commits refuse success
+while preserving earlier files and protection. Shared-only retention keeps local
+snapshot bytes as artifacts without installing source attachments or catalogs.
+Schema and transport versions remain unchanged. Production history installation,
+bookkeeping and activation remain pending. See [staged bundle retention](staged-recovery-bundles.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -852,6 +864,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Protect assets needed by live rows, uploads, staged transfers, pending work, retained history and recovery records.
 - [x] Add durable local manifest reservations, protected byte verification and explicit owner release. Make cleanup honor every registered owner and preserve local protection through shared restoration.
 - [x] Copy complete published-bundle image requirements into a staged destination under explicit complete or shared-only identities. Commit protection before file creation, publish exact immutable bytes without overwrites, reuse verified finals and archives, preserve interruption evidence and pending pins after failures, and serialize final retention with cleanup.
+- [x] Retain all eight bundle payloads and their index in staged complete or shared-only destinations after image installation. Reopen without source catalogs or files, verify trusted descriptors and exact SQL states, preserve interrupted evidence and recheck file identities and destination protection without installing production history or activating writes.
 - [x] Connect prototype baseline and effect-set publication to local manifest ownership. Verify protected files, atomic staging handoff and upload completion, cleanup contention and retained images after history is deselected.
 - [x] Recover verified published uploads or explicitly abandon reviewed pins without repeating filesystem work. Preserve intent, errors and decisions, and keep live references protected during cleanup.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.

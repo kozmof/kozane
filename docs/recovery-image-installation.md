@@ -112,6 +112,9 @@ required retention obligations have transferred. Existing source protection and
 retained history remain separate requirements. This step installs images only.
 It does not install history, materialization bookkeeping or activate the workspace.
 
+Continue with [staged bundle retention](staged-recovery-bundles.md) to preserve
+the original payload files and reopen them without the source workspace.
+
 ## Check staging metadata in a trusted host
 
 `readRecoveryStagingDestination(tx, checkpoint, expected, destinationExpected, mode)`

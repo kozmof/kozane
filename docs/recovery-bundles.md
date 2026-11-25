@@ -157,6 +157,8 @@ Choose [shared-only staging](shared-only-recovery-installation.md) explicitly
 for a new destination without source-device attachments.
 [Install destination images](recovery-image-installation.md) after row staging
 while retaining the source bundle and its existing protection.
+[Retain payloads in the staged destination](staged-recovery-bundles.md) to reopen
+the complete artifacts without the original workspace database or files.
 Automatic capture, required history, bookkeeping and
 activation remain separate requirements. Pending filesystem operations remain
 recovery data and are not executed by publication or loading.

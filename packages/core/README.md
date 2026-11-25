@@ -121,6 +121,10 @@ matching retries.
 copies required bytes under committed manifest protection, preserves interrupted
 evidence and reuses verified files on retry. History, bookkeeping and activation
 remain separate requirements.
+[Staged bundle retention](../../docs/staged-recovery-bundles.md) preserves all
+eight payloads and their index beside the destination images. The Node loader
+revalidates those artifacts without source catalogs or files. Production history
+installation and activation remain pending.
 [Staged pending-operation inspection](../../docs/recovery-file-operation-inspection.md)
 reads exact journal evidence without replay or confirmation. It requires matching
 local installation authority and preserves values outside the JavaScript date range.
