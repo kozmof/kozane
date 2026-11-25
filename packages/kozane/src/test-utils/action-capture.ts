@@ -177,76 +177,84 @@ export async function installCapturePrototype(
   publishAssets?: CaptureAssetPublisher,
 ) {
   const staged = parseAssetManifest(catalog);
-  await withTx(db, async (tx) => {
-    await configureActionConnection((statement) => tx.values(sql.raw(statement)));
-    const baseline = await captureApplicationRows(tx);
-    const assets = selectAssetManifest(staged, baselineAssetNames(baseline));
-    await tx.run(
-      sql`CREATE TABLE capture_baseline(singleton INTEGER PRIMARY KEY CHECK(singleton=1),row_encoding_ver INTEGER NOT NULL,rows TEXT NOT NULL,asset_manifest TEXT NOT NULL)`,
+  await withTx(db, (tx) => installCapturePrototypeInTx(tx, staged, publishAssets));
+  return openCapturePrototype(db, staged, publishAssets);
+}
+
+/** Test-only schema installation inside a caller-owned initialization transaction. */
+export async function installCapturePrototypeInTx(
+  tx: Tx,
+  catalog: AssetManifest = noAssets,
+  publishAssets?: CaptureAssetPublisher,
+) {
+  const staged = parseAssetManifest(catalog);
+  await configureActionConnection((statement) => tx.values(sql.raw(statement)));
+  const baseline = await captureApplicationRows(tx);
+  const assets = selectAssetManifest(staged, baselineAssetNames(baseline));
+  await tx.run(
+    sql`CREATE TABLE capture_baseline(singleton INTEGER PRIMARY KEY CHECK(singleton=1),row_encoding_ver INTEGER NOT NULL,rows TEXT NOT NULL,asset_manifest TEXT NOT NULL)`,
+  );
+  await tx.run(
+    sql`INSERT INTO capture_baseline VALUES(1,${ROW_ENCODING_VERSION},${JSON.stringify(baseline)},${JSON.stringify(assets)})`,
+  );
+  await tx.run(
+    sql`CREATE TABLE capture_context(singleton INTEGER PRIMARY KEY CHECK(singleton=1),mode TEXT NOT NULL DEFAULT 'record' CHECK(mode IN ('record','restore','migrate')),run_id TEXT,action_id TEXT,execution_ord INTEGER,next_effect_ord INTEGER NOT NULL DEFAULT 0)`,
+  );
+  await tx.run(sql`INSERT INTO capture_context(singleton) VALUES(1)`);
+  await tx.run(
+    sql`CREATE TABLE capture_run(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,epoch_id TEXT NOT NULL,root_id TEXT NOT NULL,contract_ver INTEGER NOT NULL,complete INTEGER NOT NULL DEFAULT 0,invocation TEXT,generated TEXT,asset_manifest TEXT,CHECK(complete=0 OR (complete=1 AND invocation IS NOT NULL AND generated IS NOT NULL AND asset_manifest IS NOT NULL)))`,
+  );
+  await tx.run(
+    sql`CREATE TABLE capture_execution(run_id TEXT NOT NULL,action_id TEXT NOT NULL,parent_id TEXT,kind TEXT NOT NULL,contract_ver INTEGER NOT NULL,execution_ord INTEGER NOT NULL,input TEXT NOT NULL,generated TEXT,PRIMARY KEY(run_id,action_id),UNIQUE(run_id,execution_ord))`,
+  );
+  await tx.run(
+    sql`CREATE TABLE capture_effect(run_id TEXT NOT NULL,ord INTEGER NOT NULL,action_id TEXT NOT NULL,execution_ord INTEGER NOT NULL,tbl TEXT NOT NULL,op TEXT NOT NULL,row_key TEXT NOT NULL,before_image TEXT,after_image TEXT,PRIMARY KEY(run_id,ord))`,
+  );
+  await tx.run(
+    sql`CREATE TABLE capture_selection(position INTEGER PRIMARY KEY,run_id TEXT NOT NULL UNIQUE REFERENCES capture_run(id))`,
+  );
+  await installCaptureEpochPrototype(tx);
+  // Gate only the canonical mutating triggers in this test database. Validation
+  // triggers stay active during restoration, including the inventory pair check.
+  for (const name of ["card_inventory_clear_slot", "card_stamp_missing_timestamps"]) {
+    const [trigger] = await tx
+      .select({ definition: sql<string>`sql` })
+      .from(sql`sqlite_schema`)
+      .where(sql`type='trigger' AND name=${name}`);
+    const gated = trigger?.definition.replace(
+      /WHEN\s+([\s\S]+?)\s+BEGIN/i,
+      "WHEN ($1) AND (SELECT mode FROM capture_context WHERE singleton=1)<>'restore' BEGIN",
     );
-    await tx.run(
-      sql`INSERT INTO capture_baseline VALUES(1,${ROW_ENCODING_VERSION},${JSON.stringify(baseline)},${JSON.stringify(assets)})`,
-    );
-    await tx.run(
-      sql`CREATE TABLE capture_context(singleton INTEGER PRIMARY KEY CHECK(singleton=1),mode TEXT NOT NULL DEFAULT 'record' CHECK(mode IN ('record','restore','migrate')),run_id TEXT,action_id TEXT,execution_ord INTEGER,next_effect_ord INTEGER NOT NULL DEFAULT 0)`,
-    );
-    await tx.run(sql`INSERT INTO capture_context(singleton) VALUES(1)`);
-    await tx.run(
-      sql`CREATE TABLE capture_run(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,epoch_id TEXT NOT NULL,root_id TEXT NOT NULL,contract_ver INTEGER NOT NULL,complete INTEGER NOT NULL DEFAULT 0,invocation TEXT,generated TEXT,asset_manifest TEXT,CHECK(complete=0 OR (complete=1 AND invocation IS NOT NULL AND generated IS NOT NULL AND asset_manifest IS NOT NULL)))`,
-    );
-    await tx.run(
-      sql`CREATE TABLE capture_execution(run_id TEXT NOT NULL,action_id TEXT NOT NULL,parent_id TEXT,kind TEXT NOT NULL,contract_ver INTEGER NOT NULL,execution_ord INTEGER NOT NULL,input TEXT NOT NULL,generated TEXT,PRIMARY KEY(run_id,action_id),UNIQUE(run_id,execution_ord))`,
-    );
-    await tx.run(
-      sql`CREATE TABLE capture_effect(run_id TEXT NOT NULL,ord INTEGER NOT NULL,action_id TEXT NOT NULL,execution_ord INTEGER NOT NULL,tbl TEXT NOT NULL,op TEXT NOT NULL,row_key TEXT NOT NULL,before_image TEXT,after_image TEXT,PRIMARY KEY(run_id,ord))`,
-    );
-    await tx.run(
-      sql`CREATE TABLE capture_selection(position INTEGER PRIMARY KEY,run_id TEXT NOT NULL UNIQUE REFERENCES capture_run(id))`,
-    );
-    await installCaptureEpochPrototype(tx);
-    // Gate only the canonical mutating triggers in this test database. Validation
-    // triggers stay active during restoration, including the inventory pair check.
-    for (const name of ["card_inventory_clear_slot", "card_stamp_missing_timestamps"]) {
-      const [trigger] = await tx
-        .select({ definition: sql<string>`sql` })
-        .from(sql`sqlite_schema`)
-        .where(sql`type='trigger' AND name=${name}`);
-      const gated = trigger?.definition.replace(
-        /WHEN\s+([\s\S]+?)\s+BEGIN/i,
-        "WHEN ($1) AND (SELECT mode FROM capture_context WHERE singleton=1)<>'restore' BEGIN",
-      );
-      if (!gated || gated === trigger.definition)
-        throw new Error("Missing expected mutating trigger");
-      await tx.run(sql.raw(`DROP TRIGGER ${quote(name)}`));
-      await tx.run(sql.raw(gated));
-    }
-    for (const table of capturedTables) {
-      for (const [op, event] of [
-        ["I", "INSERT"],
-        ["U", "UPDATE"],
-        ["D", "DELETE"],
-      ] as const) {
-        const valid = `((${prototypeNoTransition}) AND (EXISTS(SELECT 1 FROM capture_context c JOIN capture_run r ON r.id=c.run_id AND r.complete=0 JOIN capture_execution e ON e.run_id=c.run_id AND e.action_id=c.action_id AND e.execution_ord=c.execution_ord AND e.contract_ver=r.contract_ver JOIN capture_epoch epoch ON epoch.epoch_id=r.epoch_id WHERE c.singleton=1 AND c.mode='record') OR EXISTS(SELECT 1 FROM capture_context WHERE singleton=1 AND mode='restore' AND run_id IS NULL AND action_id IS NULL AND execution_ord IS NULL AND next_effect_ord=0))) OR (${prototypeMigrationAuthority})`;
-        const source = op === "D" ? "OLD" : "NEW";
-        const before = op === "I" ? "NULL" : captureRowSql(table.columns, "OLD");
-        const after = op === "D" ? "NULL" : captureRowSql(table.columns, "NEW");
-        const changedKey = table.primaryKey
-          .map((key) => `OLD.${quote(key)} IS NOT NEW.${quote(key)}`)
-          .join(" OR ");
-        await tx.run(
-          sql.raw(`CREATE TRIGGER ${quote(`capture_${table.name}_${op}`)} BEFORE ${event} ON ${quote(table.name)} BEGIN
+    if (!gated || gated === trigger.definition)
+      throw new Error("Missing expected mutating trigger");
+    await tx.run(sql.raw(`DROP TRIGGER ${quote(name)}`));
+    await tx.run(sql.raw(gated));
+  }
+  for (const table of capturedTables) {
+    for (const [op, event] of [
+      ["I", "INSERT"],
+      ["U", "UPDATE"],
+      ["D", "DELETE"],
+    ] as const) {
+      const valid = `((${prototypeNoTransition}) AND (EXISTS(SELECT 1 FROM capture_context c JOIN capture_run r ON r.id=c.run_id AND r.complete=0 JOIN capture_execution e ON e.run_id=c.run_id AND e.action_id=c.action_id AND e.execution_ord=c.execution_ord AND e.contract_ver=r.contract_ver JOIN capture_epoch epoch ON epoch.epoch_id=r.epoch_id WHERE c.singleton=1 AND c.mode='record') OR EXISTS(SELECT 1 FROM capture_context WHERE singleton=1 AND mode='restore' AND run_id IS NULL AND action_id IS NULL AND execution_ord IS NULL AND next_effect_ord=0))) OR (${prototypeMigrationAuthority})`;
+      const source = op === "D" ? "OLD" : "NEW";
+      const before = op === "I" ? "NULL" : captureRowSql(table.columns, "OLD");
+      const after = op === "D" ? "NULL" : captureRowSql(table.columns, "NEW");
+      const changedKey = table.primaryKey
+        .map((key) => `OLD.${quote(key)} IS NOT NEW.${quote(key)}`)
+        .join(" OR ");
+      await tx.run(
+        sql.raw(`CREATE TRIGGER ${quote(`capture_${table.name}_${op}`)} BEFORE ${event} ON ${quote(table.name)} BEGIN
           SELECT CASE WHEN NOT (${valid}) THEN RAISE(ABORT,'unstamped capture prototype write') END;
           ${op === "U" ? `SELECT CASE WHEN ${changedKey} THEN RAISE(ABORT,'capture prototype primary key changed') END;` : ""}
           INSERT INTO capture_effect SELECT run_id,next_effect_ord,action_id,execution_ord,'${table.name.replaceAll("'", "''")}','${op}',${captureRowSql(table.primaryKey, source)},${before},${after} FROM capture_context WHERE singleton=1 AND mode='record';
           UPDATE capture_context SET next_effect_ord=next_effect_ord+1 WHERE singleton=1 AND mode='record';
         END`),
-        );
-      }
+      );
     }
-    await rememberCaptureGuards(tx);
-    await publishAssets?.(tx, { kind: "baseline", manifest: assets });
-  });
-  return openCapturePrototype(db, staged, publishAssets);
+  }
+  await rememberCaptureGuards(tx);
+  await publishAssets?.(tx, { kind: "baseline", manifest: assets });
 }
 
 /** Reopen persisted test history without reinstalling capture guards or allocating a baseline. */

@@ -12,7 +12,7 @@ import {
 
 test("all adapters retain the complete capture, restoration, asset and epoch gate", () => {
   assert.ok(Object.isFrozen(captureSuites));
-  assert.equal(new Set(captureSuites).size, 7);
+  assert.equal(new Set(captureSuites).size, 8);
   for (const suite of captureSuites) assert.ok(existsSync(suite), `Missing capture suite ${suite}`);
   for (const adapter of ["native", "wasm", "browser"]) {
     const { args } = actionCapturePlan(adapter, {});

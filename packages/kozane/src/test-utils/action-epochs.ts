@@ -211,35 +211,41 @@ async function locked(tx: Tx) {
 }
 export function beginCaptureEpochTransition(db: DB, input: PrototypeEpochTransition) {
   const request = own(input);
-  return withTx(db, async (tx) => {
-    await locked(tx);
-    const existing = await tx.values(
-      sql`SELECT id FROM capture_epoch_transition WHERE id=${request.id}`,
-    );
-    if (existing.length) {
-      await active(tx, request);
-      return { changed: false };
-    }
-    await requireCaptureEpochRecordMode(tx);
-    const epoch = await currentEpoch(tx);
-    if (epoch.epochId !== request.sourceEpoch || epoch.schemaId !== request.sourceSchema)
-      throw Error("Epoch transition source identity mismatch");
-    if (
-      (
-        await tx.values(
-          sql`SELECT 1 FROM capture_epoch_archive WHERE epoch_id=${request.targetEpoch}`,
-        )
-      ).length
-    )
-      throw Error("Target epoch identity was already used");
-    await guards(tx);
-    await tx.run(
-      sql`INSERT INTO capture_epoch_transition(id,request,source_epoch,source_schema,batches,state,history) VALUES(${request.id},${JSON.stringify(request)},${request.sourceEpoch},${request.sourceSchema},${JSON.stringify(request.batches)},'active',${await history(tx)})`,
-    );
-    await verifyActionConnection((query) => tx.values(sql.raw(query)));
-    return { changed: true };
-  });
+  return withTx(db, (tx) => beginCaptureEpochTransitionInTx(tx, request));
 }
+
+/** Caller owns the complete schema and transition commit. */
+export async function beginCaptureEpochTransitionInTx(tx: Tx, input: PrototypeEpochTransition) {
+  const request = own(input);
+  await locked(tx);
+  const existing = await tx.values(
+    sql`SELECT id FROM capture_epoch_transition WHERE id=${request.id}`,
+  );
+  if (existing.length) {
+    await active(tx, request);
+    await guards(tx);
+    return { changed: false };
+  }
+  await requireCaptureEpochRecordMode(tx);
+  const epoch = await currentEpoch(tx);
+  if (epoch.epochId !== request.sourceEpoch || epoch.schemaId !== request.sourceSchema)
+    throw Error("Epoch transition source identity mismatch");
+  if (
+    (
+      await tx.values(
+        sql`SELECT 1 FROM capture_epoch_archive WHERE epoch_id=${request.targetEpoch}`,
+      )
+    ).length
+  )
+    throw Error("Target epoch identity was already used");
+  await guards(tx);
+  await tx.run(
+    sql`INSERT INTO capture_epoch_transition(id,request,source_epoch,source_schema,batches,state,history) VALUES(${request.id},${JSON.stringify(request)},${request.sourceEpoch},${request.sourceSchema},${JSON.stringify(request.batches)},'active',${await history(tx)})`,
+  );
+  await verifyActionConnection((query) => tx.values(sql.raw(query)));
+  return { changed: true };
+}
+
 /** Committed batches acknowledge retries without invoking the supplied repair callback. */
 export function runCaptureMigrationBatch(
   db: DB,
@@ -437,61 +443,69 @@ export async function activateCaptureEpoch(
   readAsset: ReadAsset = missingAsset,
 ) {
   const request = own(input);
-  return withTx(db, async (tx) => {
-    await locked(tx);
-    const stored = await transition(tx, request),
-      epoch = await currentEpoch(tx);
-    if (stored.state === "completed") {
-      if (epoch.epochId !== request.targetEpoch || epoch.schemaId !== request.targetSchema)
-        throw Error("Completed epoch is no longer active");
-      await guards(tx);
-      return { changed: false };
-    }
-    await active(tx, request);
-    if (stored.next !== request.batches.length || stored.candidate === null)
-      throw Error("Epoch activation requires a prepared baseline");
-    const { sha256, ...candidate } = JSON.parse(stored.candidate);
-    if (
-      sha256 !== (await hash(candidate)) ||
-      candidate.epochId !== request.targetEpoch ||
-      candidate.schemaId !== request.targetSchema ||
-      candidate.encoding !== ROW_ENCODING_VERSION ||
-      candidate.schema !== (await schema(tx)) ||
-      !same(candidate.rows, await captureApplicationRows(tx))
-    )
-      throw Error("Prepared epoch baseline changed");
-    const manifest = parseAssetManifest(candidate.assets);
-    if (!same(selectAssetManifest(manifest, baselineAssetNames(candidate.rows)), manifest))
-      throw Error("Prepared epoch image requirements changed");
-    const owner = await captureEpochBaselineOwner(request, sha256);
-    await verifyBaselineOwner(tx, owner, manifest, readAsset, true);
-    await active(tx, request);
-    if (
-      candidate.schema !== (await schema(tx)) ||
-      !same(candidate.rows, await captureApplicationRows(tx))
-    )
-      throw Error("Prepared epoch baseline changed during image verification");
+  return withTx(db, (tx) => activateCaptureEpochInTx(tx, request, readAsset));
+}
+
+/** Caller may complete initial staging pin transfer in the same transaction. */
+export async function activateCaptureEpochInTx(
+  tx: Tx,
+  input: PrototypeEpochTransition,
+  readAsset: ReadAsset = missingAsset,
+) {
+  const request = own(input);
+  await locked(tx);
+  const stored = await transition(tx, request),
+    epoch = await currentEpoch(tx);
+  if (stored.state === "completed") {
+    if (epoch.epochId !== request.targetEpoch || epoch.schemaId !== request.targetSchema)
+      throw Error("Completed epoch is no longer active");
     await guards(tx);
-    const baseline = await tx.values(
-        sql`SELECT row_encoding_ver,rows,asset_manifest FROM capture_baseline WHERE singleton=1`,
-      ),
-      selection = await tx.values(
-        sql`SELECT position,run_id FROM capture_selection ORDER BY position`,
-      );
-    await tx.run(
-      sql`INSERT INTO capture_epoch_archive VALUES(${request.sourceEpoch},${request.sourceSchema},${JSON.stringify(baseline.map((row) => Array.from(row)))},${JSON.stringify(selection.map((row) => Array.from(row)))})`,
+    return { changed: false };
+  }
+  await active(tx, request);
+  if (stored.next !== request.batches.length || stored.candidate === null)
+    throw Error("Epoch activation requires a prepared baseline");
+  const { sha256, ...candidate } = JSON.parse(stored.candidate);
+  if (
+    sha256 !== (await hash(candidate)) ||
+    candidate.epochId !== request.targetEpoch ||
+    candidate.schemaId !== request.targetSchema ||
+    candidate.encoding !== ROW_ENCODING_VERSION ||
+    candidate.schema !== (await schema(tx)) ||
+    !same(candidate.rows, await captureApplicationRows(tx))
+  )
+    throw Error("Prepared epoch baseline changed");
+  const manifest = parseAssetManifest(candidate.assets);
+  if (!same(selectAssetManifest(manifest, baselineAssetNames(candidate.rows)), manifest))
+    throw Error("Prepared epoch image requirements changed");
+  const owner = await captureEpochBaselineOwner(request, sha256);
+  await verifyBaselineOwner(tx, owner, manifest, readAsset, true);
+  await active(tx, request);
+  if (
+    candidate.schema !== (await schema(tx)) ||
+    !same(candidate.rows, await captureApplicationRows(tx))
+  )
+    throw Error("Prepared epoch baseline changed during image verification");
+  await guards(tx);
+  const baseline = await tx.values(
+      sql`SELECT row_encoding_ver,rows,asset_manifest FROM capture_baseline WHERE singleton=1`,
+    ),
+    selection = await tx.values(
+      sql`SELECT position,run_id FROM capture_selection ORDER BY position`,
     );
-    await tx.run(
-      sql`UPDATE capture_baseline SET row_encoding_ver=${ROW_ENCODING_VERSION},rows=${JSON.stringify(candidate.rows)},asset_manifest=${JSON.stringify(manifest)} WHERE singleton=1`,
-    );
-    await tx.run(sql`DELETE FROM capture_selection`);
-    await tx.run(
-      sql`UPDATE capture_epoch SET epoch_id=${request.targetEpoch},schema_id=${request.targetSchema} WHERE singleton=1`,
-    );
-    await tx.run(sql`UPDATE capture_epoch_transition SET state='completed' WHERE id=${request.id}`);
-    await empty(tx);
-    await requireCaptureEpochRecordMode(tx);
-    await verifyActionConnection((query) => tx.values(sql.raw(query)));
-    return { changed: true };
-  });
+  await tx.run(
+    sql`INSERT INTO capture_epoch_archive VALUES(${request.sourceEpoch},${request.sourceSchema},${JSON.stringify(baseline.map((row) => Array.from(row)))},${JSON.stringify(selection.map((row) => Array.from(row)))})`,
+  );
+  await tx.run(
+    sql`UPDATE capture_baseline SET row_encoding_ver=${ROW_ENCODING_VERSION},rows=${JSON.stringify(candidate.rows)},asset_manifest=${JSON.stringify(manifest)} WHERE singleton=1`,
+  );
+  await tx.run(sql`DELETE FROM capture_selection`);
+  await tx.run(
+    sql`UPDATE capture_epoch SET epoch_id=${request.targetEpoch},schema_id=${request.targetSchema} WHERE singleton=1`,
+  );
+  await tx.run(sql`UPDATE capture_epoch_transition SET state='completed' WHERE id=${request.id}`);
+  await empty(tx);
+  await requireCaptureEpochRecordMode(tx);
+  await verifyActionConnection((query) => tx.values(sql.raw(query)));
+  return { changed: true };
 }

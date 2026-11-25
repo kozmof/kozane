@@ -13,6 +13,7 @@ export const captureSuites = Object.freeze([
   "packages/kozane/src/db/api/action-restoration-validation.test.ts",
   "packages/kozane/src/db/api/action-asset-history.test.ts",
   "packages/kozane/src/db/api/action-epochs.test.ts",
+  "packages/kozane/src/db/api/action-initialization.test.ts",
   "packages/kozane/src/db/api/recovery-checkpoint-capture.test.ts",
 ]);
 export function actionCapturePlan(adapter, environment = process.env) {

@@ -745,6 +745,17 @@ history and local rows stay at the same checkpoint. Schema and payload versions
 remain unchanged. Production capture integration and browser runtime verification
 remain pending. See [combined checkpoint capture](recovery-checkpoint-capture.md).
 
+The capture prototype now stages initial enablement for empty, seeded and
+populated canonical databases. Guard installation, provisional rows, initial
+image protection and a blocking zero-batch transition commit together. Candidate
+validation reuses the epoch protocol. Activation and initial staging-pin release
+commit together while the retained baseline owner protects image bytes. Failed
+validation and commits remain resumable without recapturing provisional rows or
+repeating repair. Native and Node WASM tests cover identity, schema, image and
+failure boundaries. Native file tests cover restart and competing writers,
+cleanup and owner release. Production enrollment and browser runtime verification
+remain pending. See [initial capture staging](prototype-capture-initialization.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -819,6 +830,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Verify populated migration, hidden retained taskspace attachments and shared restoration without remote attachment installation on libsql and Node WASM.
 - [ ] Add workspace and epoch identities, schema and encoding versions, baseline hashes and restoration selections.
 - [ ] Implement restartable initial baseline capture for populated and seeded databases with application writes blocked until activation.
+- [x] Prototype initial baseline staging with atomic guard installation, persistent write blocking and pending image protection. Validate candidates separately and atomically activate the first epoch with staging completion. Verify initialization and failure boundaries on native and Node WASM adapters, plus native restart and cleanup contention.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.

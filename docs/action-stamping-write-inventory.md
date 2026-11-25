@@ -281,6 +281,12 @@ them with candidate publication and checks exact retained protection at activati
 Native file tests cover cleanup, restart and competing owner release while
 earlier history owners remain protected.
 
+The [initialization prototype](prototype-capture-initialization.md) installs
+capture guards, pending image protection and a blocking transition in one commit.
+It validates an initial candidate separately and completes activation and staging
+pin release atomically. Production initialization and migration policy remain
+pending.
+
 ## Tagged row codec
 
 `actions/row-codec.ts` implements encoding version 1 for SQL NULL, signed 64-bit

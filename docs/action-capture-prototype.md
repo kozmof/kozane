@@ -18,6 +18,7 @@ Run the native host and pure projection checks separately.
 pnpm exec vitest run --config vitest.source.config.ts --maxWorkers=1 \
   packages/kozane/src/lib/server/action-epoch-restart.test.ts \
   packages/kozane/src/lib/server/action-epoch-image-retention.test.ts \
+  packages/kozane/src/lib/server/action-initialization.test.ts \
   packages/kozane/src/services/action-projection.test.ts \
   packages/kozane/src/services/action-restoration-plan.test.ts
 ```
@@ -34,7 +35,7 @@ Run SQLite WASM in a browser with Chromium installed for Playwright.
 pnpm test:capture:browser
 ```
 
-All three commands use the same seven capture, restoration, checkpoint, asset-history and epoch
+All three commands use the same eight capture, restoration, checkpoint, asset-history and epoch
 suite files from `scripts/check-action-capture.mjs`. WASM and browser runs also
 check worker queue and read-snapshot behavior. The runner selects the adapter
 explicitly, bounds workers and refuses extra filters or focused tests. It checks
@@ -59,6 +60,11 @@ These are prototype boundaries without production epoch tables or activation.
 Candidate baseline pins now commit before image reads. Exact byte verification,
 retained ownership and candidate publication commit together. Native tests cover
 cleanup and restart without releasing earlier history owners.
+
+[Initial capture staging](prototype-capture-initialization.md) now uses the same
+durable boundary for empty, seeded and populated test databases. It commits guards,
+write blocking and pending image protection before candidate validation, then
+activates the initial baseline and completes staging in one transaction.
 
 ## Capture before driver conversion
 
