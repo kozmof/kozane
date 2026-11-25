@@ -36,6 +36,13 @@ export { capturedTables, captureApplicationRows } from "./action-tables.js";
 import { validateApplicationProjection, installationStatement } from "./action-validation.js";
 import { createRestorationPlan } from "../../../core/src/actions/restoration-plan.js";
 import { canonicalSchemaManifest } from "../../../core/src/generated/schema-manifest.js";
+import {
+  installCaptureEpochPrototype,
+  rememberCaptureGuards,
+  requireCaptureEpochRecordMode,
+  prototypeMigrationAuthority,
+  prototypeNoTransition,
+} from "./action-epochs.js";
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 type Handle = DB | Tx | ReadTx;
@@ -135,6 +142,7 @@ async function runs(db: Handle) {
       assets: sql<string | null>`asset_manifest`,
     })
     .from(sql`capture_run`)
+    .where(sql`epoch_id=(SELECT epoch_id FROM capture_epoch WHERE singleton=1)`)
     .orderBy(sql`seq`);
 }
 async function executions(db: Handle, runId: string) {
@@ -180,11 +188,11 @@ export async function installCapturePrototype(
       sql`INSERT INTO capture_baseline VALUES(1,${ROW_ENCODING_VERSION},${JSON.stringify(baseline)},${JSON.stringify(assets)})`,
     );
     await tx.run(
-      sql`CREATE TABLE capture_context(singleton INTEGER PRIMARY KEY CHECK(singleton=1),mode TEXT NOT NULL DEFAULT 'record' CHECK(mode IN ('record','restore')),run_id TEXT,action_id TEXT,execution_ord INTEGER,next_effect_ord INTEGER NOT NULL DEFAULT 0)`,
+      sql`CREATE TABLE capture_context(singleton INTEGER PRIMARY KEY CHECK(singleton=1),mode TEXT NOT NULL DEFAULT 'record' CHECK(mode IN ('record','restore','migrate')),run_id TEXT,action_id TEXT,execution_ord INTEGER,next_effect_ord INTEGER NOT NULL DEFAULT 0)`,
     );
     await tx.run(sql`INSERT INTO capture_context(singleton) VALUES(1)`);
     await tx.run(
-      sql`CREATE TABLE capture_run(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,root_id TEXT NOT NULL,contract_ver INTEGER NOT NULL,complete INTEGER NOT NULL DEFAULT 0,invocation TEXT,generated TEXT,asset_manifest TEXT,CHECK(complete=0 OR (complete=1 AND invocation IS NOT NULL AND generated IS NOT NULL AND asset_manifest IS NOT NULL)))`,
+      sql`CREATE TABLE capture_run(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,epoch_id TEXT NOT NULL,root_id TEXT NOT NULL,contract_ver INTEGER NOT NULL,complete INTEGER NOT NULL DEFAULT 0,invocation TEXT,generated TEXT,asset_manifest TEXT,CHECK(complete=0 OR (complete=1 AND invocation IS NOT NULL AND generated IS NOT NULL AND asset_manifest IS NOT NULL)))`,
     );
     await tx.run(
       sql`CREATE TABLE capture_execution(run_id TEXT NOT NULL,action_id TEXT NOT NULL,parent_id TEXT,kind TEXT NOT NULL,contract_ver INTEGER NOT NULL,execution_ord INTEGER NOT NULL,input TEXT NOT NULL,generated TEXT,PRIMARY KEY(run_id,action_id),UNIQUE(run_id,execution_ord))`,
@@ -195,6 +203,7 @@ export async function installCapturePrototype(
     await tx.run(
       sql`CREATE TABLE capture_selection(position INTEGER PRIMARY KEY,run_id TEXT NOT NULL UNIQUE REFERENCES capture_run(id))`,
     );
+    await installCaptureEpochPrototype(tx);
     // Gate only the canonical mutating triggers in this test database. Validation
     // triggers stay active during restoration, including the inventory pair check.
     for (const name of ["card_inventory_clear_slot", "card_stamp_missing_timestamps"]) {
@@ -204,7 +213,7 @@ export async function installCapturePrototype(
         .where(sql`type='trigger' AND name=${name}`);
       const gated = trigger?.definition.replace(
         /WHEN\s+([\s\S]+?)\s+BEGIN/i,
-        "WHEN ($1) AND (SELECT mode FROM capture_context WHERE singleton=1)='record' BEGIN",
+        "WHEN ($1) AND (SELECT mode FROM capture_context WHERE singleton=1)<>'restore' BEGIN",
       );
       if (!gated || gated === trigger.definition)
         throw new Error("Missing expected mutating trigger");
@@ -217,7 +226,7 @@ export async function installCapturePrototype(
         ["U", "UPDATE"],
         ["D", "DELETE"],
       ] as const) {
-        const valid = `EXISTS(SELECT 1 FROM capture_context c JOIN capture_run r ON r.id=c.run_id AND r.complete=0 JOIN capture_execution e ON e.run_id=c.run_id AND e.action_id=c.action_id AND e.execution_ord=c.execution_ord AND e.contract_ver=r.contract_ver WHERE c.singleton=1 AND c.mode='record') OR EXISTS(SELECT 1 FROM capture_context WHERE singleton=1 AND mode='restore' AND run_id IS NULL AND action_id IS NULL AND execution_ord IS NULL AND next_effect_ord=0)`;
+        const valid = `((${prototypeNoTransition}) AND (EXISTS(SELECT 1 FROM capture_context c JOIN capture_run r ON r.id=c.run_id AND r.complete=0 JOIN capture_execution e ON e.run_id=c.run_id AND e.action_id=c.action_id AND e.execution_ord=c.execution_ord AND e.contract_ver=r.contract_ver JOIN capture_epoch epoch ON epoch.epoch_id=r.epoch_id WHERE c.singleton=1 AND c.mode='record') OR EXISTS(SELECT 1 FROM capture_context WHERE singleton=1 AND mode='restore' AND run_id IS NULL AND action_id IS NULL AND execution_ord IS NULL AND next_effect_ord=0))) OR (${prototypeMigrationAuthority})`;
         const source = op === "D" ? "OLD" : "NEW";
         const before = op === "I" ? "NULL" : captureRowSql(table.columns, "OLD");
         const after = op === "D" ? "NULL" : captureRowSql(table.columns, "NEW");
@@ -234,6 +243,7 @@ export async function installCapturePrototype(
         );
       }
     }
+    await rememberCaptureGuards(tx);
     await publishAssets?.(tx, { kind: "baseline", manifest: assets });
   });
   return openCapturePrototype(db, staged, publishAssets);
@@ -321,9 +331,10 @@ export async function openCapturePrototype(
       enter: async (tx: Tx, entry: Omit<ActionExecutionRecord, "generated">) => {
         const context = await marker(tx);
         if (entry.parentId === null) {
+          await requireCaptureEpochRecordMode(tx);
           if (!empty(context)) throw new Error("Capture root requires an empty marker");
           await tx.run(
-            sql`INSERT INTO capture_run(id,root_id,contract_ver) VALUES(${runId},${entry.id},${entry.contractVersion})`,
+            sql`INSERT INTO capture_run(id,epoch_id,root_id,contract_ver) SELECT ${runId},epoch_id,${entry.id},${entry.contractVersion} FROM capture_epoch WHERE singleton=1`,
           );
         } else if (
           context.length !== 1 ||
@@ -434,6 +445,7 @@ export async function openCapturePrototype(
       );
       await withTx(db, async (tx) => {
         await configureActionConnection((query) => tx.values(sql.raw(query)));
+        await requireCaptureEpochRecordMode(tx);
         if (!empty(await marker(tx)))
           throw new Error("Restoration requires an empty record marker");
         const current = await reconstruct(tx, selected);

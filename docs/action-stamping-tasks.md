@@ -699,6 +699,18 @@ snapshot bytes as artifacts without installing source attachments or catalogs.
 Schema and transport versions remain unchanged. Production history installation,
 bookkeeping and activation remain pending. See [staged bundle retention](staged-recovery-bundles.md).
 
+The capture prototype now exercises durable epoch transitions. Persistent guards
+block record and restore writes while a transition is active, including no-op
+action entry. Hook-owned migration batches commit data, schema, progress, history
+and marker cleanup atomically without changing archived action history. Rebuilt
+tables must retain their guards. Committed batches acknowledge retries without
+repeating repair. Candidate baselines bind exact rows, images and schema to a hash
+after isolated validation. Activation archives the old baseline and selection and
+selects the new epoch atomically. Native and Node WASM tests cover failure and
+corruption boundaries. Native file tests cover restart and competing writers.
+Production epoch storage, migration integration, asset ownership and activation
+remain pending. See [prototype epoch transitions](prototype-epoch-transitions.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -836,6 +848,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Stage explicit shared-only recovery in a new destination under an independently trusted receiving identity. Install no source local paths, uploads, manifests or pending operations. Refuse populated destinations and conflicting recovery modes, preserve later edits on retry and validate complete published source bundles before first staging.
 - [x] Inspect pending file operations in staged complete recovery without automatically repeating filesystem changes. Require matching local installation authority, preserve exact tagged journal values and unsafe timestamps, bound disk observations and refuse stale reports after concurrent journal changes.
 - [ ] Add durable epoch transitions that block application writes across connections and restarts.
+- [x] Prototype durable epoch transitions with persistent write blocking, atomic ordered migration batches and restart recovery. Preserve archived history, refuse missing rebuilt-table guards, validate candidate baselines and image bytes, roll back failed commits and never repeat committed repair on native and Node WASM adapters.
 - [ ] Implement trusted migrate mode and atomic migration batches covering schema, data, migration history, progress and mode cleanup.
 - [ ] Resume incomplete transitions without rerunning committed repair. Validate guards and rows before atomically activating the new baseline.
 - [ ] Verify baseline replay against the compatibility corpus, populated workspace upgrades, restoration constraints, corrupt images and interrupted activation.

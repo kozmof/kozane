@@ -12,6 +12,8 @@ Run the Node libsql prototype with the source test configuration.
 pnpm exec vitest run --config vitest.source.config.ts \
   packages/kozane/src/db/api/action-capture*.test.ts \
   packages/kozane/src/db/api/action-restoration*.test.ts \
+  packages/kozane/src/db/api/action-epochs.test.ts \
+  packages/kozane/src/lib/server/action-epoch-restart.test.ts \
   packages/kozane/src/services/action-projection.test.ts \
   packages/kozane/src/services/action-restoration-plan.test.ts
 ```
@@ -21,7 +23,8 @@ Run the same capture tests against SQLite WASM in Node.
 ```sh
 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts \
   packages/kozane/src/db/api/action-capture*.test.ts \
-  packages/kozane/src/db/api/action-restoration*.test.ts
+  packages/kozane/src/db/api/action-restoration*.test.ts \
+  packages/kozane/src/db/api/action-epochs.test.ts
 ```
 
 Run SQLite WASM in a browser with Chromium installed for Playwright.
@@ -29,7 +32,8 @@ Run SQLite WASM in a browser with Chromium installed for Playwright.
 ```sh
 KOZANE_DB_BROWSER=1 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts \
   packages/kozane/src/db/api/action-capture*.test.ts \
-  packages/kozane/src/db/api/action-restoration*.test.ts
+  packages/kozane/src/db/api/action-restoration*.test.ts \
+  packages/kozane/src/db/api/action-epochs.test.ts
 ```
 
 The libsql and Node WASM checks pass. Browser verification is pending. Chromium
@@ -37,6 +41,11 @@ was unavailable in the implementation environment, and the environment's network
 policy denied its download. Browser startup also failed because the environment
 denied the local test server's listener. Keep this gate incomplete until a browser
 run passes.
+
+The test fixture also exercises [durable epoch transitions](prototype-epoch-transitions.md).
+Migration progress survives restarts, committed repair is not repeated and
+application writes remain blocked until the prepared baseline activates.
+These are prototype boundaries without production epoch tables or activation.
 
 ## Capture before driver conversion
 

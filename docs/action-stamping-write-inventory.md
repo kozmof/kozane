@@ -265,6 +265,11 @@ and its download was denied by the environment's network policy. Keep production
 log tables and activation gated on that verification. Existing JSON export values
 cannot serve as the row codec.
 
+The [epoch transition prototype](prototype-epoch-transitions.md) adds persistent
+write blocking, ordered migration batches and candidate baseline activation to
+the test fixture. Native restart tests cover committed repair and baseline
+interruption. Production epoch storage and migration integration remain pending.
+
 ## Tagged row codec
 
 `actions/row-codec.ts` implements encoding version 1 for SQL NULL, signed 64-bit
