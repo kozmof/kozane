@@ -269,6 +269,10 @@ The [epoch transition prototype](prototype-epoch-transitions.md) adds persistent
 write blocking, ordered migration batches and candidate baseline activation to
 the test fixture. Native restart tests cover committed repair and baseline
 interruption. Production epoch storage and migration integration remain pending.
+The fixture reserves pending baseline image owners before verification, retains
+them with candidate publication and checks exact retained protection at activation.
+Native file tests cover cleanup, restart and competing owner release while
+earlier history owners remain protected.
 
 ## Tagged row codec
 

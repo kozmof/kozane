@@ -19,6 +19,12 @@ import {
 import { migrations } from "../../../core/src/generated/migrations.js";
 import { capturedTables, captureApplicationRows } from "./action-tables.js";
 import { validateApplicationProjection } from "./action-validation.js";
+import {
+  reserveAssetManifestInTx,
+  readAssetManifest,
+  confirmVerifiedAssetManifestInTx,
+  type AssetManifestOwner,
+} from "../db/api/asset-manifest.js";
 
 type Handle = Tx | ReadTx;
 export interface PrototypeEpochTransition {
@@ -292,6 +298,66 @@ async function hash(input: unknown) {
     digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", data));
   return Array.from(digest, (n) => n.toString(16).padStart(2, "0")).join("");
 }
+/** A stable local pin identity, never an epoch activation receipt. */
+export async function captureEpochBaselineOwner(
+  input: PrototypeEpochTransition,
+  baselineSha256: string,
+): Promise<AssetManifestOwner> {
+  const request = own(input);
+  if (!/^[a-f0-9]{64}$/.test(baselineSha256)) throw Error("Invalid epoch baseline hash");
+  return Object.freeze({
+    kind: "baseline",
+    id:
+      "prototype-epoch:v1:" +
+      (await hash([
+        request.id,
+        request.sourceEpoch,
+        request.sourceSchema,
+        request.targetEpoch,
+        request.targetSchema,
+        request.batches,
+        baselineSha256,
+      ])),
+  });
+}
+// Test fixtures use source brands while the local manifest API exposes the packed package brand.
+const local = (tx: Tx) => tx as unknown as Parameters<typeof reserveAssetManifestInTx>[0];
+async function requireBaselineOwner(
+  tx: Tx,
+  owner: AssetManifestOwner,
+  manifest: AssetManifest,
+  retained: boolean,
+) {
+  const current = await readAssetManifest(local(tx), owner);
+  if (current.record.state === "released" || (retained && current.record.state !== "retained"))
+    throw Error("Epoch baseline image protection is not active in the required state");
+  if (current.record.manifest !== JSON.stringify(manifest))
+    throw Error("Epoch baseline image requirements changed");
+  if (
+    ![current.record.createdAt, current.record.verifiedAt, current.record.releasedAt].every(
+      (date) => date === null || Number.isSafeInteger(date.getTime()),
+    )
+  )
+    throw Error("Epoch baseline owner timestamps cannot be represented safely");
+  return current;
+}
+async function verifyBaselineOwner(
+  tx: Tx,
+  owner: AssetManifestOwner,
+  manifest: AssetManifest,
+  readAsset: ReadAsset,
+  retained: boolean,
+) {
+  const before = await requireBaselineOwner(tx, owner, manifest, retained);
+  await verifyAssetManifest(
+    manifest,
+    manifest.entries.map((entry) => entry.name),
+    readAsset,
+  );
+  const after = await requireBaselineOwner(tx, owner, manifest, retained);
+  if (!same(before.record, after.record))
+    throw Error("Epoch baseline image protection changed during verification");
+}
 /** Validate a candidate outside the live transaction, then retain it without activating writes. */
 export async function prepareCaptureEpochBaseline(
   db: DB,
@@ -318,18 +384,10 @@ export async function prepareCaptureEpochBaseline(
       schema: await schema(tx),
     };
   });
-  await verifyAssetManifest(candidate.assets, baselineAssetNames(candidate.rows), readAsset);
-  await validateApplicationProjection(
-    async () => {
-      const validation = await createValidationDatabase();
-      if (validation === db) throw Error("Epoch validation requires a separate database");
-      return validation;
-    },
-    createRowProjection(capturedTables, candidate.rows),
-  );
-  const descriptor = JSON.stringify({ ...candidate, sha256: await hash(candidate) });
-  return withTx(db, async (tx) => {
-    await locked(tx);
+  const sha256 = await hash(candidate),
+    descriptor = JSON.stringify({ ...candidate, sha256 }),
+    owner = await captureEpochBaselineOwner(request, sha256);
+  const checkCandidate = async (tx: Tx) => {
     const stored = await active(tx, request);
     await guards(tx);
     if (
@@ -340,11 +398,36 @@ export async function prepareCaptureEpochBaseline(
       throw Error("Epoch candidate changed during validation");
     if (stored.candidate !== null && stored.candidate !== descriptor)
       throw Error("A different epoch baseline was already prepared");
+    return stored;
+  };
+  // Commit protection before any host image read or isolated validation can yield.
+  await withTx(db, async (tx) => {
+    await locked(tx);
+    await checkCandidate(tx);
+    await reserveAssetManifestInTx(local(tx), owner, candidate.assets);
+    await requireBaselineOwner(tx, owner, candidate.assets, false);
+    await verifyActionConnection((query) => tx.values(sql.raw(query)));
+  });
+  await verifyAssetManifest(candidate.assets, baselineAssetNames(candidate.rows), readAsset);
+  await validateApplicationProjection(
+    async () => {
+      const validation = await createValidationDatabase();
+      if (validation === db) throw Error("Epoch validation requires a separate database");
+      return validation;
+    },
+    createRowProjection(capturedTables, candidate.rows),
+  );
+  return withTx(db, async (tx) => {
+    await locked(tx);
+    const stored = await checkCandidate(tx);
+    await verifyBaselineOwner(tx, owner, candidate.assets, readAsset, false);
+    await confirmVerifiedAssetManifestInTx(local(tx), owner, JSON.stringify(candidate.assets));
+    await checkCandidate(tx);
     await tx.run(
       sql`UPDATE capture_epoch_transition SET candidate=${descriptor} WHERE id=${request.id}`,
     );
     await verifyActionConnection((query) => tx.values(sql.raw(query)));
-    return { changed: stored.candidate === null, sha256: JSON.parse(descriptor).sha256 as string };
+    return Object.freeze({ changed: stored.candidate === null, sha256, owner });
   });
 }
 /** Old runs remain archived. Only a verified new baseline and empty selection become active. */
@@ -380,7 +463,9 @@ export async function activateCaptureEpoch(
     const manifest = parseAssetManifest(candidate.assets);
     if (!same(selectAssetManifest(manifest, baselineAssetNames(candidate.rows)), manifest))
       throw Error("Prepared epoch image requirements changed");
-    await verifyAssetManifest(manifest, baselineAssetNames(candidate.rows), readAsset);
+    const owner = await captureEpochBaselineOwner(request, sha256);
+    await verifyBaselineOwner(tx, owner, manifest, readAsset, true);
+    await active(tx, request);
     if (
       candidate.schema !== (await schema(tx)) ||
       !same(candidate.rows, await captureApplicationRows(tx))

@@ -14,6 +14,7 @@ pnpm exec vitest run --config vitest.source.config.ts \
   packages/kozane/src/db/api/action-restoration*.test.ts \
   packages/kozane/src/db/api/action-epochs.test.ts \
   packages/kozane/src/lib/server/action-epoch-restart.test.ts \
+  packages/kozane/src/lib/server/action-epoch-image-retention.test.ts \
   packages/kozane/src/services/action-projection.test.ts \
   packages/kozane/src/services/action-restoration-plan.test.ts
 ```
@@ -46,6 +47,9 @@ The test fixture also exercises [durable epoch transitions](prototype-epoch-tran
 Migration progress survives restarts, committed repair is not repeated and
 application writes remain blocked until the prepared baseline activates.
 These are prototype boundaries without production epoch tables or activation.
+Candidate baseline pins now commit before image reads. Exact byte verification,
+retained ownership and candidate publication commit together. Native tests cover
+cleanup and restart without releasing earlier history owners.
 
 ## Capture before driver conversion
 

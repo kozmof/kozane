@@ -49,6 +49,16 @@ exact shared rows, image requirements, target labels, encoding version and a
 schema fingerprint in one read snapshot. Image bytes and isolated SQL validation
 must pass before a SHA-256-bound candidate is persisted.
 
+Before the first host image read or isolated validation, a separate transaction
+commits a pending baseline owner in `local_asset_manifest`. Its stable identity
+binds the exact transition request and candidate hash. Empty baselines receive
+an empty manifest owner too. This uses the existing local ownership format.
+
+The final preparation transaction checks the exact active pin and image bytes
+again, retains protection and stores the candidate together. Cleanup and owner
+release share the database writer lock. A failed validation or final commit
+preserves the earlier pending pin. An explicit retry reuses matching protection.
+
 The helper rechecks source history, rows, schema and guards after isolated
 validation. Changed evidence refuses the candidate. Failed validation or baseline
 publication leaves writes blocked and committed batch progress intact. A matching
@@ -66,10 +76,26 @@ selects the new epoch and baseline, clears the active selection and completes th
 transition in one commit. A failed commit preserves the source epoch and the
 prepared candidate.
 
+First activation requires the candidate's exact retained owner. Missing, pending,
+released or changed protection refuses activation before image reads. Verification
+and activation hold the same writer lock, so cleanup cannot remove protection
+between them. A failed activation commit leaves the candidate and retained pin
+intact for restart recovery.
+
 Archived action, execution and effect rows stay intact. New action runs belong
 to the newly active epoch. Restoration cannot select a previous epoch's runs
 against the new baseline. A matching activation retry preserves later edits.
 Persistent capture guards continue to reject unstamped writes after activation.
+
+The candidate keeps its owner when it becomes the active baseline. Source
+baseline and action-history owners remain untouched. New baseline images stay
+protected after their last live card disappears. Release requires a separate
+explicit retention decision. Matching completed activation retries acknowledge
+the earlier commit without recreating released pins or replaying later edits.
+
+Preparation returns `changed`, `sha256` and `owner`.
+`captureEpochBaselineOwner(request, sha256)` derives the same immutable owner
+after restart. The owner identifies protection and does not authorize activation.
 
 ## Verify the boundaries
 
@@ -84,6 +110,11 @@ and reopens them before repair, after repair, after failed baseline capture,
 after candidate preparation and after activation. A competing connection cannot
 run duplicate repair while the first batch holds the writer lock.
 
+`lib/server/action-epoch-image-retention.test.ts` uses real image files and local
+manifest ownership. It covers cleanup after live references disappear, pending
+pin visibility, readable archived bytes, restart after failed candidate and
+activation commits, and competing cleanup or release during publication.
+
 Browser verification remains pending. Production migration authorization,
-schema-version policy, durable asset ownership for new epochs and workspace
+schema-version policy, integration of epoch asset ownership and workspace
 activation remain subject to the existing adapter gate.

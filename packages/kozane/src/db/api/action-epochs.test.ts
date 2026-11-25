@@ -7,6 +7,7 @@ import {
   runCaptureMigrationBatch,
   prepareCaptureEpochBaseline,
   activateCaptureEpoch,
+  captureEpochBaselineOwner,
   type PrototypeEpochTransition,
 } from "../../test-utils/action-epochs.js";
 import {
@@ -381,7 +382,7 @@ it("rejects failed transition, batch, baseline and activation commits without pu
   expect(await rows(f.db, "SELECT * FROM capture_epoch_archive")).toEqual([]);
   await activateCaptureEpoch(f.db, f.request);
 });
-it("verifies candidate image bytes again at activation while leaving migration business triggers active", async () => {
+async function imageFixture() {
   const f = await fixture();
   await beginCaptureEpochTransition(f.db, f.request);
   const filename = "00000000-0000-4000-8000-000000000001.png",
@@ -399,9 +400,15 @@ it("verifies candidate image bytes again at activation while leaving migration b
       sql`INSERT INTO card(id,partition_id,layer_id,content) VALUES('image','p','l',${"kozane-image:/api/images/" + filename})`,
     );
   });
+  await runCaptureMigrationBatch(f.db, f.request, 1, async () => {});
+  read.mockClear();
+  return { ...f, assets, read, data };
+}
+it("verifies candidate image bytes again at activation while leaving migration business triggers active", async () => {
+  const f = await imageFixture();
+  const { assets, read } = f;
   expect(Number((await rows(f.db, "SELECT created_at FROM card"))[0][0])).toBeGreaterThan(0);
   expect(await rows(f.db, "SELECT run_id FROM capture_effect")).toEqual([]);
-  await runCaptureMigrationBatch(f.db, f.request, 1, async () => {});
   const corrupt = async () => new TextEncoder().encode("wrong");
   await expect(
     prepareCaptureEpochBaseline(f.db, f.request, factory, assets, corrupt),
@@ -412,4 +419,161 @@ it("verifies candidate image bytes again at activation while leaving migration b
   );
   expect(await state(f.db)).toEqual([[2, "active", 1]]);
   await activateCaptureEpoch(f.db, f.request, read);
+});
+it("commits the exact pending image pin before the first host read and retains it with the candidate", async () => {
+  const f = await imageFixture();
+  let first = true;
+  const read = async () => {
+    if (first) {
+      first = false;
+      expect(
+        await rows(f.db, "SELECT owner_kind,state,manifest FROM local_asset_manifest"),
+      ).toEqual([["baseline", "pending", JSON.stringify(f.assets)]]);
+      expect(await state(f.db)).toEqual([[2, "active", 0]]);
+    }
+    return f.data;
+  };
+  const prepared = await prepareCaptureEpochBaseline(f.db, f.request, factory, f.assets, read);
+  expect(first).toBe(false);
+  expect(prepared.owner).toEqual(await captureEpochBaselineOwner(f.request, prepared.sha256));
+  expect(await rows(f.db, "SELECT owner_id,state FROM local_asset_manifest")).toEqual([
+    [prepared.owner.id, "retained"],
+  ]);
+  expect(await state(f.db)).toEqual([[2, "active", 1]]);
+  const retry = await prepareCaptureEpochBaseline(f.db, f.request, factory, f.assets, f.read);
+  expect(retry).toEqual({ ...prepared, changed: false });
+});
+it("keeps pending protection after failed SQL validation and reuses it on explicit retry", async () => {
+  const f = await imageFixture();
+  await expect(
+    prepareCaptureEpochBaseline(
+      f.db,
+      f.request,
+      async () => {
+        throw Error("Isolated validation failed");
+      },
+      f.assets,
+      f.read,
+    ),
+  ).rejects.toThrow("Isolated validation failed");
+  const pending = await rows(
+    f.db,
+    "SELECT owner_id,state,CAST(created_at AS TEXT) FROM local_asset_manifest",
+  );
+  expect(pending).toHaveLength(1);
+  expect(pending[0][1]).toBe("pending");
+  expect(await state(f.db)).toEqual([[2, "active", 0]]);
+  const prepared = await prepareCaptureEpochBaseline(f.db, f.request, factory, f.assets, f.read);
+  expect(prepared.owner.id).toBe(pending[0][0]);
+  expect(
+    (await rows(f.db, "SELECT CAST(created_at AS TEXT) FROM local_asset_manifest"))[0][0],
+  ).toBe(pending[0][2]);
+  expect(await rows(f.db, "SELECT state FROM local_asset_manifest")).toEqual([["retained"]]);
+});
+it("creates no pin or image reads after a failed reservation commit and preserves the committed pin after candidate commit failure", async () => {
+  const f = await imageFixture();
+  let writes = 0,
+    failAt = 1;
+  const wrapped = createDatabaseAdapter(new Proxy(f.db, {}), {
+    read: (work) => withReadTx(f.db, (tx) => work(tx as unknown as DatabaseHandle)),
+    write: (work) =>
+      withTx(f.db, async (tx) => {
+        const result = await work(tx);
+        if (++writes === failAt) throw Error("Publication commit failed");
+        return result;
+      }),
+  });
+  await expect(
+    prepareCaptureEpochBaseline(wrapped, f.request, factory, f.assets, f.read),
+  ).rejects.toThrow("Publication commit failed");
+  expect(f.read).not.toHaveBeenCalled();
+  expect(await rows(f.db, "SELECT state FROM local_asset_manifest")).toEqual([]);
+  writes = 0;
+  failAt = 2;
+  await expect(
+    prepareCaptureEpochBaseline(wrapped, f.request, factory, f.assets, f.read),
+  ).rejects.toThrow("Publication commit failed");
+  expect(await rows(f.db, "SELECT state,verified_at FROM local_asset_manifest")).toEqual([
+    ["pending", null],
+  ]);
+  expect(await state(f.db)).toEqual([[2, "active", 0]]);
+  await prepareCaptureEpochBaseline(f.db, f.request, factory, f.assets, f.read);
+});
+it("refuses image bytes that change at final candidate verification without releasing their pending owner", async () => {
+  const f = await imageFixture();
+  let reads = 0;
+  await expect(
+    prepareCaptureEpochBaseline(f.db, f.request, factory, f.assets, async () =>
+      ++reads === 1 ? f.data : new TextEncoder().encode("changed"),
+    ),
+  ).rejects.toThrow("bytes do not match");
+  expect(reads).toBe(2);
+  expect(await rows(f.db, "SELECT state,verified_at FROM local_asset_manifest")).toEqual([
+    ["pending", null],
+  ]);
+  expect(await state(f.db)).toEqual([[2, "active", 0]]);
+});
+it("refuses released protection during isolated validation without publishing a baseline", async () => {
+  const f = await imageFixture();
+  await expect(
+    prepareCaptureEpochBaseline(
+      f.db,
+      f.request,
+      async () => {
+        await f.db.run(
+          sql`UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Reviewed release'`,
+        );
+        return factory();
+      },
+      f.assets,
+      f.read,
+    ),
+  ).rejects.toThrow("protection is not active");
+  expect(await state(f.db)).toEqual([[2, "active", 0]]);
+  await expect(
+    prepareCaptureEpochBaseline(f.db, f.request, factory, f.assets, f.read),
+  ).rejects.toThrow("Released manifest owners");
+});
+it("refuses missing, pending, changed or released protection before first activation and preserves later edits on completed retries", async () => {
+  const f = await imageFixture();
+  const prepared = await prepareCaptureEpochBaseline(f.db, f.request, factory, f.assets, f.read);
+  const saved = await rows(f.db, "SELECT manifest,verified_at FROM local_asset_manifest");
+  for (const change of [
+    sql`UPDATE local_asset_manifest SET state='pending',verified_at=NULL`,
+    sql`UPDATE local_asset_manifest SET manifest='{"version":1,"entries":[]}'`,
+    sql`UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Reviewed release'`,
+    sql`UPDATE local_asset_manifest SET owner_id='another-owner'`,
+  ]) {
+    await f.db.run(change);
+    f.read.mockClear();
+    await expect(activateCaptureEpoch(f.db, f.request, f.read)).rejects.toThrow();
+    expect(f.read).not.toHaveBeenCalled();
+    expect(await state(f.db)).toEqual([[2, "active", 1]]);
+    await f.db.run(
+      sql`UPDATE local_asset_manifest SET state='retained',manifest=${String(saved[0][0])},verified_at=${Number(saved[0][1])},released_at=NULL,release_reason=NULL,owner_id=${prepared.owner.id}`,
+    );
+  }
+  await activateCaptureEpoch(f.db, f.request, f.read);
+  await f.db.run(
+    sql`UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Transferred retention'`,
+  );
+  f.read.mockClear();
+  expect((await activateCaptureEpoch(f.db, f.request, f.read)).changed).toBe(false);
+  expect(f.read).not.toHaveBeenCalled();
+  expect(await rows(f.db, "SELECT state FROM local_asset_manifest")).toEqual([["released"]]);
+});
+it("binds pin identities to the owned request and exact baseline hash independently of property order", async () => {
+  const f = await fixture(),
+    hash = "a".repeat(64);
+  const owner = await captureEpochBaselineOwner(f.request, hash);
+  const reordered = Object.fromEntries(
+    Object.entries(f.request).reverse(),
+  ) as unknown as PrototypeEpochTransition;
+  expect(await captureEpochBaselineOwner(reordered, hash)).toEqual(owner);
+  expect(await captureEpochBaselineOwner(f.request, "b".repeat(64))).not.toEqual(owner);
+  expect(await captureEpochBaselineOwner({ ...f.request, id: "different" }, hash)).not.toEqual(
+    owner,
+  );
+  expect(Object.isFrozen(owner)).toBe(true);
+  await expect(captureEpochBaselineOwner(f.request, "invalid")).rejects.toThrow("baseline hash");
 });

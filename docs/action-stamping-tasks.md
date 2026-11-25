@@ -711,6 +711,18 @@ corruption boundaries. Native file tests cover restart and competing writers.
 Production epoch storage, migration integration, asset ownership and activation
 remain pending. See [prototype epoch transitions](prototype-epoch-transitions.md).
 
+Prototype epoch candidates now commit pending image protection before host byte
+reads or isolated validation. Stable baseline owners bind the exact transition
+and candidate hash. Final verification retains the owner and candidate in one
+transaction. Activation requires exact retained protection under the same writer
+lock as cleanup and release. Failed validation or candidate commits preserve the
+earlier pin, and failed activation leaves retained protection intact. Explicit
+retries preserve file evidence, registration timestamps and earlier source
+owners. Native and Node WASM tests cover metadata and failure boundaries. Native
+file tests cover restart, cleanup after live references disappear and competing
+publication or release. Production integration remains pending. See
+[prototype epoch transitions](prototype-epoch-transitions.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -879,6 +891,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Copy complete published-bundle image requirements into a staged destination under explicit complete or shared-only identities. Commit protection before file creation, publish exact immutable bytes without overwrites, reuse verified finals and archives, preserve interruption evidence and pending pins after failures, and serialize final retention with cleanup.
 - [x] Retain all eight bundle payloads and their index in staged complete or shared-only destinations after image installation. Reopen without source catalogs or files, verify trusted descriptors and exact SQL states, preserve interrupted evidence and recheck file identities and destination protection without installing production history or activating writes.
 - [x] Connect prototype baseline and effect-set publication to local manifest ownership. Verify protected files, atomic staging handoff and upload completion, cleanup contention and retained images after history is deselected.
+- [x] Connect prototype epoch candidates to durable baseline image owners. Reserve protection before image reads, retain it with candidate publication, require exact retained protection at activation and preserve earlier owners and pins after failed validation or commits. Verify restart, cleanup contention and protection after the last live reference disappears.
 - [x] Recover verified published uploads or explicitly abandon reviewed pins without repeating filesystem work. Preserve intent, errors and decisions, and keep live references protected during cleanup.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.
 - [ ] Enable mandatory guards and ship version one only after phases 1–5 and their verification pass.
