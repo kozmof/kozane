@@ -58,6 +58,11 @@ own filesystem access and validation database disposal. See
 [shared recovery projections](../../docs/shared-recovery-projections.md) for the
 current contracts and remaining activation work.
 
+[Combined checkpoint capture](../../docs/recovery-checkpoint-capture.md) reads
+local rows and complete selected shared history in one consistent snapshot.
+It verifies exact current shared rows against the reconstruction and hashes both
+existing payload formats after successful read completion.
+
 [Shared recovery executions](../../docs/shared-recovery-executions.md) prepare
 selected scope records and effect attribution without invoking handlers. Their
 descriptors preserve no-op children and invocation image requirements beside the

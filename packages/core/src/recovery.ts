@@ -1,5 +1,10 @@
 /** Trusted recovery validation and destination staging. These helpers do not activate a workspace. */
 export {
+  captureRecoveryCheckpoint,
+  type RecoveryCheckpointHistory,
+  type CapturedRecoveryCheckpoint,
+} from "./actions/recovery-checkpoint-capture.js";
+export {
   SHARED_RECOVERY_RETAINED_HISTORY_VERSION,
   SHARED_RECOVERY_RETAINED_CHECKPOINT_VERSION,
   parseSharedRecoveryRetainedHistory,

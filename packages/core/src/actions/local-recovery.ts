@@ -176,37 +176,47 @@ export function captureLocalRecoverySnapshot(
   const copied = parseLocalRecoveryIdentity(keys);
   if (typeof readSelection !== "function")
     throw new LocalRecoveryError("Local recovery requires a checkpoint reader");
-  return withReadTx(db, async (tx) => {
-    const actual = await readSchemaManifest(async (query) =>
-      (await tx.values(sql.raw(query))).map((row) => Array.from(row)),
+  return withReadTx(db, (tx) => readLocalRecoverySnapshot(tx, copied, readSelection));
+}
+
+/** Internal composition helper. The caller owns one consistent read snapshot. */
+export async function readLocalRecoverySnapshot(
+  tx: ReadTx,
+  keys: LocalRecoveryIdentity,
+  readSelection: (tx: ReadTx) => Promise<LocalRecoverySelection>,
+): Promise<LocalRecoverySnapshot> {
+  const copied = parseLocalRecoveryIdentity(keys);
+  if (typeof readSelection !== "function")
+    throw new LocalRecoveryError("Local recovery requires a checkpoint reader");
+  const actual = await readSchemaManifest(async (query) =>
+    (await tx.values(sql.raw(query))).map((row) => Array.from(row)),
+  );
+  const local = (objects: typeof canonicalSchemaManifest) =>
+    objects.filter((entry) => localTableNames.includes(entry.table));
+  if (!compareSchemaManifests(local(actual), local(canonicalSchemaManifest)).matches)
+    throw new LocalRecoveryError("Local recovery requires the canonical local schema");
+  const selected = parseLocalRecoverySelection(await readSelection(tx));
+  const tables = [];
+  for (const table of plan.loadOrder) {
+    const rows = await tx.values(
+      sql.raw(
+        `SELECT ${captureRowSql(table.columns)} FROM ${quote(table.name)} ORDER BY ${table.primaryKey.map(quote).join(",")}`,
+      ),
     );
-    const local = (objects: typeof canonicalSchemaManifest) =>
-      objects.filter((entry) => localTableNames.includes(entry.table));
-    if (!compareSchemaManifests(local(actual), local(canonicalSchemaManifest)).matches)
-      throw new LocalRecoveryError("Local recovery requires the canonical local schema");
-    const selected = parseLocalRecoverySelection(await readSelection(tx));
-    const tables = [];
-    for (const table of plan.loadOrder) {
-      const rows = await tx.values(
-        sql.raw(
-          `SELECT ${captureRowSql(table.columns)} FROM ${quote(table.name)} ORDER BY ${table.primaryKey.map(quote).join(",")}`,
-        ),
-      );
-      tables.push({
-        name: table.name,
-        rows: rows.map((row) => {
-          if (typeof row[0] !== "string")
-            throw new LocalRecoveryError("Local recovery capture did not return a row image");
-          return decodeCapturedRow(row[0]);
-        }),
-      });
-    }
-    return parseLocalRecoverySnapshot({
-      version: LOCAL_RECOVERY_VERSION,
-      rowEncodingVersion: ROW_ENCODING_VERSION,
-      identity: copied,
-      selection: selected,
-      tables,
+    tables.push({
+      name: table.name,
+      rows: rows.map((row) => {
+        if (typeof row[0] !== "string")
+          throw new LocalRecoveryError("Local recovery capture did not return a row image");
+        return decodeCapturedRow(row[0]);
+      }),
     });
+  }
+  return parseLocalRecoverySnapshot({
+    version: LOCAL_RECOVERY_VERSION,
+    rowEncodingVersion: ROW_ENCODING_VERSION,
+    identity: copied,
+    selection: selected,
+    tables,
   });
 }

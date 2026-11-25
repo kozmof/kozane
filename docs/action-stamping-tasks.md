@@ -733,6 +733,18 @@ before tests because listener creation is denied. Browser runtime verification
 and production activation remain pending. See the
 [capture gate commands](action-capture-prototype.md#run-the-checks).
 
+Core now captures full local rows and complete selected shared history through
+one consistent read boundary. A trusted host reader supplies completed history,
+selection order and counts through the same read facade. The helper requires
+canonical managed schema and complete migration history, reconstructs the selected
+history and checks every live shared row with the tagged codec. Both existing
+content descriptors are computed only after successful read completion. Native
+and Node WASM tests cover exact values, stale histories, schema changes, malformed
+reader results and read failures. Native concurrent-writer tests verify that
+history and local rows stay at the same checkpoint. Schema and payload versions
+remain unchanged. Production capture integration and browser runtime verification
+remain pending. See [combined checkpoint capture](recovery-checkpoint-capture.md).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -821,6 +833,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Implement replacement of shared rows inside one reconciliation transaction while preserving local metadata and log tables.
 - [ ] Rebuild derived data after installation. Keep requested repair separate from exact restoration.
 - [ ] Capture full local recovery snapshots and shared checkpoint selections from one consistent database read transaction.
+- [x] Expose combined local-row and complete selected shared-history capture through one consistent read boundary. Derive one selection, verify exact live shared rows, reject stale or malformed history before hashing and compute both existing descriptors after successful read completion. Verify native concurrent commits and native/Node WASM capture and failure boundaries.
 - [x] Add an internal versioned local snapshot format and capture helper with complete table coverage, exact tagged values, checkpoint selection and identity checks. Verify concurrent checkpoint reads and refuse malformed transport without changing source data.
 - [x] Validate local snapshot rows in a separate empty database under canonical SQL constraints. Compare exact tagged read-back, roll back temporary rows and refuse success after connection, cleanup or commit failures.
 - [x] Collect local checkpoint image requirements and merge selected shared-history manifests. Reject malformed active or inactive metadata and immutable name conflicts before SQL validation. Verify recovery-owner pins through cleanup and missing-file verification.

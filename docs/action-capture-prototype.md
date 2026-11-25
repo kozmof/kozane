@@ -34,7 +34,7 @@ Run SQLite WASM in a browser with Chromium installed for Playwright.
 pnpm test:capture:browser
 ```
 
-All three commands use the same six capture, restoration, asset-history and epoch
+All three commands use the same seven capture, restoration, checkpoint, asset-history and epoch
 suite files from `scripts/check-action-capture.mjs`. WASM and browser runs also
 check worker queue and read-snapshot behavior. The runner selects the adapter
 explicitly, bounds workers and refuses extra filters or focused tests. It checks

@@ -17,6 +17,11 @@ ID and ordered effect-set IDs through this handle. Do not open another connectio
 or use a selection cached before the transaction. The host remains responsible
 for checking that those IDs identify complete retained history.
 
+Use [combined checkpoint capture](recovery-checkpoint-capture.md) when establishing
+a new local snapshot and complete selected shared history together. It reads
+both through one snapshot and verifies the reconstruction against live shared
+rows before computing either descriptor.
+
 The helper verifies the canonical local schema and captures every row from these
 tables, including explicit empty tables.
 

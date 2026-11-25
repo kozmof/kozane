@@ -160,8 +160,8 @@ it("keeps candidate images protected after activation removes their last live re
   expect((await inspectAssetManifest(f.db, prepared.owner)).record.state).toBe("retained");
   expect((await inspectAssetManifest(f.db, sourceOwner)).record).toEqual(source);
   expect(await f.db.values(sql`SELECT 1 FROM card`)).toEqual([]);
-  expect((await f.read(f.names[0])).toString("utf8")).toBe("<svg><text>0</text></svg>");
-  expect((await f.read(f.names[1])).toString("utf8")).toBe("<svg><text>1</text></svg>");
+  expect(new TextDecoder().decode(await f.read(f.names[0]))).toBe("<svg><text>0</text></svg>");
+  expect(new TextDecoder().decode(await f.read(f.names[1]))).toBe("<svg><text>1</text></svg>");
   await expect(f.read(f.names[2])).rejects.toMatchObject({ code: "ENOENT" });
   await releaseAssetManifest(f.db, prepared.owner, "Transferred retained history");
   await f.cleanup();
@@ -311,6 +311,6 @@ it("rechecks released protection and readable archived bytes without recreating 
   );
   expect((await f.db.values(sql`SELECT state FROM capture_epoch_transition`))[0][0]).toBe("active");
   await expect(fs.lstat(join(f.root, f.names[1]))).rejects.toMatchObject({ code: "ENOENT" });
-  expect((await f.read(f.names[1])).toString("utf8")).toBe("<svg><text>1</text></svg>");
+  expect(new TextDecoder().decode(await f.read(f.names[1]))).toBe("<svg><text>1</text></svg>");
   expect((await inspectAssetManifest(f.db, sourceOwner)).record.state).toBe("retained");
 });

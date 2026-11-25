@@ -762,6 +762,18 @@ await assert.rejects(
   recovery.SharedRecoveryError,
 );
 assert.equal("parseRecoveryBundleSources" in recovery, false);
+assert.equal(typeof recovery.captureRecoveryCheckpoint, "function");
+assert.equal("readLocalRecoverySnapshot" in recovery, false);
+await assert.rejects(
+  recovery.captureRecoveryCheckpoint(
+    {},
+    { ...sharedIdentity, schemaId: "unsupported" },
+    async () => {
+      throw new Error("Unexpected history read");
+    },
+  ),
+  recovery.LocalRecoveryError,
+);
 assert.equal(typeof recovery.readRecoveryStagingDestination, "function");
 assert.equal(typeof recovery.inspectRecoveryStagingDestination, "function");
 assert.equal(typeof recovery.inspectPendingRecoveryFileOperations, "function");

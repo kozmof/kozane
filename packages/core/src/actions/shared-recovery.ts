@@ -1,6 +1,6 @@
 /** Shared reconstruction, isolated validation and trusted transaction loading. */
 import { sql } from "drizzle-orm";
-import { withTx, type DB, type Tx } from "../database.js";
+import { withTx, type DB, type Tx, type ReadTx } from "../database.js";
 import { migrations } from "../generated/migrations.js";
 import { canonicalSchemaManifest } from "../generated/schema-manifest.js";
 import { compareSchemaManifests } from "../migrations/schema.js";
@@ -288,7 +288,10 @@ export async function validateSharedRecoveryProjection(
 }
 
 /** Internal exact read-back after staging and receipt publication. */
-export async function verifySharedRecoveryProjection(tx: Tx, snapshot: SharedRecoveryProjection) {
+export async function verifySharedRecoveryProjection(
+  tx: Tx | ReadTx,
+  snapshot: SharedRecoveryProjection,
+) {
   const execute = (query: string) => tx.values(sql.raw(query));
   const target = createRowProjection(
     plan.loadOrder,

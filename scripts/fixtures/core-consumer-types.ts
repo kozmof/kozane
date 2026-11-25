@@ -39,6 +39,9 @@ import { createServiceContext, withTx, withReadTx, records, type DB } from "@koz
 import { cards, namespaces, taskspaces } from "@kozane/core/services";
 import {
   captureLocalRecoveryCheckpoint,
+  captureRecoveryCheckpoint,
+  type CapturedRecoveryCheckpoint,
+  type RecoveryCheckpointHistory,
   validateStoredLocalRecoveryCheckpoint,
   rememberLocalRecoveryCheckpoint,
   parseLocalRecoveryIdentity,
@@ -1079,6 +1082,22 @@ sharedSelection.effectSets.push({ id: "extra", effectCount: 0 });
 sharedProjection.schemaId = "other";
 // @ts-expect-error Parsed host identities are immutable.
 parsedIdentity.deviceId = "other";
+void captureRecoveryCheckpoint(db, parsedIdentity, async (tx) => {
+  const source: RecoveryCheckpointHistory = { history: sharedHistory, selection: sharedSelection };
+  // @ts-expect-error Capture readers expose a restricted read facade.
+  void tx.run;
+  return source;
+}).then((value) => {
+  const captured: CapturedRecoveryCheckpoint = value;
+  const local: LocalRecoverySnapshot = captured.local.snapshot;
+  const shared: SharedRecoveryHistoryPayload = captured.shared.payload;
+  void local;
+  void shared;
+  // @ts-expect-error Captured checkpoint descriptors are immutable.
+  captured.local.checkpoint.sha256 = "changed";
+  // @ts-expect-error Captured shared selections preserve immutable materialization order.
+  captured.shared.payload.selection.effectSets.push({ id: "extra", effectCount: 0 });
+});
 void captureLocalRecoveryCheckpoint(db, checkpoint.identity, async () => checkpoint.selection).then(
   ({ snapshot, checkpoint }) => {
     const captured: LocalRecoverySnapshot = snapshot;
