@@ -256,48 +256,59 @@ export function runCaptureMigrationBatch(
   const request = own(input);
   if (!Number.isSafeInteger(index) || index < 0 || index >= request.batches.length)
     throw Error("Invalid migration batch index");
-  return withTx(db, async (tx) => {
-    await locked(tx);
-    const stored = await active(tx, request);
-    await guards(tx);
-    if (index < stored.next) return { changed: false };
-    if (index !== stored.next || stored.candidate !== null)
-      throw Error("Migration batch is out of order");
-    await tx.run(
-      sql`UPDATE capture_migration_boundary SET transition_id=${request.id},batch=${index} WHERE singleton=1`,
-    );
-    await tx.run(sql`UPDATE capture_context SET mode='migrate' WHERE singleton=1`);
-    await migrate(tx);
-    if ((await tx.values(sql.raw(`SELECT 1 WHERE ${prototypeMigrationAuthority}`))).length !== 1)
-      throw Error("Migration boundary marker changed");
-    const afterHook = await transition(tx, request);
-    if (
-      afterHook.next !== stored.next ||
-      afterHook.candidate !== stored.candidate ||
-      afterHook.state !== stored.state ||
-      afterHook.history !== stored.history
-    )
-      throw Error("Migration callback changed transition progress or candidate");
-    if ((await tx.values(sql`PRAGMA foreign_key_check`)).length)
-      throw Error("Migration foreign-key check failed");
-    await guards(tx);
-    if (stored.history !== (await history(tx)))
-      throw Error("Migration changed archived action history");
-    await tx.run(sql`UPDATE capture_context SET mode='record' WHERE singleton=1`);
-    await tx.run(
-      sql`UPDATE capture_migration_boundary SET transition_id=NULL,batch=NULL WHERE singleton=1`,
-    );
-    await tx.run(
-      sql`INSERT INTO capture_migration_history VALUES(${request.id},${index},${request.batches[index]})`,
-    );
-    await tx.run(
-      sql`UPDATE capture_epoch_transition SET next_batch=next_batch+1 WHERE id=${request.id}`,
-    );
-    await active(tx, request);
-    await empty(tx);
-    await verifyActionConnection((query) => tx.values(sql.raw(query)));
-    return { changed: true };
-  });
+  return withTx(db, (tx) => runCaptureMigrationBatchInTx(tx, request, index, migrate));
+}
+
+/** Trusted initialization can verify staging protection in the same batch transaction. */
+export async function runCaptureMigrationBatchInTx(
+  tx: Tx,
+  input: PrototypeEpochTransition,
+  index: number,
+  migrate: (tx: Tx) => Promise<void>,
+) {
+  const request = own(input);
+  if (!Number.isSafeInteger(index) || index < 0 || index >= request.batches.length)
+    throw Error("Invalid migration batch index");
+  await locked(tx);
+  const stored = await active(tx, request);
+  await guards(tx);
+  if (index < stored.next) return { changed: false };
+  if (index !== stored.next || stored.candidate !== null)
+    throw Error("Migration batch is out of order");
+  await tx.run(
+    sql`UPDATE capture_migration_boundary SET transition_id=${request.id},batch=${index} WHERE singleton=1`,
+  );
+  await tx.run(sql`UPDATE capture_context SET mode='migrate' WHERE singleton=1`);
+  await migrate(tx);
+  if ((await tx.values(sql.raw(`SELECT 1 WHERE ${prototypeMigrationAuthority}`))).length !== 1)
+    throw Error("Migration boundary marker changed");
+  const afterHook = await transition(tx, request);
+  if (
+    afterHook.next !== stored.next ||
+    afterHook.candidate !== stored.candidate ||
+    afterHook.state !== stored.state ||
+    afterHook.history !== stored.history
+  )
+    throw Error("Migration callback changed transition progress or candidate");
+  if ((await tx.values(sql`PRAGMA foreign_key_check`)).length)
+    throw Error("Migration foreign-key check failed");
+  await guards(tx);
+  if (stored.history !== (await history(tx)))
+    throw Error("Migration changed archived action history");
+  await tx.run(sql`UPDATE capture_context SET mode='record' WHERE singleton=1`);
+  await tx.run(
+    sql`UPDATE capture_migration_boundary SET transition_id=NULL,batch=NULL WHERE singleton=1`,
+  );
+  await tx.run(
+    sql`INSERT INTO capture_migration_history VALUES(${request.id},${index},${request.batches[index]})`,
+  );
+  await tx.run(
+    sql`UPDATE capture_epoch_transition SET next_batch=next_batch+1 WHERE id=${request.id}`,
+  );
+  await active(tx, request);
+  await empty(tx);
+  await verifyActionConnection((query) => tx.values(sql.raw(query)));
+  return { changed: true };
 }
 async function hash(input: unknown) {
   const data = new TextEncoder().encode(JSON.stringify(input)),

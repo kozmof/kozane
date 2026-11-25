@@ -9,6 +9,7 @@ import {
   stageCaptureInitialization,
   prepareCaptureInitialization,
   activateCaptureInitialization,
+  repairCaptureInitialization,
 } from "../../test-utils/action-initialization.js";
 import { openCapturePrototype } from "../../test-utils/action-capture.js";
 import {
@@ -27,6 +28,7 @@ vi.setConfig({ testTimeout: 30_000 });
 const roots: string[] = [],
   handles: Awaited<ReturnType<typeof openDb>>[] = [];
 const identity = { id: "initial-enable", epochId: "first-active", schemaId: migrations.at(-1)!.id };
+const repairing = { ...identity, repair: "inventories" as const };
 async function open(path: string) {
   const handle = await openDb(path);
   handles.push(handle);
@@ -67,6 +69,107 @@ async function fixture() {
   );
   return { root, path, handle, db, core, name, data, read, catalog };
 }
+async function seedInitialRepair(db: DB) {
+  await db.run(sql`INSERT INTO inventory(id,namespace_id,name) VALUES('i','n','Box')`);
+  const trigger = (
+    await db.values(sql`SELECT sql FROM sqlite_schema WHERE name='card_inventory_pair_update'`)
+  )[0][0];
+  await db.run(sql`DROP TRIGGER card_inventory_pair_update`);
+  await db.run(sql`UPDATE card SET inventory_id='i' WHERE id='seeded'`);
+  await db.run(sql.raw(String(trigger)));
+}
+it("resumes initial repair across restarts without repeating a committed batch", async () => {
+  const f = await fixture();
+  await seedInitialRepair(f.core);
+  const staged = await stageCaptureInitialization(f.core, repairing, f.catalog);
+  const original = (await f.db.values(sql`SELECT rows FROM capture_baseline`))[0][0];
+  f.handle.close();
+  const started = await open(f.path);
+  const core = started.db as unknown as DB;
+  const validation = vi.fn(factory);
+  await expect(
+    prepareCaptureInitialization(core, repairing, validation, f.catalog, f.read),
+  ).rejects.toThrow("batches are incomplete");
+  expect(validation).not.toHaveBeenCalled();
+  expect(await repairCaptureInitialization(core, repairing)).toEqual({ changed: true });
+  expect((await started.db.values(sql`SELECT rows FROM capture_baseline`))[0][0]).toBe(original);
+  started.close();
+  const repaired = await open(f.path);
+  await repaired.db.run(
+    sql`CREATE TRIGGER refuse_repair_reexecution BEFORE UPDATE OF inventory_id,inventory_slot ON card BEGIN SELECT RAISE(ABORT,'Repair repeated'); END`,
+  );
+  expect(await repairCaptureInitialization(repaired.db as unknown as DB, repairing)).toEqual({
+    changed: false,
+  });
+  const prepared = await prepareCaptureInitialization(
+    repaired.db as unknown as DB,
+    repairing,
+    factory,
+    f.catalog,
+    f.read,
+  );
+  repaired.close();
+  const ready = await open(f.path);
+  await expect(ready.db.run(sql`INSERT INTO scope VALUES('raw','unstamped')`)).rejects.toThrow();
+  await activateCaptureInitialization(ready.db as unknown as DB, repairing, f.read);
+  ready.close();
+  const active = await open(f.path);
+  expect(await repairCaptureInitialization(active.db as unknown as DB, repairing)).toEqual({
+    changed: false,
+  });
+  expect(
+    (await active.db.values(sql`SELECT next_batch,state FROM capture_epoch_transition`))[0][0],
+  ).toBe(1);
+  expect((await active.db.values(sql`SELECT count(*) FROM capture_migration_history`))[0][0]).toBe(
+    1,
+  );
+  expect(
+    (
+      await active.db.values(sql`SELECT inventory_id,inventory_slot FROM card WHERE id='seeded'`)
+    )[0][0],
+  ).toBeNull();
+  expect(
+    (await active.db.values(sql`SELECT CAST(last_seen_at AS TEXT) FROM taskspace_local`))[0][0],
+  ).toBe("9007199254740993");
+  expect((await inspectAssetManifest(active.db, staged.owner)).record.state).toBe("released");
+  expect((await inspectAssetManifest(active.db, prepared.owner)).record.state).toBe("retained");
+  await (await openCapturePrototype(active.db as unknown as DB)).verify();
+});
+it("resumes an initial repair whose data and progress commit failed", async () => {
+  const f = await fixture();
+  await seedInitialRepair(f.core);
+  const staged = await stageCaptureInitialization(f.core, repairing, f.catalog);
+  const wrapped = createDatabaseAdapter(new Proxy(f.core, {}), {
+    read: (work) => withReadTx(f.core, (tx) => work(tx as unknown as DatabaseHandle)),
+    write: (work) =>
+      withTx(f.core, async (tx) => {
+        await work(tx);
+        throw Error("Initial repair commit failed");
+      }),
+  });
+  await expect(repairCaptureInitialization(wrapped, repairing)).rejects.toThrow(
+    "Initial repair commit failed",
+  );
+  f.handle.close();
+  const resumed = await open(f.path);
+  const core = resumed.db as unknown as DB;
+  expect(
+    (await resumed.db.values(sql`SELECT next_batch FROM capture_epoch_transition`))[0][0],
+  ).toBe(0);
+  expect((await resumed.db.values(sql`SELECT count(*) FROM capture_migration_history`))[0][0]).toBe(
+    0,
+  );
+  expect(
+    (await resumed.db.values(sql`SELECT inventory_id FROM card WHERE id='seeded'`))[0][0],
+  ).toBe("i");
+  expect((await inspectAssetManifest(resumed.db, staged.owner)).record.state).toBe("pending");
+  await expect(resumed.db.run(sql`INSERT INTO scope VALUES('raw','unstamped')`)).rejects.toThrow();
+  expect((await stageCaptureInitialization(core, repairing)).changed).toBe(false);
+  expect(await repairCaptureInitialization(core, repairing)).toEqual({ changed: true });
+  await prepareCaptureInitialization(core, repairing, factory, f.catalog, f.read);
+  await activateCaptureInitialization(core, repairing, f.read);
+  await (await openCapturePrototype(core)).verify();
+});
 it("resumes a staged initial baseline across restarts while preserving seeded rows and local metadata", async () => {
   const f = await fixture(),
     staged = await stageCaptureInitialization(f.core, identity, f.catalog);
@@ -143,11 +246,13 @@ it("preserves blocking and image protection after failed activation commit and c
   expect((await inspectAssetManifest(resumed.db, staged.owner)).record.state).toBe("released");
   await (await openCapturePrototype(core)).verify();
 });
-it.each(["stage", "activation"] as const)(
+it.each(["stage", "repair", "activation"] as const)(
   "serializes %s with another connection's application writes and cleanup",
   async (phase) => {
     const f = await fixture(),
       other = await open(f.path);
+    const requested = phase === "repair" ? repairing : identity;
+    if (phase === "repair") await stageCaptureInitialization(f.core, requested, f.catalog);
     if (phase === "activation") {
       await stageCaptureInitialization(f.core, identity, f.catalog);
       await prepareCaptureInitialization(f.core, identity, factory, f.catalog, f.read);
@@ -167,7 +272,9 @@ it.each(["stage", "activation"] as const)(
     const pending =
       phase === "stage"
         ? stageCaptureInitialization(wrapped, identity, f.catalog)
-        : activateCaptureInitialization(wrapped, identity, f.read);
+        : phase === "repair"
+          ? repairCaptureInitialization(wrapped, requested)
+          : activateCaptureInitialization(wrapped, identity, f.read);
     const settled = pending.then(
       (result) => ({ result, error: null }),
       (error) => ({ result: null, error }),
@@ -183,7 +290,7 @@ it.each(["stage", "activation"] as const)(
       await expect(
         other.db.run(sql`INSERT INTO scope VALUES('raw','unstamped')`),
       ).rejects.toThrow();
-      if (phase === "activation") {
+      if (phase !== "stage") {
         const pin = await other.db.values(
           sql`SELECT owner_id,state FROM local_asset_manifest WHERE owner_kind='pending-work'`,
         );

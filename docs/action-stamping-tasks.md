@@ -747,7 +747,7 @@ remain pending. See [combined checkpoint capture](recovery-checkpoint-capture.md
 
 The capture prototype now stages initial enablement for empty, seeded and
 populated canonical databases. Guard installation, provisional rows, initial
-image protection and a blocking zero-batch transition commit together. Candidate
+image protection and a blocking initialization transition commit together. Candidate
 validation reuses the epoch protocol. Activation and initial staging-pin release
 commit together while the retained baseline owner protects image bytes. Failed
 validation and commits remain resumable without recapturing provisional rows or
@@ -796,6 +796,16 @@ Replay savepoints can reject reuse and continue with fresh providers, including
 an explicit retry after root rollback. Native and Node WASM tests cover reuse,
 concurrent admission, failed commits and fresh retries. Production integration
 remains pending. See [root provider ownership](action-execution-scopes.md#invocations-and-allocations).
+
+Initial capture staging now supports an explicitly requested inventory repair
+batch. The repair and its progress commit together under the migration marker
+and writer lock, with staging protection verified in the same transaction.
+Preparation refuses incomplete batches. Committed repairs acknowledge retries
+without repeating work, including after preparation, activation and restart.
+Native and Node WASM tests cover exact row and timestamp preservation, failure
+rollback and explicit plan selection. Native file tests cover restart and
+competing writes, cleanup and pin release. Production initialization remains
+pending. See [initial inventory repair](prototype-capture-initialization.md#run-requested-inventory-repair).
 
 ## Version one
 
@@ -877,6 +887,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [ ] Add workspace and epoch identities, schema and encoding versions, baseline hashes and restoration selections.
 - [ ] Implement restartable initial baseline capture for populated and seeded databases with application writes blocked until activation.
 - [x] Prototype initial baseline staging with atomic guard installation, persistent write blocking and pending image protection. Validate candidates separately and atomically activate the first epoch with staging completion. Verify initialization and failure boundaries on native and Node WASM adapters, plus native restart and cleanup contention.
+- [x] Support an explicitly requested inventory repair batch during prototype initialization. Commit repair and progress atomically, require completion before candidate validation, preserve initial protection and exact timestamps, and verify committed retries, failure rollback, restart and writer contention without repeating repair.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.

@@ -11,22 +11,29 @@ application routing remain pending.
 ## Stage a canonical source
 
 Start with an empty, seeded or populated database that already has the bundled
-schema and complete migration history. Finish required migration and repair
-before this prototype boundary. It does not run repair callbacks.
+schema and complete migration history. Finish schema migrations and repairs other
+than inventory repair before this prototype boundary.
 
 Choose an initialization ID and a first active epoch ID. The schema ID must be
 the current bundled migration. The epoch ID must differ from the fixture's
 provisional `initial` epoch.
 
+Include `repair: "inventories"` to request inventory repair before validation.
+Omit that property when no repair is needed. The chosen plan becomes immutable
+at the staging commit.
+
 ```ts
-const initialization = { id, epochId, schemaId };
+const initialization = { id, epochId, schemaId, repair: "inventories" as const };
 const staged = await stageCaptureInitialization(db, initialization, catalog);
 ```
 
 `stageCaptureInitialization` owns the identities and catalog before asynchronous
 work. One transaction captures provisional shared rows and image requirements,
 installs capture guards and an empty execution context, reserves an initial
-pending-work image owner and records a zero-batch epoch transition.
+pending-work image owner and records the epoch transition. The transition has
+one inventory repair batch when requested, or no batches otherwise. The repair
+plan participates in the pin identity. Requests without repair retain the
+existing pin identity and zero-batch behavior.
 
 That commit blocks ordinary shared inserts, updates and deletes. No-op action
 entry and restoration are blocked too. Another connection cannot write through
@@ -39,10 +46,44 @@ Matching retries reuse the persisted state without recapturing provisional rows.
 Conflicting identities, unrelated capture fixtures, unsupported schemas and
 temporary schema objects are refused.
 
+## Run requested inventory repair
+
+For a staged request with `repair: "inventories"`, run repair before preparing the
+initial baseline.
+
+```ts
+await repairCaptureInitialization(db, initialization);
+```
+
+The helper runs the same inventory repair implementation used by `system.repair`
+as the pinned `initial-inventory-repair:v1` migration batch. It clears half placements, resolves
+overlaps and removes stored cards from glue groups. It preserves exact card
+timestamps, local taskspace metadata and the provisional baseline. It publishes
+no action executions or effects. The first active baseline includes the repaired
+rows.
+
+The repair transaction owns the migration marker and writer lock. It checks the
+initial staging pin, guards, foreign keys, connection flags and archived history.
+Data changes, batch history, progress and marker cleanup commit together. A failed
+statement, failed commit or remaining foreign-key violation rolls them all back.
+Shared writes stay blocked, and pending image protection remains intact.
+
+Matching retries return `changed: false` without invoking repair after its batch
+commits. This also holds after candidate preparation and completed activation.
+Later action changes remain intact. Restart recovery uses the same request and
+checks durable progress instead of repeating committed repair.
+
+Changing or adding a repair plan after staging is refused. Repair is never
+automatic, and calling this helper without a requested inventory repair is an
+error. Exact restoration does not invoke repair. Other validation failures remain
+blocked for separate recovery.
+
 ## Validate the initial baseline
 
 Prepare the candidate with a separate empty validation database factory and a
-trusted image reader.
+trusted image reader. Requested repair batches must already be complete.
+An incomplete batch refuses
+preparation before allocating a validation database or reserving a candidate pin.
 
 ```ts
 const prepared = await prepareCaptureInitialization(
@@ -91,7 +132,10 @@ restart. Preparation returns the candidate's separate `owner` and `sha256`.
 
 `db/api/action-initialization.test.ts` covers empty and populated sources, blocked
 writes, invalid rows, exact identities, temporary schema refusal, image
-verification and failure at each commit. It runs in the
+verification and failure at each commit. Repair tests cover overlaps, glue groups,
+legacy half placements, exact timestamps including unsafe integers, explicit plan
+selection, incomplete batches, failed repair and commit rollback, and retained
+staging protection. It runs in the
 [fixed capture gate](action-capture-prototype.md#run-the-checks) on native and
 Node WASM adapters.
 
@@ -99,6 +143,8 @@ Node WASM adapters.
 connections. It exercises restarts before preparation, after failed validation,
 after candidate preparation and after failed activation. Competing writes,
 cleanup and owner release cannot cross a held staging or activation transaction.
+Repair tests reopen before and after its commit, recover a failed repair commit
+and refuse competing writes, cleanup and pin release during a held repair batch.
 
 Browser runtime verification and production initialization integration remain
 pending. The existing fixture installer remains an immediate setup helper for

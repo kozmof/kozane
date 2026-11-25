@@ -6,6 +6,7 @@ import {
   prepareCaptureInitialization,
   activateCaptureInitialization,
   captureInitializationOwner,
+  repairCaptureInitialization,
 } from "../../test-utils/action-initialization.js";
 import {
   openCapturePrototype,
@@ -25,9 +26,12 @@ import { defineActionRegistry } from "../../../../core/src/actions/registry.js";
 import { runActionGroup } from "../../../../core/src/actions/execution.js";
 import { createActionBindings } from "../../../../core/src/actions/bindings.js";
 import { buildAssetManifest } from "../../../../core/src/actions/asset-manifest.js";
+import { findInventoryConflicts } from "../../../../core/src/api/inventory.js";
+import { INVENTORY_COLUMNS } from "../../../../core/src/constants/index.js";
 
 const factory = async () => (await createTestDB()) as unknown as DB;
 const identity = { id: "initial-enable", epochId: "first-active", schemaId: migrations.at(-1)!.id };
+const repairing = { ...identity, repair: "inventories" as const };
 const rows = async (db: DB, query: string) =>
   (await db.values(sql.raw(query))).map((row) => Array.from(row));
 const state = (db: DB) =>
@@ -47,6 +51,37 @@ async function fixture(populated = true) {
       sql`INSERT INTO taskspace_local VALUES('absent','local/retained','workspace_relative',9007199254740993)`,
     );
   }
+  return db;
+}
+async function repairFixture() {
+  const db = await fixture();
+  await db.run(sql`INSERT INTO namespace(id,name) VALUES('n','Main')`);
+  await db.run(sql`INSERT INTO layer(id,namespace_id,name) VALUES('l','n','Base')`);
+  await db.run(sql`INSERT INTO partition(id,namespace_id,name) VALUES('p','n','Inbox')`);
+  await db.run(sql`INSERT INTO inventory(id,namespace_id,name) VALUES('i','n','Box')`);
+  for (const [id, content, slot] of [
+    ["a", "word ".repeat(40), 0],
+    ["b", "Below", INVENTORY_COLUMNS],
+    ["c", "Glued", 1],
+    ["d", "Partner", null],
+    ["half", "Half placed", null],
+  ] as const) {
+    await db.run(
+      sql`INSERT INTO card(id,partition_id,layer_id,content,inventory_id,inventory_slot,created_at,updated_at) VALUES(${id},'p','l',${content},${slot === null ? null : "i"},${slot},1600000000,1600000000)`,
+    );
+  }
+  await db.run(sql`INSERT INTO glue VALUES('g')`);
+  await db.run(sql`INSERT INTO glue_rel VALUES('g','c'),('g','d')`);
+  const trigger = (
+    await rows(db, "SELECT sql FROM sqlite_schema WHERE name='card_inventory_pair_update'")
+  )[0][0];
+  await db.run(sql`DROP TRIGGER card_inventory_pair_update`);
+  await db.run(sql`UPDATE card SET inventory_id='i' WHERE id='half'`);
+  await db.run(sql.raw(String(trigger)));
+  await db.run(sql`UPDATE card SET created_at=0,updated_at=-1 WHERE id='d'`);
+  await db.run(
+    sql`UPDATE card SET created_at=9007199254740993,updated_at=9007199254740993 WHERE id='half'`,
+  );
   return db;
 }
 function run(
@@ -85,6 +120,190 @@ function run(
     ...capture.hooks("first-run"),
   });
 }
+it("repairs an explicitly requested initial batch once before baseline validation and activation", async () => {
+  const db = await repairFixture();
+  const localBefore = await rows(
+    db,
+    "SELECT taskspace_id,path,path_kind,CAST(last_seen_at AS TEXT) FROM taskspace_local",
+  );
+  const timestamps = await rows(
+    db,
+    "SELECT id,CAST(created_at AS TEXT),CAST(updated_at AS TEXT) FROM card ORDER BY id",
+  );
+  const staged = await stageCaptureInitialization(db, repairing);
+  const original = await rows(db, "SELECT rows,asset_manifest FROM capture_baseline");
+  expect(staged.request.batches).toEqual(["initial-inventory-repair:v1"]);
+  expect(staged.owner).not.toEqual(await captureInitializationOwner(identity));
+  const validation = vi.fn(factory);
+  await expect(prepareCaptureInitialization(db, repairing, validation)).rejects.toThrow(
+    "batches are incomplete",
+  );
+  expect(validation).not.toHaveBeenCalled();
+  expect(await repairCaptureInitialization(db, repairing)).toEqual({ changed: true });
+  expect(await state(db)).toEqual([[1, "active", 0]]);
+  expect(await findInventoryConflicts({ db })).toEqual({
+    overlapping: [],
+    glued: [],
+    halfPlaced: [],
+  });
+  expect(await rows(db, "SELECT rows,asset_manifest FROM capture_baseline")).toEqual(original);
+  expect(
+    await rows(
+      db,
+      "SELECT id,CAST(created_at AS TEXT),CAST(updated_at AS TEXT) FROM card ORDER BY id",
+    ),
+  ).toEqual(timestamps);
+  expect(
+    await rows(
+      db,
+      "SELECT taskspace_id,path,path_kind,CAST(last_seen_at AS TEXT) FROM taskspace_local",
+    ),
+  ).toEqual(localBefore);
+  expect(
+    await rows(db, "SELECT 1 FROM capture_run UNION ALL SELECT 1 FROM capture_effect"),
+  ).toEqual([]);
+  expect(await rows(db, "SELECT batch,batch_id FROM capture_migration_history")).toEqual([
+    [0, "initial-inventory-repair:v1"],
+  ]);
+  expect(await rows(db, "SELECT mode,run_id,action_id FROM capture_context")).toEqual([
+    ["record", null, null],
+  ]);
+  expect(await rows(db, "SELECT transition_id,batch FROM capture_migration_boundary")).toEqual([
+    [null, null],
+  ]);
+  await db.run(
+    sql`CREATE TRIGGER refuse_repair_reexecution BEFORE UPDATE OF inventory_id,inventory_slot ON card BEGIN SELECT RAISE(ABORT,'Repair repeated'); END`,
+  );
+  expect(await repairCaptureInitialization(db, repairing)).toEqual({ changed: false });
+  await expect(run(db, await openCapturePrototype(db), null)).rejects.toThrow("blocked");
+  await prepareCaptureInitialization(db, repairing, factory);
+  expect(await repairCaptureInitialization(db, repairing)).toEqual({ changed: false });
+  await activateCaptureInitialization(db, repairing);
+  await run(db, await openCapturePrototype(db), "Later action");
+  const after = await captureApplicationRows(db);
+  expect(await repairCaptureInitialization(db, repairing)).toEqual({ changed: false });
+  expect(await captureApplicationRows(db)).toEqual(after);
+  expect(await stageCaptureInitialization(db, repairing)).toEqual({ ...staged, changed: false });
+});
+
+it.each(["statement", "commit"] as const)(
+  "rolls initial repair and progress back after a failed %s",
+  async (phase) => {
+    const db = await repairFixture();
+    await stageCaptureInitialization(db, repairing);
+    const before = await captureApplicationRows(db);
+    if (phase === "statement")
+      await db.run(
+        sql`CREATE TRIGGER refuse_initial_unglue BEFORE DELETE ON glue_rel BEGIN SELECT RAISE(ABORT,'Initial repair interrupted'); END`,
+      );
+    const wrapped =
+      phase === "statement"
+        ? db
+        : createDatabaseAdapter(new Proxy(db, {}), {
+            read: (work) => withReadTx(db, (tx) => work(tx as unknown as DatabaseHandle)),
+            write: (work) =>
+              withTx(db, async (tx) => {
+                await work(tx);
+                throw Error("Initial repair commit failed");
+              }),
+          });
+    await expect(repairCaptureInitialization(wrapped, repairing)).rejects.toThrow();
+    expect(await captureApplicationRows(db)).toEqual(before);
+    expect(await state(db)).toEqual([[0, "active", 0]]);
+    expect(await rows(db, "SELECT 1 FROM capture_migration_history")).toEqual([]);
+    expect(await rows(db, "SELECT mode FROM capture_context")).toEqual([["record"]]);
+    expect(await rows(db, "SELECT transition_id,batch FROM capture_migration_boundary")).toEqual([
+      [null, null],
+    ]);
+    expect(await rows(db, "SELECT state FROM local_asset_manifest")).toEqual([["pending"]]);
+    if (phase === "statement") await db.run(sql`DROP TRIGGER refuse_initial_unglue`);
+    expect(await repairCaptureInitialization(db, repairing)).toEqual({ changed: true });
+    expect(await findInventoryConflicts({ db })).toEqual({
+      overlapping: [],
+      glued: [],
+      halfPlaced: [],
+    });
+  },
+);
+
+it("does not commit inventory repair when unrelated foreign keys remain invalid", async () => {
+  const db = await repairFixture();
+  await db.values(sql`PRAGMA foreign_keys=OFF`);
+  await db.run(sql`INSERT INTO warp(id,namespace_id,pos_x,pos_y) VALUES('invalid','missing',0,0)`);
+  await db.values(sql`PRAGMA foreign_keys=ON`);
+  await stageCaptureInitialization(db, repairing);
+  const before = await captureApplicationRows(db);
+  await expect(repairCaptureInitialization(db, repairing)).rejects.toThrow(
+    "foreign-key check failed",
+  );
+  expect(await captureApplicationRows(db)).toEqual(before);
+  expect(await state(db)).toEqual([[0, "active", 0]]);
+  expect(await rows(db, "SELECT 1 FROM capture_migration_history")).toEqual([]);
+});
+
+it("keeps initial repair explicit and rejects changed or unsupported repair plans", async () => {
+  const db = await repairFixture();
+  await stageCaptureInitialization(db, identity);
+  const before = await captureApplicationRows(db);
+  await expect(repairCaptureInitialization(db, identity)).rejects.toThrow("not requested");
+  await expect(stageCaptureInitialization(db, repairing)).rejects.toThrow("missing or different");
+  await expect(repairCaptureInitialization(db, repairing)).rejects.toThrow("missing or different");
+  await expect(prepareCaptureInitialization(db, identity, factory)).rejects.toThrow();
+  expect(await captureApplicationRows(db)).toEqual(before);
+  expect(await state(db)).toEqual([[0, "active", 0]]);
+  const other = await fixture();
+  await expect(
+    stageCaptureInitialization(other, { ...identity, repair: "all" as "inventories" }),
+  ).rejects.toThrow("Invalid initial capture");
+  expect(await rows(other, "SELECT 1 FROM sqlite_schema WHERE name='capture_epoch'")).toEqual([]);
+  const planned = await repairFixture();
+  await stageCaptureInitialization(planned, repairing);
+  await expect(stageCaptureInitialization(planned, identity)).rejects.toThrow(
+    "missing or different",
+  );
+});
+
+it("owns the requested repair plan before asynchronous staging and repair", async () => {
+  const db = await repairFixture();
+  const input: { id: string; epochId: string; schemaId: string; repair?: "inventories" } = {
+    ...repairing,
+  };
+  const staging = stageCaptureInitialization(db, input);
+  input.repair = undefined;
+  expect((await staging).request.batches).toEqual(["initial-inventory-repair:v1"]);
+  const requested = { ...repairing };
+  const pending = repairCaptureInitialization(db, requested);
+  Reflect.set(requested, "repair", undefined);
+  expect(await pending).toEqual({ changed: true });
+  expect(await state(db)).toEqual([[1, "active", 0]]);
+});
+
+it.each(["temporary schema", "released pin"] as const)(
+  "refuses initial repair with %s and preserves rows",
+  async (failure) => {
+    const db = await repairFixture();
+    await stageCaptureInitialization(db, repairing);
+    const before = await captureApplicationRows(db);
+    const wrapped = createDatabaseAdapter(new Proxy(db, {}), {
+      read: (work) => withReadTx(db, (tx) => work(tx as unknown as DatabaseHandle)),
+      write: (work) =>
+        withTx(db, async (tx) => {
+          if (failure === "temporary schema")
+            await tx.run(sql`CREATE TEMP TABLE repair_shadow(id INTEGER)`);
+          return work(tx);
+        }),
+    });
+    if (failure === "released pin")
+      await db.run(
+        sql`UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Cancelled' WHERE owner_kind='pending-work'`,
+      );
+    await expect(repairCaptureInitialization(wrapped, repairing)).rejects.toThrow(
+      failure === "temporary schema" ? "temporary schema" : "staging protection is not active",
+    );
+    expect(await captureApplicationRows(db)).toEqual(before);
+    expect(await state(db)).toEqual([[0, "active", 0]]);
+  },
+);
 it.each([false, true])(
   "stages and activates an initial baseline with writes blocked between commits (populated=%s)",
   async (populated) => {

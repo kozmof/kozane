@@ -65,6 +65,8 @@ cleanup and restart without releasing earlier history owners.
 durable boundary for empty, seeded and populated test databases. It commits guards,
 write blocking and pending image protection before candidate validation, then
 activates the initial baseline and completes staging in one transaction.
+An explicitly requested inventory repair batch commits before validation and
+acknowledges completed retries without repeating repair.
 
 ## Capture before driver conversion
 

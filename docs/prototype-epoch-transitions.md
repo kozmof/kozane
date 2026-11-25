@@ -9,9 +9,10 @@ The tables and guards exist only in test databases. Production epoch tables,
 migration hooks and activation remain pending.
 
 [Initial capture staging](prototype-capture-initialization.md) reuses this
-protocol with a provisional source epoch and no migration batches. It blocks
-shared writes before baseline validation and completes its staging pin transfer
-with first activation.
+protocol with a provisional source epoch and no batches by default. An explicitly
+requested inventory repair uses one durable batch before validation. Initial
+staging blocks shared writes before baseline validation and completes its pin
+transfer with first activation.
 
 ## Establish a transition
 

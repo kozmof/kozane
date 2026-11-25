@@ -20,6 +20,7 @@ import {
   beginCaptureEpochTransitionInTx,
   activateCaptureEpochInTx,
   prepareCaptureEpochBaseline,
+  runCaptureMigrationBatchInTx,
   type PrototypeEpochTransition,
 } from "./action-epochs.js";
 import {
@@ -28,18 +29,22 @@ import {
   releaseAssetManifestInTx,
   type AssetManifestOwner,
 } from "../db/api/asset-manifest.js";
+import { runRequestedRepairInTx } from "../../../core/src/actions/repair.js";
+import { createServiceContext } from "../../../core/src/services/context.js";
 
 export interface PrototypeCaptureInitialization {
   readonly id: string;
   readonly epochId: string;
   readonly schemaId: string;
+  readonly repair?: "inventories";
 }
 const emptyAssets: AssetManifest = Object.freeze({ version: 1, entries: Object.freeze([]) });
 const releaseReason = "Initial capture epoch activated";
+const inventoryRepairBatch = "initial-inventory-repair:v1";
 const local = (tx: Tx | ReadTx) => tx as unknown as Parameters<typeof readAssetManifest>[0];
 const localWrite = (tx: Tx) => tx as unknown as Parameters<typeof reserveAssetManifestInTx>[0];
 function own(input: PrototypeCaptureInitialization) {
-  const { id, epochId, schemaId } = input;
+  const { id, epochId, schemaId, repair } = input;
   if (
     [id, epochId, schemaId].some(
       (value) =>
@@ -50,7 +55,8 @@ function own(input: PrototypeCaptureInitialization) {
         !value.isWellFormed(),
     ) ||
     epochId === "initial" ||
-    schemaId !== migrations.at(-1)!.id
+    schemaId !== migrations.at(-1)!.id ||
+    (repair !== undefined && repair !== "inventories")
   )
     throw Error("Invalid initial capture identity or schema");
   const request: PrototypeEpochTransition = Object.freeze({
@@ -59,16 +65,24 @@ function own(input: PrototypeCaptureInitialization) {
     sourceSchema: schemaId,
     targetEpoch: epochId,
     targetSchema: schemaId,
-    batches: Object.freeze([]),
+    batches: Object.freeze(repair === "inventories" ? [inventoryRepairBatch] : []),
   });
-  return { identity: Object.freeze({ id, epochId, schemaId }), request };
+  return {
+    identity: Object.freeze({ id, epochId, schemaId, ...(repair === undefined ? {} : { repair }) }),
+    request,
+  };
 }
 export async function captureInitializationOwner(
   input: PrototypeCaptureInitialization,
 ): Promise<AssetManifestOwner> {
   const { identity } = own(input);
   const bytes = new TextEncoder().encode(
-    JSON.stringify([identity.id, identity.epochId, identity.schemaId]),
+    JSON.stringify([
+      identity.id,
+      identity.epochId,
+      identity.schemaId,
+      ...(identity.repair === undefined ? [] : [inventoryRepairBatch]),
+    ]),
   );
   const digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes));
   return Object.freeze({
@@ -161,6 +175,28 @@ export async function stageCaptureInitialization(
     await record(tx, request, owner);
     await verifyActionConnection((query) => tx.values(sql.raw(query)));
     return Object.freeze({ changed: true, request, owner });
+  });
+}
+/** Explicit inventory repair and durable progress commit together while shared writes stay blocked. */
+export async function repairCaptureInitialization(db: DB, input: PrototypeCaptureInitialization) {
+  const { identity, request } = own(input);
+  if (identity.repair !== "inventories")
+    throw Error("Initial capture inventory repair was not requested");
+  const owner = await captureInitializationOwner(identity);
+  return withTx(db, async (tx) => {
+    await configureActionConnection((query) => tx.values(sql.raw(query)));
+    await tx.run(sql`UPDATE capture_epoch SET epoch_id=epoch_id WHERE 0`);
+    const current = await record(tx, request, owner);
+    if (current.state === "completed") {
+      await activateCaptureEpochInTx(tx, request);
+      return Object.freeze({ changed: false });
+    }
+    const result = await runCaptureMigrationBatchInTx(tx, request, 0, async (handle) => {
+      await runRequestedRepairInTx(handle, createServiceContext(), { target: "inventories" });
+    });
+    await record(tx, request, owner);
+    await verifyActionConnection((query) => tx.values(sql.raw(query)));
+    return Object.freeze(result);
   });
 }
 /** Baseline validation and candidate protection reuse the restartable epoch protocol. */
