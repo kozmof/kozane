@@ -229,6 +229,15 @@ replace the sources used for recorded IDs and clock readings. Replay also copies
 its original binding map. An unbound replay allocation fails the root even when
 the handler catches the error after earlier writes.
 
+Each root attempt requires a fresh binding provider. The scope claims it after
+contract, identity and eligibility checks pass, before opening the root boundary.
+Reusing it for another root fails before handlers or persistence hooks, including
+concurrent attempts and reuse after rollback or a failed commit. Preflight
+rejection leaves an unused provider available. To retry, construct a new provider.
+For replay, pass the original immutable binding map to the new provider so it
+retains the recorded values without calling allocation sources. A rejected reuse
+does not change earlier returned records.
+
 Replay binding maps and entries require plain objects with enumerable data
 fields. Entries contain exactly `type` and `value`. Arrays, inherited fields,
 hidden fields, symbols and accessors are refused without invoking getters or

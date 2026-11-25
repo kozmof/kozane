@@ -8,6 +8,7 @@ import type { DB, Tx } from "../../../../core/src/database.js";
 import {
   createActionBindings,
   type ActionBindingMap,
+  type ActionBindings,
 } from "../../../../core/src/actions/bindings.js";
 import {
   runActionGroup,
@@ -114,17 +115,20 @@ async function fixture(
     generated: ActionBindingMap = {},
     input: Inputs["root"] = {},
     contractVersion = 1,
+    provider?: ActionBindings,
+    rootId = "root-id",
   ) => {
     let next = 0;
     return runActionGroup({
       db,
       schemaVersion: 19,
       registry,
-      invocation: { id: "root-id", kind: "root", contractVersion, input },
+      invocation: { id: rootId, kind: "root", contractVersion, input },
       bindings:
-        mode === "record"
+        provider ??
+        (mode === "record"
           ? createActionBindings({ mode, allocateId: () => allocateId(++next), now: () => 123 })
-          : createActionBindings({ mode, bindings: generated }),
+          : createActionBindings({ mode, bindings: generated })),
       createContext: (actions, handle) => ({
         db: handle,
         actions,
@@ -169,6 +173,144 @@ async function audit(f: Awaited<ReturnType<typeof fixture>>) {
 async function marker(f: Awaited<ReturnType<typeof fixture>>) {
   return f.db.select({ id: sql<string | null>`action_id` }).from(sql`execution_marker`);
 }
+
+it("refuses a recording provider reused by a different root before hooks or stale allocations", async () => {
+  const allocateId = vi.fn(() => "entity");
+  const now = vi.fn(() => 123);
+  const provider = createActionBindings({ mode: "record", allocateId, now });
+  const handler = vi.fn(
+    async (_input: Inputs["root"], { bindings, context }: Parameters<Handlers["root"]>[1]) => {
+      const id = bindings.entityId("entity");
+      bindings.clock("created");
+      await context.db.run(sql`INSERT INTO execution_value VALUES(${id},1)`);
+      return id;
+    },
+  );
+  const f = await fixture({ root: handler });
+  const first = await f.execute("record", {}, {}, 1, provider, "first-root");
+  await expect(f.execute("record", {}, {}, 1, provider, "second-root")).rejects.toThrow(
+    "Binding provider has already been used",
+  );
+  expect(handler).toHaveBeenCalledOnce();
+  expect(f.enter).toHaveBeenCalledOnce();
+  expect(allocateId).toHaveBeenCalledOnce();
+  expect(now).toHaveBeenCalledOnce();
+  expect(provider.snapshot()).toEqual(first.generated);
+  expect(await stored(f)).toEqual([{ id: "entity", value: 1 }]);
+});
+
+it.each(["record", "replay"] as const)(
+  "does not consume %s providers rejected by contract preflight",
+  async (mode) => {
+    const provider =
+      mode === "record"
+        ? createActionBindings({ mode, allocateId: () => "unused", now: () => 123 })
+        : createActionBindings({ mode, bindings: {} });
+    const f = await fixture();
+    await expect(f.execute(mode, {}, {}, 2, provider)).rejects.toMatchObject({
+      code: "action-contract-required",
+    });
+    await expect(f.execute(mode, {}, {}, 1, provider)).resolves.toBeDefined();
+    await expect(f.execute(mode, {}, {}, 1, provider)).rejects.toThrow(
+      "Binding provider has already been used",
+    );
+    expect(f.enter).toHaveBeenCalledOnce();
+  },
+);
+
+it.each(["handler", "completion", "commit"] as const)(
+  "requires a fresh provider after a failed %s",
+  async (phase) => {
+    const failure = new Error("first attempt failed");
+    let shouldFail = true;
+    let next = 0;
+    const sources = {
+      mode: "record" as const,
+      allocateId: () => `entity-${++next}`,
+      now: () => 123,
+    };
+    const provider = createActionBindings(sources);
+    const handler = vi.fn(
+      async (_input: Inputs["root"], { bindings, context }: Parameters<Handlers["root"]>[1]) => {
+        const id = bindings.entityId("entity");
+        await context.db.run(sql`INSERT INTO execution_value VALUES(${id},1)`);
+        if (phase === "handler" && shouldFail) throw failure;
+        return id;
+      },
+    );
+    const f = await fixture({ root: handler }, undefined, async (tx) => {
+      if (phase === "completion" && shouldFail) throw failure;
+      if (phase === "commit" && shouldFail)
+        await tx.run(sql`INSERT INTO provider_deferred VALUES('missing')`);
+    });
+    if (phase === "commit") {
+      await f.db.run(sql`CREATE TABLE provider_parent(id TEXT PRIMARY KEY)`);
+      await f.db.run(
+        sql`CREATE TABLE provider_deferred(id TEXT REFERENCES provider_parent(id) DEFERRABLE INITIALLY DEFERRED)`,
+      );
+      await expect(f.execute("record", {}, {}, 1, provider)).rejects.toBeDefined();
+    } else await expect(f.execute("record", {}, {}, 1, provider)).rejects.toBe(failure);
+    expect(await stored(f)).toEqual([]);
+    expect(await audit(f)).toEqual([]);
+    shouldFail = false;
+    await expect(f.execute("record", {}, {}, 1, provider)).rejects.toThrow(
+      "Binding provider has already been used",
+    );
+    expect(handler).toHaveBeenCalledOnce();
+    const fresh = await f.execute("record", {}, {}, 1, createActionBindings(sources));
+    expect(fresh.result).toBe("entity-2");
+    expect(await stored(f)).toEqual([{ id: "entity-2", value: 1 }]);
+  },
+);
+
+it("refuses concurrent root calls sharing a provider before a second boundary opens", async () => {
+  const provider = createActionBindings({
+    mode: "record",
+    allocateId: () => "unused",
+    now: () => 123,
+  });
+  const registry = defineActionRegistry<{ root: unknown }, unknown>({
+    contractVersion: 1,
+    schemaVersions: [19],
+    definitions: {
+      root: { eligibility: "syncable", prepare: (input) => input, replay: async () => {} },
+    },
+  });
+  const failure = new Error("boundary interrupted");
+  let reject!: (cause: unknown) => void;
+  const held = new Promise<never>((_resolve, fail) => {
+    reject = fail;
+  });
+  const firstBoundary = vi.fn(() => held);
+  const secondBoundary = vi.fn(async () => {
+    throw new Error("Second boundary opened");
+  });
+  const options = {
+    registry,
+    schemaVersion: 19,
+    invocation: { id: "first", kind: "root", contractVersion: 1, input: {} },
+    bindings: provider,
+    createContext: () => ({}),
+  };
+  const first = runActionGroupAtBoundary(options, firstBoundary);
+  try {
+    await expect(
+      runActionGroupAtBoundary(
+        { ...options, invocation: { ...options.invocation, id: "second" } },
+        secondBoundary,
+      ),
+    ).rejects.toThrow("Binding provider has already been used");
+    expect(firstBoundary).toHaveBeenCalledOnce();
+    expect(secondBoundary).not.toHaveBeenCalled();
+  } finally {
+    reject(failure);
+    await expect(first).rejects.toBe(failure);
+  }
+  await expect(runActionGroupAtBoundary(options, secondBoundary)).rejects.toThrow(
+    "Binding provider has already been used",
+  );
+  expect(secondBoundary).not.toHaveBeenCalled();
+});
 
 it("attributes nested and effect-free children in handler-entry order", async () => {
   const f = await fixture({

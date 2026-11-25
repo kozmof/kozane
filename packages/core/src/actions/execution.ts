@@ -59,6 +59,7 @@ interface Frame {
   open: boolean;
   child: Promise<void> | null;
 }
+const usedBindingProviders = new WeakSet<ActionBindings>();
 export function freezeActionInput(input: unknown): unknown {
   if (input !== null && typeof input === "object") {
     for (const value of Object.values(input)) freezeActionInput(value);
@@ -71,6 +72,7 @@ export interface ActionGroupOptions<Inputs extends object, C> {
   readonly schemaVersion: number;
   readonly registry: ReturnType<typeof defineActionRegistry<Inputs, C>>;
   readonly invocation: ActionInvocation;
+  /** One fresh provider per root attempt that passes preflight. */
   readonly bindings: ActionBindings;
   readonly createContext: (frame: ActionFrameAccess, db: Tx) => C;
   readonly enter?: (db: Tx, execution: Omit<ActionExecutionRecord, "generated">) => Promise<void>;
@@ -107,6 +109,9 @@ export async function runActionGroupAtBoundary<Inputs extends object, C>(
   if (!isActionIdentity(invocation.id) || !isActionIdentity(invocation.kind))
     throw new ActionExecutionError("Root action requires a valid ID and kind");
   registry.assertSyncable(invocation.kind);
+  if (usedBindingProviders.has(bindings))
+    throw new ActionExecutionError("Binding provider has already been used by a root");
+  usedBindingProviders.add(bindings);
   return boundary(async (tx) => {
     const executeConnection = (statement: string) => tx.values(sql.raw(statement));
     await configureActionConnection(executeConnection);

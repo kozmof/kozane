@@ -448,6 +448,39 @@ it("requires replay bindings and rejects incompatible contracts before handlers"
   expect(root).toHaveBeenCalledOnce();
 });
 
+it("isolates a reused replay provider and continues with a fresh provider", async () => {
+  const f = await fixture();
+  const first = f.options("first");
+  await withActionReplayTransaction(f.db, async ({ replay }) => {
+    await replay(first);
+    await expect(replay({ ...f.options("reused"), bindings: first.bindings })).rejects.toThrow(
+      "Binding provider has already been used",
+    );
+    await replay(f.options("fresh"));
+  });
+  expect(await values(f.db)).toEqual([
+    { id: "first", value: 1 },
+    { id: "fresh", value: 1 },
+  ]);
+  expect(await groups(f.db)).toEqual([{ id: "first" }, { id: "fresh" }]);
+  expect(await marker(f.db)).toEqual([{ id: null }]);
+});
+
+it("requires fresh replay bindings after root rollback while allowing an explicit retry", async () => {
+  const f = await fixture();
+  const failed = f.options("retry", true);
+  await withActionReplayTransaction(f.db, async ({ db, replay }) => {
+    await expect(replay(failed)).rejects.toBe(failure);
+    await expect(replay({ ...f.options("retry"), bindings: failed.bindings })).rejects.toThrow(
+      "Binding provider has already been used",
+    );
+    expect(await values(db)).toEqual([]);
+    await replay(f.options("retry"));
+  });
+  expect(await values(f.db)).toEqual([{ id: "retry", value: 1 }]);
+  expect(await groups(f.db)).toEqual([{ id: "retry" }]);
+});
+
 it("rejects an outer deferred commit failure without preserving released root savepoints", async () => {
   const f = await fixture();
   await f.db.run(sql`CREATE TABLE replay_parent(id TEXT PRIMARY KEY)`);
