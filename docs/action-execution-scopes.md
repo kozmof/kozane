@@ -229,6 +229,20 @@ replace the sources used for recorded IDs and clock readings. Replay also copies
 its original binding map. An unbound replay allocation fails the root even when
 the handler catches the error after earlier writes.
 
+Replay binding maps and entries require plain objects with enumerable data
+fields. Entries contain exactly `type` and `value`. Arrays, inherited fields,
+hidden fields, symbols and accessors are refused without invoking getters or
+serialization hooks. Null-prototype objects and property-like paths remain
+supported. Allocation paths must be nonempty strings.
+
+Each provider uses recovery's limits of 100,000 nodes and 8,388,608 UTF-16 string
+units. The map counts as one node, and each entry adds its object and two scalar
+nodes. String units include paths, field names, roles and string values. Recording
+refuses overflow before retaining a value and checks known costs before calling
+allocation sources. Existing bindings remain available when the budget is full.
+Failed allocations leave the provider's earlier map intact. A caught limit error
+still rolls back the action's earlier writes and history.
+
 `actions/allocations.ts` connects guarded handles to their handler's binding
 provider. Covered record helpers supply IDs and card timestamps explicitly before
 SQL execution. Handles outside an action retain their existing defaults. A closed

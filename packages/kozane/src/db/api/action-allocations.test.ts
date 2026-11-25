@@ -26,6 +26,10 @@ import {
 } from "../../../../core/src/actions/bindings.js";
 import { runActionGroup, type ActionFrameAccess } from "../../../../core/src/actions/execution.js";
 import { defineActionRegistry, type ActionHandler } from "../../../../core/src/actions/registry.js";
+import {
+  INPUT_MAX_NODES,
+  INPUT_MAX_STRING_UNITS,
+} from "../../../../core/src/services/prepare-input.js";
 
 type Input = Record<string, unknown>;
 type Inputs = { root: Input; create: Input };
@@ -109,6 +113,63 @@ async function fixture(root: ActionHandler<Input, Context>) {
 async function cardRows(db: DB | Tx) {
   return db.select().from(schema.cardTable).orderBy(schema.cardTable.id);
 }
+
+it("refuses replay getters before entering a handler or changing rows", async () => {
+  const handler = vi.fn(async () => {});
+  const f = await fixture(handler);
+  const getter = vi.fn().mockReturnValueOnce("valid").mockReturnValue("invalid\0id");
+  const before = await cardRows(f.db);
+  expect(() =>
+    f.run(
+      {},
+      {
+        a: {
+          type: "entity-id",
+          get value() {
+            return getter();
+          },
+        },
+      },
+    ),
+  ).toThrow(ActionBindingError);
+  expect(getter).not.toHaveBeenCalled();
+  expect(handler).not.toHaveBeenCalled();
+  expect(f.allocate).not.toHaveBeenCalled();
+  expect(f.now).not.toHaveBeenCalled();
+  expect(await cardRows(f.db)).toEqual(before);
+  expect(await f.db.all(sql`SELECT * FROM allocation_log`)).toEqual([]);
+});
+
+it.each(["nodes", "strings"] as const)(
+  "rolls back earlier service writes after a caught binding %s limit",
+  async (limit) => {
+    const caught = vi.fn();
+    const f = await fixture(async (_input, { context: execution, bindings }) => {
+      await execution.db
+        .update(schema.cardTable)
+        .set({ content: "pending edit" })
+        .where(eq(schema.cardTable.id, "first"));
+      if (limit === "nodes") {
+        const maximum = Math.floor((INPUT_MAX_NODES - 1) / 3);
+        for (let index = 0; index < maximum; index++) bindings.entityId(String(index));
+      }
+      try {
+        bindings.clock(limit === "nodes" ? "overflow" : "x".repeat(INPUT_MAX_STRING_UNITS));
+      } catch (cause) {
+        caught(cause);
+      }
+    });
+    const before = await cardRows(f.db);
+    await expect(f.run()).rejects.toThrow("exceed input limits");
+    expect(caught).toHaveBeenCalledOnce();
+    expect(f.now).not.toHaveBeenCalled();
+    expect(f.allocate).toHaveBeenCalledTimes(
+      limit === "nodes" ? Math.floor((INPUT_MAX_NODES - 1) / 3) : 0,
+    );
+    expect(await cardRows(f.db)).toEqual(before);
+    expect(await f.db.all(sql`SELECT * FROM allocation_log`)).toEqual([]);
+  },
+);
 
 it.each([" ", "entity\0id", "bad\ud800", "bad\udc00", "x".repeat(1001)])(
   "rolls back a caught unrecoverable service ID before insert: %j",

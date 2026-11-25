@@ -6,6 +6,10 @@ import {
   type ActionBindingMap,
 } from "../../../core/src/actions/bindings.js";
 import { bindings as recoveryBindings } from "../../../core/src/actions/recovery-action-data.js";
+import {
+  INPUT_MAX_NODES,
+  INPUT_MAX_STRING_UNITS,
+} from "../../../core/src/services/prepare-input.js";
 
 const path = (key: string) => actionBindingPath("cards.squash", "source-card", key);
 function recording() {
@@ -16,6 +20,154 @@ function recording() {
 }
 
 describe("action allocation bindings", () => {
+  it.each(["map", "type", "value"] as const)(
+    "refuses accessor-based replay %s fields without invoking them",
+    (field) => {
+      const getter = vi.fn(() =>
+        field === "type"
+          ? "entity-id"
+          : field === "value"
+            ? "original"
+            : { type: "entity-id", value: "original" },
+      );
+      const binding = { type: "entity-id", value: "original" };
+      const input = { a: binding };
+      Object.defineProperty(field === "map" ? input : binding, field === "map" ? "a" : field, {
+        get: getter,
+        enumerable: true,
+      });
+      expect(() =>
+        createActionBindings({ mode: "replay", bindings: input as ActionBindingMap }),
+      ).toThrow(ActionBindingError);
+      expect(getter).not.toHaveBeenCalled();
+    },
+  );
+
+  it("never copies an unchecked second value from a replay getter", () => {
+    const getter = vi.fn().mockReturnValueOnce("valid").mockReturnValue("invalid\0id");
+    const binding = {
+      type: "entity-id",
+      get value() {
+        return getter();
+      },
+    };
+    expect(() =>
+      createActionBindings({ mode: "replay", bindings: { a: binding } as ActionBindingMap }),
+    ).toThrow(ActionBindingError);
+    expect(getter).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["array map", (): unknown => []],
+    ["primitive map", (): unknown => 1],
+    ["class map", () => new Date()],
+    ["inherited map", () => Object.create({ a: { type: "entity-id", value: "id" } })],
+    [
+      "hidden map entry",
+      () => Object.defineProperty({}, "a", { value: { type: "entity-id", value: "id" } }),
+    ],
+    ["symbol map entry", () => ({ [Symbol("a")]: { type: "entity-id", value: "id" } })],
+    ["array binding", () => ({ a: Object.assign([], { type: "entity-id", value: "id" }) })],
+    ["inherited binding", () => ({ a: Object.create({ type: "entity-id", value: "id" }) })],
+    ["extra binding field", () => ({ a: { type: "entity-id", value: "id", extra: 1 } })],
+    [
+      "hidden binding field",
+      () => ({ a: Object.defineProperty({ type: "entity-id" }, "value", { value: "id" }) }),
+    ],
+    [
+      "symbol binding field",
+      () => ({ a: { type: "entity-id", value: "id", [Symbol("extra")]: 1 } }),
+    ],
+  ] as const)("refuses nonportable replay data: %s", (_label, input) => {
+    expect(() =>
+      createActionBindings({ mode: "replay", bindings: input() as ActionBindingMap }),
+    ).toThrow(ActionBindingError);
+  });
+
+  it("preserves plain null-prototype maps and property-like binding paths", () => {
+    const input = Object.create(null);
+    input.__proto__ = Object.assign(Object.create(null), { type: "entity-id", value: "id" });
+    const replay = createActionBindings({ mode: "replay", bindings: input });
+    expect(replay.entityId("__proto__")).toBe("id");
+    expect(recoveryBindings(replay.snapshot())).toEqual(replay.snapshot());
+  });
+
+  it("keeps node limits identical to recovery and refuses extra allocations without calling sources", () => {
+    const allocateId = vi.fn(() => "id");
+    const now = vi.fn(() => 1);
+    const record = createActionBindings({ mode: "record", allocateId, now });
+    const maximum = Math.floor((INPUT_MAX_NODES - 1) / 3);
+    for (let index = 0; index < maximum; index++) record.entityId(String(index));
+    const snapshot = record.snapshot();
+    expect(recoveryBindings(snapshot)).toEqual(snapshot);
+    expect(createActionBindings({ mode: "replay", bindings: snapshot }).snapshot()).toEqual(
+      snapshot,
+    );
+    expect(() => record.clock("overflow")).toThrow("exceed input limits");
+    expect(record.entityId("0")).toBe("id");
+    expect(now).not.toHaveBeenCalled();
+    expect(allocateId).toHaveBeenCalledTimes(maximum);
+    expect(record.snapshot()).toEqual(snapshot);
+    expect(() =>
+      createActionBindings({
+        mode: "replay",
+        bindings: { ...snapshot, overflow: { type: "clock", value: 1 } },
+      }),
+    ).toThrow("exceed input limits");
+  });
+
+  it("counts field names, roles, paths and ID strings against the recovery string budget", () => {
+    const key = "p".repeat(
+      INPUT_MAX_STRING_UNITS - "typevalue".length - "entity-id".length - "id".length,
+    );
+    const f = recording();
+    // Use a fixed two-unit ID so the exact boundary is independent of the fixture counter.
+    const record = createActionBindings({ mode: "record", allocateId: () => "id", now: f.now });
+    record.entityId(key);
+    const snapshot = record.snapshot();
+    expect(recoveryBindings(snapshot)).toEqual(snapshot);
+    expect(createActionBindings({ mode: "replay", bindings: snapshot }).entityId(key)).toBe("id");
+    expect(() => record.clock("overflow")).toThrow("exceed input limits");
+    expect(f.now).not.toHaveBeenCalled();
+    expect(record.snapshot()).toEqual(snapshot);
+    expect(() =>
+      createActionBindings({
+        mode: "replay",
+        bindings: { [key + "x"]: { type: "entity-id", value: "id" } },
+      }),
+    ).toThrow("exceed input limits");
+    const fresh = recording();
+    expect(() => fresh.bindings.entityId("x".repeat(INPUT_MAX_STRING_UNITS))).toThrow(
+      "exceed input limits",
+    );
+    expect(fresh.allocateId).not.toHaveBeenCalled();
+    expect(fresh.bindings.snapshot()).toEqual({});
+  });
+
+  it("does not retain an ID when its returned length exceeds the remaining string budget", () => {
+    const allocateId = vi.fn(() => "id");
+    const record = createActionBindings({ mode: "record", allocateId, now: () => 1 });
+    const key = "p".repeat(INPUT_MAX_STRING_UNITS - "typevalue".length - "entity-id".length);
+    expect(() => record.entityId(key)).toThrow("exceed input limits");
+    expect(allocateId).toHaveBeenCalledOnce();
+    expect(record.snapshot()).toEqual({});
+    expect(record.entityId("short")).toBe("id");
+    expect(recoveryBindings(record.snapshot())).toEqual(record.snapshot());
+  });
+
+  it("refuses non-string allocation paths without coercion or source calls", () => {
+    const toString = vi.fn(() => "coerced");
+    for (const path of [1, {}, { toString }, Symbol("path"), null, undefined]) {
+      const f = recording();
+      for (const allocate of [f.bindings.entityId, f.bindings.childId, f.bindings.clock])
+        expect(() => allocate(path as unknown as string)).toThrow(ActionBindingError);
+      expect(f.bindings.snapshot()).toEqual({});
+      expect(f.allocateId).not.toHaveBeenCalled();
+      expect(f.now).not.toHaveBeenCalled();
+    }
+    expect(toString).not.toHaveBeenCalled();
+  });
+
   it("allocates each stable path once and keeps entity, child and clock roles distinct", () => {
     const f = recording();
     expect(f.bindings.entityId(path("card"))).toBe("id-1");

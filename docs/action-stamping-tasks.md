@@ -779,6 +779,15 @@ child and service allocation failures, rollback and recovery-compatible bindings
 Schema and payload versions remain unchanged. See
 [action identity checks](action-execution-scopes.md#invocations-and-allocations).
 
+Replay providers now copy only plain binding data without invoking getters or
+serialization hooks. Accessors can no longer substitute an unchecked value
+between validation and copying. Providers also enforce recovery's node and string
+budgets during recording and replay. Exact-limit maps remain recoverable, existing
+paths stay reusable at capacity and failed allocations preserve earlier bindings.
+Native and Node WASM tests verify early malformed-replay refusal and rollback
+after caught limit errors. Production integration remains pending. See
+[binding transport checks](action-execution-scopes.md#invocations-and-allocations).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -800,6 +809,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Bind taskspace record IDs, creation timestamps and label clocks through opt-in execution handles without allocating clocks for location updates.
 - [x] Retain each binding provider's initial mode and allocation callbacks. Verify caller mutation cannot enable replay allocations or replace recorded ID and clock sources, including across awaited service SQL on native and Node WASM adapters.
 - [x] Apply recovery identity rules when registering kinds, entering roots and allocating entity or child IDs. Verify rejected values cannot commit writes or enter binding maps, and accepted boundary values remain exact through replay and recovery parsing.
+- [x] Require plain replay binding maps and closed data entries without getters or serialization hooks. Enforce recovery's node and string budgets while recording and replaying, preserve earlier maps on failure and verify caught limit errors roll back on native and Node WASM adapters.
 - [ ] Persist `contract_ver` from the first execution and dispatch the whole group through its compatible registry.
 - [ ] Refuse unbound replay allocations without changing the binding map. Preserve original invocations when replay resolves child arguments differently.
 - [ ] Replace migration 0019's timestamp fallback with explicit bindings and record-mode validation. Preserve historical timestamps during restoration.
