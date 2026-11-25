@@ -6,42 +6,51 @@ before the production log schema is finalized.
 
 ## Run the checks
 
-Run the Node libsql prototype with the source test configuration.
+Run the fixed capture gate on Node libsql.
 
 ```sh
-pnpm exec vitest run --config vitest.source.config.ts \
-  packages/kozane/src/db/api/action-capture*.test.ts \
-  packages/kozane/src/db/api/action-restoration*.test.ts \
-  packages/kozane/src/db/api/action-epochs.test.ts \
+pnpm test:capture:native
+```
+
+Run the native host and pure projection checks separately.
+
+```sh
+pnpm exec vitest run --config vitest.source.config.ts --maxWorkers=1 \
   packages/kozane/src/lib/server/action-epoch-restart.test.ts \
   packages/kozane/src/lib/server/action-epoch-image-retention.test.ts \
   packages/kozane/src/services/action-projection.test.ts \
   packages/kozane/src/services/action-restoration-plan.test.ts
 ```
 
-Run the same capture tests against SQLite WASM in Node.
+Run the same gate against SQLite WASM in Node.
 
 ```sh
-pnpm exec vitest run --config scripts/database-parity/vitest.config.ts \
-  packages/kozane/src/db/api/action-capture*.test.ts \
-  packages/kozane/src/db/api/action-restoration*.test.ts \
-  packages/kozane/src/db/api/action-epochs.test.ts
+pnpm test:capture:wasm
 ```
 
 Run SQLite WASM in a browser with Chromium installed for Playwright.
 
 ```sh
-KOZANE_DB_BROWSER=1 pnpm exec vitest run --config scripts/database-parity/vitest.config.ts \
-  packages/kozane/src/db/api/action-capture*.test.ts \
-  packages/kozane/src/db/api/action-restoration*.test.ts \
-  packages/kozane/src/db/api/action-epochs.test.ts
+pnpm test:capture:browser
 ```
 
-The libsql and Node WASM checks pass. Browser verification is pending. Chromium
-was unavailable in the implementation environment, and the environment's network
-policy denied its download. Browser startup also failed because the environment
-denied the local test server's listener. Keep this gate incomplete until a browser
-run passes.
+All three commands use the same six capture, restoration, asset-history and epoch
+suite files from `scripts/check-action-capture.mjs`. WASM and browser runs also
+check worker queue and read-snapshot behavior. The runner selects the adapter
+explicitly, bounds workers and refuses extra filters or focused tests. It checks
+the test report for every required file and rejects failed, skipped, empty or
+missing suites. These commands do not build packages.
+
+Workspace verification always runs the WASM gate, including preparation with
+`--skip-browser-tests`. CI runs the browser gate after installing Chromium and
+before preparing browser package fixtures. Full local release preparation also
+runs the browser gate unless browser checks are explicitly skipped.
+
+The libsql and Node WASM commands pass. Browser runtime verification remains
+pending. The current local command stops before tests because the environment
+denies the test server's listener with `listen EACCES`. Earlier Chromium download
+attempts were also denied by the network policy. Production log schema and
+activation remain gated until an actual browser run passes for the tested revision.
 
 The test fixture also exercises [durable epoch transitions](prototype-epoch-transitions.md).
 Migration progress survives restarts, committed repair is not repeated and

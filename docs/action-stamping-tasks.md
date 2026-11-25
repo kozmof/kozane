@@ -723,6 +723,16 @@ file tests cover restart, cleanup after live references disappear and competing
 publication or release. Production integration remains pending. See
 [prototype epoch transitions](prototype-epoch-transitions.md).
 
+Persistent capture verification now uses fixed native, Node WASM and browser
+commands with one shared suite inventory. The runner refuses filters and focused
+tests, verifies every required suite in the test report and propagates failures.
+Workspace verification always includes the WASM gate. CI runs the browser gate
+after Chromium installation, and full local release preparation includes it too.
+Native and Node WASM command runs pass. The current local browser attempt stops
+before tests because listener creation is denied. Browser runtime verification
+and production activation remain pending. See the
+[capture gate commands](action-capture-prototype.md#run-the-checks).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -749,6 +759,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 
 ### 2. Prove capture and restoration on every adapter
 
+- [x] Add fixed native, WASM and browser capture gate commands with complete suite-report checks. Require WASM checks during workspace verification and browser checks in CI and full local release preparation without treating skipped suites as runtime verification.
 - [ ] Prototype persistent `BEFORE` capture with an unconstrained row projection on every supported adapter.
 - [x] Implement the tagged row-value codec for baseline rows, primary keys and full effect images.
 - [x] Integrate test-only capture across all application tables with real service actions, execution attribution and full projection read-back on libsql and Node WASM.

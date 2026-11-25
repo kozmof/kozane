@@ -265,6 +265,12 @@ and its download was denied by the environment's network policy. Keep production
 log tables and activation gated on that verification. Existing JSON export values
 cannot serve as the row codec.
 
+The [fixed capture commands](action-capture-prototype.md#run-the-checks) verify
+the required suite inventory and refuse focused, skipped or missing checks.
+Workspace verification includes the WASM gate. CI runs the browser gate after
+Chromium installation. Browser runtime verification remains pending until that
+command completes on the tested revision.
+
 The [epoch transition prototype](prototype-epoch-transitions.md) adds persistent
 write blocking, ordered migration batches and candidate baseline activation to
 the test fixture. Native restart tests cover committed repair and baseline

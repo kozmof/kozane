@@ -48,6 +48,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      - name: Verify persistent capture and epoch transitions in Chromium
+        run: pnpm test:capture:browser
       - run: pnpm build:packages --output=tmp/browser-packages
       - run: node scripts/check-core-package.mjs --client-package --client-browser-harness --restoration-harness --artifacts=tmp/browser-packages
       - run: pnpm test:e2e

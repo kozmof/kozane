@@ -25,7 +25,7 @@ After preparation, the command checks npm authentication with `npm whoami`. If t
 
 If a prepared release already exists for the current commit, the command reuses it. Rerun the command after a partial publication to resume with the same archives. The publisher validates the manifest and archive hashes and skips published versions only when their bytes match. Preparation failures stop publication.
 
-`release:auto` skips Playwright browser execution because those suites run in CI. Source coverage, package checks, browser compilation, auditing, and smoke checks still run. Use `pnpm release:local` for full local preparation with browser tests. A source test failure still stops automatic release.
+`release:auto` skips browser execution because those suites run in CI. Source coverage, the focused WASM capture gate, package checks, browser compilation, auditing, and smoke checks still run. Use `pnpm release:local` for full local preparation with browser tests. A source or WASM capture test failure stops automatic release.
 
 ## Prepare a local release
 
@@ -37,11 +37,14 @@ Commit all source changes, then run the local release checks.
 pnpm release:local
 ```
 
-This runs release metadata and versioning regressions, verification and coverage, production dependency auditing, local/global archive installation and HTTP smoke, and the app, restoration and public-client browser suites. It builds once and packs all three packages once with lifecycle rebuilds disabled. Verification, installed-package tests, browser fixtures, installation smoke and npm dry-run publication consume those same archives.
+This runs release metadata and versioning regressions, verification and coverage, production dependency auditing, local/global archive installation and HTTP smoke, and the capture, app, restoration and public-client browser suites. It builds once and packs all three packages once with lifecycle rebuilds disabled. Verification, installed-package tests, browser fixtures, installation smoke and npm dry-run publication consume those same archives.
 
 It writes a release manifest containing their versions, SHA-256 hashes and source commit under `tmp/releases/<commit>/`. An optional directory argument chooses another destination.
 
-Database driver parity checks are optional and are not part of release preparation. Run `pnpm test:db-wasm` or `pnpm test:db-browser` separately when needed.
+Release preparation always runs `pnpm test:capture:wasm`. Full preparation also
+runs `pnpm test:capture:browser`. These focused gates verify persistent capture,
+exact restoration, epoch transitions and image protection. Run the broader
+`pnpm test:db-wasm` or `pnpm test:db-browser` suites separately when needed.
 
 Installed core package checks stage their consumers under the ignored `tmp/package-checks/` directory. This keeps native driver libraries off restricted system temporary mounts, even when the tool sandbox resets `TMPDIR`. Temporary consumers are removed after checks.
 
@@ -87,5 +90,8 @@ pnpm smoke:package --artifacts=tmp/verified-packages
 The verifier checks that its prepared archive hashes remain unchanged. Pass `--artifacts=<directory>` to verify existing archives without rebuilding. Run `pnpm build:packages --output=tmp/packages` to build and pack a candidate without running verification.
 
 Each CI verification job retains its candidate and passes those archives to package smoke checks. The browser job builds its own candidate once, compiles both harnesses from those archives and runs the suites without rebuilding packages.
+Before preparing that candidate, the browser job installs Chromium and runs the
+fixed persistent capture gate. A missing or skipped suite refuses the gate even
+if the test process reports success.
 
 Jobs remain independent so the Node versions and browser checks can run in parallel. These are test workflows. Publication continues through the local release flow.
