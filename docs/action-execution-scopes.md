@@ -214,6 +214,15 @@ The full original binding map remains available. Replayed child arguments and
 entry order belong to the new execution records. Earlier returned records and
 the root invocation remain unchanged.
 
+Action kinds, root IDs and allocated entity and child IDs use the same identity
+rules as recovery. Values must be nonblank, well-formed Unicode strings of at
+most 1,000 UTF-16 code units and contain no NUL characters. Accepted values retain
+their exact spelling, including surrounding spaces. Invalid roots fail before
+the transaction opens. Invalid recorded allocations fail before they enter the
+binding map, and their errors remain latched if a handler catches them. Replay
+refuses invalid ID bindings when its provider is created. Registry construction
+also refuses invalid action kinds.
+
 Binding providers retain their initial mode and allocation callbacks. Changing
 the caller's options after creation cannot switch replay into recording or
 replace the sources used for recorded IDs and clock readings. Replay also copies

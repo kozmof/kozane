@@ -1,3 +1,5 @@
+import { isActionIdentity } from "./identity.js";
+
 /** Durable allocations are JSON scalars, never driver or ORM values. */
 export type ActionBinding =
   | { readonly type: "entity-id" | "child-id"; readonly value: string }
@@ -25,8 +27,7 @@ function validBinding(binding: ActionBinding): boolean {
   return binding.type === "clock"
     ? Number.isSafeInteger(binding.value)
     : (binding.type === "entity-id" || binding.type === "child-id") &&
-        typeof binding.value === "string" &&
-        binding.value.length > 0;
+        isActionIdentity(binding.value);
 }
 
 /** Own one provider per root execution. Replays never call allocation sources or extend bindings. */

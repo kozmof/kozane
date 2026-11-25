@@ -8,6 +8,7 @@ import { readSchemaManifest } from "../migrations/schema-reader.js";
 import { configureActionConnection, verifyActionConnection } from "./connection.js";
 import { localTableNames, recoveryDestinationTableNames } from "./local-tables.js";
 import { createRestorationPlan } from "./restoration-plan.js";
+import { isActionIdentity } from "./identity.js";
 import { createRowProjection, type ProjectionEffect } from "./projection.js";
 import { parseTaggedRow, taggedRowKey, ROW_ENCODING_VERSION, type TaggedRow } from "./row-codec.js";
 import {
@@ -142,13 +143,7 @@ export function parseSharedRecoveryProjection(input: unknown): SharedRecoveryPro
 }
 
 function historyId(input: unknown): string {
-  if (
-    typeof input !== "string" ||
-    !input.trim() ||
-    input.length > 1000 ||
-    input.includes("\0") ||
-    !input.isWellFormed()
-  )
+  if (!isActionIdentity(input))
     throw new SharedRecoveryError("Invalid shared recovery history identity");
   return input;
 }

@@ -7,6 +7,7 @@ import {
   type ActionKindV1,
 } from "./contracts.js";
 import { prepareActionInputV1 } from "./invocation.js";
+import { isActionIdentity } from "./identity.js";
 
 export class ActionContractRequiredError extends Error {
   override readonly name = "ActionContractRequiredError";
@@ -69,7 +70,7 @@ export function defineActionRegistry<Inputs extends object, C>(options: {
     ActionDefinition<unknown, C>,
   ][]) {
     if (
-      !kind ||
+      !isActionIdentity(kind) ||
       typeof entry?.prepare !== "function" ||
       (entry.eligibility !== "syncable" && entry.eligibility !== "local-only")
     )

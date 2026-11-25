@@ -288,6 +288,21 @@ describe("versioned action registry", () => {
       ).toThrow("Invalid action definition");
     }
   });
+
+  it.each([" ", "kind\0name", "bad\ud800", "bad\udc00", "x".repeat(1001)])(
+    "refuses action kinds that recovery cannot retain: %j",
+    (kind) => {
+      expect(() =>
+        defineActionRegistry<Record<string, unknown>, unknown>({
+          contractVersion: 1,
+          schemaVersions: [19],
+          definitions: {
+            [kind]: { eligibility: "syncable", prepare: (input) => input, replay: async () => {} },
+          },
+        }),
+      ).toThrow("Invalid action definition");
+    },
+  );
 });
 
 describe("version 1 invocation envelopes", () => {

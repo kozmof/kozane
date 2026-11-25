@@ -110,6 +110,31 @@ async function cardRows(db: DB | Tx) {
   return db.select().from(schema.cardTable).orderBy(schema.cardTable.id);
 }
 
+it.each([" ", "entity\0id", "bad\ud800", "bad\udc00", "x".repeat(1001)])(
+  "rolls back a caught unrecoverable service ID before insert: %j",
+  async (id) => {
+    const caught = vi.fn();
+    const f = await fixture(async (_input, { context: execution }) => {
+      await execution.db
+        .update(schema.cardTable)
+        .set({ content: "pending edit" })
+        .where(eq(schema.cardTable.id, "first"));
+      try {
+        await layers.createInTx(execution.db, context, "n", { name: "Invalid" });
+      } catch (cause) {
+        caught(cause);
+      }
+    });
+    f.allocate.mockReturnValue(id);
+    const before = await cardRows(f.db);
+    await expect(f.run()).rejects.toThrow("Invalid allocation");
+    expect(caught).toHaveBeenCalledOnce();
+    expect(await cardRows(f.db)).toEqual(before);
+    expect((await f.db.select().from(schema.layerTable)).map(({ id }) => id)).toEqual(["l"]);
+    expect(await f.db.all(sql`SELECT * FROM allocation_log`)).toEqual([]);
+  },
+);
+
 it("rolls back caught replay allocations after provider options change while SQL is awaited", async () => {
   const options = { mode: "replay" as const, bindings: {} };
   const provider = createActionBindings(options);

@@ -7,6 +7,7 @@ import {
   INPUT_MAX_STRING_UNITS,
 } from "../services/prepare-input.js";
 import { SharedRecoveryError } from "./shared-recovery.js";
+import { isActionIdentity } from "./identity.js";
 
 export function fields(input: unknown, names: readonly string[]): Record<string, unknown> {
   if (
@@ -37,13 +38,7 @@ export function array(input: unknown): unknown[] {
   });
 }
 export function id(input: unknown): string {
-  if (
-    typeof input !== "string" ||
-    !input.trim() ||
-    input.length > 1000 ||
-    input.includes("\0") ||
-    !input.isWellFormed()
-  )
+  if (!isActionIdentity(input))
     throw new SharedRecoveryError("Invalid recovery execution identity");
   return input;
 }

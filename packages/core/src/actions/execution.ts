@@ -7,6 +7,7 @@ import { withTx, type DB, type Tx } from "../database.js";
 import { prepareInput } from "../services/prepare-input.js";
 import { actionBindingPath, type ActionBindingMap, type ActionBindings } from "./bindings.js";
 import { ActionContractRequiredError, type defineActionRegistry } from "./registry.js";
+import { isActionIdentity } from "./identity.js";
 
 export class ActionExecutionError extends Error {
   override readonly name = "ActionExecutionError";
@@ -103,13 +104,8 @@ export async function runActionGroupAtBoundary<Inputs extends object, C>(
       schemaVersion,
       registry.supportsSchema(schemaVersion) ? [registry.contractVersion] : [],
     );
-  if (
-    !invocation.id ||
-    typeof invocation.id !== "string" ||
-    !invocation.kind ||
-    typeof invocation.kind !== "string"
-  )
-    throw new ActionExecutionError("Root action requires an ID and kind");
+  if (!isActionIdentity(invocation.id) || !isActionIdentity(invocation.kind))
+    throw new ActionExecutionError("Root action requires a valid ID and kind");
   registry.assertSyncable(invocation.kind);
   return boundary(async (tx) => {
     const executeConnection = (statement: string) => tx.values(sql.raw(statement));

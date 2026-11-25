@@ -430,6 +430,75 @@ it.each(["record", "replay"] as const)(
   },
 );
 
+it.each([" ", "root\0id", "bad\ud800", "bad\udc00", "x".repeat(1001)])(
+  "refuses unrecoverable root IDs and kinds before opening a boundary: %j",
+  async (id) => {
+    const handler = vi.fn(async () => {});
+    const registry = defineActionRegistry<{ root: unknown }, unknown>({
+      contractVersion: 1,
+      schemaVersions: [19],
+      definitions: {
+        root: { eligibility: "syncable", prepare: (input) => input, replay: handler },
+      },
+    });
+    const boundary = vi.fn(async () => {
+      throw new Error("Boundary must not open");
+    });
+    for (const mode of ["record", "replay"] as const) {
+      const bindings =
+        mode === "record"
+          ? createActionBindings({ mode, allocateId: () => "unused", now: () => 1 })
+          : createActionBindings({ mode, bindings: {} });
+      for (const identity of [
+        { id, kind: "root" },
+        { id: "root", kind: id },
+      ]) {
+        await expect(
+          runActionGroupAtBoundary(
+            {
+              registry,
+              schemaVersion: 19,
+              invocation: { ...identity, contractVersion: 1, input: {} },
+              bindings,
+              createContext: () => ({}),
+            },
+            boundary,
+          ),
+        ).rejects.toThrow("Root action requires");
+      }
+    }
+    expect(boundary).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+  },
+);
+
+it.each([" ", "child\0id", "bad\ud800", "bad\udc00", "x".repeat(1001)])(
+  "rolls back caught invalid child ID allocations before child persistence: %j",
+  async (id) => {
+    const child = vi.fn(async () => {});
+    const caught = vi.fn();
+    const f = await fixture({
+      noop: child,
+      root: async (_input, { context }) => {
+        await context.db.run(sql`INSERT INTO execution_value VALUES('parent',1)`);
+        try {
+          await context.actions.child(["child"], "noop", { label: "unused" });
+        } catch (cause) {
+          caught(cause);
+        }
+      },
+    });
+    f.allocateId.mockReturnValue(id);
+    await expect(f.execute()).rejects.toThrow("Invalid allocation");
+    expect(caught).toHaveBeenCalledOnce();
+    expect(child).not.toHaveBeenCalled();
+    expect(f.enter).toHaveBeenCalledOnce();
+    expect(await stored(f)).toEqual([]);
+    expect(await audit(f)).toEqual([]);
+    expect(await marker(f)).toEqual([{ id: null }]);
+  },
+);
+
 it.each(["record", "replay"] as const)(
   "rejects ineligible children before allocation and persistence during %s, even when caught",
   async (mode) => {

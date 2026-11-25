@@ -771,6 +771,14 @@ reproduce both earlier failures. Native and Node WASM service tests verify sourc
 stability across awaited SQL and full rollback after a caught unbound replay
 allocation. See [allocation ownership](action-execution-scopes.md#invocations-and-allocations).
 
+Action scopes and recovery now share identity validation. Registry kinds, root
+IDs and allocated entity and child IDs refuse blank values, NUL characters,
+malformed Unicode and values longer than the existing recovery limit. Accepted
+IDs remain exact. Native and Node WASM tests cover early root refusal, caught
+child and service allocation failures, rollback and recovery-compatible bindings.
+Schema and payload versions remain unchanged. See
+[action identity checks](action-execution-scopes.md#invocations-and-allocations).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -791,6 +799,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Bind squash inventory and piece IDs and their shared timestamp to the source card and segment roles.
 - [x] Bind taskspace record IDs, creation timestamps and label clocks through opt-in execution handles without allocating clocks for location updates.
 - [x] Retain each binding provider's initial mode and allocation callbacks. Verify caller mutation cannot enable replay allocations or replace recorded ID and clock sources, including across awaited service SQL on native and Node WASM adapters.
+- [x] Apply recovery identity rules when registering kinds, entering roots and allocating entity or child IDs. Verify rejected values cannot commit writes or enter binding maps, and accepted boundary values remain exact through replay and recovery parsing.
 - [ ] Persist `contract_ver` from the first execution and dispatch the whole group through its compatible registry.
 - [ ] Refuse unbound replay allocations without changing the binding map. Preserve original invocations when replay resolves child arguments differently.
 - [ ] Replace migration 0019's timestamp fallback with explicit bindings and record-mode validation. Preserve historical timestamps during restoration.

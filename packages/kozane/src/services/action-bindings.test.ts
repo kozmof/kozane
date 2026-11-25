@@ -5,6 +5,7 @@ import {
   createActionBindings,
   type ActionBindingMap,
 } from "../../../core/src/actions/bindings.js";
+import { bindings as recoveryBindings } from "../../../core/src/actions/recovery-action-data.js";
 
 const path = (key: string) => actionBindingPath("cards.squash", "source-card", key);
 function recording() {
@@ -136,6 +137,43 @@ describe("action allocation bindings", () => {
     expect(() => bindings.clock(path("time"))).toThrow("Invalid allocation");
     expect(bindings.snapshot()).toEqual({});
   });
+
+  it.each([" ", "\0id", "bad\ud800", "id\udc00", "x".repeat(1001)])(
+    "refuses IDs that recovery cannot retain: %j",
+    (value) => {
+      for (const type of ["entity-id", "child-id"] as const) {
+        const bindings = createActionBindings({
+          mode: "record",
+          allocateId: () => value,
+          now: () => 1,
+        });
+        const allocate = type === "entity-id" ? bindings.entityId : bindings.childId;
+        expect(() => allocate(path("invalid"))).toThrow("Invalid allocation");
+        expect(bindings.snapshot()).toEqual({});
+        expect(() =>
+          createActionBindings({ mode: "replay", bindings: { a: { type, value } } }),
+        ).toThrow("Invalid recorded binding");
+      }
+    },
+  );
+
+  it.each([" padded id ", "🪁".repeat(500), "x".repeat(1000), "__proto__"])(
+    "preserves accepted IDs without trimming or normalizing them: %j",
+    (value) => {
+      const record = createActionBindings({
+        mode: "record",
+        allocateId: () => value,
+        now: () => 1,
+      });
+      expect(record.entityId(path("id"))).toBe(value);
+      const replay = createActionBindings({
+        mode: "replay",
+        bindings: JSON.parse(JSON.stringify(record.snapshot())),
+      });
+      expect(replay.entityId(path("id"))).toBe(value);
+      expect(recoveryBindings(record.snapshot())).toEqual(replay.snapshot());
+    },
+  );
 
   it("uses collision-free paths and safely stores property-like keys", () => {
     expect(actionBindingPath("cards.create", "a/b", "c")).not.toBe(
