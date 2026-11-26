@@ -221,6 +221,49 @@ it("keeps initial and candidate pins after failed validation and resumes without
   expect(prepared.owner.id).toBe(pending[0][0]);
   await activateCaptureInitialization(core, identity, f.read);
 });
+it("rolls back changed activation metadata after staging completion and resumes the retained candidate after restart", async () => {
+  const f = await fixture();
+  await seedInitialRepair(f.core);
+  const staged = await stageCaptureInitialization(f.core, repairing, f.catalog);
+  await repairCaptureInitialization(f.core, repairing);
+  await f.db.run(sql`CREATE TABLE activation_fault(enabled INTEGER)`);
+  await f.db.run(sql`INSERT INTO activation_fault VALUES(1)`);
+  await f.db.run(
+    sql`CREATE TRIGGER corrupt_initial_baseline AFTER UPDATE OF state ON local_asset_manifest WHEN NEW.owner_kind='pending-work' AND NEW.state='released' AND (SELECT enabled FROM activation_fault)=1 BEGIN UPDATE capture_baseline SET rows='[]'; END`,
+  );
+  const prepared = await prepareCaptureInitialization(
+    f.core,
+    repairing,
+    factory,
+    f.catalog,
+    f.read,
+  );
+  await expect(activateCaptureInitialization(f.core, repairing, f.read)).rejects.toThrow(
+    "baseline or selection changed",
+  );
+  expect((await inspectAssetManifest(f.db, staged.owner)).record.state).toBe("pending");
+  expect((await inspectAssetManifest(f.db, prepared.owner)).record.state).toBe("retained");
+  f.handle.close();
+  const resumed = await open(f.path);
+  const core = resumed.db as unknown as DB;
+  expect((await resumed.db.values(sql`SELECT epoch_id FROM capture_epoch`))[0][0]).toBe("initial");
+  expect((await resumed.db.values(sql`SELECT state FROM capture_epoch_transition`))[0][0]).toBe(
+    "active",
+  );
+  expect((await resumed.db.values(sql`SELECT count(*) FROM capture_epoch_archive`))[0][0]).toBe(0);
+  await expect(resumed.db.run(sql`INSERT INTO scope VALUES('raw','unstamped')`)).rejects.toThrow();
+  expect(await repairCaptureInitialization(core, repairing)).toEqual({ changed: false });
+  await resumed.db.run(sql`UPDATE activation_fault SET enabled=0`);
+  await activateCaptureInitialization(core, repairing, f.read);
+  expect((await resumed.db.values(sql`SELECT count(*) FROM capture_migration_history`))[0][0]).toBe(
+    1,
+  );
+  expect((await inspectAssetManifest(resumed.db, staged.owner)).record.state).toBe("released");
+  expect((await inspectAssetManifest(resumed.db, prepared.owner)).record.state).toBe("retained");
+  expect(new TextDecoder().decode(await f.read(f.name))).toBe(new TextDecoder().decode(f.data));
+  await (await openCapturePrototype(core)).verify();
+});
+
 it("preserves blocking and image protection after failed activation commit and completes after restart", async () => {
   const f = await fixture(),
     staged = await stageCaptureInitialization(f.core, identity, f.catalog);

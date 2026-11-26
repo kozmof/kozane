@@ -5,8 +5,8 @@ import {
   configureActionConnection,
   verifyActionConnection,
 } from "../../../core/src/actions/connection.js";
-import { captureRowSql } from "../../../core/src/actions/sql-codec.js";
-import { ROW_ENCODING_VERSION } from "../../../core/src/actions/row-codec.js";
+import { captureRowSql, decodeCapturedRow } from "../../../core/src/actions/sql-codec.js";
+import { ROW_ENCODING_VERSION, parseTaggedRow } from "../../../core/src/actions/row-codec.js";
 import { createRowProjection } from "../../../core/src/actions/projection.js";
 import {
   baselineAssetNames,
@@ -155,9 +155,22 @@ async function history(tx: Handle) {
   return JSON.stringify(result);
 }
 async function currentEpoch(tx: Handle) {
-  const rows = await tx.values(sql`SELECT epoch_id,schema_id FROM capture_epoch WHERE singleton=1`);
+  const rows = await tx.values(
+    sql.raw(
+      `SELECT ${captureRowSql(["epoch_id", "schema_id"])} FROM capture_epoch WHERE singleton=1`,
+    ),
+  );
   if (rows.length !== 1) throw Error("Missing active prototype epoch");
-  return { epochId: String(rows[0][0]), schemaId: String(rows[0][1]) };
+  const captured = decodeCapturedRow(String(rows[0][0]));
+  const epochId = captured.epoch_id,
+    schemaId = captured.schema_id;
+  if (epochId[0] !== "text" || schemaId[0] !== "text")
+    throw Error("Invalid prototype epoch identity storage");
+  return { epochId: epochId[1], schemaId: schemaId[1] };
+}
+async function metadataRows(tx: Handle, table: string, columns: readonly string[]) {
+  const rows = await tx.values(sql.raw(`SELECT ${captureRowSql(columns)} FROM ${quote(table)}`));
+  return rows.map((row) => decodeCapturedRow(String(row[0])));
 }
 async function transition(tx: Handle, request: PrototypeEpochTransition) {
   const rows = await tx.values(
@@ -172,6 +185,12 @@ async function transition(tx: Handle, request: PrototypeEpochTransition) {
   )
     throw Error("Epoch transition request is missing or changed");
   const next = rows[0][1];
+  if (
+    typeof rows[0][2] !== "string" ||
+    typeof rows[0][3] !== "string" ||
+    (rows[0][4] !== null && typeof rows[0][4] !== "string")
+  )
+    throw Error("Invalid prototype transition metadata");
   if (!Number.isSafeInteger(next) || Number(next) < 0 || Number(next) > request.batches.length)
     throw Error("Invalid migration progress");
   const completed = await tx.values(
@@ -466,11 +485,12 @@ export async function activateCaptureEpoch(
   return withTx(db, (tx) => activateCaptureEpochInTx(tx, request, readAsset));
 }
 
-/** Caller may complete initial staging pin transfer in the same transaction. */
+/** Optional completion joins first activation before its final metadata verification. */
 export async function activateCaptureEpochInTx(
   tx: Tx,
   input: PrototypeEpochTransition,
   readAsset: ReadAsset = missingAsset,
+  complete?: (tx: Tx) => Promise<void>,
 ) {
   const request = own(input);
   await locked(tx);
@@ -500,6 +520,7 @@ export async function activateCaptureEpochInTx(
     throw Error("Prepared epoch image requirements changed");
   const owner = await captureEpochBaselineOwner(request, sha256);
   await verifyBaselineOwner(tx, owner, manifest, readAsset, true);
+  const protection = await requireBaselineOwner(tx, owner, manifest, true);
   await active(tx, request);
   if (
     candidate.schema !== (await schema(tx)) ||
@@ -513,8 +534,12 @@ export async function activateCaptureEpochInTx(
     selection = await tx.values(
       sql`SELECT position,run_id FROM capture_selection ORDER BY position`,
     );
+  const sourceBaseline = JSON.stringify(baseline.map((row) => Array.from(row)));
+  const sourceSelection = JSON.stringify(selection.map((row) => Array.from(row)));
+  const archiveColumns = ["epoch_id", "schema_id", "baseline", "selection"];
+  const previousArchives = await metadataRows(tx, "capture_epoch_archive", archiveColumns);
   await tx.run(
-    sql`INSERT INTO capture_epoch_archive VALUES(${request.sourceEpoch},${request.sourceSchema},${JSON.stringify(baseline.map((row) => Array.from(row)))},${JSON.stringify(selection.map((row) => Array.from(row)))})`,
+    sql`INSERT INTO capture_epoch_archive VALUES(${request.sourceEpoch},${request.sourceSchema},${sourceBaseline},${sourceSelection})`,
   );
   await tx.run(
     sql`UPDATE capture_baseline SET row_encoding_ver=${ROW_ENCODING_VERSION},rows=${JSON.stringify(candidate.rows)},asset_manifest=${JSON.stringify(manifest)} WHERE singleton=1`,
@@ -524,6 +549,75 @@ export async function activateCaptureEpochInTx(
     sql`UPDATE capture_epoch SET epoch_id=${request.targetEpoch},schema_id=${request.targetSchema} WHERE singleton=1`,
   );
   await tx.run(sql`UPDATE capture_epoch_transition SET state='completed' WHERE id=${request.id}`);
+  await complete?.(tx);
+  const completed = await transition(tx, request);
+  const selectedEpoch = await metadataRows(tx, "capture_epoch", [
+    "singleton",
+    "epoch_id",
+    "schema_id",
+  ]);
+  if (
+    completed.state !== "completed" ||
+    completed.next !== request.batches.length ||
+    completed.candidate !== stored.candidate ||
+    completed.history !== stored.history ||
+    !same(selectedEpoch, [
+      parseTaggedRow({
+        singleton: ["integer", "1"],
+        epoch_id: ["text", request.targetEpoch],
+        schema_id: ["text", request.targetSchema],
+      }),
+    ])
+  )
+    throw Error("Epoch activation metadata changed");
+  const installedBaseline = await metadataRows(tx, "capture_baseline", [
+    "singleton",
+    "row_encoding_ver",
+    "rows",
+    "asset_manifest",
+  ]);
+  if (
+    !same(installedBaseline, [
+      parseTaggedRow({
+        singleton: ["integer", "1"],
+        row_encoding_ver: ["integer", String(ROW_ENCODING_VERSION)],
+        rows: ["text", JSON.stringify(candidate.rows)],
+        asset_manifest: ["text", JSON.stringify(manifest)],
+      }),
+    ]) ||
+    (await tx.values(sql`SELECT 1 FROM capture_selection LIMIT 1`)).length
+  )
+    throw Error("Epoch baseline or selection changed during activation");
+  const expectedArchives = [
+    ...previousArchives,
+    parseTaggedRow({
+      epoch_id: ["text", request.sourceEpoch],
+      schema_id: ["text", request.sourceSchema],
+      baseline: ["text", sourceBaseline],
+      selection: ["text", sourceSelection],
+    }),
+  ]
+    .map((row) => JSON.stringify(row))
+    .sort();
+  const installedArchives = (await metadataRows(tx, "capture_epoch_archive", archiveColumns))
+    .map((row) => JSON.stringify(row))
+    .sort();
+  if (!same(installedArchives, expectedArchives))
+    throw Error("Epoch archive changed during activation");
+  const originalHistory = JSON.parse(stored.history);
+  const retainedHistory = JSON.parse(await history(tx));
+  if (
+    ["capture_run", "capture_execution", "capture_effect"].some(
+      (table) => !same(originalHistory[table], retainedHistory[table]),
+    ) ||
+    candidate.schema !== (await schema(tx)) ||
+    !same(candidate.rows, await captureApplicationRows(tx))
+  )
+    throw Error("Epoch rows or retained history changed during activation");
+  const finalProtection = await requireBaselineOwner(tx, owner, manifest, true);
+  if (!same(protection.record, finalProtection.record))
+    throw Error("Epoch baseline image protection changed during activation");
+  await guards(tx);
   await empty(tx);
   await requireCaptureEpochRecordMode(tx);
   await verifyActionConnection((query) => tx.values(sql.raw(query)));

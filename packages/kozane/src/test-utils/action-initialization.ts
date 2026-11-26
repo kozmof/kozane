@@ -234,11 +234,10 @@ export async function activateCaptureInitialization(
     await configureActionConnection((query) => tx.values(sql.raw(query)));
     await tx.run(sql`UPDATE capture_epoch SET epoch_id=epoch_id WHERE 0`);
     await record(tx, request, owner);
-    const activated = await activateCaptureEpochInTx(tx, request, readAsset);
-    if (activated.changed) {
-      await releaseAssetManifestInTx(localWrite(tx), owner, releaseReason);
-      await record(tx, request, owner);
-    }
+    const activated = await activateCaptureEpochInTx(tx, request, readAsset, async (handle) => {
+      await releaseAssetManifestInTx(localWrite(handle), owner, releaseReason);
+      await record(handle, request, owner);
+    });
     await verifyActionConnection((query) => tx.values(sql.raw(query)));
     return Object.freeze(activated);
   });

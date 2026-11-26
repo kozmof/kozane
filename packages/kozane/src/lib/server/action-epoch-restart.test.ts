@@ -98,6 +98,43 @@ it("keeps application writes blocked across restarts before repair, after its co
   expect((await activateCaptureEpoch(active.db, request)).changed).toBe(false);
   expect(repair).toHaveBeenCalledTimes(1);
 });
+it("resumes a failed activation read-back without repeating committed migration work", async () => {
+  const { handle, request } = await fixture();
+  await beginCaptureEpochTransition(handle.db, request);
+  const repair = vi.fn(
+    async (tx: Parameters<Parameters<typeof runCaptureMigrationBatch>[3]>[0]) => {
+      await tx.run(sql`UPDATE scope SET name='Repaired' WHERE id='s'`);
+    },
+  );
+  await runCaptureMigrationBatch(handle.db, request, 0, repair);
+  await handle.db.run(sql`CREATE TABLE activation_fault(enabled INTEGER)`);
+  await handle.db.run(sql`INSERT INTO activation_fault VALUES(1)`);
+  await handle.db.run(
+    sql`CREATE TRIGGER corrupt_active_epoch AFTER UPDATE OF state ON capture_epoch_transition WHEN NEW.state='completed' AND (SELECT enabled FROM activation_fault)=1 BEGIN UPDATE capture_epoch SET epoch_id='wrong'; END`,
+  );
+  await prepareCaptureEpochBaseline(handle.db, request, factory);
+  await expect(activateCaptureEpoch(handle.db, request)).rejects.toThrow(
+    "activation metadata changed",
+  );
+  handle.close();
+  const resumed = await open();
+  expect((await resumed.db.values(sql`SELECT epoch_id FROM capture_epoch`))[0][0]).toBe(
+    request.sourceEpoch,
+  );
+  expect((await resumed.db.values(sql`SELECT count(*) FROM capture_epoch_archive`))[0][0]).toBe(0);
+  expect((await resumed.db.values(sql`SELECT state FROM local_asset_manifest`))[0][0]).toBe(
+    "retained",
+  );
+  await expect(resumed.db.run(sql`UPDATE scope SET name='Unstamped'`)).rejects.toThrow();
+  expect(await runCaptureMigrationBatch(resumed.db, request, 0, repair)).toEqual({
+    changed: false,
+  });
+  expect(repair).toHaveBeenCalledOnce();
+  await resumed.db.run(sql`UPDATE activation_fault SET enabled=0`);
+  expect(await activateCaptureEpoch(resumed.db, request)).toEqual({ changed: true });
+  await (await openCapturePrototype(resumed.db)).verify();
+});
+
 it("serializes competing batch callbacks and preserves committed progress after waiting writers retry", async () => {
   const { handle, request } = await fixture();
   const second = await open();

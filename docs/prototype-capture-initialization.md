@@ -126,6 +126,12 @@ first active epoch and baseline, completes the transition and releases the initi
 staging owner in one transaction. The retained baseline owner continues protecting
 the images. Cleanup and owner release share the writer lock throughout.
 
+Final activation checks run after the initial pin release. They verify the exact
+installed epoch and baseline, empty selection, source archive, retained history
+and candidate owner before commit. The baseline and archive checks use the tagged
+codec, so changes to storage classes cannot pass through driver coercion. A
+completion-side metadata change rolls back activation and pin release together.
+
 A failure to release the staging pin rolls activation back. A failed final commit
 leaves the initial transition blocked, the candidate retained and the staging pin
 active. Reopen the database and retry the same initialization.
@@ -160,6 +166,9 @@ Repair tests reopen before and after its commit, recover a failed repair commit
 and refuse competing writes, cleanup and pin release during a held repair batch.
 Preparation tests refuse pin release from another connection during validation
 and serialize final publication with application writes, cleanup and pin release.
+Activation tests reject metadata changes after staging completion, reopen the
+blocked source and activate its existing candidate without repeating repair or
+changing image bytes.
 
 Browser runtime verification and production initialization integration remain
 pending. The existing fixture installer remains an immediate setup helper for

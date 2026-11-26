@@ -89,6 +89,18 @@ selects the new epoch and baseline, clears the active selection and completes th
 transition in one commit. A failed commit preserves the source epoch and the
 prepared candidate.
 
+Before first activation commits, the helper reads the installed epoch, baseline
+and archives with the tagged codec. It requires the exact candidate and completed
+batch progress, an empty selection, unchanged earlier archives and retained action,
+execution and effect records. It also rechecks live rows, schema, guards, empty
+markers, connection flags and the candidate owner's exact retained metadata.
+Changed values or storage classes refuse activation.
+
+Initial staging completion runs inside this boundary before final verification.
+Any mismatch rolls back activation and the staging-pin release together. The
+previous epoch, prepared candidate and retained protection remain available for
+an explicit retry without repeating committed repair.
+
 First activation requires the candidate's exact retained owner. Missing, pending,
 released or changed protection refuses activation before image reads. Verification
 and activation hold the same writer lock, so cleanup cannot remove protection

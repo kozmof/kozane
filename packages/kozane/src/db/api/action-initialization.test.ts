@@ -546,6 +546,44 @@ it("rolls back activation and staging pin release after a failed final commit", 
   expect(await rows(db, "SELECT 1 FROM capture_epoch_archive")).toEqual([]);
   await activateCaptureInitialization(db, identity);
 });
+it.each([
+  ["epoch", "UPDATE capture_epoch SET epoch_id='wrong'"],
+  ["baseline", "UPDATE capture_baseline SET rows='[]'"],
+  [
+    "owner",
+    "UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Completion fault' WHERE owner_kind='baseline'",
+  ],
+] as const)(
+  "rolls back changed %s metadata after initial staging completion",
+  async (_name, mutation) => {
+    const db = await fixture();
+    await stageCaptureInitialization(db, identity);
+    await db.run(sql`CREATE TABLE activation_fault(enabled INTEGER)`);
+    await db.run(sql`INSERT INTO activation_fault VALUES(1)`);
+    await db.run(
+      sql.raw(
+        `CREATE TRIGGER mutate_initial_completion AFTER UPDATE OF state ON local_asset_manifest WHEN NEW.owner_kind='pending-work' AND NEW.state='released' AND (SELECT enabled FROM activation_fault)=1 BEGIN ${mutation}; END`,
+      ),
+    );
+    await prepareCaptureInitialization(db, identity, factory);
+    const baseline = await rows(db, "SELECT * FROM capture_baseline");
+    await expect(activateCaptureInitialization(db, identity)).rejects.toThrow();
+    expect(await state(db)).toEqual([[0, "active", 1]]);
+    expect(await rows(db, "SELECT epoch_id FROM capture_epoch")).toEqual([["initial"]]);
+    expect(await rows(db, "SELECT * FROM capture_baseline")).toEqual(baseline);
+    expect(await rows(db, "SELECT * FROM capture_epoch_archive")).toEqual([]);
+    expect(
+      await rows(db, "SELECT owner_kind,state FROM local_asset_manifest ORDER BY owner_kind"),
+    ).toEqual([
+      ["baseline", "retained"],
+      ["pending-work", "pending"],
+    ]);
+    await db.run(sql`UPDATE activation_fault SET enabled=0`);
+    expect(await activateCaptureInitialization(db, identity)).toEqual({ changed: true });
+    await (await openCapturePrototype(db)).verify();
+  },
+);
+
 it("rolls back epoch activation if completion cannot release the staging owner", async () => {
   const db = await fixture();
   await stageCaptureInitialization(db, identity);

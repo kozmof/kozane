@@ -119,6 +119,70 @@ async function completeBatches(f: Awaited<ReturnType<typeof fixture>>) {
   await runCaptureMigrationBatch(f.db, f.request, 0, repair);
   await runCaptureMigrationBatch(f.db, f.request, 1, rebuild);
 }
+it.each([
+  ["epoch", "UPDATE capture_epoch SET epoch_id='wrong'"],
+  ["epoch storage", "UPDATE capture_epoch SET schema_id=CAST(schema_id AS BLOB)"],
+  ["baseline", "UPDATE capture_baseline SET rows='[]'"],
+  ["selection", "INSERT INTO capture_selection VALUES(0,'old')"],
+  ["archive", "UPDATE capture_epoch_archive SET baseline='[]' WHERE epoch_id=NEW.source_epoch"],
+  ["prior archive", "UPDATE capture_epoch_archive SET selection='changed' WHERE epoch_id='older'"],
+  ["candidate", "UPDATE capture_epoch_transition SET candidate=NULL WHERE id=NEW.id"],
+  [
+    "history storage",
+    "UPDATE capture_epoch_transition SET history=CAST(history AS BLOB) WHERE id=NEW.id",
+  ],
+  [
+    "owner",
+    "UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Activation fault' WHERE owner_kind='baseline'",
+  ],
+  ["history", "UPDATE capture_run SET invocation='{}' WHERE id='old'"],
+  ["execution", "UPDATE capture_execution SET input='{\"changed\":true}' WHERE run_id='old'"],
+  ["effect", "UPDATE capture_effect SET after_image=NULL WHERE run_id='old'"],
+  [
+    "owner metadata",
+    "UPDATE local_asset_manifest SET verified_at=verified_at+1 WHERE owner_kind='baseline'",
+  ],
+] as const)(
+  "rolls back changed %s metadata at epoch activation and retries without repeating repair",
+  async (_name, mutation) => {
+    const f = await fixture();
+    await run(f.db, f.capture, "old", "Recorded");
+    await f.db.run(sql`INSERT INTO capture_epoch_archive VALUES('older','old-schema','[]','[]')`);
+    await completeBatches(f);
+    await f.db.run(sql`CREATE TABLE activation_fault(enabled INTEGER)`);
+    await f.db.run(sql`INSERT INTO activation_fault VALUES(1)`);
+    await f.db.run(
+      sql.raw(
+        `CREATE TRIGGER mutate_activated_epoch AFTER UPDATE OF state ON capture_epoch_transition WHEN NEW.state='completed' AND (SELECT enabled FROM activation_fault)=1 BEGIN ${mutation}; END`,
+      ),
+    );
+    await prepareCaptureEpochBaseline(f.db, f.request, factory);
+    const baseline = await rows(f.db, "SELECT * FROM capture_baseline");
+    const selected = await rows(f.db, "SELECT * FROM capture_selection");
+    const runs = await rows(f.db, "SELECT * FROM capture_run");
+    const executions = await rows(f.db, "SELECT * FROM capture_execution");
+    const effects = await rows(f.db, "SELECT * FROM capture_effect");
+    const archives = await rows(f.db, "SELECT * FROM capture_epoch_archive");
+    await expect(activateCaptureEpoch(f.db, f.request)).rejects.toThrow();
+    expect(await state(f.db)).toEqual([[2, "active", 1]]);
+    expect(await rows(f.db, "SELECT epoch_id,schema_id FROM capture_epoch")).toEqual([
+      [f.request.sourceEpoch, f.request.sourceSchema],
+    ]);
+    expect(await rows(f.db, "SELECT * FROM capture_baseline")).toEqual(baseline);
+    expect(await rows(f.db, "SELECT * FROM capture_selection")).toEqual(selected);
+    expect(await rows(f.db, "SELECT * FROM capture_run")).toEqual(runs);
+    expect(await rows(f.db, "SELECT * FROM capture_execution")).toEqual(executions);
+    expect(await rows(f.db, "SELECT * FROM capture_effect")).toEqual(effects);
+    expect(await rows(f.db, "SELECT * FROM capture_epoch_archive")).toEqual(archives);
+    expect(await rows(f.db, "SELECT state FROM local_asset_manifest")).toEqual([["retained"]]);
+    expect(await marker(f.db)).toEqual(emptyMarker);
+    await f.db.run(sql`UPDATE activation_fault SET enabled=0`);
+    expect(await activateCaptureEpoch(f.db, f.request)).toEqual({ changed: true });
+    expect(await rows(f.db, "SELECT attempts FROM migration_repair")).toEqual([[1]]);
+    await (await openCapturePrototype(f.db)).verify();
+  },
+);
+
 it("blocks actions, no-op actions, restore mode and raw writes until a prepared epoch activates", async () => {
   const f = await fixture();
   await run(f.db, f.capture, "old", "Recorded");

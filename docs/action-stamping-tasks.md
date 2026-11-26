@@ -817,6 +817,16 @@ pins or evidence. Native file tests cover release from another connection and
 writer serialization during publication. Production initialization remains
 pending. See [initial candidate validation](prototype-capture-initialization.md#validate-the-initial-baseline).
 
+First epoch activation now verifies the installed metadata after its writes and
+initial staging completion. Tagged read-back checks the target epoch, baseline
+and archives, while final checks preserve exact retained history, candidate,
+progress, owner metadata and empty context. Changes during activation or pin
+release roll the entire boundary back. Native and Node WASM tests cover altered
+metadata and storage classes. Native file tests reopen blocked sources and retry
+their retained candidates without repeating repair or changing image bytes.
+Production activation remains pending. See
+[activation verification](prototype-epoch-transitions.md#activate-atomically).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -899,6 +909,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Prototype initial baseline staging with atomic guard installation, persistent write blocking and pending image protection. Validate candidates separately and atomically activate the first epoch with staging completion. Verify initialization and failure boundaries on native and Node WASM adapters, plus native restart and cleanup contention.
 - [x] Support an explicitly requested inventory repair batch during prototype initialization. Commit repair and progress atomically, require completion before candidate validation, preserve initial protection and exact timestamps, and verify committed retries, failure rollback, restart and writer contention without repeating repair.
 - [x] Recheck initial staging authority during candidate reads and locked reservation and publication. Verify final descriptor, progress, retained ownership and context after metadata writes, and refuse concurrent cancellation or changed publication metadata while preserving earlier protection and evidence.
+- [x] Verify first epoch activation after all metadata writes and initial staging completion. Require exact tagged epoch, baseline and archive rows, an empty selection, unchanged retained history and candidate ownership, and verify rollback and restart without repeating committed repair.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.
