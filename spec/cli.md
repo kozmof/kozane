@@ -967,6 +967,11 @@ identity or directory contents. Applying changes only the journal entry, preserv
 all shared rows, attachments and timestamps. Failed confirmation retains pending
 evidence, and repeated confirmation makes no changes.
 
+File recovery verifies the final journal receipt, visibility, attachment and disk
+state after database triggers finish. Changed evidence rolls back confirmation
+without restoring earlier file bytes. Eligibility checks support shared and local
+observation timestamps outside JavaScript's safe integer range.
+
 Unsafe or ambiguous disk states, recorded filesystem errors and abandoned operations
 are refused. Directory mutations also refuse changed taskspace snapshots. Inspect
 blocked operations and preserve their evidence for manual recovery. The command never repeats filesystem

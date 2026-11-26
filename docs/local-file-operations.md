@@ -144,6 +144,13 @@ statement or commit retains pending evidence. Repeated confirmation is idempoten
 Abandoned operations cannot be confirmed. Startup and `doctor` only report evidence
 and never apply confirmation automatically.
 
+Before committing file recovery, the host verifies the final journal receipt and
+rechecks visibility, attachment and disk state after database triggers finish.
+Changed evidence rolls back confirmation. A newer file edit stays on disk.
+Eligibility checks read only namespace and path fields, so large shared timestamps
+and prior local observation timestamps remain unchanged without JavaScript number
+conversion.
+
 Managed directory removal and legacy combined rename commit intent before changing
 disk. Their intent retains the original shared fields and attachment, the exact
 marker hash and directory device and inode IDs. Moves also record the new label

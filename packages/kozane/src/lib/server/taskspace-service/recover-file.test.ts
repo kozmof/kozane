@@ -27,6 +27,7 @@ import {
 import { localFileOperationTable, taskspaceTable } from "../../../db/schema.js";
 import { _resetWorkspaceRootForTest } from "../../../db/internal/config.js";
 import * as disk from "../taskspace-files.js";
+import * as evidence from "../taskspace-file-operations.js";
 import { contentHash } from "../local-file-operations.js";
 import { createFile, saveFile } from "./file.js";
 import { createDirectory, renameEntry, removeEntry } from "./files.js";
@@ -377,4 +378,71 @@ it("binds a forged path before reading its content even when its hash matches", 
     reason: expect.stringContaining("attachment-mismatch"),
   });
   expect(await rows()).toEqual(evidence);
+});
+
+it.each(cases)(
+  "confirms %s without decoding or changing unrelated unsafe timestamps",
+  async (operation) => {
+    const pending = await interrupted(operation);
+    await db.run(
+      sql`UPDATE taskspace SET created_at=9007199254740993,updated_at=-9007199254740995`,
+    );
+    await db.run(sql`UPDATE taskspace_local SET last_seen_at=9007199254740997`);
+    const snapshot = async () => {
+      const shared = await db.values(sql`SELECT id,namespace_id,scope_id,name,
+      CAST(created_at AS TEXT),CAST(updated_at AS TEXT) FROM taskspace`);
+      const local = await db.values(sql`SELECT taskspace_id,path,path_kind,
+      CAST(last_seen_at AS TEXT) FROM taskspace_local`);
+      return {
+        shared: shared.map((row) => Array.from(row)),
+        local: local.map((row) => Array.from(row)),
+      };
+    };
+    const before = await snapshot();
+    expect((await recover(pending.id)).status).toBe("confirmable");
+    expect((await recover(pending.id, true)).status).toBe("confirmed");
+    expect(await snapshot()).toEqual(before);
+  },
+);
+
+it.each(["intent", "created", "state", "receipt", "namespace", "attachment"] as const)(
+  "rolls back file confirmation when triggers change final %s evidence",
+  async (field) => {
+    const pending = await interrupted();
+    const statements = {
+      intent: "UPDATE local_file_operation SET intent='{}' WHERE id=NEW.id",
+      created: "UPDATE local_file_operation SET created_at=created_at+1 WHERE id=NEW.id",
+      state: "UPDATE local_file_operation SET state='pending',confirmed_at=NULL WHERE id=NEW.id",
+      receipt: "UPDATE local_file_operation SET confirmed_at=confirmed_at+1 WHERE id=NEW.id",
+      namespace: "UPDATE taskspace SET namespace_id='another'",
+      attachment: "UPDATE taskspace_local SET path='different'",
+    };
+    if (field === "namespace")
+      await db.run(sql`INSERT INTO namespace(id,name,is_default) VALUES('another','Other',0)`);
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_confirmed AFTER UPDATE ON local_file_operation
+      WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN ${statements[field]}; END`),
+    );
+    const before = await shared();
+    const attachment = await local();
+    await expect(recover(pending.id, true)).rejects.toThrow();
+    expect(await rows()).toEqual([pending]);
+    expect(await shared()).toEqual(before);
+    expect(await local()).toEqual(attachment);
+    expect(bytes()).toBe("Saved 日本語 🪁\n");
+  },
+);
+
+it("refuses a file outcome that changes during database confirmation without overwriting it", async () => {
+  const pending = await interrupted();
+  const observe = evidence.inspectTaskspaceFileRecovery;
+  let observations = 0;
+  vi.spyOn(evidence, "inspectTaskspaceFileRecovery").mockImplementation((...args) => {
+    const result = observe(...args);
+    if (++observations === 1) writeFileSync(join(root, "demo", "original.txt"), "Later edit");
+    return result;
+  });
+  await expect(recover(pending.id, true)).rejects.toThrow("different-content");
+  expect(await rows()).toEqual([pending]);
+  expect(bytes()).toBe("Later edit");
 });

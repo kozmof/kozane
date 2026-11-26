@@ -174,8 +174,16 @@ it("previews and confirms a real interrupted file save through the CLI without r
     const pending = (
       await client.execute("SELECT * FROM local_file_operation WHERE kind='taskspace.file'")
     ).rows[0];
-    const shared = (await client.execute("SELECT * FROM taskspace")).rows;
-    const attachment = (await client.execute("SELECT * FROM taskspace_local")).rows;
+    await client.execute(
+      "UPDATE taskspace SET created_at=9007199254740993,updated_at=-9007199254740995",
+    );
+    await client.execute("UPDATE taskspace_local SET last_seen_at=9007199254740997");
+    const sharedQuery =
+      "SELECT id,namespace_id,scope_id,name,CAST(created_at AS TEXT) AS created_at,CAST(updated_at AS TEXT) AS updated_at FROM taskspace";
+    const attachmentQuery =
+      "SELECT taskspace_id,path,path_kind,CAST(last_seen_at AS TEXT) AS last_seen_at FROM taskspace_local";
+    const shared = (await client.execute(sharedQuery)).rows;
+    const attachment = (await client.execute(attachmentQuery)).rows;
     const preview = run(root, "taskspace", "recover", String(pending.id));
     expect(preview.status).toBe(0);
     expect(preview.stdout).toContain("action    : save-file");
@@ -194,8 +202,8 @@ it("previews and confirms a real interrupted file save through the CLI without r
     expect(applied.status).toBe(0);
     expect(applied.stdout).toContain("File operation tracking confirmed. No files changed.");
     expect(readFileSync(join(baseDir, "note.txt"), "utf8")).toBe(content);
-    expect((await client.execute("SELECT * FROM taskspace")).rows).toEqual(shared);
-    expect((await client.execute("SELECT * FROM taskspace_local")).rows).toEqual(attachment);
+    expect((await client.execute(sharedQuery)).rows).toEqual(shared);
+    expect((await client.execute(attachmentQuery)).rows).toEqual(attachment);
     expect(
       (await client.execute("SELECT state FROM local_file_operation WHERE kind='taskspace.file'"))
         .rows[0].state,

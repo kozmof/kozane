@@ -1005,6 +1005,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Add explicit abandonment of reviewed pending operations while retaining intent, errors, reason and timestamp. Refuse automatic retries of pending layout work.
 - [x] Recover completed directory moves, layout changes and removals with snapshot and disk checks, atomic database confirmation and no filesystem retries. Preserve blocked and failed recovery evidence.
 - [x] Inspect interrupted taskspace file operations against disk state on startup and explicitly confirm reviewed outcomes without repeating filesystem callbacks. Preserve recorded errors and blocked evidence.
+- [x] Verify the final file recovery receipt, visibility, attachment and disk outcome after database triggers. Roll back changed evidence without overwriting newer files, and confirm all five operations while preserving shared and local observation timestamps outside JavaScript's safe integer range.
 - [x] Inspect pending directory claims on authenticated server startup and provide explicit attachment confirmation with live marker, identity and attachment checks. Preserve blocked claims without repeating filesystem work.
 - [ ] Add asset manifests to baselines and effect sets, covering references in invocations and full before and after images.
 - [x] Add internal image-manifest collection, canonical validation, byte verification and collision checks. Verify requirements from real captured history on native and WASM adapters.
