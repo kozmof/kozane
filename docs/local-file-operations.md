@@ -81,6 +81,11 @@ disk evidence blocks confirmation. The command does not recreate shared rows.
 Confirmation commits the attachment, current local observation time and journal
 completion together. It preserves shared timestamps and changes no files.
 Statement and commit failures retain the pending operation and prior attachment.
+Confirmation matches the inspected claim identity, creation time and recorded
+error, then checks the final journal receipt, namespace and attachment after
+database triggers finish. Changed evidence rolls back local publication and
+confirmation together. Eligibility reads leave shared timestamps and prior local
+observation timestamps opaque, including integers outside JavaScript's safe range.
 Repeating confirmation of an already confirmed operation makes no changes.
 Blocked claims remain available for manual recovery. Explicit abandonment records
 an operator's reviewed decision without claiming that the filesystem work completed.

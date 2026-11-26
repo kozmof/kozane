@@ -7,7 +7,11 @@ import { createTestDB } from "../../../test-utils/db.js";
 import type { DB } from "../../../db/database.js";
 import { addNamespace, deleteNamespace } from "../../../db/api/namespace.js";
 import { getTaskspace, updateTaskspaceLocation } from "../../../db/api/taskspace.js";
-import { localFileOperationTable, taskspaceTable } from "../../../db/schema.js";
+import {
+  localFileOperationTable,
+  taskspaceLocalTable,
+  taskspaceTable,
+} from "../../../db/schema.js";
 import { TASKSPACE_MARKER_FILE } from "../../taskspace-marker.js";
 import { contentHash, localClaimIntent, pendingLocalClaims } from "../local-file-operations.js";
 import * as directories from "../taskspace-directory.js";
@@ -214,3 +218,81 @@ it("reports inspection failure without rejecting startup or retrying external wo
   expect(warn).toHaveBeenCalledOnce();
   expect(warn.mock.calls[0][0]).toContain("Could not inspect");
 });
+
+it("recovers while preserving unsafe shared timestamps and replacing an unrelated local observation", async () => {
+  await db.run(sql`UPDATE taskspace SET created_at=9007199254740993,updated_at=9007199254740995`);
+  await db.run(sql`INSERT INTO taskspace_local(taskspace_id,path,path_kind,last_seen_at)
+    VALUES(${taskspaceId},NULL,'workspace_relative',9007199254740997)`);
+  const shared = () =>
+    db.values(sql`SELECT id,namespace_id,name,scope_id,
+    CAST(created_at AS TEXT),CAST(updated_at AS TEXT) FROM taskspace`);
+  const original = (await shared()).map((row) => Array.from(row));
+  const claim = vi.spyOn(directories, "claimTaskspaceDirectory");
+  expect((await recover()).status).toBe("confirmable");
+  expect((await recover(true)).status).toBe("confirmed");
+  expect((await shared()).map((row) => Array.from(row))).toEqual(original);
+  expect(await db.select().from(taskspaceLocalTable)).toMatchObject([
+    { taskspaceId, path: "target", lastSeenAt: expect.any(Date) },
+  ]);
+  expect(claim).not.toHaveBeenCalled();
+});
+
+it("clears the inspected claim error only after verifying matching completed work", async () => {
+  await db.update(localFileOperationTable).set({ error: "Interrupted after writing the marker" });
+  expect((await recover()).status).toBe("confirmable");
+  expect((await journal())[0].error).toBe("Interrupted after writing the marker");
+  expect((await recover(true)).status).toBe("confirmed");
+  expect((await journal())[0].error).toBeNull();
+  await updateTaskspaceLocation({ db, taskspaceId, path: "later", lastSeenAt: new Date(123000) });
+  const later = await taskspace();
+  expect((await recover(true)).status).toBe("already-confirmed");
+  expect(await taskspace()).toEqual(later);
+});
+
+it.each(["path", "intent", "namespace", "created", "error", "abandoned"] as const)(
+  "rolls back publication when a trigger changes pending %s evidence",
+  async (field) => {
+    const changes = {
+      path: "path='different'",
+      intent: "intent='{}'",
+      namespace: "namespace_id='different'",
+      created: "created_at=created_at+1",
+      error: "error='Changed after inspection'",
+      abandoned: "state='abandoned',abandoned_at=123,abandon_reason='Reviewed'",
+    };
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_claim AFTER INSERT ON taskspace_local
+      BEGIN UPDATE local_file_operation SET ${changes[field]}; END`),
+    );
+    const pending = await journal();
+    const original = await taskspace();
+    const marker = readFileSync(join(root, "target", TASKSPACE_MARKER_FILE));
+    await expect(recover(true)).rejects.toThrow();
+    expect(await journal()).toEqual(pending);
+    expect(await taskspace()).toEqual(original);
+    expect(readFileSync(join(root, "target", TASKSPACE_MARKER_FILE))).toEqual(marker);
+  },
+);
+
+it.each(["intent", "state", "attachment", "namespace", "observation", "receipt"] as const)(
+  "rolls back when confirmation triggers change final %s state",
+  async (field) => {
+    const changes = {
+      intent: "UPDATE local_file_operation SET intent='{}' WHERE id=NEW.id",
+      state: "UPDATE local_file_operation SET state='pending',confirmed_at=NULL WHERE id=NEW.id",
+      attachment: "UPDATE taskspace_local SET path='different'",
+      namespace: "UPDATE taskspace SET namespace_id=NULL",
+      observation: "UPDATE taskspace_local SET last_seen_at=NULL",
+      receipt: "UPDATE local_file_operation SET confirmed_at=confirmed_at+1 WHERE id=NEW.id",
+    };
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_confirmed AFTER UPDATE ON local_file_operation
+      WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN ${changes[field]}; END`),
+    );
+    const pending = await journal();
+    const original = await taskspace();
+    await expect(recover(true)).rejects.toThrow();
+    expect(await journal()).toEqual(pending);
+    expect(await taskspace()).toEqual(original);
+  },
+);

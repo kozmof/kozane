@@ -79,7 +79,12 @@ it("recovers interrupted attachment of a new external directory without recreati
   roots.push(external);
   const target = join(external, "notes");
   try {
-    const shared = (await client.execute("SELECT * FROM taskspace")).rows;
+    await client.execute(
+      "UPDATE taskspace SET created_at=9007199254740993,updated_at=9007199254740995",
+    );
+    const sharedQuery =
+      "SELECT id,namespace_id,scope_id,name,CAST(created_at AS TEXT) AS created_at,CAST(updated_at AS TEXT) AS updated_at FROM taskspace";
+    const shared = (await client.execute(sharedQuery)).rows;
     await client.execute(
       "CREATE TRIGGER interrupt_claim BEFORE UPDATE ON local_file_operation BEGIN SELECT RAISE(ABORT,'interrupted'); END",
     );
@@ -104,7 +109,7 @@ it("recovers interrupted attachment of a new external directory without recreati
     expect((await client.execute("SELECT path,path_kind FROM taskspace_local")).rows).toEqual([
       { path: target, path_kind: "absolute" },
     ]);
-    expect((await client.execute("SELECT * FROM taskspace")).rows).toEqual(shared);
+    expect((await client.execute(sharedQuery)).rows).toEqual(shared);
     expect(readFileSync(join(target, ".taskspace.json"))).toEqual(marker);
     expect(JSON.parse(marker.toString("utf8"))).not.toHaveProperty("ownsDirectory");
   } finally {

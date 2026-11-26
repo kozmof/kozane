@@ -942,6 +942,8 @@ Claim confirmation requires the exact intended marker bytes, an existing shared 
 the recorded namespace and no conflicting attachment. It refuses missing or changed
 markers, unsafe paths, symlinks, invalid intent and absent or reassigned taskspaces.
 It records the current local observation time and preserves shared timestamps.
+Applying rechecks the inspected intent and the final journal receipt and attachment.
+Changed evidence rolls back confirmation and local publication together.
 An already confirmed operation makes no changes.
 
 Directory mutation confirmation requires unchanged shared fields and attachment from the recorded
