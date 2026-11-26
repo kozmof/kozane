@@ -827,6 +827,16 @@ their retained candidates without repeating repair or changing image bytes.
 Production activation remains pending. See
 [activation verification](prototype-epoch-transitions.md#activate-atomically).
 
+Initial capture now has read-only phase inspection through one consistent read
+snapshot. It reports repair, validation, activation or completion progress with
+staging and candidate ownership metadata. Inspection refuses mismatched or
+corrupt state, preserves later actions and reviewed releases, and opens no write
+boundary or validation database. It does not read image files or advance work.
+Native and Node WASM tests cover phases, immutability and refusal boundaries.
+Native file tests verify snapshots during competing preparation and activation,
+and inspection with missing image files. Production integration remains pending.
+See [staged initialization inspection](prototype-capture-initialization.md#inspect-staged-initialization).
+
 ## Version one
 
 Complete phases 1–5 before shipping stamping and restoration. Keep guards opt-in
@@ -910,6 +920,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Support an explicitly requested inventory repair batch during prototype initialization. Commit repair and progress atomically, require completion before candidate validation, preserve initial protection and exact timestamps, and verify committed retries, failure rollback, restart and writer contention without repeating repair.
 - [x] Recheck initial staging authority during candidate reads and locked reservation and publication. Verify final descriptor, progress, retained ownership and context after metadata writes, and refuse concurrent cancellation or changed publication metadata while preserving earlier protection and evidence.
 - [x] Verify first epoch activation after all metadata writes and initial staging completion. Require exact tagged epoch, baseline and archive rows, an empty selection, unchanged retained history and candidate ownership, and verify rollback and restart without repeating committed repair.
+- [x] Inspect matching staged initialization through one read snapshot without writes, repair, image reads or validation database allocation. Report durable phases and ownership, refuse inconsistent state, preserve completed edits and releases, and verify competing publication and activation on native files.
 - [ ] Reconstruct the target projection from the baseline and selected complete effect sets in materialization order. Check every full before image.
 - [x] Expose pure shared reconstruction from a complete baseline and selected effect records. Require separately trusted IDs, order and expected counts, reject truncation and ordinal gaps, and compare full tagged before images without SQL coercion. Verify captured cascades on native and Node WASM adapters.
 - [x] Bind canonical shared row-history payloads to checkpoint identities, selected IDs, counts, UTF-8 byte lengths and SHA-256 hashes. Verify separately retained descriptors before SQL allocation and preserve exact intermediate effects, TEXT cells and caller-owned inputs while hashing.

@@ -1,6 +1,6 @@
 /** Test-only restartable enablement. Production enrollment remains disabled. */
 import { sql } from "drizzle-orm";
-import { withTx, type DB, type Tx, type ReadTx } from "../../../core/src/database.js";
+import { withReadTx, withTx, type DB, type Tx, type ReadTx } from "../../../core/src/database.js";
 import {
   configureActionConnection,
   verifyActionConnection,
@@ -21,6 +21,7 @@ import {
   activateCaptureEpochInTx,
   prepareCaptureEpochBaseline,
   runCaptureMigrationBatchInTx,
+  readCaptureEpochTransition,
   type PrototypeEpochTransition,
 } from "./action-epochs.js";
 import {
@@ -144,6 +145,20 @@ async function record(
   )
     throw Error("Initial capture staging completion is inconsistent");
   return { state, pin };
+}
+/** Inspect matching durable staging through one read snapshot without advancing it. */
+export async function inspectCaptureInitialization(db: DB, input: PrototypeCaptureInitialization) {
+  const { identity, request } = own(input);
+  const owner = await captureInitializationOwner(identity);
+  return withReadTx(db, async (tx) => {
+    const current = await record(tx, request, owner);
+    const status = await readCaptureEpochTransition(tx, request);
+    return Object.freeze({
+      ...status,
+      stagingOwner: owner,
+      stagingProtection: current.pin.record.state,
+    });
+  });
 }
 /** Schema, initial write blocking and pending image protection become durable together. */
 export async function stageCaptureInitialization(

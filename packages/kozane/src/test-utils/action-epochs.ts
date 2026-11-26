@@ -358,15 +358,11 @@ export async function captureEpochBaselineOwner(
 }
 // Test fixtures use source brands while the local manifest API exposes the packed package brand.
 const local = (tx: Tx) => tx as unknown as Parameters<typeof reserveAssetManifestInTx>[0];
-async function requireBaselineOwner(
-  tx: Tx,
-  owner: AssetManifestOwner,
-  manifest: AssetManifest,
-  retained: boolean,
-) {
-  const current = await readAssetManifest(local(tx), owner);
-  if (current.record.state === "released" || (retained && current.record.state !== "retained"))
-    throw Error("Epoch baseline image protection is not active in the required state");
+async function readBaselineOwner(tx: Handle, owner: AssetManifestOwner, manifest: AssetManifest) {
+  const current = await readAssetManifest(
+    tx as unknown as Parameters<typeof readAssetManifest>[0],
+    owner,
+  );
   if (current.record.manifest !== JSON.stringify(manifest))
     throw Error("Epoch baseline image requirements changed");
   if (
@@ -376,6 +372,110 @@ async function requireBaselineOwner(
   )
     throw Error("Epoch baseline owner timestamps cannot be represented safely");
   return current;
+}
+async function requireBaselineOwner(
+  tx: Tx,
+  owner: AssetManifestOwner,
+  manifest: AssetManifest,
+  retained: boolean,
+) {
+  const current = await readBaselineOwner(tx, owner, manifest);
+  if (current.record.state === "released" || (retained && current.record.state !== "retained"))
+    throw Error("Epoch baseline image protection is not active in the required state");
+  return current;
+}
+
+/** Read one staged transition without writes, image access or validation database allocation. */
+export async function readCaptureEpochTransition(tx: Handle, input: PrototypeEpochTransition) {
+  const request = own(input);
+  if ((await tx.values(sql`SELECT 1 FROM sqlite_temp_schema LIMIT 1`)).length)
+    throw Error("Epoch inspection refuses temporary schema objects");
+  await empty(tx);
+  await guards(tx);
+  const stored = await transition(tx, request);
+  const epoch = await currentEpoch(tx);
+  if (stored.state === "active") await active(tx, request);
+  else if (
+    stored.state !== "completed" ||
+    epoch.epochId !== request.targetEpoch ||
+    epoch.schemaId !== request.targetSchema
+  )
+    throw Error("Inspected epoch is not active for this transition");
+  if (stored.state === "completed") await requireCaptureEpochRecordMode(tx);
+  let candidate: Readonly<{
+    sha256: string;
+    owner: AssetManifestOwner;
+    protection: "retained" | "released";
+  }> | null = null;
+  if (stored.candidate !== null) {
+    if (stored.next !== request.batches.length)
+      throw Error("Inspected candidate has incomplete migration batches");
+    const { sha256, ...value } = JSON.parse(stored.candidate);
+    if (
+      typeof sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(sha256) ||
+      sha256 !== (await hash(value)) ||
+      value.epochId !== request.targetEpoch ||
+      value.schemaId !== request.targetSchema ||
+      value.encoding !== ROW_ENCODING_VERSION ||
+      typeof value.schema !== "string" ||
+      !Array.isArray(value.rows)
+    )
+      throw Error("Inspected epoch baseline changed");
+    createRowProjection(capturedTables, value.rows);
+    const manifest = parseAssetManifest(value.assets);
+    if (!same(selectAssetManifest(manifest, baselineAssetNames(value.rows)), manifest))
+      throw Error("Inspected epoch image requirements changed");
+    const owner = await captureEpochBaselineOwner(request, sha256);
+    const protection = await readBaselineOwner(tx, owner, manifest);
+    if (
+      protection.record.state === "pending" ||
+      (stored.state === "active" && protection.record.state !== "retained")
+    )
+      throw Error("Inspected epoch baseline protection is inconsistent");
+    if (stored.state === "active") {
+      if (
+        value.schema !== (await schema(tx)) ||
+        !same(value.rows, await captureApplicationRows(tx))
+      )
+        throw Error("Inspected epoch candidate no longer matches the source");
+    } else {
+      const baseline = await metadataRows(tx, "capture_baseline", [
+        "singleton",
+        "row_encoding_ver",
+        "rows",
+        "asset_manifest",
+      ]);
+      if (
+        !same(baseline, [
+          parseTaggedRow({
+            singleton: ["integer", "1"],
+            row_encoding_ver: ["integer", String(ROW_ENCODING_VERSION)],
+            rows: ["text", JSON.stringify(value.rows)],
+            asset_manifest: ["text", JSON.stringify(manifest)],
+          }),
+        ])
+      )
+        throw Error("Inspected active epoch baseline changed");
+    }
+    candidate = Object.freeze({ sha256, owner, protection: protection.record.state });
+  } else if (stored.state === "completed")
+    throw Error("Inspected completed epoch has no candidate");
+  const phase =
+    stored.state === "completed"
+      ? "active"
+      : stored.next < request.batches.length
+        ? "repair-pending"
+        : candidate === null
+          ? "validation-pending"
+          : "activation-pending";
+  return Object.freeze({
+    phase,
+    request,
+    completedBatches: stored.next,
+    totalBatches: request.batches.length,
+    candidate,
+  });
 }
 async function verifyBaselineOwner(
   tx: Tx,

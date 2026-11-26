@@ -7,6 +7,7 @@ import {
   activateCaptureInitialization,
   captureInitializationOwner,
   repairCaptureInitialization,
+  inspectCaptureInitialization,
 } from "../../test-utils/action-initialization.js";
 import {
   openCapturePrototype,
@@ -84,6 +85,196 @@ async function repairFixture() {
   );
   return db;
 }
+function inspectionOnly(db: DB) {
+  const write = vi.fn(async () => {
+    throw Error("Inspection must not write");
+  });
+  return {
+    db: createDatabaseAdapter(new Proxy(db, {}), {
+      read: (work) => withReadTx(db, (tx) => work(tx as unknown as DatabaseHandle)),
+      write,
+    }),
+    write,
+  };
+}
+
+it("inspects every staged phase without writes and preserves completed edits and reviewed releases", async () => {
+  const db = await repairFixture();
+  const staged = await stageCaptureInitialization(db, repairing);
+  const inspected = inspectionOnly(db);
+  let status = await inspectCaptureInitialization(inspected.db, repairing);
+  expect(status).toMatchObject({
+    phase: "repair-pending",
+    completedBatches: 0,
+    totalBatches: 1,
+    candidate: null,
+    stagingOwner: staged.owner,
+    stagingProtection: "pending",
+  });
+  await repairCaptureInitialization(db, repairing);
+  status = await inspectCaptureInitialization(inspected.db, repairing);
+  expect(status).toMatchObject({
+    phase: "validation-pending",
+    completedBatches: 1,
+    candidate: null,
+  });
+  const prepared = await prepareCaptureInitialization(db, repairing, factory);
+  status = await inspectCaptureInitialization(inspected.db, repairing);
+  expect(status).toMatchObject({
+    phase: "activation-pending",
+    candidate: { sha256: prepared.sha256, owner: prepared.owner, protection: "retained" },
+  });
+  for (const value of [
+    status,
+    status.request,
+    status.request.batches,
+    status.stagingOwner,
+    status.candidate,
+    status.candidate!.owner,
+  ])
+    expect(Object.isFrozen(value)).toBe(true);
+  await activateCaptureInitialization(db, repairing);
+  await run(db, await openCapturePrototype(db), "Later action");
+  await db.run(
+    sql`UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Reviewed release' WHERE owner_kind='baseline'`,
+  );
+  const before = await captureApplicationRows(db);
+  status = await inspectCaptureInitialization(inspected.db, repairing);
+  expect(status).toMatchObject({
+    phase: "active",
+    stagingProtection: "released",
+    candidate: { protection: "released" },
+  });
+  expect(await captureApplicationRows(db)).toEqual(before);
+  expect(inspected.write).not.toHaveBeenCalled();
+});
+
+it("reports validation still pending after interrupted preparation without recreating its pin", async () => {
+  const db = await fixture();
+  await stageCaptureInitialization(db, identity);
+  await expect(
+    prepareCaptureInitialization(db, identity, async () => {
+      throw Error("Interrupted");
+    }),
+  ).rejects.toThrow("Interrupted");
+  const before = await rows(
+    db,
+    "SELECT owner_kind,owner_id,state,created_at FROM local_asset_manifest ORDER BY owner_kind",
+  );
+  const inspected = inspectionOnly(db);
+  expect(await inspectCaptureInitialization(inspected.db, identity)).toMatchObject({
+    phase: "validation-pending",
+    candidate: null,
+    completedBatches: 0,
+    totalBatches: 0,
+  });
+  expect(
+    await rows(
+      db,
+      "SELECT owner_kind,owner_id,state,created_at FROM local_asset_manifest ORDER BY owner_kind",
+    ),
+  ).toEqual(before);
+  expect(inspected.write).not.toHaveBeenCalled();
+});
+
+it("refuses absent, mismatched and cancelled initialization without changing rows or metadata", async () => {
+  const db = await fixture();
+  const inspected = inspectionOnly(db);
+  await expect(inspectCaptureInitialization(inspected.db, identity)).rejects.toThrow();
+  expect(await rows(db, "SELECT 1 FROM sqlite_schema WHERE name GLOB 'capture_*'")).toEqual([]);
+  await stageCaptureInitialization(db, repairing);
+  for (const wrong of [identity, { ...repairing, id: "other" }, { ...repairing, epochId: "other" }])
+    await expect(inspectCaptureInitialization(inspected.db, wrong)).rejects.toThrow(
+      "missing or different",
+    );
+  await db.run(
+    sql`UPDATE local_asset_manifest SET state='released',released_at=1,release_reason='Cancelled' WHERE owner_kind='pending-work'`,
+  );
+  await expect(inspectCaptureInitialization(inspected.db, repairing)).rejects.toThrow(
+    "staging protection is not active",
+  );
+  expect(await state(db)).toEqual([[0, "active", 0]]);
+  expect(inspected.write).not.toHaveBeenCalled();
+});
+
+it.each(["progress", "candidate", "protection"] as const)(
+  "refuses corrupted %s during read-only inspection",
+  async (field) => {
+    const db = await fixture();
+    await stageCaptureInitialization(db, repairing);
+    await repairCaptureInitialization(db, repairing);
+    if (field === "progress") await db.run(sql`UPDATE capture_epoch_transition SET next_batch=0`);
+    else {
+      await prepareCaptureInitialization(db, repairing, factory);
+      if (field === "candidate")
+        await db.run(
+          sql`UPDATE capture_epoch_transition SET candidate=json_set(candidate,'$.sha256',${"0".repeat(64)})`,
+        );
+      else
+        await db.run(
+          sql`UPDATE local_asset_manifest SET state='pending',verified_at=NULL WHERE owner_kind='baseline'`,
+        );
+    }
+    const before = await rows(db, "SELECT * FROM capture_epoch_transition");
+    const inspected = inspectionOnly(db);
+    await expect(inspectCaptureInitialization(inspected.db, repairing)).rejects.toThrow();
+    expect(await rows(db, "SELECT * FROM capture_epoch_transition")).toEqual(before);
+    expect(inspected.write).not.toHaveBeenCalled();
+  },
+);
+
+it("leaves connection flags unchanged and refuses temporary schema during inspection", async () => {
+  const db = await fixture();
+  await stageCaptureInitialization(db, identity);
+  const inspected = inspectionOnly(db);
+  await db.values(sql`PRAGMA recursive_triggers=OFF`);
+  expect((await inspectCaptureInitialization(inspected.db, identity)).phase).toBe(
+    "validation-pending",
+  );
+  expect(await rows(db, "PRAGMA recursive_triggers")).toEqual([[0]]);
+  await db.values(sql`PRAGMA recursive_triggers=ON`);
+  const temporary = createDatabaseAdapter(new Proxy(db, {}), {
+    read: (work) =>
+      withReadTx(db, async (tx) => {
+        await tx.values(sql`CREATE TEMP TABLE inspection_shadow(id INTEGER)`);
+        try {
+          return await work(tx as unknown as DatabaseHandle);
+        } catch (cause) {
+          expect((await tx.values(sql`SELECT name FROM sqlite_temp_schema`))[0][0]).toBe(
+            "inspection_shadow",
+          );
+          throw cause;
+        }
+      }),
+    write: inspected.write,
+  });
+  await expect(inspectCaptureInitialization(temporary, identity)).rejects.toThrow(
+    "temporary schema",
+  );
+  expect(inspected.write).not.toHaveBeenCalled();
+});
+
+it("owns inspection identity before hashing and rejects read-boundary completion failures", async () => {
+  const db = await fixture();
+  await stageCaptureInitialization(db, identity);
+  const input = { ...identity };
+  const pending = inspectCaptureInitialization(inspectionOnly(db).db, input);
+  input.id = "changed";
+  expect((await pending).request.id).toBe(identity.id);
+  const wrapped = createDatabaseAdapter(new Proxy(db, {}), {
+    read: (work) =>
+      withReadTx(db, async (tx) => {
+        await work(tx as unknown as DatabaseHandle);
+        throw Error("Inspection read completion failed");
+      }),
+    write: async () => {
+      throw Error("Inspection must not write");
+    },
+  });
+  await expect(inspectCaptureInitialization(wrapped, identity)).rejects.toThrow(
+    "Inspection read completion failed",
+  );
+});
 function run(
   db: DB,
   capture: Awaited<ReturnType<typeof openCapturePrototype>>,

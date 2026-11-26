@@ -10,6 +10,7 @@ import {
   prepareCaptureInitialization,
   activateCaptureInitialization,
   repairCaptureInitialization,
+  inspectCaptureInitialization,
 } from "../../test-utils/action-initialization.js";
 import { openCapturePrototype } from "../../test-utils/action-capture.js";
 import {
@@ -78,6 +79,60 @@ async function seedInitialRepair(db: DB) {
   await db.run(sql`UPDATE card SET inventory_id='i' WHERE id='seeded'`);
   await db.run(sql.raw(String(trigger)));
 }
+it.each(["preparation", "activation"] as const)(
+  "inspects one consistent snapshot while another connection commits %s",
+  async (phase) => {
+    const f = await fixture();
+    await stageCaptureInitialization(f.core, identity, f.catalog);
+    if (phase === "activation")
+      await prepareCaptureInitialization(f.core, identity, factory, f.catalog, f.read);
+    const other = await open(f.path);
+    const write = vi.fn(async () => {
+      throw Error("Inspection must not write");
+    });
+    const wrapped = createDatabaseAdapter(new Proxy(f.core, {}), {
+      read: (work) =>
+        withReadTx(f.core, async (tx) => {
+          await tx.values(sql`SELECT candidate FROM capture_epoch_transition`);
+          if (phase === "preparation")
+            await prepareCaptureInitialization(
+              other.db as unknown as DB,
+              identity,
+              factory,
+              f.catalog,
+              f.read,
+            );
+          else await activateCaptureInitialization(other.db as unknown as DB, identity, f.read);
+          return work(tx as unknown as DatabaseHandle);
+        }),
+      write,
+    });
+    const captured = await inspectCaptureInitialization(wrapped, identity);
+    expect(captured.phase).toBe(
+      phase === "preparation" ? "validation-pending" : "activation-pending",
+    );
+    expect(captured.stagingProtection).toBe("pending");
+    const current = await inspectCaptureInitialization(f.core, identity);
+    expect(current.phase).toBe(phase === "preparation" ? "activation-pending" : "active");
+    expect(current.stagingProtection).toBe(phase === "preparation" ? "pending" : "released");
+    expect(write).not.toHaveBeenCalled();
+  },
+);
+
+it("inspects a prepared initialization without reading missing image bytes or activating writes", async () => {
+  const f = await fixture();
+  await stageCaptureInitialization(f.core, identity, f.catalog);
+  const prepared = await prepareCaptureInitialization(f.core, identity, factory, f.catalog, f.read);
+  await fs.unlink(join(f.root, f.name));
+  const current = await inspectCaptureInitialization(f.core, identity);
+  expect(current.phase).toBe("activation-pending");
+  expect(current.candidate?.owner).toEqual(prepared.owner);
+  expect(current.candidate?.protection).toBe("retained");
+  await expect(activateCaptureInitialization(f.core, identity, f.read)).rejects.toThrow();
+  expect((await inspectCaptureInitialization(f.core, identity)).phase).toBe("activation-pending");
+  await expect(f.db.run(sql`INSERT INTO scope VALUES('raw','unstamped')`)).rejects.toThrow();
+});
+
 it("resumes initial repair across restarts without repeating a committed batch", async () => {
   const f = await fixture();
   await seedInitialRepair(f.core);

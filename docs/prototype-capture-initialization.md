@@ -145,6 +145,39 @@ The staging result includes `changed`, `request` and `owner`.
 `captureInitializationOwner(initialization)` derives the same initial pin after
 restart. Preparation returns the candidate's separate `owner` and `sha256`.
 
+## Inspect staged initialization
+
+Inspect a matching staged request without advancing it.
+
+```ts
+const status = await inspectCaptureInitialization(db, initialization);
+```
+
+All observations use one consistent read snapshot. The result includes the owned
+request, completed and total batch counts, initial staging owner and protection
+state, and any committed candidate's hash, owner and protection state. Returned
+objects and request batches are frozen.
+
+| Phase | Recorded state |
+| --- | --- |
+| `repair-pending` | Requested repair has not committed. |
+| `validation-pending` | Batches are complete and no candidate has committed. |
+| `activation-pending` | A candidate with matching retained protection awaits activation. |
+| `active` | Initialization completed and its epoch remains selected without another blocking transition. |
+
+Inspection requires the exact staged identity and repair plan. It checks progress,
+guards, empty markers, candidate hashes and image-requirement metadata. Prepared
+candidates must still match source rows and schema. Completed inspection preserves
+later actions and reports reviewed baseline-owner releases without recreating
+protection. Missing, mismatched, cancelled or inconsistent staging is refused.
+
+The reader opens no write boundary, changes no connection flags, reads no image
+bytes and allocates no validation database. Repair and activation verify their
+own write connections and required bytes. Inspection can therefore report a
+persisted phase even when image files are missing. Interrupted validation can
+also leave pending pins while the reported candidate remains `null`; inspection
+preserves that evidence.
+
 ## Verify the boundaries
 
 `db/api/action-initialization.test.ts` covers empty and populated sources, blocked
@@ -169,6 +202,10 @@ and serialize final publication with application writes, cleanup and pin release
 Activation tests reject metadata changes after staging completion, reopen the
 blocked source and activate its existing candidate without repeating repair or
 changing image bytes.
+Inspection tests cover every phase, immutable results, cancelled and corrupted
+metadata, unchanged connection flags, temporary schema refusal and read-completion
+failures. Native file tests keep observations consistent while another connection
+prepares or activates, and inspect missing images without touching their bytes.
 
 Browser runtime verification and production initialization integration remain
 pending. The existing fixture installer remains an immediate setup helper for
