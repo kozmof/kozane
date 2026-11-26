@@ -33,6 +33,8 @@ import {
 import { _resetWorkspaceRootForTest } from "../../../db/internal/config.js";
 import { TASKSPACE_MARKER_FILE, taskspaceMarkerText } from "../../taskspace-marker.js";
 import * as disk from "../taskspace-directory.js";
+import * as evidence from "../taskspace-directory-operations.js";
+import { journalTaskspaceDirectoryChange } from "./directory-operation.js";
 import { removeTaskspace, renameTaskspace } from "./mutate.js";
 import { recoverTaskspaceOperation } from "./recover-operation.js";
 import { recoverDirectoryOperation } from "./recover-directory.js";
@@ -87,23 +89,42 @@ afterEach(() => {
 const record = () => getTaskspace({ db, taskspaceId });
 const rows = () => db.select().from(localFileOperationTable);
 const recover = (id: string, apply = false) => recoverTaskspaceOperation(db, root, id, apply);
-async function interrupted(operation: "move" | "remove" = "move") {
+async function interrupted(operation: "move" | "remove" | "layout" = "move") {
   await db.run(
     sql`CREATE TRIGGER reject_confirmation BEFORE UPDATE ON local_file_operation BEGIN SELECT RAISE(ABORT,'interrupted'); END`,
   );
   const params = { namespaceId, taskspaceId };
   await expect(
-    operation === "move"
-      ? renameTaskspace({ db }, params, { name: "final" })
-      : removeTaskspace({ db }, params),
-  ).rejects.toMatchObject({ status: 500 });
+    operation === "layout"
+      ? journalTaskspaceDirectoryChange(
+          {
+            db,
+            namespaceId,
+            root,
+            original: (await record())!,
+            request: { operation: "layout", targetPath: target },
+            recheck: async () => {},
+          },
+          () =>
+            disk.moveTaskspaceDirectory({
+              workspaceRoot: root,
+              storedPath: path,
+              taskspaceId,
+              nextStored: target,
+            }),
+          (tx) => updateTaskspaceLocation({ db: tx, taskspaceId, path: target }),
+        )
+      : operation === "move"
+        ? renameTaskspace({ db }, params, { name: "final" })
+        : removeTaskspace({ db }, params),
+  ).rejects.toMatchObject(operation === "layout" ? { phase: "confirm" } : { status: 500 });
   await db.run(sql`DROP TRIGGER reject_confirmation`);
   const [row] = await rows();
   expect(row).toMatchObject({ state: "pending", error: null });
   return row;
 }
 
-it.each(["move", "remove"] as const)(
+it.each(["move", "remove", "layout"] as const)(
   "previews %s read-only and confirms all database changes together without disk callbacks",
   async (operation) => {
     const original = await record();
@@ -116,15 +137,15 @@ it.each(["move", "remove"] as const)(
       vi.spyOn(disk, "claimTaskspaceDirectory"),
     ];
     const marker =
-      operation === "move" ? readFileSync(join(root, target, TASKSPACE_MARKER_FILE)) : null;
+      operation !== "remove" ? readFileSync(join(root, target, TASKSPACE_MARKER_FILE)) : null;
     expect((await recover(pending.id)).status).toBe("confirmable");
     expect(await record()).toEqual(original);
     expect(await rows()).toEqual([pending]);
     expect((await db.select().from(cardTable))[0].taskspaceId).toBe(taskspaceId);
     expect((await recover(pending.id, true)).status).toBe("confirmed");
-    if (operation === "move") {
+    if (operation !== "remove") {
       expect(await record()).toMatchObject({
-        name: "final",
+        name: operation === "move" ? "final" : "draft",
         path: target,
         createdAt: original!.createdAt,
         lastSeenAt: original!.lastSeenAt,
@@ -149,7 +170,7 @@ it.each(["move", "remove"] as const)(
   },
 );
 
-it.each(["move", "remove"] as const)(
+it.each(["move", "remove", "layout"] as const)(
   "rolls back every %s change when recovery confirmation fails at commit",
   async (operation) => {
     const pending = await interrupted(operation);
@@ -302,4 +323,133 @@ it("refuses abandoned operations and directory recovery of another kind without 
   );
   expect(await rows()).toEqual(evidence);
   await expect(recover("missing")).rejects.toThrow("not found");
+});
+
+it.each(["move", "remove", "layout"] as const)(
+  "preserves an unsafe local observation during %s recovery",
+  async (operation) => {
+    const pending = await interrupted(operation);
+    await db.run(sql`UPDATE taskspace_local SET last_seen_at=9007199254740993`);
+    expect((await recover(pending.id)).status).toBe("confirmable");
+    expect((await recover(pending.id, true)).status).toBe("confirmed");
+    expect(
+      (await db.values(sql`SELECT CAST(last_seen_at AS TEXT) FROM taskspace_local`))[0][0],
+    ).toBe("9007199254740993");
+  },
+);
+
+it.each([
+  "intent",
+  "receipt",
+  "state",
+  "label",
+  "scope",
+  "timestamp",
+  "attachment",
+  "observation",
+  "namespace",
+] as const)(
+  "rolls back move recovery after confirmation triggers change final %s state",
+  async (field) => {
+    const pending = await interrupted();
+    const statements = {
+      intent: "UPDATE local_file_operation SET intent='{}' WHERE id=NEW.id",
+      receipt: "UPDATE local_file_operation SET confirmed_at=confirmed_at+1 WHERE id=NEW.id",
+      state: "UPDATE local_file_operation SET state='pending',confirmed_at=NULL WHERE id=NEW.id",
+      label: "UPDATE taskspace SET name='later'",
+      scope: "UPDATE taskspace SET scope_id='other-scope'",
+      timestamp: "UPDATE taskspace SET updated_at=updated_at+1",
+      attachment: "UPDATE taskspace_local SET path='elsewhere'",
+      observation: "UPDATE taskspace_local SET last_seen_at=NULL",
+      namespace: "DELETE FROM namespace",
+    };
+    if (field === "scope")
+      await db.run(sql`INSERT INTO scope(id,name) VALUES('other-scope','Other')`);
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_confirmed AFTER UPDATE ON local_file_operation
+      WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN ${statements[field]}; END`),
+    );
+    const original = await record();
+    const attachment = await db.select().from(taskspaceLocalTable);
+    await expect(recover(pending.id, true)).rejects.toThrow();
+    expect(await record()).toEqual(original);
+    expect(await db.select().from(taskspaceLocalTable)).toEqual(attachment);
+    expect((await db.select().from(cardTable))[0].taskspaceId).toBe(taskspaceId);
+    expect(await rows()).toEqual([pending]);
+    expect(readFileSync(join(root, target, "a.txt"), "utf8")).toBe("Retained content");
+  },
+);
+
+it("rolls back layout publication when a confirmation trigger changes shared fields", async () => {
+  const pending = await interrupted("layout");
+  await db.run(sql`CREATE TRIGGER change_confirmed AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' BEGIN UPDATE taskspace SET updated_at=updated_at+1; END`);
+  const original = await record();
+  await expect(recover(pending.id, true)).rejects.toThrow();
+  expect(await record()).toEqual(original);
+  expect(await rows()).toEqual([pending]);
+});
+
+it("rolls back removal when a trigger relinks a card to the deleted identity", async () => {
+  const pending = await interrupted("remove");
+  await db.run(
+    sql.raw(`CREATE TRIGGER change_confirmed AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' BEGIN
+      INSERT INTO taskspace(id,namespace_id,name,created_at,updated_at) VALUES('${taskspaceId}','${namespaceId}','resurrected',123,456);
+      UPDATE card SET taskspace_id='${taskspaceId}';
+    END`),
+  );
+  const original = await record();
+  await expect(recover(pending.id, true)).rejects.toThrow();
+  expect(await record()).toEqual(original);
+  expect((await db.select().from(cardTable))[0].taskspaceId).toBe(taskspaceId);
+  expect(await rows()).toEqual([pending]);
+  expect(existsSync(join(root, path))).toBe(false);
+});
+
+it("leaves newer directory evidence intact when it changes during confirmation", async () => {
+  const pending = await interrupted();
+  const observe = evidence.inspectTaskspaceDirectoryOperation;
+  let observations = 0;
+  vi.spyOn(evidence, "inspectTaskspaceDirectoryOperation").mockImplementation((...args) => {
+    const result = observe(...args);
+    if (++observations === 1)
+      writeFileSync(join(root, target, TASKSPACE_MARKER_FILE), "Newer marker");
+    return result;
+  });
+  const original = await record();
+  await expect(recover(pending.id, true)).rejects.toThrow();
+  expect(await record()).toEqual(original);
+  expect(await rows()).toEqual([pending]);
+  expect(readFileSync(join(root, target, TASKSPACE_MARKER_FILE), "utf8")).toBe("Newer marker");
+});
+
+it.each(["1.0000000000000002", "x'80ff00'", "CAST(x'610062' AS TEXT)"])(
+  "preserves the SQL observation value %s during layout recovery",
+  async (value) => {
+    const pending = await interrupted("layout");
+    await db.run(sql.raw(`UPDATE taskspace_local SET last_seen_at=${value}`));
+    const observation = async () =>
+      Array.from(
+        (
+          await db.values(sql`SELECT typeof(last_seen_at),hex(last_seen_at),
+      CASE WHEN typeof(last_seen_at)='real' THEN last_seen_at ELSE NULL END FROM taskspace_local`)
+        )[0],
+      );
+    const before = await observation();
+    expect((await recover(pending.id, true)).status).toBe("confirmed");
+    expect(await observation()).toEqual(before);
+  },
+);
+
+it("rejects a changed REAL observation even when SQLite text formatting is unchanged", async () => {
+  const pending = await interrupted("layout");
+  await db.run(sql`UPDATE taskspace_local SET last_seen_at=1.0000000000000002`);
+  await db.run(sql`CREATE TRIGGER change_confirmed AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' BEGIN UPDATE taskspace_local SET last_seen_at=1.0000000000000004; END`);
+  await expect(recover(pending.id, true)).rejects.toThrow("attachment changed");
+  expect((await db.values(sql`SELECT last_seen_at FROM taskspace_local`))[0][0]).toBe(
+    1.0000000000000002,
+  );
+  expect(await rows()).toEqual([pending]);
 });

@@ -112,6 +112,23 @@ it("recovers an interrupted doctor layout commit and then finishes configuration
         )
       ).rows[0].state,
     ).toBe("pending");
+    await client.execute(
+      "CREATE TRIGGER change_layout_receipt AFTER UPDATE ON local_file_operation WHEN NEW.state='confirmed' AND NEW.kind='taskspace.directory' BEGIN UPDATE taskspace_local SET path='different'; END",
+    );
+    const refused = run(root, "taskspace", "recover", String(pending.id), "--apply");
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toContain("attachment changed");
+    expect((await client.execute("SELECT * FROM taskspace")).rows).toEqual(shared);
+    expect((await client.execute("SELECT * FROM taskspace_local")).rows).toEqual(attachment);
+    expect(
+      (
+        await client.execute(
+          "SELECT state FROM local_file_operation WHERE kind='taskspace.directory'",
+        )
+      ).rows[0].state,
+    ).toBe("pending");
+    expect(readFileSync(markerPath)).toEqual(marker);
+    await client.execute("DROP TRIGGER change_layout_receipt");
     const applied = run(root, "taskspace", "recover", String(pending.id), "--apply");
     expect(applied.status).toBe(0);
     expect(applied.stdout).toContain("database changes confirmed. No files changed.");

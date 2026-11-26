@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import { isStrictlyInside } from "../fs-paths.js";
 
 type Snapshot = NonNullable<Awaited<ReturnType<typeof getTaskspace>>>;
-export function taskspaceDirectorySnapshot(record: Snapshot) {
+export function taskspaceDirectorySnapshot(record: Omit<Snapshot, "lastSeenAt">) {
   if (
     !Number.isSafeInteger(record.createdAt.getTime()) ||
     !Number.isSafeInteger(record.updatedAt.getTime())

@@ -954,6 +954,12 @@ recovery changes only the local path. Removal deletes the shared taskspace, clea
 card links and retains local metadata. Confirmation commits atomically with these
 changes and preserves creation and local observation timestamps.
 
+Before committing directory recovery, verify the final journal receipt, namespace,
+shared record, attachment and disk outcome after database triggers finish. Removal
+also requires the shared identity and card links to be absent. Changed evidence
+rolls back database changes and leaves completed disk work in place. Retained local
+observations preserve their SQL storage class and value, including large integers.
+
 File confirmation requires a taskspace visible in the recorded namespace and a valid
 current attachment. The requested path must resolve to the exact recorded affected
 path and path kind. Creates and saves require matching content hashes. Directory
