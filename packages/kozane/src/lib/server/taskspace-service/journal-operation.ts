@@ -7,7 +7,7 @@ type Intent = Pick<
   typeof localFileOperationTable.$inferInsert,
   "taskspaceId" | "namespaceId" | "path" | "pathKind" | "intent"
 > & {
-  kind: "taskspace.file" | "taskspace.directory";
+  kind: "taskspace.file" | "taskspace.directory" | "taskspace.claim";
 };
 export class LocalOperationError extends Error {
   constructor(
@@ -23,8 +23,8 @@ export class LocalOperationError extends Error {
 export async function journalLocalOperation<T, R>(
   db: DB,
   intent: Intent,
-  change: () => T | Promise<T>,
-  commit: (tx: Tx, result: T) => R | Promise<R>,
+  change: (operationId: string) => T | Promise<T>,
+  commit: (tx: Tx, result: T, operationId: string) => R | Promise<R>,
   beforeRecord?: (tx: Tx) => Promise<void>,
 ): Promise<R> {
   const id = randomUUID();
@@ -47,7 +47,7 @@ export async function journalLocalOperation<T, R>(
   });
   let result: T;
   try {
-    result = await change();
+    result = await change(id);
   } catch (error) {
     try {
       await withTx(db, async (tx) => {
@@ -70,7 +70,7 @@ export async function journalLocalOperation<T, R>(
   }
   try {
     return await withTx(db, async (tx) => {
-      const response = await commit(tx, result);
+      const response = await commit(tx, result, id);
       const confirmed = await tx
         .update(localFileOperationTable)
         .set({ state: "confirmed", confirmedAt: new Date(), error: null })

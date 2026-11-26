@@ -987,6 +987,28 @@ It does not complete, retry, reverse or cancel filesystem work. Confirmed operat
 refused. Repeating the same abandonment reason makes no changes. A different reason for an
 already abandoned operation is refused.
 
+### `kozane taskspace attach <taskspaceId>`
+
+Attach a directory on this device to an existing shared taskspace. Accept a full or
+unambiguous short taskspace ID. The taskspace must belong to an existing namespace
+and have no directory attachment or pending local operation.
+
+| Option | Required | Description |
+|---|---|---|
+| `--dir <path>` | Yes | Directory to create or adopt. Resolve relative paths from the current directory. Store paths inside the workspace as relative and external paths as absolute. |
+| `--namespace <namespaceId>` | No | Require this full or unambiguous short namespace ID. Defaults to the taskspace's namespace. |
+
+An existing target must be an unmarked directory. Symlinks and existing markers are
+refused. The marker leaves the directory user-owned even when this command creates
+it. Shared identity, placement, label, scope and timestamps stay unchanged.
+
+The command commits a local claim intent before touching disk, then confirms the
+attachment and local observation time together. An interrupted claim retains its
+shared identity and recovery evidence. Inspect the printed operation ID with
+`kozane taskspace recover <operationId>`. Confirm matching completed work with
+`--apply`, which changes no files. See
+[local filesystem operation records](../docs/local-file-operations.md).
+
 ### `kozane taskspace create <name>`
 
 Create a database record, target directory, and `.taskspace.json` identity marker. Require

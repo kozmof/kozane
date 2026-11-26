@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { taskspaceScan, taskspaceCreate, taskspaceList } from "../commands/taskspace.js";
 import { taskspaceRecover } from "../commands/taskspace-recover.js";
 import { taskspaceAbandon } from "../commands/taskspace-abandon.js";
+import { taskspaceAttach } from "../commands/taskspace-attach.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "../commands/db.js";
 import { imageUploads, imageRecover, imageAbandon } from "../commands/image-upload.js";
 
@@ -85,6 +86,21 @@ export function registerDataCommands(program: Command): void {
     .requiredOption("--reason <reason>", "Record why tracking can be abandoned")
     .option("--apply", "Mark abandoned while retaining evidence and leaving files unchanged")
     .action((operationId, opts) => taskspaceAbandon(operationId, opts));
+
+  taskspace
+    .command("attach <taskspaceId>")
+    .description(
+      "Attach a local directory to an existing taskspace without changing its shared record",
+    )
+    .requiredOption(
+      "--dir <path>",
+      "Directory to create or adopt (relative to the current directory)",
+    )
+    .option(
+      "--namespace <namespaceId>",
+      "Require the taskspace to belong to this namespace ID or short ID",
+    )
+    .action((taskspaceId, opts) => taskspaceAttach(taskspaceId, opts));
 
   taskspace
     .command("create <name>")

@@ -997,6 +997,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 
 - [ ] Add pending and confirmed local file-operation records with affected paths and intended content hashes where applicable.
 - [x] Journal taskspace directory claims before disk work, atomically confirm local attachments, retain interrupted evidence and report it through `doctor` without retrying callbacks. See [local filesystem operation records](local-file-operations.md).
+- [x] Attach a device-local directory to an existing namespaced shared taskspace through `taskspace attach`. Commit local intent before disk work, preserve shared rows on success and failure, and recover interrupted confirmation without retrying directory creation.
 - [x] Journal all five file mutation methods with intended hashes where applicable, preserve evidence after statement and commit failures, and inspect disk state without retrying callbacks.
 - [x] Journal managed-directory deletion and legacy combined rename, retain marker and directory identity evidence, and commit shared changes and confirmation atomically.
 - [x] Journal CLI layout moves and intermediate paths, atomically confirm attachment updates, and retain completed disk changes instead of unrecorded compensating moves.

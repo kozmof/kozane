@@ -386,7 +386,7 @@ export type ClaimRequest = {
   namespaceId: string;
   /**
    * Use a directory already at `targetDir` that has no marker, rather than refusing it. Only
-   * `kozane taskspace create` does this. The browser always makes a new directory.
+   * CLI taskspace creation and attachment do this. The browser always makes a new directory.
    */
   adoptExisting: boolean;
   /**
@@ -400,8 +400,8 @@ export type ClaimRequest = {
 };
 
 /**
- * Make a new taskspace's directory and its marker. The browser and `kozane taskspace create`
- * both use this, so they claim directories the same way.
+ * Make a taskspace's directory and its marker. Browser creation and CLI creation and
+ * attachment use this, so they claim directories the same way.
  *
  * Create the directory and marker with exclusive operations. A concurrent creation fails
  * the claim. With `adoptExisting`, an existing directory without a marker can be reused.

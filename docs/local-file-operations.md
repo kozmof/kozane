@@ -39,6 +39,20 @@ the directory, shared identity and pending operation. It rolls back attachment
 changes. The caller receives a recovery message rather than success. A process
 interruption at either durable boundary likewise leaves a pending operation.
 
+Attach a directory to an existing shared taskspace with an explicit path.
+
+```sh
+kozane taskspace attach <taskspaceId> --dir ./notes
+```
+
+The taskspace must already belong to a namespace and have no directory attachment
+or pending local work. An existing directory must have no marker. Symlinks are
+refused. The command records the same version 1 claim intent before disk work and
+confirms the local attachment afterward. It preserves all shared fields and never
+deletes the shared identity after failure. A user-chosen directory remains
+user-owned even when the command creates it. Interrupted attachment uses the
+claim recovery flow below, which never repeats directory creation.
+
 `kozane doctor` reports the pending count and up to five operation IDs with disk
 observations. It distinguishes missing directories, missing markers, exact marker
 hash matches, different markers, unsafe paths, invalid intent and unreadable
