@@ -17,7 +17,13 @@ import { createTestDB } from "../../../test-utils/db.js";
 import type { DB } from "../../../db/database.js";
 import type { DB as CoreDB } from "../../../../../core/src/database.js";
 import { addNamespace } from "../../../db/api/namespace.js";
-import { addTaskspace, getTaskspace, updateTaskspaceName } from "../../../db/api/taskspace.js";
+import {
+  addTaskspace,
+  getTaskspace,
+  updateTaskspaceName,
+  updateTaskspace,
+  deleteTaskspace,
+} from "../../../db/api/taskspace.js";
 import {
   cardTable,
   layerTable,
@@ -92,6 +98,180 @@ function change(operation: "move" | "remove") {
     ? renameTaskspace({ db }, params, { name: "final" })
     : removeTaskspace({ db }, params);
 }
+
+it.each(["label", "timestamp", "path", "observation", "namespace"] as const)(
+  "rolls back a move when confirmation changes final %s state",
+  async (field) => {
+    const statements = {
+      label: "UPDATE taskspace SET name='Different'",
+      timestamp: "UPDATE taskspace SET updated_at=updated_at+1",
+      path: "UPDATE taskspace_local SET path='different'",
+      observation: "UPDATE taskspace_local SET last_seen_at=NULL",
+      namespace: "UPDATE taskspace SET namespace_id=NULL",
+    };
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_publication AFTER UPDATE ON local_file_operation
+      WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN ${statements[field]}; END`),
+    );
+    const before = await shared();
+    const original = await record();
+    await expect(change("move")).rejects.toMatchObject({
+      status: 500,
+      message: expect.stringContaining("needs recovery"),
+    });
+    expect(await shared()).toEqual(before);
+    expect(await record()).toEqual(original);
+    expect(await rows()).toMatchObject([{ state: "pending", error: null }]);
+    expect(readFileSync(join(root, "tasks", "final", "notes", "a.md"), "utf8")).toBe(
+      "Retained content",
+    );
+  },
+);
+
+it("rolls back removal if confirmation recreates the shared identity and card link", async () => {
+  await db.run(
+    sql.raw(`CREATE TRIGGER change_publication AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN
+      INSERT INTO taskspace(id,namespace_id,name,created_at,updated_at) VALUES('${params.taskspaceId}','${params.namespaceId}','Recreated',1,2);
+      UPDATE card SET taskspace_id='${params.taskspaceId}';
+    END`),
+  );
+  const before = await shared();
+  const original = await record();
+  await expect(change("remove")).rejects.toMatchObject({
+    status: 500,
+    message: expect.stringContaining("needs recovery"),
+  });
+  expect(await shared()).toEqual(before);
+  expect(await record()).toEqual(original);
+  expect((await db.select().from(cardTable))[0].taskspaceId).toBe(params.taskspaceId);
+  expect(await rows()).toMatchObject([{ state: "pending", error: null }]);
+  expect(existsSync(join(root, path))).toBe(false);
+});
+
+it.each(["move", "remove"] as const)(
+  "keeps newer disk state after %s publication is refused",
+  async (operation) => {
+    const before = await shared();
+    const original = (await record())!;
+    await expect(
+      journalTaskspaceDirectoryChange(
+        {
+          db,
+          namespaceId: params.namespaceId,
+          root,
+          original,
+          request:
+            operation === "move" ? { operation: "move", name: "final" } : { operation: "remove" },
+          recheck: async () => {},
+        },
+        () =>
+          operation === "move"
+            ? disk.renameTaskspaceDirectory({
+                workspaceRoot: root,
+                storedPath: path,
+                taskspaceId: params.taskspaceId,
+                newName: "final",
+              })
+            : disk.removeTaskspaceDirectory({
+                workspaceRoot: root,
+                storedPath: path,
+                taskspaceId: params.taskspaceId,
+              }),
+        async (tx, result) => {
+          if (operation === "move") {
+            await updateTaskspace({
+              db: tx,
+              taskspaceId: params.taskspaceId,
+              name: "final",
+              path: String(result),
+            });
+            writeFileSync(join(root, "tasks", "final", TASKSPACE_MARKER_FILE), "Newer marker");
+          } else {
+            await deleteTaskspace({ db: tx, taskspaceId: params.taskspaceId });
+            mkdirSync(join(root, path));
+            writeFileSync(join(root, path, "new.txt"), "Recreated directory");
+          }
+        },
+      ),
+    ).rejects.toMatchObject({ phase: "confirm" });
+    expect(await shared()).toEqual(before);
+    expect(await record()).toEqual(original);
+    expect(await rows()).toMatchObject([{ state: "pending", error: null }]);
+    expect(
+      readFileSync(
+        operation === "move"
+          ? join(root, "tasks", "final", TASKSPACE_MARKER_FILE)
+          : join(root, path, "new.txt"),
+        "utf8",
+      ),
+    ).toBe(operation === "move" ? "Newer marker" : "Recreated directory");
+  },
+);
+
+it("owns the directory request, snapshot dates and recheck before awaiting intent publication", async () => {
+  const original = (await record())!;
+  const input = {
+    db,
+    namespaceId: params.namespaceId,
+    root,
+    original,
+    request: { operation: "move" as const, name: "final" },
+    recheck: async () => {},
+  };
+  const changing = journalTaskspaceDirectoryChange(
+    input,
+    () =>
+      disk.renameTaskspaceDirectory({
+        workspaceRoot: root,
+        storedPath: path,
+        taskspaceId: params.taskspaceId,
+        newName: "final",
+      }),
+    async (tx, target) => {
+      await updateTaskspace({
+        db: tx,
+        taskspaceId: params.taskspaceId,
+        name: "final",
+        path: target,
+      });
+    },
+  );
+  input.request.name = "changed";
+  input.original.name = "changed";
+  input.original.updatedAt.setTime(1000);
+  input.recheck = async () => {
+    throw Error("Changed callback");
+  };
+  await changing;
+  expect(await record()).toMatchObject({ name: "final", path: join("tasks", "final") });
+  expect((await rows())[0].state).toBe("confirmed");
+});
+
+it("does not expose mutable marker identity to the filesystem callback", async () => {
+  const original = (await record())!;
+  const before = await shared();
+  await expect(
+    journalTaskspaceDirectoryChange(
+      {
+        db,
+        namespaceId: params.namespaceId,
+        root,
+        original,
+        request: { operation: "remove" },
+        recheck: async () => {},
+      },
+      (identity) => {
+        Object.assign(identity, { markerHash: "changed" });
+      },
+      () => undefined,
+    ),
+  ).rejects.toMatchObject({ phase: "change", cause: expect.any(TypeError) });
+  expect(await shared()).toEqual(before);
+  expect(await record()).toEqual(original);
+  expect((await rows())[0]).toMatchObject({ state: "pending", error: expect.any(String) });
+  expect(readFileSync(join(root, path, "notes", "a.md"), "utf8")).toBe("Retained content");
+});
 
 it.each(["move", "remove"] as const)(
   "rolls back %s publication if a trigger rewrites its receipt",

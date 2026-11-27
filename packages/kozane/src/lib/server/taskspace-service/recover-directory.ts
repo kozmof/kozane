@@ -1,5 +1,5 @@
 /** Finish verified database publication after completed directory work. Never repeat disk work. */
-import { and, eq, getTableColumns, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { withReadTx, withTx, type DB, type ReadTx, type Tx } from "../../../db/database.js";
 import { getNamespace } from "../../../db/api/namespace.js";
 import {
@@ -7,19 +7,19 @@ import {
   updateTaskspaceLocationInTx,
   deleteTaskspaceInTx,
 } from "../../../db/api/taskspace.js";
-import {
-  cardTable,
-  localFileOperationTable,
-  taskspaceTable,
-  taskspaceLocalTable,
-} from "../../../db/schema.js";
-import type { PathKind } from "../../constants.js";
+import { localFileOperationTable, taskspaceTable } from "../../../db/schema.js";
 import { inspectTaskspaceDirectoryOperation } from "../taskspace-directory-operations.js";
-import { taskspaceDirectorySnapshot } from "./directory-operation.js";
+import {
+  readDirectorySnapshot,
+  readDirectoryAttachment,
+  sameDirectorySnapshot,
+  verifyDirectoryPublication,
+  type DirectorySnapshot,
+} from "./directory-state.js";
 import { oneAtATime } from "./queue.js";
 
 type Operation = typeof localFileOperationTable.$inferSelect;
-type Before = ReturnType<typeof taskspaceDirectorySnapshot>;
+type Before = DirectorySnapshot;
 type Intent = { before: Before } & (
   | { operation: "remove" }
   | { operation: "move"; name: string; targetPath: string }
@@ -38,43 +38,6 @@ function intentIdentity(operation: Operation) {
     eq(localFileOperationTable.intent, operation.intent),
     eq(localFileOperationTable.createdAt, operation.createdAt),
   );
-}
-
-/** Version 1 needs shared timestamps, but local observations are outside its snapshot. */
-async function sharedSnapshot(db: ReadTx | Tx, taskspaceId: string) {
-  const row = await db
-    .select({
-      ...getTableColumns(taskspaceTable),
-      path: taskspaceLocalTable.path,
-      pathKind: sql<PathKind>`coalesce(${taskspaceLocalTable.pathKind}, 'workspace_relative')`,
-    })
-    .from(taskspaceTable)
-    .leftJoin(taskspaceLocalTable, eq(taskspaceLocalTable.taskspaceId, taskspaceTable.id))
-    .where(eq(taskspaceTable.id, taskspaceId))
-    .get();
-  return row && taskspaceDirectorySnapshot(row);
-}
-
-/** Preserve bytes and storage class, with a separate REAL value to avoid text rounding. */
-function attachment(db: ReadTx | Tx, taskspaceId: string) {
-  return db
-    .select({
-      taskspaceId: taskspaceLocalTable.taskspaceId,
-      path: taskspaceLocalTable.path,
-      pathKind: taskspaceLocalTable.pathKind,
-      observationBytes: sql<string>`hex(${taskspaceLocalTable.lastSeenAt})`,
-      observationType: sql<string>`typeof(${taskspaceLocalTable.lastSeenAt})`,
-      observationReal: sql<
-        number | null
-      >`CASE WHEN typeof(${taskspaceLocalTable.lastSeenAt}) = 'real' THEN ${taskspaceLocalTable.lastSeenAt} ELSE NULL END`,
-    })
-    .from(taskspaceLocalTable)
-    .where(eq(taskspaceLocalTable.taskspaceId, taskspaceId))
-    .get();
-}
-
-function sameSnapshot(actual: Before, expected: Before) {
-  return (Object.keys(expected) as (keyof Before)[]).every((key) => actual[key] === expected[key]);
 }
 
 function diskIssue(operation: Operation, intent: Intent, root: string) {
@@ -153,11 +116,11 @@ async function inspect(db: ReadTx | Tx, root: string, operationId: string) {
     );
   const intent = recoveryIntent(operation);
   if (!intent) return blocked("Invalid recorded taskspace snapshot");
-  const current = await sharedSnapshot(db, operation.taskspaceId);
+  const current = await readDirectorySnapshot(db, operation.taskspaceId);
   if (!current) return blocked("Taskspace no longer exists");
   if (!(await getNamespace({ db, namespaceId: operation.namespaceId })))
     return blocked("Namespace no longer exists");
-  if (!sameSnapshot(current, intent.before))
+  if (!sameDirectorySnapshot(current, intent.before))
     return blocked("Taskspace or attachment changed since the operation was recorded");
   const issue = diskIssue(operation, intent, root);
   if (issue !== null) return blocked(issue);
@@ -188,7 +151,7 @@ export async function recoverDirectoryOperation(
       if (current.status === "blocked")
         throw new Error(`Directory operation cannot be confirmed: ${current.reason}`);
       const { operation, intent } = current;
-      const beforeAttachment = await attachment(tx, operation.taskspaceId);
+      const beforeAttachment = await readDirectoryAttachment(tx, operation.taskspaceId);
       if (!beforeAttachment) throw new Error("Directory attachment is missing");
       const expectedShared = { ...intent.before };
       const expectedAttachment = { ...beforeAttachment };
@@ -252,27 +215,13 @@ export async function recoverDirectoryOperation(
         )
         .get();
       if (!receipt) throw new Error("Directory operation confirmation changed or is missing");
-      if (!(await getNamespace({ db: tx, namespaceId: operation.namespaceId })))
-        throw new Error("Directory operation namespace no longer exists");
-      const published = await sharedSnapshot(tx, operation.taskspaceId);
-      if (intent.operation === "remove") {
-        const linked = await tx
-          .select({ id: cardTable.id })
-          .from(cardTable)
-          .where(eq(cardTable.taskspaceId, operation.taskspaceId))
-          .get();
-        if (published || linked) throw new Error("Directory removal database state changed");
-      } else if (!published || !sameSnapshot(published, expectedShared)) {
-        throw new Error("Directory recovery taskspace or attachment changed");
-      }
-      const finalAttachment = await attachment(tx, operation.taskspaceId);
-      if (
-        !finalAttachment ||
-        (Object.keys(expectedAttachment) as (keyof typeof expectedAttachment)[]).some(
-          (key) => !Object.is(finalAttachment[key], expectedAttachment[key]),
-        )
-      )
-        throw new Error("Directory recovery attachment changed or is missing");
+      await verifyDirectoryPublication(
+        tx,
+        operation.namespaceId,
+        intent.operation,
+        expectedShared,
+        expectedAttachment,
+      );
       const issue = diskIssue(operation, intent, root);
       if (issue !== null) throw new Error(`Directory operation cannot be confirmed: ${issue}`);
       return { operation: confirmed, status: "confirmed" as const, reason: null, intent };

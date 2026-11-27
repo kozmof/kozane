@@ -21,6 +21,7 @@ import * as disk from "../../lib/server/taskspace-directory.js";
 import { inspectTaskspaceDirectoryOperation } from "../../lib/server/taskspace-directory-operations.js";
 import { abandonLocalOperation } from "../../lib/server/taskspace-service/abandon-operation.js";
 import { recoverTaskspaceOperation } from "../../lib/server/taskspace-service/recover-operation.js";
+import { journalTaskspaceDirectoryChange } from "../../lib/server/taskspace-service/directory-operation.js";
 import { captureApplicationRows } from "../../test-utils/action-tables.js";
 import type { DB as CoreDB } from "../../../../core/src/database.js";
 import { applyTaskspaceLayout, planTaskspaceLayout } from "./taskspace-layout.js";
@@ -64,6 +65,89 @@ const plan = () => planTaskspaceLayout(db, root, readConfig(root));
 const rows = () => db.select().from(localFileOperationTable);
 // Source aliases share this adapter with the host package during filesystem integration tests.
 const shared = () => captureApplicationRows(db as unknown as CoreDB);
+
+it.each(["notes", "taskspaces"])(
+  "keeps completed %s layout pending when confirmation changes the attachment",
+  async (source) => {
+    const id = await owned(source);
+    const original = await getTaskspace({ db, taskspaceId: id });
+    const before = await shared();
+    const config = readFileSync(join(root, ".kozane", "config.json"));
+    const planned = await plan();
+    await db.run(sql`CREATE TRIGGER change_publication AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN UPDATE taskspace_local SET path='different'; END`);
+    const callback = vi.spyOn(disk, "moveTaskspaceDirectory");
+    expect(await applyTaskspaceLayout(db, root, planned)).toMatchObject({
+      moved: [],
+      config: "kept",
+      failed: [expect.anything()],
+    });
+    expect(await shared()).toEqual(before);
+    expect(await getTaskspace({ db, taskspaceId: id })).toEqual(original);
+    const [pending] = await rows();
+    expect(pending).toMatchObject({ state: "pending", error: null });
+    expect(inspectTaskspaceDirectoryOperation(pending, root)).toBe("target-only");
+    const steps = JSON.parse(pending.intent).paths.length - 1;
+    expect(callback).toHaveBeenCalledTimes(steps);
+    expect(readFileSync(join(root, planned.moves[0].to, "notes.txt"), "utf8")).toBe(
+      "Original content",
+    );
+    expect(readFileSync(join(root, ".kozane", "config.json"))).toEqual(config);
+    await db.run(sql`DROP TRIGGER change_publication`);
+    expect((await recoverTaskspaceOperation(db, root, pending.id, true)).status).toBe("confirmed");
+    expect(callback).toHaveBeenCalledTimes(steps);
+    expect(await getTaskspace({ db, taskspaceId: id })).toEqual({
+      ...original,
+      path: planned.moves[0].to,
+    });
+  },
+);
+
+it("copies allowed pending batch IDs before asynchronous checks", async () => {
+  const id = await owned("notes");
+  const original = (await getTaskspace({ db, taskspaceId: id }))!;
+  const planned = await plan();
+  await db.insert(localFileOperationTable).values({
+    id: "foreign",
+    kind: "taskspace.file",
+    version: 1,
+    taskspaceId: id,
+    namespaceId,
+    path: "notes/file.txt",
+    pathKind: "workspace_relative",
+    state: "pending",
+    intent: "{}",
+    createdAt: new Date(),
+  });
+  const allowed = new Set<string>();
+  const callback = vi.fn(() =>
+    disk.moveTaskspaceDirectory({
+      workspaceRoot: root,
+      storedPath: "notes",
+      taskspaceId: id,
+      nextStored: planned.moves[0].to,
+    }),
+  );
+  const changing = journalTaskspaceDirectoryChange(
+    {
+      db,
+      namespaceId,
+      root,
+      original,
+      request: { operation: "layout", targetPath: planned.moves[0].to },
+      pendingOwnedByBatch: allowed,
+      recheck: async () => {},
+    },
+    callback,
+    (tx, path) => updateTaskspaceLocation({ db: tx, taskspaceId: id, path }),
+  );
+  allowed.add("foreign");
+  await expect(changing).rejects.toThrow("pending");
+  expect(callback).not.toHaveBeenCalled();
+  expect(await rows()).toMatchObject([{ id: "foreign", state: "pending" }]);
+  expect(await getTaskspace({ db, taskspaceId: id })).toEqual(original);
+  expect(readFileSync(join(root, "notes", "notes.txt"), "utf8")).toBe("Original content");
+});
 
 it.each(["notes", "taskspaces"])(
   "recovers completed %s layout without repeating direct or temporary moves",

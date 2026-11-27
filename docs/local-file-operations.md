@@ -238,8 +238,9 @@ fields. It never moves, removes, creates or restores files. Concurrent attempts
 serialize on the taskspace queue, and a failed confirmation rolls back database
 changes while retaining pending evidence.
 
-Before committing directory recovery, the host verifies the final journal receipt,
-namespace, shared record, attachment and completed disk outcome after database
+Live directory confirmation and explicit recovery share published-state checks.
+Before committing, the host verifies the final journal receipt, namespace, shared
+record, attachment and completed disk outcome after database
 triggers finish. Removal also checks that the shared identity and card links are
 absent. Changed evidence rolls back database publication while completed disk work
 and newer directory evidence stay in place.
@@ -248,6 +249,12 @@ Retained local observations are compared by SQL storage class and value without
 converting large integers to JavaScript numbers. REAL values, text and blobs keep
 their values too. Shared creation and update timestamps still use the version 1
 snapshot format.
+
+Live operations copy shared snapshot values, request fields, callback references
+and allowed layout batch IDs before asynchronous work. Filesystem callbacks receive
+an immutable directory identity. Direct and temporary layout moves retain completed
+disk work when final publication fails. The legacy configuration stays unchanged
+after failure and is updated when layout maintenance later finishes.
 
 An operation with a recorded filesystem error requires manual review and cannot
 be confirmed this way. The error may describe partial work that completed-state

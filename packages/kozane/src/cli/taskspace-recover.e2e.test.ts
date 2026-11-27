@@ -114,7 +114,7 @@ it("recovers an interrupted doctor layout commit and then finishes configuration
     const shared = (await client.execute("SELECT * FROM taskspace")).rows;
     const attachment = (await client.execute("SELECT * FROM taskspace_local")).rows;
     await client.execute(
-      "CREATE TRIGGER interrupt_layout BEFORE UPDATE ON local_file_operation BEGIN SELECT RAISE(ABORT,'interrupted'); END",
+      "CREATE TRIGGER interrupt_layout AFTER UPDATE ON local_file_operation WHEN NEW.state='confirmed' AND OLD.state='pending' AND NEW.kind='taskspace.directory' BEGIN UPDATE taskspace_local SET path='different'; END",
     );
     const failed = run(root, "doctor", "--fix");
     expect(failed.stdout).toContain("needs recovery");

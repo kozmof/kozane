@@ -511,6 +511,11 @@ a former namespace folder also change only their label after a namespace rename.
 Return 400 for an invalid name, 404 for a taskspace not on this board, and 409 when the new
 directory name is taken.
 
+Managed moves verify the final shared record, attachment and directory evidence
+after confirmation triggers finish. Failed publication returns 500 with a recovery
+message, restores prior database state and keeps the completed disk move pending.
+Run `kozane doctor` before repeating the change.
+
 ### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]/label`
 
 Change the shared label without moving a directory. Body requires exactly
@@ -531,6 +536,11 @@ Other directories stay on disk with a `kept` result. This also applies to symlin
 files, and directories holding another taskspace. Directory contents are deleted before the
 `.taskspace.json` marker so a failure preserves the record and allows a retry.
 Cards linked to the taskspace keep their text and lose the link.
+
+Managed removal verifies that the shared identity and card links are absent and
+the local metadata is retained after confirmation triggers finish. Changed
+publication returns 500 with a recovery message and rolls back database changes.
+Completed deletion stays on disk and its tracking record remains pending.
 
 Return `{ ok: true, directory }`, where `directory` is `deleted`, `missing`, or `kept`.
 Return 404 for a taskspace not on this board, and 409 when the directory at a managed path
