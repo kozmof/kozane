@@ -53,9 +53,10 @@ export async function taskspaceBaseDir(
 }
 /**
  * Change a taskspace's files after every earlier change to it has finished, see
- * {@link oneAtATime}. The directory is resolved inside the queue, so it reflects any rename
- * before it. Read and check the request body before calling this, so a slow upload never
- * holds up other changes to the taskspace.
+ * {@link oneAtATime}. Capture database context, routing and intent before waiting.
+ * Resolve the attachment inside the queue so earlier directory moves are visible.
+ * Read and check the request body before calling this, so a slow upload never holds
+ * up other changes to the taskspace.
  */
 export function queuedFilesChange<T>(
   locals: { db: DB },
@@ -67,20 +68,24 @@ export function queuedFilesChange<T>(
   request: TaskspaceFileChange,
   change: (baseDir: string) => T,
 ): Promise<T> {
-  return oneAtATime(params.taskspaceId, async () => {
-    const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
+  const { db } = locals;
+  const { namespaceId, taskspaceId } = params;
+  const ownedRequest = Object.freeze({ ...request });
+  return oneAtATime(taskspaceId, async () => {
+    const baseDir = await taskspaceBaseDir({ db }, namespaceId, taskspaceId);
     try {
       const root = getWorkspaceRoot();
       if (!root)
         throw new TaskspaceServiceError(503, "No Kozane workspace found. Run 'kozane init' first.");
       return await journalTaskspaceFileChange(
         {
-          ...locals,
-          ...params,
+          db,
+          namespaceId,
+          taskspaceId,
           root,
           baseDir,
-          request,
-          currentBaseDir: () => taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId),
+          request: ownedRequest,
+          currentBaseDir: () => taskspaceBaseDir({ db }, namespaceId, taskspaceId),
         },
         change,
       );

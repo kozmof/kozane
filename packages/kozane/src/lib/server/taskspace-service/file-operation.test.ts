@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,6 +35,8 @@ import {
 import { createLocalClaimStartupCheck } from "../local-claim-startup.js";
 import { journalTaskspaceFileChange } from "./file-operation.js";
 import { recoverLocalClaim } from "./recover-claim.js";
+import { queuedFilesChange } from "./base-dir.js";
+import { oneAtATime } from "./queue.js";
 
 let db: DB;
 let root: string;
@@ -64,28 +74,36 @@ const cases = [
   "rename-entry",
   "remove-entry",
 ] as const;
-async function change(operation: (typeof cases)[number]) {
-  const context = { db };
+async function change(
+  operation: (typeof cases)[number],
+  context = { db },
+  routing = params,
+  body?: Record<string, unknown>,
+) {
   switch (operation) {
     case "create-file":
-      return createFile(context, params, { path: "new.txt" });
+      return createFile(context, routing, body ?? { path: "new.txt" });
     case "save-file": {
       const { signature } = disk.readTaskspaceFile({
         baseDir: join(root, "demo"),
         subPath: "original.txt",
       });
-      return saveFile(context, params, {
-        path: "original.txt",
-        content: "Saved 日本語 🪁\n",
-        signature,
-      });
+      return saveFile(
+        context,
+        routing,
+        body ?? {
+          path: "original.txt",
+          content: "Saved 日本語 🪁\n",
+          signature,
+        },
+      );
     }
     case "create-directory":
-      return createDirectory(context, params, { path: "new-directory" });
+      return createDirectory(context, routing, body ?? { path: "new-directory" });
     case "rename-entry":
-      return renameEntry(context, params, { path: "original.txt", name: "renamed.txt" });
+      return renameEntry(context, routing, body ?? { path: "original.txt", name: "renamed.txt" });
     case "remove-entry":
-      return removeEntry(context, params, "original.txt");
+      return removeEntry(context, routing, body ? (body.path as string) : "original.txt");
   }
 }
 const observation = (operation: (typeof cases)[number]) =>
@@ -96,6 +114,174 @@ const observation = (operation: (typeof cases)[number]) =>
     "rename-entry": "target-only",
     "remove-entry": "entry-absent",
   })[operation];
+
+async function holdTaskspace(afterWaiting?: () => Promise<void>) {
+  let entered!: () => void;
+  let release!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const held = oneAtATime(params.taskspaceId, async () => {
+    entered();
+    await waiting;
+    await afterWaiting?.();
+  });
+  await started;
+  return { held, release };
+}
+
+it.each(cases)("owns the database before %s waits in the host queue", async (operation) => {
+  const { held, release } = await holdTaskspace();
+  const context = { db };
+  const changing = change(operation, context);
+  context.db = null as never;
+  try {
+    release();
+    await held;
+    await changing;
+    const [row] = await operations();
+    expect(row).toMatchObject({ ...params, state: "confirmed", error: null });
+    expect(inspectTaskspaceFileOperation(row, root)).toBe(observation(operation));
+  } finally {
+    release();
+    await held;
+  }
+});
+
+it.each(cases)("owns routing and body before %s waits in the host queue", async (operation) => {
+  const otherNamespace = await addNamespace({ db, name: "Other namespace" });
+  const otherTaskspace = await addTaskspace({
+    db,
+    namespaceId: otherNamespace,
+    name: "Other",
+    path: "other",
+  });
+  mkdirSync(join(root, "other"));
+  writeFileSync(join(root, "other", "original.txt"), "Other taskspace");
+  const signature = disk.readTaskspaceFile({
+    baseDir: join(root, "demo"),
+    subPath: "original.txt",
+  }).signature;
+  const body: Record<string, unknown> = {
+    path:
+      operation === "create-file"
+        ? "new.txt"
+        : operation === "create-directory"
+          ? "new-directory"
+          : "original.txt",
+    ...(operation === "save-file" && { content: "Intended content", signature }),
+    ...(operation === "rename-entry" && { name: "renamed.txt" }),
+  };
+  const routing = { ...params };
+  const { held, release } = await holdTaskspace();
+  const changing = change(operation, { db }, routing, body);
+  routing.namespaceId = otherNamespace;
+  routing.taskspaceId = otherTaskspace;
+  body.path = "changed.txt";
+  if (operation === "save-file") {
+    body.content = "Changed content";
+    body.signature = null;
+  }
+  if (operation === "rename-entry") body.name = "changed.txt";
+  try {
+    release();
+    await held;
+    await changing;
+    const [row] = await operations();
+    expect(row).toMatchObject({ ...params, state: "confirmed", error: null });
+    expect(inspectTaskspaceFileOperation(row, root)).toBe(observation(operation));
+    expect(readFileSync(join(root, "other", "original.txt"), "utf8")).toBe("Other taskspace");
+    expect(existsSync(join(root, "other", "new.txt"))).toBe(false);
+    expect(existsSync(join(root, "other", "new-directory"))).toBe(false);
+    expect(existsSync(join(root, "other", "renamed.txt"))).toBe(false);
+    expect(existsSync(join(root, "demo", "changed.txt"))).toBe(false);
+    expect(existsSync(join(root, "other", "changed.txt"))).toBe(false);
+    if (operation === "save-file")
+      expect(readFileSync(join(root, "demo", "original.txt"), "utf8")).toBe("Intended content");
+  } finally {
+    release();
+    await held;
+  }
+});
+
+it.each(cases)("resolves the attachment after earlier queued work for %s", async (operation) => {
+  const { held, release } = await holdTaskspace(async () => {
+    renameSync(join(root, "demo"), join(root, "moved"));
+    await updateTaskspaceLocation({ db, taskspaceId: params.taskspaceId, path: "moved" });
+  });
+  const changing = change(operation);
+  try {
+    release();
+    await held;
+    await changing;
+    const [row] = await operations();
+    expect(row).toMatchObject({ ...params, state: "confirmed", error: null });
+    expect(row.path).toBe(
+      join(
+        "moved",
+        operation === "create-file"
+          ? "new.txt"
+          : operation === "create-directory"
+            ? "new-directory"
+            : "original.txt",
+      ),
+    );
+    expect(inspectTaskspaceFileOperation(row, root)).toBe(observation(operation));
+    expect(existsSync(join(root, "demo"))).toBe(false);
+  } finally {
+    release();
+    await held;
+  }
+});
+
+it("owns save intent before waiting in the host queue", async () => {
+  const signature = disk.readTaskspaceFile({
+    baseDir: join(root, "demo"),
+    subPath: "original.txt",
+  }).signature;
+  const request = {
+    operation: "save-file" as const,
+    subPath: "original.txt",
+    content: "Owned content",
+    signature,
+  };
+  const { held, release } = await holdTaskspace();
+  const changing = queuedFilesChange({ db }, params, "Save failed", request, (baseDir) =>
+    disk.writeTaskspaceFile({
+      baseDir,
+      subPath: "original.txt",
+      content: "Owned content",
+      signature,
+    }),
+  );
+  request.subPath = "changed.txt";
+  request.content = "Changed content";
+  request.signature = null;
+  try {
+    release();
+    await held;
+    await changing;
+    const [row] = await operations();
+    expect(row).toMatchObject({
+      path: join("demo", "original.txt"),
+      state: "confirmed",
+      error: null,
+    });
+    expect(JSON.parse(row.intent)).toEqual({
+      operation: "save-file",
+      requestedPath: "original.txt",
+      contentHash: contentHash("Owned content"),
+      signature,
+    });
+    expect(readFileSync(join(root, "demo", "original.txt"), "utf8")).toBe("Owned content");
+  } finally {
+    release();
+    await held;
+  }
+});
 
 it.each(cases)(
   "journals and confirms %s without changing shared rows or local attachments",

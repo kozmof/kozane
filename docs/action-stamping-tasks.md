@@ -146,7 +146,11 @@ attachment without retrying filesystem work. Migration 0022 now journals the fiv
 mutations, retaining affected paths and intended content hashes before disk work.
 `doctor` and startup inspect pending file work without retrying callbacks. File
 mutations leave shared rows unchanged, and shared restoration preserves their
-local evidence. Migration 0023 journals managed-directory deletion and legacy
+local evidence. All five host file mutations now capture database context,
+routing and request fields before waiting in the taskspace queue. Attachment
+resolution stays inside the queue so preceding directory moves are visible.
+Queued save intent retains the original content hash and read signature.
+Migration 0023 journals managed-directory deletion and legacy
 combined rename. Their shared changes, attachment updates and journal
 confirmation commit together. Completed disk changes and pending evidence survive
 a failed final transaction. CLI layout journals now include temporary paths and
@@ -1024,6 +1028,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Inspect interrupted taskspace file operations against disk state on startup and explicitly confirm reviewed outcomes without repeating filesystem callbacks. Preserve recorded errors and blocked evidence.
 - [x] Verify the final file recovery receipt, visibility, attachment and disk outcome after database triggers. Roll back changed evidence without overwriting newer files, and confirm all five operations while preserving shared and local observation timestamps outside JavaScript's safe integer range.
 - [x] Apply the same outcome checks to live file mutations after confirmation triggers. Own requests and path resolvers before asynchronous work, preserve newer disk state and separately committed attachments, and route all five methods without decoding unrelated shared or local timestamps. Cover recovery parity and HTTP failure responses.
+- [x] Capture database context, routing and file intent before waiting in the host queue for all five mutation methods. Capture directory creation input without yielding, retain original save hashes and signatures, and resolve attachments after preceding queued moves.
 - [x] Inspect pending directory claims on authenticated server startup and provide explicit attachment confirmation with live marker, identity and attachment checks. Preserve blocked claims without repeating filesystem work.
 - [ ] Add asset manifests to baselines and effect sets, covering references in invocations and full before and after images.
 - [x] Add internal image-manifest collection, canonical validation, byte verification and collision checks. Verify requirements from real captured history on native and WASM adapters.

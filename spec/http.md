@@ -572,6 +572,11 @@ All taskspace file routes check containment before and after path resolution.
 Return 400 for traversal, 403 for unreadable paths, 404 for unknown namespace,
 taskspace, or directory, and 503 without a workspace.
 
+File mutations capture database context, namespace and taskspace IDs, and mutation
+fields before waiting for earlier taskspace changes. The directory is resolved
+when queued work starts, so a preceding move applies to the original taskspace.
+Save intent retains the requested content hash and read signature.
+
 File mutations recheck visibility, the current attachment and the recorded disk
 outcome after confirmation triggers finish. Failed verification returns 500 with
 a recovery message. Completed disk work and newer file edits stay in place, and

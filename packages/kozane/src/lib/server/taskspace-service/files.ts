@@ -28,7 +28,7 @@ export async function createDirectory(
   params: Params,
   body: Record<string, unknown>,
 ) {
-  const subPath = requireString(await body, "path");
+  const subPath = requireString(body, "path");
   const created = await queuedFilesChange(
     locals,
     params,

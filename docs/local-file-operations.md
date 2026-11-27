@@ -180,7 +180,14 @@ and prior local observation timestamps remain unchanged without JavaScript numbe
 conversion.
 
 File mutations copy their request and path resolver before asynchronous journal
-work. A separately committed attachment change stays intact when final verification
+work. The host captures database context, namespace and taskspace IDs, and mutation
+fields before waiting in the taskspace queue. Directory creation captures its path
+without yielding. The attachment is resolved after earlier queued work finishes,
+so a preceding directory move applies to the original requested taskspace.
+Save intent retains the original content hash and read signature even if the
+caller changes its request while waiting.
+
+A separately committed attachment change stays intact when final verification
 refuses confirmation. The host reports that recovery is needed and keeps pending
 evidence without repeating file callbacks.
 
