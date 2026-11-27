@@ -203,7 +203,11 @@ directories. It archives regular files through synced exclusive hard links and
 can finish an interrupted link without replacing retained bytes. Deletion
 requests are synced before card commits and checked by file identity before
 acknowledgment. Unsafe or replaced requests remain available for review. Process
-crash verification across all cleanup boundaries remains pending.
+restart tests now terminate native workers at upload reservation, file creation,
+write, sync, publication, card commit, archive and deletion-request boundaries.
+Fresh processes reopen the database and run cleanup without losing pending pins
+or committed references. Competing processes refuse cleanup while upload or card
+writers remain paused. Production action-commit crash verification remains pending.
 
 Migration 0026 adds a durable local manifest ledger. Pending and retained owners
 protect registered baseline, effect-set, pending-work, transfer and recovery images
@@ -1070,6 +1074,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Verify upload reservation, installation, error recording and card-reference completion after database triggers. Preserve separately committed errors, verify the whole completion batch and other unfinished pins, retain exact SQL timestamps and refuse changed disk publication without repeating installation.
 - [x] Archive unused regular images through synced exclusive hard links. Preserve conflicting archive entries, resume matching interrupted links and refuse symlinked managed directories without changing outside bytes.
 - [x] Sync deletion requests before card commits and acknowledge only the original empty regular request after removal sync checks. Preserve requests after failed commits, unsafe entries, interrupted publication and request replacement.
+- [x] Terminate native image workers at reservation, temporary creation and writes, file and directory syncs, publication, card completion, archive and deletion-request boundaries. Verify database integrity and exact retained evidence after reopening, preserve queued deletion requests behind pending pins and live references, refuse cleanup from competing processes while writers remain paused, and resume cleanup or explicit recovery in fresh processes.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.
 - [ ] Enable mandatory guards and ship version one only after phases 1–5 and their verification pass.
 

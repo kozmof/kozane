@@ -136,6 +136,14 @@ The worker keeps requests until removals and supported directory syncs finish.
 It checks the request's file identity before acknowledging it. Replaced, nonempty
 or unsafe request entries remain available for review.
 
+Native subprocess tests stop workers with `SIGKILL` at upload reservation,
+temporary creation, writes and syncs, publication, card commits, archiving and
+deletion-request boundaries. Fresh processes reopen the database and run cleanup.
+Pending pins and committed references still protect their images. Interrupted
+archives and committed deletion requests can finish without reinstalling bytes.
+Competing processes refuse cleanup while upload or card writers remain paused.
+These tests keep the operating system running and do not simulate a power loss.
+
 `image uploads --all` includes completed and abandoned records. Startup and
 `doctor` report at most five unfinished filenames and their published and
 temporary file observations. They never confirm, abandon or retry upload work.
