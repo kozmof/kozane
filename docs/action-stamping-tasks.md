@@ -128,7 +128,13 @@ observations retain their exact SQL storage class and value, including integers
 outside JavaScript's safe range. Database context, routing and label input are
 captured before waiting for other taskspace work. A failed reply read rolls back
 the label change. The old combined endpoint retains its directory behavior for
-earlier clients. Production action persistence remains pending.
+earlier clients. Its rename and removal paths now preserve exact local observation
+values without decoding them. Nesting checks read only identities and paths,
+including when other taskspaces have shared timestamps outside JavaScript's safe
+range. Both operations capture database context and routing before waiting for
+the queue. Failed publication preserves the observation and completed disk work
+for explicit recovery without repeating filesystem callbacks. Production action
+persistence remains pending.
 
 Migration 0021 now journals taskspace directory claims before disk work. Creation
 publishes the local attachment and confirmation together, preserves pending
@@ -1014,6 +1020,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Recover completed directory moves, layout changes and removals with snapshot and disk checks, atomic database confirmation and no filesystem retries. Preserve blocked and failed recovery evidence.
 - [x] Verify directory recovery's final receipt, namespace, shared record, attachment, cleared removal links and disk outcome after database triggers. Roll back changed publication without repeating disk work, preserve retained local observations by SQL storage class and value, and cover moves, layout changes, removals and CLI recovery retries.
 - [x] Apply shared published-state checks to live moves, removals and layout changes after confirmation triggers. Own requests, shared snapshot values, callbacks, directory identity and allowed batch IDs before asynchronous work. Preserve completed disk changes and configuration after failed publication, and verify direct and temporary layout recovery without repeated moves.
+- [x] Preserve exact local observations through legacy HTTP rename and removal without decoding them. Read only identities and paths for nesting protection, capture database context and routing before queueing, preserve hidden-taskspace 404 responses, and verify rollback and recovery without repeating disk work.
 - [x] Inspect interrupted taskspace file operations against disk state on startup and explicitly confirm reviewed outcomes without repeating filesystem callbacks. Preserve recorded errors and blocked evidence.
 - [x] Verify the final file recovery receipt, visibility, attachment and disk outcome after database triggers. Roll back changed evidence without overwriting newer files, and confirm all five operations while preserving shared and local observation timestamps outside JavaScript's safe integer range.
 - [x] Apply the same outcome checks to live file mutations after confirmation triggers. Own requests and path resolvers before asynchronous work, preserve newer disk state and separately committed attachments, and route all five methods without decoding unrelated shared or local timestamps. Cover recovery parity and HTTP failure responses.

@@ -12,6 +12,7 @@ import {
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
+import { sql } from "drizzle-orm";
 import { DELETE, PATCH } from "./+server.js";
 import { POST as createFile } from "./file/+server.js";
 import { addNamespace } from "$db/api/namespace.js";
@@ -119,6 +120,113 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
     else process.env.KOZANE_WORKSPACE_ROOT = prevEnv;
     _resetWorkspaceRootForTest();
     rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  async function observations() {
+    return (
+      await db.values(sql`SELECT taskspace_id,typeof(last_seen_at),hex(last_seen_at),
+      CASE WHEN typeof(last_seen_at)='real' THEN last_seen_at ELSE NULL END
+      FROM taskspace_local ORDER BY taskspace_id`)
+    ).map((row) => Array.from(row));
+  }
+
+  describe.each(["PATCH", "DELETE"] as const)("%s observation isolation", (method) => {
+    async function mutate() {
+      return method === "PATCH"
+        ? PATCH(event(db, namespaceId, taskspaceId, method, { name: "final" }))
+        : DELETE(event(db, namespaceId, taskspaceId, method));
+    }
+
+    it.each([
+      "9007199254740993",
+      "-9007199254740995",
+      "1.0000000000000002",
+      "CAST(x'610062' AS TEXT)",
+      "x'80ff00'",
+      "NULL",
+    ])("preserves the target's exact local observation %s", async (value) => {
+      await db.run(sql.raw(`UPDATE taskspace_local SET last_seen_at=${value}`));
+      const before = await observations();
+      const marker = readFileSync(join(tmpRoot, "tasks", "draft", TASKSPACE_MARKER_FILE));
+      const response = await mutate();
+      expect(await response.json()).toEqual(
+        method === "PATCH"
+          ? { id: taskspaceId, name: "final", path: "tasks/final", pathKind: "workspace_relative" }
+          : { ok: true, directory: "deleted" },
+      );
+      expect(await observations()).toEqual(before);
+      expect(existsSync(join(tmpRoot, "tasks", "draft"))).toBe(false);
+      if (method === "PATCH") {
+        expect(readFileSync(join(tmpRoot, "tasks", "final", TASKSPACE_MARKER_FILE))).toEqual(
+          marker,
+        );
+        expect(readFileSync(join(tmpRoot, "tasks", "final", "notes", "a.md"), "utf8")).toBe("a");
+      }
+      expect(
+        (await db.values(sql`SELECT state,error FROM local_file_operation`)).map((row) =>
+          Array.from(row),
+        ),
+      ).toEqual([["confirmed", null]]);
+    });
+
+    it("does not decode unrelated shared or local timestamps during the nesting check", async () => {
+      const other = await addTaskspace({ db, namespaceId, name: "other", path: "tasks/other" });
+      await db.run(sql`UPDATE taskspace SET created_at=9007199254740993,
+      updated_at=-9007199254740995 WHERE id=${other}`);
+      await db.run(sql`UPDATE taskspace_local SET last_seen_at=9007199254740993
+      WHERE taskspace_id=${other}`);
+      const before = await observations();
+      const shared = await db.values(sql`SELECT CAST(created_at AS TEXT),CAST(updated_at AS TEXT)
+      FROM taskspace WHERE id=${other}`);
+      await mutate();
+      expect(await observations()).toEqual(before);
+      expect(
+        await db.values(sql`SELECT CAST(created_at AS TEXT),CAST(updated_at AS TEXT)
+        FROM taskspace WHERE id=${other}`),
+      ).toEqual(shared);
+      expect(existsSync(join(tmpRoot, "tasks", "draft"))).toBe(false);
+    });
+
+    it("still protects a nested taskspace with unsafe observation and shared timestamps", async () => {
+      const inner = await addTaskspace({
+        db,
+        namespaceId,
+        name: "inner",
+        path: "tasks/draft/inner",
+      });
+      mkdirSync(join(tmpRoot, "tasks", "draft", "inner"));
+      writeFileSync(join(tmpRoot, "tasks", "draft", "inner", "keep.md"), "Retained");
+      await db.run(sql`UPDATE taskspace SET created_at=9007199254740993 WHERE id=${inner}`);
+      await db.run(sql`UPDATE taskspace_local SET last_seen_at=-9007199254740995
+      WHERE taskspace_id=${inner}`);
+      const before = await observations();
+      const response = await mutate();
+      expect(await response.json()).toEqual(
+        method === "PATCH"
+          ? { id: taskspaceId, name: "final", path: "tasks/draft", pathKind: "workspace_relative" }
+          : { ok: true, directory: "kept" },
+      );
+      expect(await observations()).toEqual(before);
+      expect(readFileSync(join(tmpRoot, "tasks", "draft", "inner", "keep.md"), "utf8")).toBe(
+        "Retained",
+      );
+      expect(await db.values(sql`SELECT id FROM local_file_operation`)).toEqual([]);
+    });
+
+    it("rejects hidden taskspaces before decoding their shared timestamps", async () => {
+      const otherNamespace = await addNamespace({ db, name: "Other namespace" });
+      await db.run(sql`UPDATE taskspace SET created_at=9007199254740993
+      WHERE id=${taskspaceId}`);
+      await expectHttpRejection(
+        method === "PATCH"
+          ? PATCH(event(db, otherNamespace, taskspaceId, method, { name: "final" }))
+          : DELETE(event(db, otherNamespace, taskspaceId, method)),
+        404,
+        "Taskspace not found",
+      );
+      expect(readFileSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"), "utf8")).toBe("a");
+      expect(await db.values(sql`SELECT id FROM local_file_operation`)).toEqual([]);
+    });
   });
 
   describe("PATCH", () => {

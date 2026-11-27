@@ -41,8 +41,10 @@ import {
 } from "../taskspace-directory-operations.js";
 import { createLocalClaimStartupCheck } from "../local-claim-startup.js";
 import { recoverLocalClaim } from "./recover-claim.js";
+import { recoverDirectoryOperation } from "./recover-directory.js";
 import { journalTaskspaceDirectoryChange } from "./directory-operation.js";
 import { removeTaskspace, renameTaskspace } from "./mutate.js";
+import { oneAtATime } from "./queue.js";
 
 let db: DB;
 let root: string;
@@ -99,6 +101,55 @@ function change(operation: "move" | "remove") {
     : removeTaskspace({ db }, params);
 }
 
+it.each(["move", "remove"] as const)(
+  "owns the host database and routing before a %s waits in the taskspace queue",
+  async (operation) => {
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const held = oneAtATime(params.taskspaceId, async () => {
+      entered();
+      await waiting;
+    });
+    await started;
+    const locals = { db };
+    const routing = { ...params };
+    const input = { name: "final" };
+    const changing =
+      operation === "move"
+        ? renameTaskspace(locals, routing, input)
+        : removeTaskspace(locals, routing);
+    locals.db = null as never;
+    routing.namespaceId = "missing";
+    routing.taskspaceId = "missing";
+    input.name = "Changed";
+    try {
+      release();
+      await held;
+      expect(await changing).toEqual(
+        operation === "move"
+          ? {
+              id: params.taskspaceId,
+              name: "final",
+              path: "tasks/final",
+              pathKind: "workspace_relative",
+            }
+          : { ok: true, directory: "deleted" },
+      );
+      expect(await rows()).toMatchObject([{ ...params, state: "confirmed" }]);
+      expect(existsSync(join(root, path))).toBe(false);
+    } finally {
+      release();
+      await held;
+    }
+  },
+);
+
 it.each(["label", "timestamp", "path", "observation", "namespace"] as const)(
   "rolls back a move when confirmation changes final %s state",
   async (field) => {
@@ -125,6 +176,49 @@ it.each(["label", "timestamp", "path", "observation", "namespace"] as const)(
     expect(readFileSync(join(root, "tasks", "final", "notes", "a.md"), "utf8")).toBe(
       "Retained content",
     );
+  },
+);
+
+it.each(["move", "remove"] as const)(
+  "recovers refused %s publication with an exact large observation without repeating disk work",
+  async (operation) => {
+    await db.run(sql`UPDATE taskspace_local SET last_seen_at=9007199254740993
+    WHERE taskspace_id=${params.taskspaceId}`);
+    const attachment = async () =>
+      (
+        await db.values(sql`SELECT path,path_kind,typeof(last_seen_at),hex(last_seen_at)
+        FROM taskspace_local WHERE taskspace_id=${params.taskspaceId}`)
+      ).map((row) => Array.from(row));
+    const before = await shared();
+    const originalAttachment = await attachment();
+    await db.run(sql`CREATE TRIGGER change_observation AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' AND OLD.state='pending'
+    BEGIN UPDATE taskspace_local SET last_seen_at=9007199254740995; END`);
+    const callback = vi.spyOn(
+      disk,
+      operation === "move" ? "renameTaskspaceDirectory" : "removeTaskspaceDirectory",
+    );
+    await expect(change(operation)).rejects.toMatchObject({
+      status: 500,
+      message: expect.stringContaining("needs recovery"),
+    });
+    expect(await shared()).toEqual(before);
+    expect(await attachment()).toEqual(originalAttachment);
+    const [pending] = await rows();
+    expect(pending).toMatchObject({ state: "pending", confirmedAt: null, error: null });
+    expect(inspectTaskspaceDirectoryOperation(pending, root)).toBe(
+      operation === "move" ? "target-only" : "source-absent",
+    );
+    await db.run(sql`DROP TRIGGER change_observation`);
+    expect((await recoverDirectoryOperation(db, root, pending.id, true)).status).toBe("confirmed");
+    expect((await recoverDirectoryOperation(db, root, pending.id, true)).status).toBe(
+      "already-confirmed",
+    );
+    expect(callback).toHaveBeenCalledOnce();
+    const expectedAttachment = originalAttachment.map((row) => [...row]);
+    if (operation === "move") expectedAttachment[0][0] = "tasks/final";
+    expect(await attachment()).toEqual(expectedAttachment);
+    expect(await rows()).toMatchObject([{ state: "confirmed", error: null }]);
   },
 );
 

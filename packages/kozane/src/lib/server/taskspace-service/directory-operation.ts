@@ -1,6 +1,5 @@
 import { join, dirname, resolve } from "node:path";
 import { withReadTx, type DB, type ReadTx, type Tx } from "../../../db/database.js";
-import type { getTaskspace } from "../../../db/api/taskspace.js";
 import { getNamespace } from "../../../db/api/namespace.js";
 import { directoryEvidence, type DirectoryIdentity } from "../taskspace-directory-operations.js";
 import { TaskspaceFilesError } from "../taskspace-files.js";
@@ -22,7 +21,7 @@ import {
 import { inspectTaskspaceDirectoryOperation } from "../taskspace-directory-operations.js";
 export { taskspaceDirectorySnapshot } from "./directory-state.js";
 
-type Snapshot = NonNullable<Awaited<ReturnType<typeof getTaskspace>>>;
+type Snapshot = Parameters<typeof taskspaceDirectorySnapshot>[0];
 
 /** Recheck the shared identity and attachment without overwriting later edits. */
 async function guard(tx: Tx | ReadTx, namespaceId: string, original: DirectorySnapshot) {

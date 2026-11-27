@@ -516,6 +516,10 @@ after confirmation triggers finish. Failed publication returns 500 with a recove
 message, restores prior database state and keeps the completed disk move pending.
 Run `kozane doctor` before repeating the change.
 
+Local observations retain their exact SQL values. Directory nesting checks do not
+read shared or local timestamps from other taskspaces. Database context and
+routing are captured before waiting for other taskspace changes.
+
 ### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]/label`
 
 Change the shared label without moving a directory. Body requires exactly
@@ -540,6 +544,10 @@ Other directories stay on disk with a `kept` result. This also applies to symlin
 files, and directories holding another taskspace. Directory contents are deleted before the
 `.taskspace.json` marker so a failure preserves the record and allows a retry.
 Cards linked to the taskspace keep their text and lose the link.
+
+Retained local observations preserve their exact SQL values. Directory nesting
+checks read only identities and paths. Database context and routing are captured
+before waiting for other taskspace changes.
 
 Managed removal verifies that the shared identity and card links are absent and
 the local metadata is retained after confirmation triggers finish. Changed

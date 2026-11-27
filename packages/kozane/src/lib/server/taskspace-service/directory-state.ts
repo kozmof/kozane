@@ -1,6 +1,6 @@
 /** Shared row and retained local state checks for directory publication and recovery. */
-import { eq, getTableColumns, sql } from "drizzle-orm";
-import type { ReadTx, Tx } from "../../../db/database.js";
+import { and, eq, getTableColumns, isNull, or, sql } from "drizzle-orm";
+import type { AnyDB, ReadTx, Tx } from "../../../db/database.js";
 import {
   cardTable,
   namespaceTable,
@@ -30,9 +30,9 @@ export function taskspaceDirectorySnapshot(record: Row) {
 }
 export type DirectorySnapshot = ReturnType<typeof taskspaceDirectorySnapshot>;
 
-/** Version 1 needs shared timestamps, but local observations stay outside its snapshot. */
-export async function readDirectorySnapshot(db: ReadTx | Tx, taskspaceId: string) {
-  const row = await db
+/** Directory operations need shared fields and paths, but never decode local observations. */
+export function readDirectoryTaskspace(db: AnyDB, taskspaceId: string, namespaceId?: string) {
+  return db
     .select({
       ...getTableColumns(taskspaceTable),
       path: taskspaceLocalTable.path,
@@ -40,8 +40,20 @@ export async function readDirectorySnapshot(db: ReadTx | Tx, taskspaceId: string
     })
     .from(taskspaceTable)
     .leftJoin(taskspaceLocalTable, eq(taskspaceLocalTable.taskspaceId, taskspaceTable.id))
-    .where(eq(taskspaceTable.id, taskspaceId))
+    .where(
+      and(
+        eq(taskspaceTable.id, taskspaceId),
+        namespaceId === undefined
+          ? undefined
+          : or(eq(taskspaceTable.namespaceId, namespaceId), isNull(taskspaceTable.namespaceId)),
+      ),
+    )
     .get();
+}
+
+/** Version 1 needs shared timestamps, but local observations stay outside its snapshot. */
+export async function readDirectorySnapshot(db: ReadTx | Tx, taskspaceId: string) {
+  const row = await readDirectoryTaskspace(db, taskspaceId);
   return row && taskspaceDirectorySnapshot(row);
 }
 

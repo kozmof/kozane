@@ -197,6 +197,13 @@ deletion or label changes, any attachment update and journal confirmation togeth
 A concurrent edit prevents the final transaction from overwriting newer state.
 Local observation timestamps remain unchanged.
 
+Legacy HTTP rename and removal read shared fields and attachment paths without
+decoding local observations. Directory nesting checks read only taskspace IDs and
+paths, so unrelated shared timestamps also stay opaque. Database context and
+routing are captured before waiting for other taskspace work. Version 1 directory
+intents still require representable shared timestamps for the taskspace being
+moved or removed.
+
 If the final transaction fails, the completed move or removal remains on disk and
 the intent stays pending. The legacy rename endpoint no longer moves a directory
 back automatically after a database failure. Partial deletion retains the marker

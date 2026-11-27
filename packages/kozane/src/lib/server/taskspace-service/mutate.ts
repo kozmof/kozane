@@ -1,11 +1,6 @@
 import type { DB } from "../../../db/database.js";
 import { TaskspaceServiceError } from "./errors.js";
-import {
-  deleteTaskspace,
-  getAllTaskspaces,
-  getTaskspaceInNamespace,
-  updateTaskspace,
-} from "../../../db/api/taskspace.js";
+import { deleteTaskspace, updateTaskspace } from "../../../db/api/taskspace.js";
 import { getAllNamespaces, getNamespace } from "../../../db/api/namespace.js";
 import { getTaskspacePlacementConfig, getWorkspaceRoot } from "../../../db/internal/config.js";
 import { taskspaceNameIssue, type PathKind } from "../../constants.js";
@@ -25,12 +20,14 @@ import { rethrowFilesError } from "./base-dir.js";
 import { oneAtATime } from "./queue.js";
 import { journalTaskspaceDirectoryChange } from "./directory-operation.js";
 import { LocalOperationError } from "./journal-operation.js";
+import { readDirectoryTaskspace } from "./directory-state.js";
+import { readTaskspaceAttachments } from "./attachment.js";
 /** The taskspace visible on this board, or 404. */
 async function visibleTaskspace(locals: { db: DB }, namespaceId: string, taskspaceId: string) {
   const { db } = locals;
   if (!(await getNamespace({ db, namespaceId })))
     throw new TaskspaceServiceError(404, "Namespace not found");
-  const taskspace = await getTaskspaceInNamespace({ db, namespaceId, taskspaceId });
+  const taskspace = await readDirectoryTaskspace(db, taskspaceId, namespaceId);
   if (!taskspace) throw new TaskspaceServiceError(404, "Taskspace not found");
   return taskspace;
 }
@@ -67,7 +64,7 @@ async function managedDirectory(db: DB, taskspace: TaskspaceRow) {
   if (!managed) return null;
   // Another taskspace inside this directory would move or be deleted with it, so leave the
   // directory alone: rename changes only the label, and delete keeps it.
-  if (holdsOtherTaskspaces(root, taskspace, await getAllTaskspaces({ db }))) return null;
+  if (holdsOtherTaskspaces(root, taskspace, await readTaskspaceAttachments(db))) return null;
   const target = { workspaceRoot: root, storedPath, taskspaceId: taskspace.id };
   let claim: DirectoryClaim;
   try {
@@ -186,8 +183,10 @@ export function renameTaskspace(
   params: TaskspaceParams,
   body: Record<string, unknown>,
 ) {
+  const { db } = locals;
+  const { namespaceId, taskspaceId } = params;
   const name = requireBoundedName(body);
-  return oneAtATime(params.taskspaceId, () => rename(locals, params, name));
+  return oneAtATime(taskspaceId, () => rename({ db }, { namespaceId, taskspaceId }, name));
 }
 export function removeTaskspace(
   locals: {
@@ -195,5 +194,7 @@ export function removeTaskspace(
   },
   params: TaskspaceParams,
 ) {
-  return oneAtATime(params.taskspaceId, () => remove(locals, params));
+  const { db } = locals;
+  const { namespaceId, taskspaceId } = params;
+  return oneAtATime(taskspaceId, () => remove({ db }, { namespaceId, taskspaceId }));
 }
