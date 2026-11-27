@@ -1,9 +1,13 @@
 /** Explicitly reconcile local upload metadata. Filesystem work is never repeated. */
-import { and, count, eq, inArray, isNull } from "drizzle-orm";
+import { count, eq, inArray } from "drizzle-orm";
 import { withReadTx, withTx, type DB, type ReadTx, type Tx } from "../../db/database.js";
 import { cardTable, localImageUploadTable } from "../../db/schema.js";
 import { lockImageAssetWork } from "../../db/api/image-upload.js";
 import { inspectImageUpload, validImageUploadFilename } from "./image-upload-evidence.js";
+import {
+  imageUploadIdentity as identity,
+  readImageUploadReceipt as receipt,
+} from "../../db/api/image-upload-state.js";
 
 type Upload = typeof localImageUploadTable.$inferSelect;
 function filename(input: string) {
@@ -26,36 +30,6 @@ async function referenced(db: ReadTx | Tx, name: string) {
     .where(eq(cardTable.content, "kozane-image:/api/images/" + name))
     .limit(1)
     .get());
-}
-function identity(row: Upload) {
-  return and(
-    eq(localImageUploadTable.filename, row.filename),
-    eq(localImageUploadTable.state, row.state),
-    eq(localImageUploadTable.sha256, row.sha256),
-    eq(localImageUploadTable.byteLength, row.byteLength),
-    eq(localImageUploadTable.createdAt, row.createdAt),
-    row.installedAt === null
-      ? isNull(localImageUploadTable.installedAt)
-      : eq(localImageUploadTable.installedAt, row.installedAt),
-    row.completedAt === null
-      ? isNull(localImageUploadTable.completedAt)
-      : eq(localImageUploadTable.completedAt, row.completedAt),
-    row.error === null
-      ? isNull(localImageUploadTable.error)
-      : eq(localImageUploadTable.error, row.error),
-    row.abandonedAt === null
-      ? isNull(localImageUploadTable.abandonedAt)
-      : eq(localImageUploadTable.abandonedAt, row.abandonedAt),
-    row.abandonReason === null
-      ? isNull(localImageUploadTable.abandonReason)
-      : eq(localImageUploadTable.abandonReason, row.abandonReason),
-  );
-}
-/** Read after triggers with the expected predicate before decoding any changed timestamps. */
-async function receipt(tx: Tx, expected: Upload) {
-  const upload = await tx.select().from(localImageUploadTable).where(identity(expected)).get();
-  if (!upload) throw new Error("Image upload publication changed or is missing");
-  return upload;
 }
 function safeDates(row: Upload) {
   return [row.createdAt, row.installedAt, row.completedAt, row.abandonedAt].every(

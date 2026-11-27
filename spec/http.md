@@ -667,6 +667,13 @@ installed bytes before returning the URL. Card creation or update completes the
 installed pin in the same transaction as the reference. Failed writes retain it.
 A missing workspace or a storage failure returns 500. Storage failures use a generic message.
 
+Reservation and installation verify their final receipts after database triggers.
+Installation rechecks published bytes, safe directories and temporary-file absence
+before returning a URL. A failure after file publication retains the pending pin
+and current disk state. Card writes verify the complete pin-transfer batch and
+preserve other unfinished pins. Changed completion rolls back the card write and
+pin changes together.
+
 ### Storage and deletion
 
 Uploads and CLI card creation trigger maintenance at most once per hour per

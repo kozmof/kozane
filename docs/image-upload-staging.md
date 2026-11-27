@@ -11,6 +11,12 @@ an exclusive hard link. Existing destination names are never overwritten.
 Installation verifies the final file's identity, length and hash before marking
 the record installed and returning its URL. Symlinked image directories are refused.
 
+Reservation verifies its exact generated fields after insertion triggers and
+before commit. The installer rechecks that reservation before disk work. After
+installation triggers finish, it verifies the final receipt, published bytes,
+safe image directories and absence of a temporary file. Changed publication
+retains the pending pin and current disk state without repeating installation.
+
 The file is synced before publication. Directory entries are synced where Node
 supports directory fsync. Windows skips directory fsync. Filesystem callbacks run
 once and are never retried automatically.
@@ -22,6 +28,16 @@ in the same transaction as the card write. CLI image creation uses the same
 transaction-bound adapter. Completion preserves the recorded filename, length,
 hash and installation evidence. A failed statement or commit rolls back both
 the card change and staging completion, leaving the pin intact.
+
+Completion snapshots unfinished pins under the writer lock and verifies the
+entire selected batch after database triggers finish. Each completed upload must
+still have a card reference and other unfinished pins must stay unchanged. A newly
+referenced installation introduced by a trigger also refuses completion. Failed
+verification rolls back the card write and pin changes together.
+
+Creation and installation timestamps retain their SQL storage class and value,
+including integers outside JavaScript's safe range, exact REAL values, text and
+blobs. Completion changes no timestamp values on unrelated pins.
 
 Completed records retain metadata while live card references protect the bytes.
 Pending and installed records pin files even when no card refers to them. The
@@ -41,6 +57,11 @@ A filesystem failure preserves its pending record and attempts to retain the err
 Temporary files or published bytes remain available for review. If installation
 finished but its confirmation failed, the pending record and verified file remain.
 CLI card creation no longer deletes an uploaded file after a failed card write.
+
+Error recording matches the original pending intent and never overwrites an
+existing error. It verifies its final receipt after database triggers finish.
+Failed recording preserves the current pin and reports both failures. Separately
+committed errors remain intact.
 
 Unfinished pins have no automatic expiry. List them and preview recovery with
 the full filename printed by `doctor` or authenticated startup.

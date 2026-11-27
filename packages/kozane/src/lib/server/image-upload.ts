@@ -3,11 +3,15 @@ import * as fs from "node:fs/promises";
 import { constants } from "node:fs";
 import * as crypto from "node:crypto";
 import { dirname, join } from "node:path";
-import { and, eq, isNull } from "drizzle-orm";
 import { withTx, type DB } from "../../db/database.js";
 import { localImageUploadTable } from "../../db/schema.js";
 import { lockImageAssetWork } from "../../db/api/image-upload.js";
 import { assertImageAssetIdentityInTx } from "../../db/api/asset-manifest.js";
+import {
+  imageUploadIdentity,
+  readImageUploadReceipt,
+  type ImageUploadRecord,
+} from "../../db/api/image-upload-state.js";
 
 export const imageDirectory = (root: string) => join(root, ".kozane", "assets", "images");
 
@@ -88,12 +92,17 @@ export async function installImageUpload(
 ) {
   const filename = `${crypto.randomUUID()}.${extension}`;
   const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
-  const record = {
+  const record: ImageUploadRecord = {
     filename,
     sha256,
     byteLength: bytes.byteLength,
     state: "pending" as const,
     createdAt: new Date(Math.floor(Date.now() / 1000) * 1000),
+    installedAt: null,
+    completedAt: null,
+    error: null,
+    abandonedAt: null,
+    abandonReason: null,
   };
   // The pin is committed before any directory or file is created.
   await withTx(db, async (tx) => {
@@ -105,26 +114,14 @@ export async function installImageUpload(
       ],
     });
     await tx.insert(localImageUploadTable).values(record);
+    await readImageUploadReceipt(tx, record);
   });
   let attempted = false;
   let diskComplete = false;
   try {
     await withTx(db, async (tx) => {
       await lockImageAssetWork(tx);
-      const current = await tx
-        .select()
-        .from(localImageUploadTable)
-        .where(eq(localImageUploadTable.filename, filename))
-        .get();
-      if (
-        !current ||
-        current.state !== "pending" ||
-        current.error !== null ||
-        current.sha256 !== sha256 ||
-        current.byteLength !== bytes.byteLength ||
-        current.createdAt.getTime() !== record.createdAt.getTime()
-      )
-        throw new Error("Image upload reservation changed");
+      await readImageUploadReceipt(tx, record);
       attempted = true;
       const dir = await imageAssetDirectory(root);
       const temporary = join(dir, `.upload-${filename}`);
@@ -146,40 +143,44 @@ export async function installImageUpload(
       await syncDirectory(dir);
       await verifyImageUploadFile(target, bytes.byteLength, sha256);
       diskComplete = true;
+      const expected: ImageUploadRecord = {
+        ...record,
+        state: "installed",
+        installedAt: new Date(),
+      };
       const [installed] = await tx
         .update(localImageUploadTable)
-        .set({ state: "installed", installedAt: new Date() })
-        .where(
-          and(
-            eq(localImageUploadTable.filename, filename),
-            eq(localImageUploadTable.state, "pending"),
-            eq(localImageUploadTable.sha256, sha256),
-            eq(localImageUploadTable.byteLength, bytes.byteLength),
-            eq(localImageUploadTable.createdAt, record.createdAt),
-            isNull(localImageUploadTable.error),
-          ),
-        )
-        .returning();
+        .set({ state: expected.state, installedAt: expected.installedAt })
+        .where(imageUploadIdentity(record))
+        .returning({ filename: localImageUploadTable.filename });
       if (!installed) throw new Error("Image upload reservation changed or is missing");
+      await verifyImageUploadFile(target, record.byteLength, sha256);
+      if ((await imageAssetDirectory(root, false)) !== dir)
+        throw new Error("Image directory changed during installation");
+      const temporaryExists = await fs.lstat(temporary).then(
+        () => true,
+        (error) => {
+          if (error.code === "ENOENT") return false;
+          throw error;
+        },
+      );
+      if (temporaryExists)
+        throw new Error("Image upload temporary file remains after installation");
+      await readImageUploadReceipt(tx, expected);
     });
   } catch (cause) {
     if (attempted && !diskComplete) {
       try {
+        const message = String(cause);
         await withTx(db, async (tx) => {
+          await lockImageAssetWork(tx);
           const [recorded] = await tx
             .update(localImageUploadTable)
-            .set({ error: String(cause) })
-            .where(
-              and(
-                eq(localImageUploadTable.filename, filename),
-                eq(localImageUploadTable.state, "pending"),
-                eq(localImageUploadTable.sha256, sha256),
-                eq(localImageUploadTable.byteLength, bytes.byteLength),
-                eq(localImageUploadTable.createdAt, record.createdAt),
-              ),
-            )
-            .returning();
+            .set({ error: message })
+            .where(imageUploadIdentity(record))
+            .returning({ filename: localImageUploadTable.filename });
           if (!recorded) throw new Error("Image upload error could not be retained", { cause });
+          await readImageUploadReceipt(tx, { ...record, error: message });
         });
       } catch (recordError) {
         throw new AggregateError(

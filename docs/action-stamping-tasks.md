@@ -189,9 +189,14 @@ now preview and explicitly recover verified installation or abandon a reviewed
 pin while preserving evidence. Both operations verify the final receipt and
 card-reference presence after database triggers. Recovery also rechecks published
 bytes and temporary-file absence. Changed publication preserves the prior pin
-and current disk state without repeating installation. Startup and doctor inspect
-unfinished records without retrying work. Production history manifests and transfer
-pins remain pending. See [local image upload staging](image-upload-staging.md).
+and current disk state without repeating installation. Live reservation,
+installation and error recording now verify their final receipts after triggers.
+Card completion verifies the whole selected batch and other unfinished pins,
+preserving creation and installation timestamps by SQL storage class and value.
+Changed publication rolls back card writes and pin changes together. Startup and
+doctor inspect unfinished records without retrying work. Production history
+manifests and transfer pins remain pending. See
+[local image upload staging](image-upload-staging.md).
 
 Migration 0026 adds a durable local manifest ledger. Pending and retained owners
 protect registered baseline, effect-set, pending-work, transfer and recovery images
@@ -1055,7 +1060,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Connect prototype epoch candidates to durable baseline image owners. Reserve protection before image reads, retain it with candidate publication, require exact retained protection at activation and preserve earlier owners and pins after failed validation or commits. Verify restart, cleanup contention and protection after the last live reference disappears.
 - [x] Recover verified published uploads or explicitly abandon reviewed pins without repeating filesystem work. Preserve intent, errors and decisions, and keep live references protected during cleanup.
 - [x] Verify image upload recovery and abandonment receipts and card-reference presence after database triggers. Preserve exact intended metadata and decision evidence, recheck recovered bytes and temporary-file absence, and retain prior pins and newer disk state after refused publication.
-- [ ] Verify upload reservation, installation, error recording and card-reference completion after database triggers.
+- [x] Verify upload reservation, installation, error recording and card-reference completion after database triggers. Preserve separately committed errors, verify the whole completion batch and other unfinished pins, retain exact SQL timestamps and refuse changed disk publication without repeating installation.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.
 - [ ] Enable mandatory guards and ship version one only after phases 1–5 and their verification pass.
 

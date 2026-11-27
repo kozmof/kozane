@@ -13,6 +13,9 @@ import { createNamespace } from "../../db/api/namespace.js";
 import { getDefaultPartition } from "../../db/api/partition.js";
 import { create, update } from "../../services/cards.js";
 import { createServiceContext } from "../../services/context.js";
+import { captureApplicationRows } from "../../test-utils/action-tables.js";
+import type { DB as CoreDB } from "../../../../core/src/database.js";
+import { recoverImageUpload } from "./image-upload-recovery.js";
 import {
   storeImage,
   imageDirectory,
@@ -91,6 +94,195 @@ it("creates no files or directories when the reservation cannot commit", async (
   expect(await uploads()).toEqual([]);
   expect(existsSync(imageDirectory(root))).toBe(false);
 });
+
+const alteredReceipt = {
+  state:
+    "UPDATE local_image_upload SET state='abandoned',completed_at=NULL,abandoned_at=123,abandon_reason='Changed' WHERE filename=NEW.filename",
+  filename:
+    "UPDATE local_image_upload SET filename='00000000-0000-4000-8000-000000000001.svg' WHERE filename=NEW.filename",
+  hash: "UPDATE local_image_upload SET sha256=printf('%064d',0) WHERE filename=NEW.filename",
+  length: "UPDATE local_image_upload SET byte_length=byte_length+1 WHERE filename=NEW.filename",
+  created: "UPDATE local_image_upload SET created_at=created_at+1 WHERE filename=NEW.filename",
+  "large-created":
+    "UPDATE local_image_upload SET created_at=9007199254740993 WHERE filename=NEW.filename",
+  deleted: "DELETE FROM local_image_upload WHERE filename=NEW.filename",
+};
+
+it.each(Object.keys(alteredReceipt) as (keyof typeof alteredReceipt)[])(
+  "rolls back changed %s reservation evidence before disk work",
+  async (field) => {
+    await db.run(sql`CREATE TABLE reservation_audit(value TEXT)`);
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_reservation AFTER INSERT ON local_image_upload
+    BEGIN INSERT INTO reservation_audit VALUES('changed'); ${alteredReceipt[field]}; END`),
+    );
+    const link = vi.spyOn(fs, "link");
+    await expect(store()).rejects.toThrow();
+    expect(await uploads()).toEqual([]);
+    expect(await db.values(sql`SELECT value FROM reservation_audit`)).toEqual([]);
+    expect(existsSync(imageDirectory(root))).toBe(false);
+    expect(link).not.toHaveBeenCalled();
+  },
+);
+
+it.each([...Object.keys(alteredReceipt), "installed"])(
+  "preserves the pending pin and completed bytes after changed %s installation publication",
+  async (field) => {
+    const statement =
+      field === "installed"
+        ? "UPDATE local_image_upload SET installed_at=installed_at+1 WHERE filename=NEW.filename"
+        : alteredReceipt[field as keyof typeof alteredReceipt];
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_installation AFTER UPDATE ON local_image_upload
+    WHEN OLD.state='pending' AND NEW.state='installed' BEGIN ${statement}; END`),
+    );
+    const link = vi.spyOn(fs, "link");
+    await expect(store()).rejects.toThrow("needs review");
+    const [pending] = await uploads();
+    expect(pending).toMatchObject({
+      state: "pending",
+      installedAt: null,
+      completedAt: null,
+      error: null,
+      byteLength: bytes.byteLength,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+    });
+    expect(await fs.readFile(join(imageDirectory(root), pending.filename), "utf8")).toBe(source);
+    await queueDeletion(pending.filename);
+    await collectUnusedImages(root, db);
+    await retryImageDeletions(root, db);
+    expect(existsSync(join(imageDirectory(root), pending.filename))).toBe(true);
+    await db.run(sql`DROP TRIGGER change_installation`);
+    expect((await recoverImageUpload(db, root, pending.filename, true)).status).toBe("confirmed");
+    expect(link).toHaveBeenCalledOnce();
+  },
+);
+
+it.each(["bytes", "temporary", "symlink"] as const)(
+  "retains pending publication when %s changes during final installation verification",
+  async (field) => {
+    const open = fs.open;
+    let reads = 0;
+    vi.spyOn(fs, "open").mockImplementation(async (...args) => {
+      const target = String(args[0]);
+      if (target.endsWith(".svg") && !target.includes(".upload-") && ++reads === 2) {
+        if (field === "bytes") await fs.writeFile(target, "Later bytes");
+        if (field === "temporary")
+          await fs.writeFile(
+            join(imageDirectory(root), `.upload-${target.split("/").pop()}`),
+            bytes,
+          );
+        if (field === "symlink") {
+          await fs.rename(target, join(root, "retained.svg"));
+          await fs.symlink(join(root, "retained.svg"), target);
+        }
+      }
+      return open(...args);
+    });
+    const link = vi.spyOn(fs, "link");
+    await expect(store()).rejects.toThrow("needs review");
+    const [pending] = await uploads();
+    expect(pending).toMatchObject({ state: "pending", installedAt: null, error: null });
+    const target = join(imageDirectory(root), pending.filename);
+    if (field === "symlink") {
+      expect((await fs.lstat(target)).isSymbolicLink()).toBe(true);
+      expect(await fs.readFile(join(root, "retained.svg"), "utf8")).toBe(source);
+    } else {
+      expect(await fs.readFile(target, "utf8")).toBe(field === "bytes" ? "Later bytes" : source);
+      if (field === "temporary")
+        expect(
+          await fs.readFile(join(imageDirectory(root), `.upload-${pending.filename}`), "utf8"),
+        ).toBe(source);
+    }
+    expect(link).toHaveBeenCalledOnce();
+  },
+);
+
+it.each([...Object.keys(alteredReceipt), "error"])(
+  "retains both failures and the original pin when error recording changes %s evidence",
+  async (field) => {
+    const statement =
+      field === "error"
+        ? "UPDATE local_image_upload SET error='Rewritten failure' WHERE filename=NEW.filename"
+        : alteredReceipt[field as keyof typeof alteredReceipt];
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_error AFTER UPDATE ON local_image_upload
+    WHEN OLD.error IS NULL AND NEW.error IS NOT NULL BEGIN ${statement}; END`),
+    );
+    const failure = new Error("Interrupted publication");
+    const link = vi.spyOn(fs, "link").mockRejectedValueOnce(failure);
+    await expect(store()).rejects.toMatchObject({ errors: [failure, expect.any(Error)] });
+    const [pending] = await uploads();
+    expect(pending).toMatchObject({ state: "pending", installedAt: null, error: null });
+    expect(
+      await fs.readFile(join(imageDirectory(root), `.upload-${pending.filename}`), "utf8"),
+    ).toBe(source);
+    expect(link).toHaveBeenCalledOnce();
+  },
+);
+
+it("preserves an error committed after installation rollback instead of overwriting it", async () => {
+  let published = false;
+  const failure = new Error("Interrupted publication");
+  failure.toString = () => {
+    if (!published) {
+      published = true;
+      const writer = new DatabaseSync(join(root, "db.sqlite"));
+      try {
+        writer.exec("UPDATE local_image_upload SET error='Separately committed failure'");
+      } finally {
+        writer.close();
+      }
+    }
+    return "Original filesystem failure";
+  };
+  vi.spyOn(fs, "link").mockRejectedValueOnce(failure);
+  await expect(store()).rejects.toBeInstanceOf(AggregateError);
+  expect(await uploads()).toMatchObject([
+    { state: "pending", error: "Separately committed failure" },
+  ]);
+});
+
+it.each(
+  [false, true].flatMap((updating) =>
+    [...Object.keys(alteredReceipt), "installed", "completed", "reference", "unrelated-pin"].map(
+      (field) => ({ updating, field }),
+    ),
+  ),
+)(
+  "rolls back card changes and pin completion after changed $field evidence (updating=$updating)",
+  async ({ updating, field }) => {
+    const url = await store();
+    await store();
+    const installed = await uploads();
+    const card = updating ? await createCard("Plain card") : null;
+    const before = await captureApplicationRows(db as unknown as CoreDB);
+    const statement = {
+      ...alteredReceipt,
+      installed:
+        "UPDATE local_image_upload SET installed_at=installed_at+1 WHERE filename=NEW.filename",
+      completed:
+        "UPDATE local_image_upload SET completed_at=completed_at+1 WHERE filename=NEW.filename",
+      reference:
+        "UPDATE card SET content='Changed reference' WHERE content='kozane-image:/api/images/' || NEW.filename",
+      "unrelated-pin":
+        "UPDATE local_image_upload SET state='abandoned',abandoned_at=123,abandon_reason='Changed' WHERE filename<>NEW.filename",
+    }[field];
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_completion AFTER UPDATE ON local_image_upload
+    WHEN OLD.state='installed' AND NEW.state='completed' BEGIN ${statement}; END`),
+    );
+    await expect(
+      card
+        ? update(db, createServiceContext(), namespaceId, card.id, {
+            content: "kozane-image:" + url,
+          })
+        : createCard(url),
+    ).rejects.toThrow("completion");
+    expect(await uploads()).toEqual(installed);
+    expect(await captureApplicationRows(db as unknown as CoreDB)).toEqual(before);
+  },
+);
 
 it("retains an interrupted temporary file and error without repeating publication", async () => {
   const link = vi.spyOn(fs, "link").mockRejectedValueOnce(new Error("Interrupted publication"));
