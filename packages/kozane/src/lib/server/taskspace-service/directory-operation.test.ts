@@ -93,6 +93,32 @@ function change(operation: "move" | "remove") {
     : removeTaskspace({ db }, params);
 }
 
+it.each(["move", "remove"] as const)(
+  "rolls back %s publication if a trigger rewrites its receipt",
+  async (operation) => {
+    await db.run(sql`CREATE TRIGGER change_confirmation AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' AND OLD.state='pending'
+    BEGIN UPDATE local_file_operation SET created_at=created_at+1 WHERE id=NEW.id; END`);
+    const before = await shared();
+    const original = await record();
+    const callback = vi.spyOn(
+      disk,
+      operation === "move" ? "renameTaskspaceDirectory" : "removeTaskspaceDirectory",
+    );
+    await expect(change(operation)).rejects.toMatchObject({
+      status: 500,
+      message: expect.stringContaining("needs recovery"),
+    });
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(await shared()).toEqual(before);
+    expect(await record()).toEqual(original);
+    expect(await rows()).toMatchObject([{ state: "pending", confirmedAt: null, error: null }]);
+    expect(inspectTaskspaceDirectoryOperation((await rows())[0], root)).toBe(
+      operation === "move" ? "target-only" : "source-absent",
+    );
+  },
+);
+
 it("refuses unrepresentable shared timestamps before recording intent or touching disk", async () => {
   await db.run(sql`UPDATE taskspace SET created_at=8640000000001 WHERE id=${params.taskspaceId}`);
   const callback = vi.spyOn(disk, "removeTaskspaceDirectory");

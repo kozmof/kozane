@@ -255,26 +255,22 @@ it("touches no disk when pending intent cannot commit", async () => {
   expect(await db.select().from(localFileOperationTable)).toEqual([]);
 });
 
-it.each(["intent", "target"])(
-  "rechecks %s after the initial commit before touching disk",
-  async (changed) => {
-    if (changed === "intent")
-      await db.run(sql`CREATE TRIGGER change_after_record AFTER INSERT ON local_file_operation
+it.each(["intent", "target"])("refuses stale %s before touching disk", async (changed) => {
+  if (changed === "intent")
+    await db.run(sql`CREATE TRIGGER change_after_record AFTER INSERT ON local_file_operation
       BEGIN UPDATE local_file_operation SET path='different'; END`);
-    else
-      await db.run(sql`CREATE TRIGGER change_after_record AFTER INSERT ON local_file_operation
+  else
+    await db.run(sql`CREATE TRIGGER change_after_record AFTER INSERT ON local_file_operation
       BEGIN UPDATE taskspace SET namespace_id=NULL; END`);
-    const spy = vi.spyOn(directories, "claimTaskspaceDirectory");
-    await expect(claim()).rejects.toMatchObject({ phase: "change" });
-    expect(spy).not.toHaveBeenCalled();
-    expect(await operation()).toMatchObject({
-      state: "pending",
-      path: changed === "intent" ? "different" : "target",
-    });
-    expect(await db.select().from(taskspaceLocalTable)).toEqual([]);
-    expect(existsSync(join(root, "target"))).toBe(false);
-  },
-);
+  const spy = vi.spyOn(directories, "claimTaskspaceDirectory");
+  if (changed === "intent") await expect(claim()).rejects.toThrow("intent changed");
+  else await expect(claim()).rejects.toMatchObject({ phase: "change" });
+  expect(spy).not.toHaveBeenCalled();
+  if (changed === "intent") expect(await db.select().from(localFileOperationTable)).toEqual([]);
+  else expect(await operation()).toMatchObject({ state: "pending", path: "target" });
+  expect(await db.select().from(taskspaceLocalTable)).toEqual([]);
+  expect(existsSync(join(root, "target"))).toBe(false);
+});
 
 it.each(["path", "date"])("refuses invalid %s inputs before queuing disk work", async (field) => {
   const { record, directory } = inputs();

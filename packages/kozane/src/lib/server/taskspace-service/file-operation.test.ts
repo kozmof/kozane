@@ -317,3 +317,23 @@ it("waits for outstanding file work before confirming completion", async () => {
   await changing;
   expect((await operations())[0].state).toBe("confirmed");
 });
+
+it.each(cases)(
+  "retains completed %s after a confirmation trigger changes its receipt",
+  async (operation) => {
+    await db.run(sql`CREATE TRIGGER change_confirmation AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' AND OLD.state='pending'
+    BEGIN UPDATE local_file_operation SET created_at=created_at+1 WHERE id=NEW.id; END`);
+    const before = await shared();
+    const local = await getAllTaskspaceLocalMetadata({ db });
+    await expect(change(operation)).rejects.toMatchObject({
+      status: 500,
+      message: expect.stringContaining("needs recovery"),
+    });
+    const [row] = await operations();
+    expect(row).toMatchObject({ state: "pending", confirmedAt: null, error: null });
+    expect(inspectTaskspaceFileOperation(row, root)).toBe(observation(operation));
+    expect(await shared()).toEqual(before);
+    expect(await getAllTaskspaceLocalMetadata({ db })).toEqual(local);
+  },
+);

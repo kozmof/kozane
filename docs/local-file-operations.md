@@ -53,6 +53,15 @@ deletes the shared identity after failure. A user-chosen directory remains
 user-owned even when the command creates it. Interrupted attachment uses the
 claim recovery flow below, which never repeats directory creation.
 
+File mutations, managed directory operations, layout moves and attachment to an
+existing taskspace share a journal boundary. It copies intent fields before
+asynchronous preparation and verifies the pending row after insertion, before
+filesystem work and before database publication. Confirmation and error recording
+check the final journal row after database triggers finish. Changed identity,
+creation time or evidence rolls back publication or error recording. A separately
+committed error stays intact when later error recording fails, and the caller
+receives both failures. Completed disk work is never repeated by this boundary.
+
 `kozane doctor` reports the pending count and up to five operation IDs with disk
 observations. It distinguishes missing directories, missing markers, exact marker
 hash matches, different markers, unsafe paths, invalid intent and unreadable
