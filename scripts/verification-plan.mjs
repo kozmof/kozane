@@ -20,6 +20,7 @@ export function verificationPlan(directory, { skipBrowserTests = false } = {}) {
       "lint",
       "fmt:check",
       "test:coverage:source",
+      "test:capture:wasm",
     ].map((name) => ["pnpm", [name]]),
   ];
 }

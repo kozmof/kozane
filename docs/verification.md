@@ -17,6 +17,8 @@ production candidate, including package installation and browser behavior.
 | Core validation or services     | `pnpm test` and `pnpm check:core-browser`                                  |
 | Database adapters               | `pnpm check:core-package` and `pnpm test:db-wasm`                          |
 | Browser database adapters       | Also run `pnpm test:db-browser`                                            |
+| Capture and epoch prototypes    | `pnpm test:capture:native` and `pnpm test:capture:wasm`                       |
+| Browser capture gate            | `pnpm test:capture:browser`                                                 |
 | Public types or exports         | `pnpm check:core-package` and `pnpm check:client-package`                  |
 | Client contracts or adapters    | `pnpm test`, `pnpm check:client-contract`, and `pnpm check:client-browser` |
 | Client views or lifecycle       | `pnpm test` and `pnpm test:client-package`                                 |
@@ -30,6 +32,11 @@ production candidate, including package installation and browser behavior.
 
 The verification plan consumes prepared artifacts. Use `pnpm verify` to run the
 workspace verification entry point. Use `pnpm release:local` for release preparation.
+
+The verification plan always includes the focused WASM capture gate. CI and full
+local release preparation also run the browser capture gate. The fixed runner
+checks the complete suite inventory and rejects skipped or missing checks.
+See the [capture prototype guide](action-capture-prototype.md#run-the-checks).
 
 For every driver, retain consumer checks for committed writes, rollback after
 callback failure, reads after rollback and subsequent successful writes. Test

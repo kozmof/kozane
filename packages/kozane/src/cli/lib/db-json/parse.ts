@@ -57,8 +57,8 @@ export function parseDump(input: unknown): DbJsonDump {
 
   // Keep the narrowed version number available inside the row callback.
   const version = dump.version;
+  const tables = structuredClone(dump.tables) as Partial<TableRows>;
   for (const table of TABLES) {
-    const tables = dump.tables as Partial<TableRows>;
     // Treat tables omitted by older dumps as empty.
     const since = "since" in table ? table.since : undefined;
     if (since !== undefined && dump.version < since && tables[table.name] === undefined) {
@@ -73,7 +73,11 @@ export function parseDump(input: unknown): DbJsonDump {
         throw new Error(`Invalid row ${index} in table ${table.name}`);
       }
       const added = COLUMNS_SINCE[table.name] ?? {};
-      for (const column of table.columns) {
+      const columns =
+        table.name === "taskspace" && version < 10
+          ? [...table.columns, "path", "path_kind", "last_seen_at"]
+          : table.columns;
+      for (const column of columns) {
         const addedIn = added[column];
         if (!(column in row) && addedIn !== undefined && version < addedIn) {
           (row as JsonObject)[column] = null;
@@ -88,5 +92,18 @@ export function parseDump(input: unknown): DbJsonDump {
     });
   }
 
-  return dump as DbJsonDump;
+  if (version < 10) {
+    // Older dumps carried attachments inline. Copy them exactly, then retain only
+    // shared columns on taskspace rows. The caller's original dump stays unchanged.
+    tables.taskspace_local = tables.taskspace!.map(({ id, path, path_kind, last_seen_at }) => ({
+      taskspace_id: id,
+      path,
+      path_kind,
+      last_seen_at,
+    }));
+    tables.taskspace = tables.taskspace!.map(
+      ({ path: _path, path_kind: _kind, last_seen_at: _seen, ...shared }) => shared,
+    );
+  }
+  return { ...dump, version: EXPORT_VERSION, tables } as DbJsonDump;
 }

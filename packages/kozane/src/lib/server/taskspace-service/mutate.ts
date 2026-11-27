@@ -1,11 +1,6 @@
 import type { DB } from "../../../db/database.js";
 import { TaskspaceServiceError } from "./errors.js";
-import {
-  deleteTaskspace,
-  getAllTaskspaces,
-  getTaskspaceInNamespace,
-  updateTaskspace,
-} from "../../../db/api/taskspace.js";
+import { deleteTaskspace, updateTaskspace } from "../../../db/api/taskspace.js";
 import { getAllNamespaces, getNamespace } from "../../../db/api/namespace.js";
 import { getTaskspacePlacementConfig, getWorkspaceRoot } from "../../../db/internal/config.js";
 import { taskspaceNameIssue, type PathKind } from "../../constants.js";
@@ -15,7 +10,7 @@ import {
   isManagedTaskspaceDirectory,
   removeTaskspaceDirectory,
   renameTaskspaceDirectory,
-  restoreTaskspaceDirectory,
+  directoryRemovalError,
   taskspaceDirectoryClaim,
   type DirectoryClaim,
 } from "../taskspace-directory.js";
@@ -23,12 +18,16 @@ import type { TaskspaceDirectoryOutcome } from "../../types.js";
 import { requireBoundedName } from "../../../services/validation.js";
 import { rethrowFilesError } from "./base-dir.js";
 import { oneAtATime } from "./queue.js";
+import { journalTaskspaceDirectoryChange } from "./directory-operation.js";
+import { LocalOperationError } from "./journal-operation.js";
+import { readDirectoryTaskspace } from "./directory-state.js";
+import { readTaskspaceAttachments } from "./attachment.js";
 /** The taskspace visible on this board, or 404. */
 async function visibleTaskspace(locals: { db: DB }, namespaceId: string, taskspaceId: string) {
   const { db } = locals;
   if (!(await getNamespace({ db, namespaceId })))
     throw new TaskspaceServiceError(404, "Namespace not found");
-  const taskspace = await getTaskspaceInNamespace({ db, namespaceId, taskspaceId });
+  const taskspace = await readDirectoryTaskspace(db, taskspaceId, namespaceId);
   if (!taskspace) throw new TaskspaceServiceError(404, "Taskspace not found");
   return taskspace;
 }
@@ -65,7 +64,7 @@ async function managedDirectory(db: DB, taskspace: TaskspaceRow) {
   if (!managed) return null;
   // Another taskspace inside this directory would move or be deleted with it, so leave the
   // directory alone: rename changes only the label, and delete keeps it.
-  if (holdsOtherTaskspaces(root, taskspace, await getAllTaskspaces({ db }))) return null;
+  if (holdsOtherTaskspaces(root, taskspace, await readTaskspaceAttachments(db))) return null;
   const target = { workspaceRoot: root, storedPath, taskspaceId: taskspace.id };
   let claim: DirectoryClaim;
   try {
@@ -79,6 +78,33 @@ type TaskspaceParams = {
   namespaceId: string;
   taskspaceId: string;
 };
+async function recheckManagedDirectory(
+  db: DB,
+  taskspace: TaskspaceRow,
+  expected: { workspaceRoot: string; storedPath: string },
+) {
+  const current = await managedDirectory(db, taskspace);
+  if (
+    !current ||
+    current.claim !== "owned" ||
+    current.workspaceRoot !== expected.workspaceRoot ||
+    current.storedPath !== expected.storedPath
+  )
+    throw new TaskspaceServiceError(409, "Taskspace directory changed before the operation");
+}
+function rethrowDirectoryChange(error: unknown, whatFailed: string): never {
+  if (error instanceof LocalOperationError) {
+    if (error.phase === "confirm")
+      throw new TaskspaceServiceError(
+        500,
+        "Directory change needs recovery. Run 'kozane doctor' before repeating it.",
+      );
+    if (error.cause instanceof TaskspaceServiceError) throw error.cause;
+    rethrowFilesError(error.cause, whatFailed);
+  }
+  if (error instanceof TaskspaceServiceError) throw error;
+  rethrowFilesError(error, whatFailed);
+}
 async function rename(locals: { db: DB }, params: TaskspaceParams, name: string) {
   const { db } = locals;
   const taskspace = await visibleTaskspace(locals, params.namespaceId, params.taskspaceId);
@@ -98,30 +124,25 @@ async function rename(locals: { db: DB }, params: TaskspaceParams, name: string)
   // The name becomes the directory, so it has to be one plain segment.
   const nameIssue = taskspaceNameIssue(name);
   if (nameIssue) throw new TaskspaceServiceError(400, nameIssue);
-  let nextPath: string;
   try {
-    nextPath = renameTaskspaceDirectory({ ...managed, newName: name });
-  } catch (e) {
-    rethrowFilesError(e, "Failed to rename taskspace directory");
+    return await journalTaskspaceDirectoryChange(
+      {
+        db,
+        namespaceId: params.namespaceId,
+        root: managed.workspaceRoot,
+        original: taskspace,
+        request: { operation: "move", name },
+        recheck: () => recheckManagedDirectory(db, taskspace, managed),
+      },
+      () => renameTaskspaceDirectory({ ...managed, newName: name }),
+      async (tx, nextPath) => {
+        await updateTaskspace({ db: tx, taskspaceId: taskspace.id, name, path: nextPath });
+        return reply(nextPath);
+      },
+    );
+  } catch (error) {
+    rethrowDirectoryChange(error, "Failed to rename taskspace directory");
   }
-  try {
-    await updateTaskspace({ db, taskspaceId: taskspace.id, name, path: nextPath });
-  } catch (e) {
-    // Put the directory back so the record and the disk keep agreeing.
-    try {
-      restoreTaskspaceDirectory(managed.workspaceRoot, nextPath, managed.storedPath);
-    } catch (restoreError) {
-      console.error("Failed to restore taskspace directory after rename:", e, restoreError);
-      // The record still names the old path, so say where the directory went.
-      throw new TaskspaceServiceError(
-        500,
-        `Failed to rename taskspace. Its directory is now at ${nextPath}; ` +
-          `move it back to ${managed.storedPath}.`,
-      );
-    }
-    throw e;
-  }
-  return reply(nextPath);
 }
 async function remove(locals: { db: DB }, params: TaskspaceParams) {
   const { db } = locals;
@@ -129,12 +150,27 @@ async function remove(locals: { db: DB }, params: TaskspaceParams) {
   const managed = await managedDirectory(db, taskspace);
   let directory: TaskspaceDirectoryOutcome = "kept";
   if (managed?.claim === "missing") directory = "missing";
-  else if (managed?.claim === "owned" || managed?.claim === "foreign") {
-    // A foreign directory is refused inside, rather than quietly kept.
+  else if (managed?.claim === "foreign") {
+    rethrowFilesError(directoryRemovalError(taskspace.id), "Failed to delete taskspace directory");
+  } else if (managed?.claim === "owned") {
     try {
-      directory = removeTaskspaceDirectory(managed);
-    } catch (e) {
-      rethrowFilesError(e, "Failed to delete taskspace directory");
+      return await journalTaskspaceDirectoryChange(
+        {
+          db,
+          namespaceId: params.namespaceId,
+          root: managed.workspaceRoot,
+          original: taskspace,
+          request: { operation: "remove" },
+          recheck: () => recheckManagedDirectory(db, taskspace, managed),
+        },
+        () => removeTaskspaceDirectory(managed),
+        async (tx, outcome) => {
+          await deleteTaskspace({ db: tx, taskspaceId: taskspace.id });
+          return { ok: true, directory: outcome };
+        },
+      );
+    } catch (error) {
+      rethrowDirectoryChange(error, "Failed to delete taskspace directory");
     }
   }
   await deleteTaskspace({ db, taskspaceId: taskspace.id });
@@ -147,8 +183,10 @@ export function renameTaskspace(
   params: TaskspaceParams,
   body: Record<string, unknown>,
 ) {
+  const { db } = locals;
+  const { namespaceId, taskspaceId } = params;
   const name = requireBoundedName(body);
-  return oneAtATime(params.taskspaceId, () => rename(locals, params, name));
+  return oneAtATime(taskspaceId, () => rename({ db }, { namespaceId, taskspaceId }, name));
 }
 export function removeTaskspace(
   locals: {
@@ -156,5 +194,7 @@ export function removeTaskspace(
   },
   params: TaskspaceParams,
 ) {
-  return oneAtATime(params.taskspaceId, () => remove(locals, params));
+  const { db } = locals;
+  const { namespaceId, taskspaceId } = params;
+  return oneAtATime(taskspaceId, () => remove({ db }, { namespaceId, taskspaceId }));
 }

@@ -27,6 +27,7 @@ export async function createFile(locals: Context, params: Params, body: Record<s
     locals,
     params,
     "Failed to create taskspace file",
+    { operation: "create-file", subPath },
     (baseDir) => createTaskspaceFile({ baseDir, subPath }),
   );
   return created;
@@ -44,6 +45,7 @@ export async function saveFile(locals: Context, params: Params, body: Record<str
     locals,
     params,
     "Failed to save taskspace file",
+    { operation: "save-file", subPath, content, signature },
     (baseDir) => writeTaskspaceFile({ baseDir, subPath, content, signature }),
   );
   return saved;

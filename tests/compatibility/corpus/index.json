@@ -16,6 +16,90 @@
     {
       "id": "core-0.1.0-rc4-libsql-boundaries",
       "sha256": "9d5e350ad2197e91aabadc6c3a8cf27683c3f21384152a17f86020a7ba627703"
+    },
+    {
+      "id": "core-0.2.0-migration20-wasm",
+      "sha256": "b47e6e85861d505897045e541cfb2ec89990cc6955106fed6478c29e18fba6b9"
+    },
+    {
+      "id": "core-0.2.0-migration21-wasm",
+      "sha256": "f0380869d9560cfbb3c7ad1344c0b6abb4ae963c6c1a9033301ddba37cebd82b"
+    },
+    {
+      "id": "core-0.2.0-migration22-wasm",
+      "sha256": "dbb8a32e6c35d28725dbf8d8db97c23b3615c50e8c1b3ec28a910d470bcc4e9c"
+    },
+    {
+      "id": "core-0.2.0-migration23-wasm",
+      "sha256": "5e98b964c431951458537fad9f9a1191ee3dcfbf1cb5fc227605c0bed532d127"
+    },
+    {
+      "id": "core-0.2.0-migration24-wasm",
+      "sha256": "6d75a6d31d84b53f22443c21cd48d3fc72d14d2ff255aa3c52f9c908b4fae0f1"
+    },
+    {
+      "id": "core-0.2.0-migration25-wasm",
+      "sha256": "e8a2c949ec8b327017474fdcc44c2c10a4bf5551c3f02bad4720013b7b68c613"
+    },
+    {
+      "id": "core-0.2.0-migration25-wasm-basic",
+      "sha256": "1f1e8ce44499b2eb1c98fb597363f0ac99c8a0e510d22cabd4264edfb095cae3"
+    },
+    {
+      "id": "core-0.2.0-migration26-wasm",
+      "sha256": "51d528c731ec8a30c0efa1fd7d00ea00d6dde75317f84d5e3ae75667a70da2a6"
+    },
+    {
+      "id": "core-0.2.0-migration27-wasm",
+      "sha256": "11b18241fe6a4c75d715b8069817f1535148456455155079c953ec6e4b369d94"
+    },
+    {
+      "id": "core-0.2.0-migration28-wasm",
+      "sha256": "1e90a2e42b6c06cb090308ec63bc5eb5e58dff46eeb99da324eedf007c58d439"
+    },
+    {
+      "id": "core-0.2.0-migration29-wasm",
+      "sha256": "60f04fdbc0fc2459920fbeec7ab4a15a64060b7d396bdc9fb0ef4d7f17bf1805"
+    },
+    {
+      "id": "core-0.2.0-migration30-wasm",
+      "sha256": "c8880495cfaf8f24a9ce892ac91b426e3214fea40db88a1546c4fc9ddc829760"
+    },
+    {
+      "id": "core-0.2.0-migration31-wasm",
+      "sha256": "782063cb65e01aa1e2a6a15a23999c20f3173473c6f3d6b9bf2b0ed57540b874"
+    },
+    {
+      "id": "core-0.2.0-migration32-wasm",
+      "sha256": "3acd5375deda768fcd6f4c65a75f1eb25ebe88edb8628a56fc9b20d14e634be7"
+    },
+    {
+      "id": "core-0.2.0-migration33-wasm",
+      "sha256": "2feefc60808d8cb8bdb805622a451150258506e4fcb582ce6b989a0f07e5eb7d"
+    },
+    {
+      "id": "core-0.2.0-migration34-wasm",
+      "sha256": "2ff6fb8013f84c135f3bb3f62801f35b077ae657328cae757c4420e6bf48e9ca"
+    },
+    {
+      "id": "core-0.2.0-migration35-wasm",
+      "sha256": "7d60bb2ce6b5a1dc0e8dc9398ecefe302d528b203f132f092c9a7f6bd486f369"
+    },
+    {
+      "id": "core-0.2.0-migration36-wasm",
+      "sha256": "44110fc32fe443d14eabf4a3b311d6feb47e1983d221a5ebc3aadbe38b3c3966"
+    },
+    {
+      "id": "core-0.2.0-migration37-wasm",
+      "sha256": "6d8453147efde7174ce472531ace992e2d7fba42514d7333836cdf18bc57809d"
+    },
+    {
+      "id": "core-0.2.0-migration38-wasm",
+      "sha256": "8c27a3835291cd2cadb6c11ff4dd29026d04fae6a556aadcad3bfc89fc939b09"
+    },
+    {
+      "id": "core-0.2.0-migration39-wasm",
+      "sha256": "a8f1d0cf70d37d3e9f16e851f03401ef4f2716ea9e4b72bdf99e6116c7eaa73e"
     }
   ]
 }

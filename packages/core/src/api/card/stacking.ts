@@ -225,49 +225,53 @@ export type ReassignStackOrderResult = BatchResult<"foreign-cards", { stacking: 
  */
 export async function reassignCardsStackOrder({
   db,
+  ...fields
+}: ReassignCardsStackOrder): Promise<ReassignStackOrderResult> {
+  if (fields.cardIds.length === 0) return { ok: true, stacking: [] };
+  return withTx(db, (tx) => reassignCardsStackOrderInTx({ ...fields, db: tx }));
+}
+
+export async function reassignCardsStackOrderInTx({
+  db: tx,
   namespaceId,
   cardIds,
   direction,
-}: ReassignCardsStackOrder): Promise<ReassignStackOrderResult> {
+}: Omit<ReassignCardsStackOrder, "db"> & { db: Tx }): Promise<ReassignStackOrderResult> {
   if (cardIds.length === 0) return { ok: true, stacking: [] };
 
-  return withTx(db, async (tx) => {
-    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
-    if (!owned.ok) return owned;
+  const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
+  if (!owned.ok) return owned;
 
-    const requested = await readStackRows(tx, cardIds);
+  const requested = await readStackRows(tx, cardIds);
 
-    const byLayer = new Map<string, typeof requested>();
-    for (const card of requested) {
-      const group = byLayer.get(card.layerId);
-      if (group) group.push(card);
-      else byLayer.set(card.layerId, [card]);
+  const byLayer = new Map<string, typeof requested>();
+  for (const card of requested) {
+    const group = byLayer.get(card.layerId);
+    if (group) group.push(card);
+    else byLayer.set(card.layerId, [card]);
+  }
+
+  const bounds = await layerStackBoundsByLayer(tx, [...byLayer.keys()]);
+  const stacking: CardStacking[] = [];
+  for (const [layerId, group] of byLayer) {
+    // Leave a group that is already at the edge alone, so repeating the command does not
+    // keep pushing its values further out.
+    if (await atStackEdge(tx, layerId, group, direction)) continue;
+    const { top, bottom } = bounds.get(layerId) ?? { top: 0, bottom: 0 };
+
+    const ordered = [...group].sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id));
+    if (direction === "front") {
+      ordered.forEach((card, index) => stacking.push({ cardId: card.id, zIndex: top + 1 + index }));
+    } else {
+      // Assign values from bottom to top to preserve the group's relative order.
+      const n = ordered.length;
+      ordered.forEach((card, index) =>
+        stacking.push({ cardId: card.id, zIndex: bottom - (n - index) }),
+      );
     }
+  }
 
-    const bounds = await layerStackBoundsByLayer(tx, [...byLayer.keys()]);
-    const stacking: CardStacking[] = [];
-    for (const [layerId, group] of byLayer) {
-      // Leave a group that is already at the edge alone, so repeating the command does not
-      // keep pushing its values further out.
-      if (await atStackEdge(tx, layerId, group, direction)) continue;
-      const { top, bottom } = bounds.get(layerId) ?? { top: 0, bottom: 0 };
+  for (const batch of caseUpdateBatches(stacking, 1)) await writeStacking(tx, batch);
 
-      const ordered = [...group].sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id));
-      if (direction === "front") {
-        ordered.forEach((card, index) =>
-          stacking.push({ cardId: card.id, zIndex: top + 1 + index }),
-        );
-      } else {
-        // Assign values from bottom to top to preserve the group's relative order.
-        const n = ordered.length;
-        ordered.forEach((card, index) =>
-          stacking.push({ cardId: card.id, zIndex: bottom - (n - index) }),
-        );
-      }
-    }
-
-    for (const batch of caseUpdateBatches(stacking, 1)) await writeStacking(tx, batch);
-
-    return { ok: true, stacking };
-  });
+  return { ok: true, stacking };
 }

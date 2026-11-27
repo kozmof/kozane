@@ -1,3 +1,4 @@
+import { withActionService } from "../actions/service-frame.js";
 export type { WarpCreateInput, WarpUpdateInput } from "./inputs.js";
 import { withTx } from "../database.js";
 import { prepareInput } from "./prepare-input.js";
@@ -14,52 +15,53 @@ function clampPosition(posX: number, posY: number, context: ServiceContext) {
 import { addWarp, moveWarp, deleteWarp } from "../api/warp.js";
 import { optionalNumber } from "./validation.js";
 
-export async function createInTx(
+export function createInTx(
   db: Tx,
   context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const posX = optionalNumber(body, "posX");
-  const posY = optionalNumber(body, "posY");
-  if (posX === undefined || posY === undefined)
-    throw new ValidationError("posX and posY are required");
-  // Round coordinates to integers and clamp them to the configured canvas so warps remain
-  // reachable.
-  const clamped = clampPosition(posX, posY, context);
-  const stored = { posX: Math.round(clamped.posX), posY: Math.round(clamped.posY) };
-  // The whole stored row, so a client that echoed back what it sent cannot draw the
-  // marker off the clamped position until the next snapshot poll corrects it.
-  return await addWarp({ db, namespaceId, ...stored });
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const posX = optionalNumber(body, "posX");
+    const posY = optionalNumber(body, "posY");
+    if (posX === undefined || posY === undefined)
+      throw new ValidationError("posX and posY are required");
+    // Round coordinates to integers and clamp them to the configured canvas so warps remain
+    // reachable.
+    const clamped = clampPosition(posX, posY, context);
+    const stored = { posX: Math.round(clamped.posX), posY: Math.round(clamped.posY) };
+    // The whole stored row, so a client that echoed back what it sent cannot draw the
+    // marker off the clamped position until the next snapshot poll corrects it.
+    return await addWarp({ db, namespaceId, ...stored });
+  });
 }
 
-export async function updateInTx(
+export function updateInTx(
   db: Tx,
   context: ServiceContext,
   namespaceId: string,
   warpId: string,
   body: Record<string, unknown>,
 ) {
-  body = prepareInput(body);
-  const posX = optionalNumber(body, "posX");
-  const posY = optionalNumber(body, "posY");
-  if (posX === undefined || posY === undefined)
-    throw new ValidationError("posX and posY are required");
-  // Round and clamp moved warps using the same rules as newly created warps.
-  const clamped = clampPosition(posX, posY, context);
-  const stored = { posX: Math.round(clamped.posX), posY: Math.round(clamped.posY) };
-  return await moveWarp({ db, namespaceId, warpId, ...stored });
+  return withActionService(db, async () => {
+    body = prepareInput(body);
+    const posX = optionalNumber(body, "posX");
+    const posY = optionalNumber(body, "posY");
+    if (posX === undefined || posY === undefined)
+      throw new ValidationError("posX and posY are required");
+    // Round and clamp moved warps using the same rules as newly created warps.
+    const clamped = clampPosition(posX, posY, context);
+    const stored = { posX: Math.round(clamped.posX), posY: Math.round(clamped.posY) };
+    return await moveWarp({ db, namespaceId, warpId, ...stored });
+  });
 }
 
-export async function removeInTx(
-  db: Tx,
-  context: ServiceContext,
-  namespaceId: string,
-  warpId: string,
-) {
-  await deleteWarp({ db, namespaceId, warpId });
-  return { ok: true };
+export function removeInTx(db: Tx, context: ServiceContext, namespaceId: string, warpId: string) {
+  return withActionService(db, async () => {
+    await deleteWarp({ db, namespaceId, warpId });
+    return { ok: true };
+  });
 }
 
 export async function create(

@@ -246,17 +246,22 @@ describe("FileBrowser", () => {
     expect(screen.getByRole("alert").textContent).toBe("Close notes.md in the editor first.");
   });
 
-  it("blocks renaming the taskspace whose file is open in the editor", async () => {
+  it("renames the taskspace label while its file is open in the editor", async () => {
+    const props = makeProps({
+      editorFile: { taskspaceId: "t1", taskspaceName: "drafts", path: "notes.md" },
+    });
     render(FileBrowser, {
-      props: makeProps({
-        editorFile: { taskspaceId: "t1", taskspaceName: "drafts", path: "notes.md" },
-      }),
+      props,
     });
 
     await userEvent.click(screen.getByRole("button", { name: 'Rename "drafts"' }));
 
-    expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.getByRole("alert").textContent).toBe("Close notes.md in the editor first.");
+    const input = screen.getByRole("textbox", { name: "New name for drafts" });
+    await userEvent.clear(input);
+    await userEvent.type(input, "Final / label{Enter}");
+    expect(props.actions.renameTaskspace).toHaveBeenCalledWith("t1", "Final / label");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(props.onOpenFile).not.toHaveBeenCalled();
   });
 
   it("keeps a file rename in its own taskspace after switching to another", async () => {

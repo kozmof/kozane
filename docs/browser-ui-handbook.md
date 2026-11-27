@@ -213,7 +213,7 @@ refresh it. Symbolic links cannot be opened.
 
 ## Taskspaces
 
-A taskspace is a filesystem directory tied to a scope. Browse, create, rename,
+A taskspace has a label, a scope and an optional local directory. Browse, create, rename,
 and delete taskspaces in the [file browser](#the-file-browser).
 
 A board shows this namespace's taskspaces and those with no namespace.
@@ -281,7 +281,8 @@ New files open in the editor immediately.
 
 In the file browser, hover a scope, taskspace, file, or folder and use its
 pencil to rename it, or its bin to delete it. Enter the new name and press `Enter` to save, or `Esc` to cancel.
-New names follow the same rules as new ones.
+File and folder names follow the rules for new entries. Taskspace labels can use
+names that would not be valid directory names.
 
 Each delete asks first.
 
@@ -295,15 +296,15 @@ Each delete asks first.
   with `kozane taskspace create --dir` or ones that already existed, stay on
   disk.
 - A taskspace directory stays on disk if it holds another taskspace or sits in a
-  former namespace folder after a namespace rename. Renaming such a taskspace changes
-  only its label. See the [CLI layout recovery guide](../spec/cli.md#old-taskspace-layout)
+  former namespace folder after a namespace rename. See the [CLI layout recovery guide](../spec/cli.md#old-taskspace-layout)
   to move eligible directories into the current layout.
 - Deleting a folder deletes everything in it. These deletes cannot be undone.
-- Renaming a taskspace renames its directory under the same rule. Other
-  taskspaces change only their name.
+- Renaming a taskspace changes its label and keeps its directory and attachment
+  in place. Existing file paths continue to work.
 
 The file open in the editor and the folders holding it cannot be renamed or
-deleted, and its taskspace cannot be deleted. Close the file first.
+deleted, and its taskspace cannot be deleted. Close the file first. Taskspace
+labels can change while a file remains open.
 
 ### Editing a file
 

@@ -12,5 +12,6 @@ export const updateScopeName: typeof records.scope.updateScopeName = records.sco
 export const deleteScope: typeof records.scope.deleteScope = records.scope.deleteScope;
 export const deleteScopeFromNamespace: typeof records.scope.deleteScopeFromNamespace =
   records.scope.deleteScopeFromNamespace;
+export const deleteScopeFromNamespaceInTx = records.scope.deleteScopeFromNamespaceInTx;
 export type ScopeNamespaceUsage = records.scope.ScopeNamespaceUsage;
 export type ScopePartitionUsage = records.scope.ScopePartitionUsage;

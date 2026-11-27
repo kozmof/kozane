@@ -1,0 +1,725 @@
+/** Test-only durable migration boundary. This is not the production epoch or log schema. */
+import { sql } from "drizzle-orm";
+import { withReadTx, withTx, type DB, type Tx, type ReadTx } from "../../../core/src/database.js";
+import {
+  configureActionConnection,
+  verifyActionConnection,
+} from "../../../core/src/actions/connection.js";
+import { captureRowSql, decodeCapturedRow } from "../../../core/src/actions/sql-codec.js";
+import { ROW_ENCODING_VERSION, parseTaggedRow } from "../../../core/src/actions/row-codec.js";
+import { createRowProjection } from "../../../core/src/actions/projection.js";
+import {
+  baselineAssetNames,
+  selectAssetManifest,
+  parseAssetManifest,
+  verifyAssetManifest,
+  type AssetManifest,
+  type ReadAsset,
+} from "../../../core/src/actions/asset-manifest.js";
+import { migrations } from "../../../core/src/generated/migrations.js";
+import { capturedTables, captureApplicationRows } from "./action-tables.js";
+import { validateApplicationProjection } from "./action-validation.js";
+import {
+  reserveAssetManifestInTx,
+  readAssetManifest,
+  confirmVerifiedAssetManifestInTx,
+  type AssetManifestOwner,
+} from "../db/api/asset-manifest.js";
+
+type Handle = Tx | ReadTx;
+export interface PrototypeEpochTransition {
+  readonly id: string;
+  readonly sourceEpoch: string;
+  readonly sourceSchema: string;
+  readonly targetEpoch: string;
+  readonly targetSchema: string;
+  readonly batches: readonly string[];
+}
+const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"';
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const missingAsset: ReadAsset = async () => {
+  throw Error("Epoch baseline requires an asset reader");
+};
+function own(input: PrototypeEpochTransition): PrototypeEpochTransition {
+  const { id, sourceEpoch, sourceSchema, targetEpoch, targetSchema } = input;
+  const batches = [...input.batches];
+  if (
+    [id, sourceEpoch, sourceSchema, targetEpoch, targetSchema, ...batches].some(
+      (value) =>
+        typeof value !== "string" || !value.trim() || value.length > 1000 || value.includes("\0"),
+    ) ||
+    sourceEpoch === targetEpoch ||
+    new Set(batches).size !== batches.length
+  )
+    throw Error("Invalid prototype epoch transition");
+  return Object.freeze({
+    id,
+    sourceEpoch,
+    sourceSchema,
+    targetEpoch,
+    targetSchema,
+    batches: Object.freeze(batches),
+  });
+}
+/** SQL guards allow migration only with an exact hook-owned batch marker and active transition. */
+export const prototypeMigrationAuthority = `EXISTS(SELECT 1 FROM capture_context c JOIN capture_migration_boundary b ON b.singleton=c.singleton JOIN capture_epoch_transition t ON t.id=b.transition_id JOIN capture_epoch e ON e.singleton=c.singleton WHERE c.singleton=1 AND c.mode='migrate' AND c.run_id IS NULL AND c.action_id IS NULL AND c.execution_ord IS NULL AND c.next_effect_ord=0 AND t.state='active' AND t.next_batch=b.batch AND t.next_batch<json_array_length(t.batches) AND t.source_epoch=e.epoch_id AND t.source_schema=e.schema_id)`;
+export const prototypeNoTransition = `NOT EXISTS(SELECT 1 FROM capture_epoch_transition WHERE state='active')`;
+export async function installCaptureEpochPrototype(tx: Tx) {
+  await tx.run(
+    sql`CREATE TABLE capture_epoch(singleton INTEGER PRIMARY KEY CHECK(singleton=1),epoch_id TEXT NOT NULL UNIQUE,schema_id TEXT NOT NULL)`,
+  );
+  await tx.run(sql`INSERT INTO capture_epoch VALUES(1,'initial',${migrations.at(-1)!.id})`);
+  await tx.run(
+    sql`CREATE TABLE capture_epoch_transition(id TEXT PRIMARY KEY,request TEXT NOT NULL,source_epoch TEXT NOT NULL,source_schema TEXT NOT NULL,batches TEXT NOT NULL,next_batch INTEGER NOT NULL DEFAULT 0 CHECK(next_batch>=0 AND next_batch<=json_array_length(batches)),state TEXT NOT NULL CHECK(state IN ('active','completed')),history TEXT NOT NULL,candidate TEXT)`,
+  );
+  await tx.run(
+    sql`CREATE UNIQUE INDEX capture_one_transition ON capture_epoch_transition(state) WHERE state='active'`,
+  );
+  await tx.run(
+    sql`CREATE TABLE capture_migration_boundary(singleton INTEGER PRIMARY KEY CHECK(singleton=1),transition_id TEXT,batch INTEGER,CHECK((transition_id IS NULL)=(batch IS NULL)))`,
+  );
+  await tx.run(sql`INSERT INTO capture_migration_boundary VALUES(1,NULL,NULL)`);
+  await tx.run(
+    sql`CREATE TABLE capture_migration_history(transition_id TEXT NOT NULL REFERENCES capture_epoch_transition(id),batch INTEGER NOT NULL,batch_id TEXT NOT NULL,PRIMARY KEY(transition_id,batch))`,
+  );
+  await tx.run(
+    sql`CREATE TABLE capture_epoch_archive(epoch_id TEXT PRIMARY KEY,schema_id TEXT NOT NULL,baseline TEXT NOT NULL,selection TEXT NOT NULL)`,
+  );
+  await tx.run(
+    sql`CREATE TABLE capture_guard_catalog(name TEXT PRIMARY KEY,definition TEXT NOT NULL)`,
+  );
+}
+export async function rememberCaptureGuards(tx: Tx) {
+  await tx.run(
+    sql`INSERT INTO capture_guard_catalog SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name GLOB 'capture_*'`,
+  );
+}
+export async function requireCaptureEpochRecordMode(tx: Handle) {
+  if ((await tx.values(sql`SELECT 1 FROM capture_epoch_transition WHERE state='active'`)).length)
+    throw Error("Application writes are blocked by an epoch transition");
+}
+async function empty(tx: Handle) {
+  const rows = await tx.values(
+    sql`SELECT 1 FROM capture_context c JOIN capture_migration_boundary b USING(singleton) WHERE c.singleton=1 AND c.mode='record' AND c.run_id IS NULL AND c.action_id IS NULL AND c.execution_ord IS NULL AND c.next_effect_ord=0 AND b.transition_id IS NULL AND b.batch IS NULL`,
+  );
+  if (
+    rows.length !== 1 ||
+    (await tx.values(sql`SELECT 1 FROM capture_run WHERE complete<>1 LIMIT 1`)).length
+  )
+    throw Error("Epoch transition requires empty execution and migration markers");
+}
+async function guards(tx: Handle) {
+  const expected = await tx.values(
+    sql`SELECT name,definition FROM capture_guard_catalog ORDER BY name`,
+  );
+  if (expected.length !== capturedTables.length * 3)
+    throw Error("Missing epoch capture guard catalog");
+  const actual = await tx.values(
+    sql`SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name GLOB 'capture_*' ORDER BY name`,
+  );
+  if (
+    !same(
+      actual.map((row) => Array.from(row)),
+      expected.map((row) => Array.from(row)),
+    )
+  )
+    throw Error("Epoch capture guards changed or disappeared");
+}
+async function schema(tx: Handle) {
+  return JSON.stringify(
+    (
+      await tx.values(
+        sql`SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL ORDER BY type,name`,
+      )
+    ).map((row) => Array.from(row)),
+  );
+}
+async function history(tx: Handle) {
+  const result: Record<string, string[]> = {};
+  for (const name of [
+    "capture_baseline",
+    "capture_selection",
+    "capture_run",
+    "capture_execution",
+    "capture_effect",
+  ]) {
+    const columns = (await tx.values(sql.raw(`PRAGMA table_info(${quote(name)})`))).map((row) =>
+      String(row[1]),
+    );
+    result[name] = (
+      await tx.values(sql.raw(`SELECT ${captureRowSql(columns)} FROM ${quote(name)}`))
+    )
+      .map((row) => String(row[0]))
+      .sort();
+  }
+  return JSON.stringify(result);
+}
+async function currentEpoch(tx: Handle) {
+  const rows = await tx.values(
+    sql.raw(
+      `SELECT ${captureRowSql(["epoch_id", "schema_id"])} FROM capture_epoch WHERE singleton=1`,
+    ),
+  );
+  if (rows.length !== 1) throw Error("Missing active prototype epoch");
+  const captured = decodeCapturedRow(String(rows[0][0]));
+  const epochId = captured.epoch_id,
+    schemaId = captured.schema_id;
+  if (epochId[0] !== "text" || schemaId[0] !== "text")
+    throw Error("Invalid prototype epoch identity storage");
+  return { epochId: epochId[1], schemaId: schemaId[1] };
+}
+async function metadataRows(tx: Handle, table: string, columns: readonly string[]) {
+  const rows = await tx.values(sql.raw(`SELECT ${captureRowSql(columns)} FROM ${quote(table)}`));
+  return rows.map((row) => decodeCapturedRow(String(row[0])));
+}
+async function transition(tx: Handle, request: PrototypeEpochTransition) {
+  const rows = await tx.values(
+    sql`SELECT request,next_batch,state,history,candidate,source_epoch,source_schema,batches FROM capture_epoch_transition WHERE id=${request.id}`,
+  );
+  if (
+    rows.length !== 1 ||
+    rows[0][0] !== JSON.stringify(request) ||
+    rows[0][5] !== request.sourceEpoch ||
+    rows[0][6] !== request.sourceSchema ||
+    rows[0][7] !== JSON.stringify(request.batches)
+  )
+    throw Error("Epoch transition request is missing or changed");
+  const next = rows[0][1];
+  if (
+    typeof rows[0][2] !== "string" ||
+    typeof rows[0][3] !== "string" ||
+    (rows[0][4] !== null && typeof rows[0][4] !== "string")
+  )
+    throw Error("Invalid prototype transition metadata");
+  if (!Number.isSafeInteger(next) || Number(next) < 0 || Number(next) > request.batches.length)
+    throw Error("Invalid migration progress");
+  const completed = await tx.values(
+    sql`SELECT batch,batch_id FROM capture_migration_history WHERE transition_id=${request.id} ORDER BY batch`,
+  );
+  if (
+    !same(
+      completed.map((row) => Array.from(row)),
+      request.batches.slice(0, Number(next)).map((id, i) => [i, id]),
+    )
+  )
+    throw Error("Migration history disagrees with progress");
+  return {
+    next: Number(next),
+    state: String(rows[0][2]),
+    history: String(rows[0][3]),
+    candidate: rows[0][4] as string | null,
+  };
+}
+async function active(tx: Handle, request: PrototypeEpochTransition) {
+  const stored = await transition(tx, request),
+    epoch = await currentEpoch(tx);
+  if (
+    stored.state !== "active" ||
+    epoch.epochId !== request.sourceEpoch ||
+    epoch.schemaId !== request.sourceSchema
+  )
+    throw Error("Epoch transition is not active for the source epoch");
+  if (stored.history !== (await history(tx)))
+    throw Error("Archived epoch history changed during migration");
+  return stored;
+}
+async function locked(tx: Tx) {
+  await tx.run(sql`UPDATE capture_epoch SET epoch_id=epoch_id WHERE 0`);
+  await configureActionConnection((query) => tx.values(sql.raw(query)));
+  await empty(tx);
+}
+export function beginCaptureEpochTransition(db: DB, input: PrototypeEpochTransition) {
+  const request = own(input);
+  return withTx(db, (tx) => beginCaptureEpochTransitionInTx(tx, request));
+}
+
+/** Caller owns the complete schema and transition commit. */
+export async function beginCaptureEpochTransitionInTx(tx: Tx, input: PrototypeEpochTransition) {
+  const request = own(input);
+  await locked(tx);
+  const existing = await tx.values(
+    sql`SELECT id FROM capture_epoch_transition WHERE id=${request.id}`,
+  );
+  if (existing.length) {
+    await active(tx, request);
+    await guards(tx);
+    return { changed: false };
+  }
+  await requireCaptureEpochRecordMode(tx);
+  const epoch = await currentEpoch(tx);
+  if (epoch.epochId !== request.sourceEpoch || epoch.schemaId !== request.sourceSchema)
+    throw Error("Epoch transition source identity mismatch");
+  if (
+    (
+      await tx.values(
+        sql`SELECT 1 FROM capture_epoch_archive WHERE epoch_id=${request.targetEpoch}`,
+      )
+    ).length
+  )
+    throw Error("Target epoch identity was already used");
+  await guards(tx);
+  await tx.run(
+    sql`INSERT INTO capture_epoch_transition(id,request,source_epoch,source_schema,batches,state,history) VALUES(${request.id},${JSON.stringify(request)},${request.sourceEpoch},${request.sourceSchema},${JSON.stringify(request.batches)},'active',${await history(tx)})`,
+  );
+  await verifyActionConnection((query) => tx.values(sql.raw(query)));
+  return { changed: true };
+}
+
+/** Committed batches acknowledge retries without invoking the supplied repair callback. */
+export function runCaptureMigrationBatch(
+  db: DB,
+  input: PrototypeEpochTransition,
+  index: number,
+  migrate: (tx: Tx) => Promise<void>,
+) {
+  const request = own(input);
+  if (!Number.isSafeInteger(index) || index < 0 || index >= request.batches.length)
+    throw Error("Invalid migration batch index");
+  return withTx(db, (tx) => runCaptureMigrationBatchInTx(tx, request, index, migrate));
+}
+
+/** Trusted initialization can verify staging protection in the same batch transaction. */
+export async function runCaptureMigrationBatchInTx(
+  tx: Tx,
+  input: PrototypeEpochTransition,
+  index: number,
+  migrate: (tx: Tx) => Promise<void>,
+) {
+  const request = own(input);
+  if (!Number.isSafeInteger(index) || index < 0 || index >= request.batches.length)
+    throw Error("Invalid migration batch index");
+  await locked(tx);
+  const stored = await active(tx, request);
+  await guards(tx);
+  if (index < stored.next) return { changed: false };
+  if (index !== stored.next || stored.candidate !== null)
+    throw Error("Migration batch is out of order");
+  await tx.run(
+    sql`UPDATE capture_migration_boundary SET transition_id=${request.id},batch=${index} WHERE singleton=1`,
+  );
+  await tx.run(sql`UPDATE capture_context SET mode='migrate' WHERE singleton=1`);
+  await migrate(tx);
+  if ((await tx.values(sql.raw(`SELECT 1 WHERE ${prototypeMigrationAuthority}`))).length !== 1)
+    throw Error("Migration boundary marker changed");
+  const afterHook = await transition(tx, request);
+  if (
+    afterHook.next !== stored.next ||
+    afterHook.candidate !== stored.candidate ||
+    afterHook.state !== stored.state ||
+    afterHook.history !== stored.history
+  )
+    throw Error("Migration callback changed transition progress or candidate");
+  if ((await tx.values(sql`PRAGMA foreign_key_check`)).length)
+    throw Error("Migration foreign-key check failed");
+  await guards(tx);
+  if (stored.history !== (await history(tx)))
+    throw Error("Migration changed archived action history");
+  await tx.run(sql`UPDATE capture_context SET mode='record' WHERE singleton=1`);
+  await tx.run(
+    sql`UPDATE capture_migration_boundary SET transition_id=NULL,batch=NULL WHERE singleton=1`,
+  );
+  await tx.run(
+    sql`INSERT INTO capture_migration_history VALUES(${request.id},${index},${request.batches[index]})`,
+  );
+  await tx.run(
+    sql`UPDATE capture_epoch_transition SET next_batch=next_batch+1 WHERE id=${request.id}`,
+  );
+  await active(tx, request);
+  await empty(tx);
+  await verifyActionConnection((query) => tx.values(sql.raw(query)));
+  return { changed: true };
+}
+async function hash(input: unknown) {
+  const data = new TextEncoder().encode(JSON.stringify(input)),
+    digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", data));
+  return Array.from(digest, (n) => n.toString(16).padStart(2, "0")).join("");
+}
+/** A stable local pin identity, never an epoch activation receipt. */
+export async function captureEpochBaselineOwner(
+  input: PrototypeEpochTransition,
+  baselineSha256: string,
+): Promise<AssetManifestOwner> {
+  const request = own(input);
+  if (!/^[a-f0-9]{64}$/.test(baselineSha256)) throw Error("Invalid epoch baseline hash");
+  return Object.freeze({
+    kind: "baseline",
+    id:
+      "prototype-epoch:v1:" +
+      (await hash([
+        request.id,
+        request.sourceEpoch,
+        request.sourceSchema,
+        request.targetEpoch,
+        request.targetSchema,
+        request.batches,
+        baselineSha256,
+      ])),
+  });
+}
+// Test fixtures use source brands while the local manifest API exposes the packed package brand.
+const local = (tx: Tx) => tx as unknown as Parameters<typeof reserveAssetManifestInTx>[0];
+async function readBaselineOwner(tx: Handle, owner: AssetManifestOwner, manifest: AssetManifest) {
+  const current = await readAssetManifest(
+    tx as unknown as Parameters<typeof readAssetManifest>[0],
+    owner,
+  );
+  if (current.record.manifest !== JSON.stringify(manifest))
+    throw Error("Epoch baseline image requirements changed");
+  if (
+    ![current.record.createdAt, current.record.verifiedAt, current.record.releasedAt].every(
+      (date) => date === null || Number.isSafeInteger(date.getTime()),
+    )
+  )
+    throw Error("Epoch baseline owner timestamps cannot be represented safely");
+  return current;
+}
+async function requireBaselineOwner(
+  tx: Tx,
+  owner: AssetManifestOwner,
+  manifest: AssetManifest,
+  retained: boolean,
+) {
+  const current = await readBaselineOwner(tx, owner, manifest);
+  if (current.record.state === "released" || (retained && current.record.state !== "retained"))
+    throw Error("Epoch baseline image protection is not active in the required state");
+  return current;
+}
+
+/** Read one staged transition without writes, image access or validation database allocation. */
+export async function readCaptureEpochTransition(tx: Handle, input: PrototypeEpochTransition) {
+  const request = own(input);
+  if ((await tx.values(sql`SELECT 1 FROM sqlite_temp_schema LIMIT 1`)).length)
+    throw Error("Epoch inspection refuses temporary schema objects");
+  await empty(tx);
+  await guards(tx);
+  const stored = await transition(tx, request);
+  const epoch = await currentEpoch(tx);
+  if (stored.state === "active") await active(tx, request);
+  else if (
+    stored.state !== "completed" ||
+    epoch.epochId !== request.targetEpoch ||
+    epoch.schemaId !== request.targetSchema
+  )
+    throw Error("Inspected epoch is not active for this transition");
+  if (stored.state === "completed") await requireCaptureEpochRecordMode(tx);
+  let candidate: Readonly<{
+    sha256: string;
+    owner: AssetManifestOwner;
+    protection: "retained" | "released";
+  }> | null = null;
+  if (stored.candidate !== null) {
+    if (stored.next !== request.batches.length)
+      throw Error("Inspected candidate has incomplete migration batches");
+    const { sha256, ...value } = JSON.parse(stored.candidate);
+    if (
+      typeof sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(sha256) ||
+      sha256 !== (await hash(value)) ||
+      value.epochId !== request.targetEpoch ||
+      value.schemaId !== request.targetSchema ||
+      value.encoding !== ROW_ENCODING_VERSION ||
+      typeof value.schema !== "string" ||
+      !Array.isArray(value.rows)
+    )
+      throw Error("Inspected epoch baseline changed");
+    createRowProjection(capturedTables, value.rows);
+    const manifest = parseAssetManifest(value.assets);
+    if (!same(selectAssetManifest(manifest, baselineAssetNames(value.rows)), manifest))
+      throw Error("Inspected epoch image requirements changed");
+    const owner = await captureEpochBaselineOwner(request, sha256);
+    const protection = await readBaselineOwner(tx, owner, manifest);
+    if (
+      protection.record.state === "pending" ||
+      (stored.state === "active" && protection.record.state !== "retained")
+    )
+      throw Error("Inspected epoch baseline protection is inconsistent");
+    if (stored.state === "active") {
+      if (
+        value.schema !== (await schema(tx)) ||
+        !same(value.rows, await captureApplicationRows(tx))
+      )
+        throw Error("Inspected epoch candidate no longer matches the source");
+    } else {
+      const baseline = await metadataRows(tx, "capture_baseline", [
+        "singleton",
+        "row_encoding_ver",
+        "rows",
+        "asset_manifest",
+      ]);
+      if (
+        !same(baseline, [
+          parseTaggedRow({
+            singleton: ["integer", "1"],
+            row_encoding_ver: ["integer", String(ROW_ENCODING_VERSION)],
+            rows: ["text", JSON.stringify(value.rows)],
+            asset_manifest: ["text", JSON.stringify(manifest)],
+          }),
+        ])
+      )
+        throw Error("Inspected active epoch baseline changed");
+    }
+    candidate = Object.freeze({ sha256, owner, protection: protection.record.state });
+  } else if (stored.state === "completed")
+    throw Error("Inspected completed epoch has no candidate");
+  const phase =
+    stored.state === "completed"
+      ? "active"
+      : stored.next < request.batches.length
+        ? "repair-pending"
+        : candidate === null
+          ? "validation-pending"
+          : "activation-pending";
+  return Object.freeze({
+    phase,
+    request,
+    completedBatches: stored.next,
+    totalBatches: request.batches.length,
+    candidate,
+  });
+}
+async function verifyBaselineOwner(
+  tx: Tx,
+  owner: AssetManifestOwner,
+  manifest: AssetManifest,
+  readAsset: ReadAsset,
+  retained: boolean,
+) {
+  const before = await requireBaselineOwner(tx, owner, manifest, retained);
+  await verifyAssetManifest(
+    manifest,
+    manifest.entries.map((entry) => entry.name),
+    readAsset,
+  );
+  const after = await requireBaselineOwner(tx, owner, manifest, retained);
+  if (!same(before.record, after.record))
+    throw Error("Epoch baseline image protection changed during verification");
+}
+/** Validate a candidate outside the live transaction, then retain it without activating writes. */
+export async function prepareCaptureEpochBaseline(
+  db: DB,
+  input: PrototypeEpochTransition,
+  createValidationDatabase: () => Promise<DB>,
+  catalog: AssetManifest = { version: 1, entries: [] },
+  readAsset: ReadAsset = missingAsset,
+  verifyStaging?: (tx: Handle) => Promise<void>,
+) {
+  const request = own(input),
+    assets = parseAssetManifest(catalog);
+  const candidate = await withReadTx(db, async (tx) => {
+    await verifyStaging?.(tx);
+    await empty(tx);
+    const stored = await active(tx, request);
+    if (stored.next !== request.batches.length) throw Error("Migration batches are incomplete");
+    await guards(tx);
+    const rows = await captureApplicationRows(tx),
+      manifest = selectAssetManifest(assets, baselineAssetNames(rows));
+    return {
+      epochId: request.targetEpoch,
+      schemaId: request.targetSchema,
+      encoding: ROW_ENCODING_VERSION,
+      rows,
+      assets: manifest,
+      schema: await schema(tx),
+    };
+  });
+  const sha256 = await hash(candidate),
+    descriptor = JSON.stringify({ ...candidate, sha256 }),
+    owner = await captureEpochBaselineOwner(request, sha256);
+  const checkCandidate = async (tx: Tx) => {
+    await verifyStaging?.(tx);
+    const stored = await active(tx, request);
+    await guards(tx);
+    if (
+      stored.next !== request.batches.length ||
+      !same(await captureApplicationRows(tx), candidate.rows) ||
+      (await schema(tx)) !== candidate.schema
+    )
+      throw Error("Epoch candidate changed during validation");
+    if (stored.candidate !== null && stored.candidate !== descriptor)
+      throw Error("A different epoch baseline was already prepared");
+    return stored;
+  };
+  // Commit protection before any host image read or isolated validation can yield.
+  await withTx(db, async (tx) => {
+    await locked(tx);
+    await checkCandidate(tx);
+    await reserveAssetManifestInTx(local(tx), owner, candidate.assets);
+    await requireBaselineOwner(tx, owner, candidate.assets, false);
+    await verifyActionConnection((query) => tx.values(sql.raw(query)));
+  });
+  await verifyAssetManifest(candidate.assets, baselineAssetNames(candidate.rows), readAsset);
+  await validateApplicationProjection(
+    async () => {
+      const validation = await createValidationDatabase();
+      if (validation === db) throw Error("Epoch validation requires a separate database");
+      return validation;
+    },
+    createRowProjection(capturedTables, candidate.rows),
+  );
+  return withTx(db, async (tx) => {
+    await locked(tx);
+    const stored = await checkCandidate(tx);
+    await verifyBaselineOwner(tx, owner, candidate.assets, readAsset, false);
+    await confirmVerifiedAssetManifestInTx(local(tx), owner, JSON.stringify(candidate.assets));
+    await checkCandidate(tx);
+    await tx.run(
+      sql`UPDATE capture_epoch_transition SET candidate=${descriptor} WHERE id=${request.id}`,
+    );
+    await verifyStaging?.(tx);
+    const published = await active(tx, request);
+    if (published.next !== request.batches.length || published.candidate !== descriptor)
+      throw Error("Epoch baseline publication changed");
+    await requireBaselineOwner(tx, owner, candidate.assets, true);
+    await empty(tx);
+    await verifyActionConnection((query) => tx.values(sql.raw(query)));
+    return Object.freeze({ changed: stored.candidate === null, sha256, owner });
+  });
+}
+/** Old runs remain archived. Only a verified new baseline and empty selection become active. */
+export async function activateCaptureEpoch(
+  db: DB,
+  input: PrototypeEpochTransition,
+  readAsset: ReadAsset = missingAsset,
+) {
+  const request = own(input);
+  return withTx(db, (tx) => activateCaptureEpochInTx(tx, request, readAsset));
+}
+
+/** Optional completion joins first activation before its final metadata verification. */
+export async function activateCaptureEpochInTx(
+  tx: Tx,
+  input: PrototypeEpochTransition,
+  readAsset: ReadAsset = missingAsset,
+  complete?: (tx: Tx) => Promise<void>,
+) {
+  const request = own(input);
+  await locked(tx);
+  const stored = await transition(tx, request),
+    epoch = await currentEpoch(tx);
+  if (stored.state === "completed") {
+    if (epoch.epochId !== request.targetEpoch || epoch.schemaId !== request.targetSchema)
+      throw Error("Completed epoch is no longer active");
+    await guards(tx);
+    return { changed: false };
+  }
+  await active(tx, request);
+  if (stored.next !== request.batches.length || stored.candidate === null)
+    throw Error("Epoch activation requires a prepared baseline");
+  const { sha256, ...candidate } = JSON.parse(stored.candidate);
+  if (
+    sha256 !== (await hash(candidate)) ||
+    candidate.epochId !== request.targetEpoch ||
+    candidate.schemaId !== request.targetSchema ||
+    candidate.encoding !== ROW_ENCODING_VERSION ||
+    candidate.schema !== (await schema(tx)) ||
+    !same(candidate.rows, await captureApplicationRows(tx))
+  )
+    throw Error("Prepared epoch baseline changed");
+  const manifest = parseAssetManifest(candidate.assets);
+  if (!same(selectAssetManifest(manifest, baselineAssetNames(candidate.rows)), manifest))
+    throw Error("Prepared epoch image requirements changed");
+  const owner = await captureEpochBaselineOwner(request, sha256);
+  await verifyBaselineOwner(tx, owner, manifest, readAsset, true);
+  const protection = await requireBaselineOwner(tx, owner, manifest, true);
+  await active(tx, request);
+  if (
+    candidate.schema !== (await schema(tx)) ||
+    !same(candidate.rows, await captureApplicationRows(tx))
+  )
+    throw Error("Prepared epoch baseline changed during image verification");
+  await guards(tx);
+  const baseline = await tx.values(
+      sql`SELECT row_encoding_ver,rows,asset_manifest FROM capture_baseline WHERE singleton=1`,
+    ),
+    selection = await tx.values(
+      sql`SELECT position,run_id FROM capture_selection ORDER BY position`,
+    );
+  const sourceBaseline = JSON.stringify(baseline.map((row) => Array.from(row)));
+  const sourceSelection = JSON.stringify(selection.map((row) => Array.from(row)));
+  const archiveColumns = ["epoch_id", "schema_id", "baseline", "selection"];
+  const previousArchives = await metadataRows(tx, "capture_epoch_archive", archiveColumns);
+  await tx.run(
+    sql`INSERT INTO capture_epoch_archive VALUES(${request.sourceEpoch},${request.sourceSchema},${sourceBaseline},${sourceSelection})`,
+  );
+  await tx.run(
+    sql`UPDATE capture_baseline SET row_encoding_ver=${ROW_ENCODING_VERSION},rows=${JSON.stringify(candidate.rows)},asset_manifest=${JSON.stringify(manifest)} WHERE singleton=1`,
+  );
+  await tx.run(sql`DELETE FROM capture_selection`);
+  await tx.run(
+    sql`UPDATE capture_epoch SET epoch_id=${request.targetEpoch},schema_id=${request.targetSchema} WHERE singleton=1`,
+  );
+  await tx.run(sql`UPDATE capture_epoch_transition SET state='completed' WHERE id=${request.id}`);
+  await complete?.(tx);
+  const completed = await transition(tx, request);
+  const selectedEpoch = await metadataRows(tx, "capture_epoch", [
+    "singleton",
+    "epoch_id",
+    "schema_id",
+  ]);
+  if (
+    completed.state !== "completed" ||
+    completed.next !== request.batches.length ||
+    completed.candidate !== stored.candidate ||
+    completed.history !== stored.history ||
+    !same(selectedEpoch, [
+      parseTaggedRow({
+        singleton: ["integer", "1"],
+        epoch_id: ["text", request.targetEpoch],
+        schema_id: ["text", request.targetSchema],
+      }),
+    ])
+  )
+    throw Error("Epoch activation metadata changed");
+  const installedBaseline = await metadataRows(tx, "capture_baseline", [
+    "singleton",
+    "row_encoding_ver",
+    "rows",
+    "asset_manifest",
+  ]);
+  if (
+    !same(installedBaseline, [
+      parseTaggedRow({
+        singleton: ["integer", "1"],
+        row_encoding_ver: ["integer", String(ROW_ENCODING_VERSION)],
+        rows: ["text", JSON.stringify(candidate.rows)],
+        asset_manifest: ["text", JSON.stringify(manifest)],
+      }),
+    ]) ||
+    (await tx.values(sql`SELECT 1 FROM capture_selection LIMIT 1`)).length
+  )
+    throw Error("Epoch baseline or selection changed during activation");
+  const expectedArchives = [
+    ...previousArchives,
+    parseTaggedRow({
+      epoch_id: ["text", request.sourceEpoch],
+      schema_id: ["text", request.sourceSchema],
+      baseline: ["text", sourceBaseline],
+      selection: ["text", sourceSelection],
+    }),
+  ]
+    .map((row) => JSON.stringify(row))
+    .sort();
+  const installedArchives = (await metadataRows(tx, "capture_epoch_archive", archiveColumns))
+    .map((row) => JSON.stringify(row))
+    .sort();
+  if (!same(installedArchives, expectedArchives))
+    throw Error("Epoch archive changed during activation");
+  const originalHistory = JSON.parse(stored.history);
+  const retainedHistory = JSON.parse(await history(tx));
+  if (
+    ["capture_run", "capture_execution", "capture_effect"].some(
+      (table) => !same(originalHistory[table], retainedHistory[table]),
+    ) ||
+    candidate.schema !== (await schema(tx)) ||
+    !same(candidate.rows, await captureApplicationRows(tx))
+  )
+    throw Error("Epoch rows or retained history changed during activation");
+  const finalProtection = await requireBaselineOwner(tx, owner, manifest, true);
+  if (!same(protection.record, finalProtection.record))
+    throw Error("Epoch baseline image protection changed during activation");
+  await guards(tx);
+  await empty(tx);
+  await requireCaptureEpochRecordMode(tx);
+  await verifyActionConnection((query) => tx.values(sql.raw(query)));
+  return { changed: true };
+}

@@ -16,7 +16,7 @@ import { storedLocation } from "../../lib/server/taskspace-path.js";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import type { WorkspaceConfig } from "../lib/config.js";
-import type { DB } from "../../db/tx.js";
+import { withTx, type DB } from "../../db/tx.js";
 import {
   scanTaskspaces,
   diffTaskspaces,
@@ -27,7 +27,12 @@ import {
 import { taskspaceTable, scopeTable } from "../../db/schema.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { pickNamespaceId, resolveNamespaceId } from "../lib/namespace-selection.js";
-import { getAllTaskspaces, getTaskspacesInNamespace } from "../../db/api/taskspace.js";
+import {
+  getAllTaskspaces,
+  getTaskspacesInNamespace,
+  updateTaskspaceLocation,
+  updateTaskspaceLocationInTx,
+} from "../../db/api/taskspace.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { taskspaceParentDir } from "../../lib/taskspace-location.js";
 import { isStrictlyInside } from "../../lib/server/fs-paths.js";
@@ -84,7 +89,7 @@ async function scanWithin(
   const searchRoots = config.taskspace.searchRoots.map((r) => (isAbsolute(r) ? r : join(root, r)));
 
   const found = scanTaskspaces(searchRoots);
-  const dbRecords = await db.select().from(taskspaceTable);
+  const dbRecords = await getAllTaskspaces({ db });
   const taskspaceIds = [
     ...new Set([...dbRecords.map(({ id }) => id), ...found.map(({ taskspaceId }) => taskspaceId)]),
   ];
@@ -107,10 +112,11 @@ async function scanWithin(
       `  ok      ${shortId(taskspace.taskspaceId, taskspaceIds)}  ${taskspace.path}${seenSuffix}`,
     );
     if (options.apply) {
-      await db
-        .update(taskspaceTable)
-        .set({ lastSeenAt: new Date() })
-        .where(eq(taskspaceTable.id, taskspace.taskspaceId));
+      await updateTaskspaceLocation({
+        db,
+        taskspaceId: taskspace.taskspaceId,
+        lastSeenAt: new Date(),
+      });
     }
   }
 
@@ -123,10 +129,13 @@ async function scanWithin(
     console.log(`    new: ${scanned.path}`);
     if (options.apply) {
       const { pathKind, storedPath } = storedLocation(root, scanned.path);
-      await db
-        .update(taskspaceTable)
-        .set({ path: storedPath, pathKind, lastSeenAt: new Date(), updatedAt: new Date() })
-        .where(eq(taskspaceTable.id, record.id));
+      await updateTaskspaceLocation({
+        db,
+        taskspaceId: record.id,
+        path: storedPath,
+        pathKind,
+        lastSeenAt: new Date(),
+      });
       updated++;
     }
   }
@@ -146,13 +155,19 @@ async function scanWithin(
           workspaceDefault,
         });
         const { pathKind, storedPath } = storedLocation(root, taskspace.path);
-        await db.insert(taskspaceTable).values({
-          id: taskspace.taskspaceId,
-          namespaceId: placement.namespaceId,
-          name: basename(taskspace.path),
-          path: storedPath,
-          pathKind,
-          lastSeenAt: new Date(),
+        await withTx(db, async (tx) => {
+          await tx.insert(taskspaceTable).values({
+            id: taskspace.taskspaceId,
+            namespaceId: placement.namespaceId,
+            name: basename(taskspace.path),
+          });
+          await updateTaskspaceLocationInTx({
+            db: tx,
+            taskspaceId: taskspace.taskspaceId,
+            path: storedPath,
+            pathKind,
+            lastSeenAt: new Date(),
+          });
         });
         if (
           placement.namespaceId === taskspace.namespaceId ||
@@ -388,6 +403,12 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       );
     } catch (failure) {
       if (!(failure instanceof TaskspaceClaimError)) throw failure;
+      if (failure.phase === "attach" || failure.cause instanceof AggregateError) {
+        console.error(
+          "Directory creation needs recovery. Run 'kozane doctor' before creating it again.",
+        );
+        process.exit(1);
+      }
       const e = failure.cause;
       console.error("Failed to initialize taskspace directory.");
       const outside = e instanceof TaskspaceFilesError && e.reason === "invalid-path";

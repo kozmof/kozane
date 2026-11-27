@@ -1,3 +1,4 @@
+import { boundEntityId } from "../actions/allocations.js";
 import { layerTable } from "../schema.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type {
@@ -55,6 +56,7 @@ export async function addLayer({
   const [row] = await db
     .insert(layerTable)
     .values({
+      id: boundEntityId(db, "layer"),
       namespaceId,
       name,
       isDefault,

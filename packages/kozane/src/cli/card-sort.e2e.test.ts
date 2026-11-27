@@ -291,6 +291,7 @@ describe("kozane card list --sort", () => {
       await client.batch(
         [
           "DROP INDEX IF EXISTS card_partition_updated",
+          ...UNDO_TASKSPACE_LOCAL_SQL,
           "DROP INDEX IF EXISTS glue_rel_glue",
           // Drop `scope_area` so migration 0016 can recreate it after its journal entry is
           // removed. Its indexes disappear with it.
@@ -477,3 +478,4 @@ describe("kozane card show --times", () => {
     );
   }, 90_000);
 });
+import { UNDO_TASKSPACE_LOCAL_SQL } from "../test-utils/legacy-migrations.js";

@@ -17,7 +17,7 @@ import { type NamespaceRef, folderKey, namespaceFolders } from "../taskspace-loc
 import {
   TASKSPACE_MARKER_FILE,
   TASKSPACE_MARKER_KIND,
-  TASKSPACE_MARKER_VERSION,
+  taskspaceMarkerText,
 } from "../taskspace-marker.js";
 import type { TaskspaceDirectoryOutcome } from "../types.js";
 import { errorCode, isStrictlyInside, isWithin, sameEntry } from "./fs-paths.js";
@@ -386,7 +386,7 @@ export type ClaimRequest = {
   namespaceId: string;
   /**
    * Use a directory already at `targetDir` that has no marker, rather than refusing it. Only
-   * `kozane taskspace create` does this. The browser always makes a new directory.
+   * CLI taskspace creation and attachment do this. The browser always makes a new directory.
    */
   adoptExisting: boolean;
   /**
@@ -400,8 +400,8 @@ export type ClaimRequest = {
 };
 
 /**
- * Make a new taskspace's directory and its marker. The browser and `kozane taskspace create`
- * both use this, so they claim directories the same way.
+ * Make a taskspace's directory and its marker. Browser creation and CLI creation and
+ * attachment use this, so they claim directories the same way.
  *
  * Create the directory and marker with exclusive operations. A concurrent creation fails
  * the claim. With `adoptExisting`, an existing directory without a marker can be reused.
@@ -453,16 +453,14 @@ export function claimTaskspaceDirectory(request: ClaimRequest): { dirCreated: bo
         if (code !== "ENOENT" || attempt >= MAX_PARENT_ATTEMPTS) throw e;
       }
     }
-    const marker = {
-      kind: TASKSPACE_MARKER_KIND,
-      version: TASKSPACE_MARKER_VERSION,
-      taskspaceId: request.taskspaceId,
-      namespaceId: request.namespaceId,
-      ...(request.ownIfCreated && dirCreated && { ownsDirectory: true }),
-    };
+    const marker = taskspaceMarkerText(
+      request.taskspaceId,
+      request.namespaceId,
+      request.ownIfCreated && dirCreated,
+    );
     try {
       // `wx` refuses a marker another process wrote since the directory was checked.
-      writeFileSync(markerPath, JSON.stringify(marker, null, 2) + "\n", {
+      writeFileSync(markerPath, marker, {
         flag: "wx",
         mode: 0o600,
       });
@@ -519,6 +517,15 @@ export function restoreTaskspaceDirectory(
   renameSync(from, to);
 }
 
+/** The ownership error shared by removal preflight and its filesystem callback. */
+export function directoryRemovalError(taskspaceId: string): TaskspaceFilesError {
+  return new TaskspaceFilesError(
+    "exists",
+    "The directory's .taskspace.json does not name this taskspace, so it was not deleted. " +
+      `Move the directory aside or restore its .taskspace.json (taskspace ID ${taskspaceId}), then delete again.`,
+  );
+}
+
 /**
  * Delete an owned taskspace directory and everything in it. Check the marker again right
  * before deleting and check directory identity between removals to detect replacement.
@@ -536,12 +543,7 @@ export function removeTaskspaceDirectory({
   const dir = resolve(workspaceRoot, storedPath);
   if (!assertOwnDirectory(dir, workspaceRoot)) return "missing";
   const checked = lstatSync(dir);
-  if (readClaim(dir, taskspaceId) !== "owned")
-    throw new TaskspaceFilesError(
-      "exists",
-      "The directory's .taskspace.json does not name this taskspace, so it was not deleted. " +
-        `Move the directory aside or restore its .taskspace.json (taskspace ID ${taskspaceId}), then delete again.`,
-    );
+  if (readClaim(dir, taskspaceId) !== "owned") throw directoryRemovalError(taskspaceId);
   /**
    * Stop when the path no longer holds the directory checked above. If another process
    * swapped in a symlink, `join(dir, name)` would follow it out of the workspace. Node has

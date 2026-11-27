@@ -11,6 +11,7 @@ export * as scopes from "./scopes.js";
 export * as warps from "./warps.js";
 export * as inventories from "./inventories.js";
 export * as namespaces from "./namespaces.js";
+export * as taskspaces from "./taskspaces.js";
 export * as snapshot from "./snapshot.js";
 export * as tags from "./tags.js";
 export * as map from "./map.js";

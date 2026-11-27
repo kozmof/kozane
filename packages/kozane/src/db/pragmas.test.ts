@@ -45,12 +45,15 @@ describe("applyConnectionPragmas", () => {
     expect(await pragma(url, "journal_mode")).toBe("wal");
   });
 
-  it("enforces foreign keys on the connection it is given", async () => {
+  it("enforces foreign keys and recursive triggers on the connection it is given", async () => {
     const url = tempDbUrl();
     const client = createClient({ url });
     try {
       await applyConnectionPragmas(client, url);
       expect((await client.execute("PRAGMA foreign_keys")).rows[0]?.foreign_keys).toBe(1);
+      expect((await client.execute("PRAGMA recursive_triggers")).rows[0]?.recursive_triggers).toBe(
+        1,
+      );
       expect((await client.execute("PRAGMA busy_timeout")).rows[0]?.timeout).toBe(BUSY_TIMEOUT_MS);
     } finally {
       client.close();

@@ -47,6 +47,7 @@ test("one build produces three archives and verification reuses them without lif
     const plan = verificationPlan(directory);
     assert.ok(plan.some(([, args]) => args.includes("--artifacts=" + directory)));
     assert.ok(plan.some(([, args]) => args.includes("test:coverage:source")));
+    assert.ok(plan.some(([, args]) => args.includes("test:capture:wasm")));
     for (const [, args] of plan)
       assert.ok(!args.some((arg) => ["build", "pack", "test:coverage"].includes(arg)));
   } finally {
@@ -84,6 +85,7 @@ test("automatic release can omit browser harnesses while retaining source covera
   assert.ok(!args.includes("--restoration-harness"));
   assert.ok(args.includes("--client-package"));
   assert.ok(args.includes("test:coverage:source"));
+  assert.ok(args.includes("test:capture:wasm"));
   const full = verificationPlan(options.directory).flatMap(([, args]) => args);
   assert.ok(full.includes("--client-browser-harness"));
   assert.ok(full.includes("--restoration-harness"));

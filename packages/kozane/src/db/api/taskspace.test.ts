@@ -7,10 +7,14 @@ import {
   getTaskspacesInNamespace,
   updateTaskspace,
   deleteTaskspace,
+  getAllTaskspaceLocalMetadata,
 } from "./taskspace.js";
 import { addNamespace } from "./namespace.js";
 import { addScope } from "./scope.js";
 import { NotFoundError } from "./utils.js";
+import { sql } from "drizzle-orm";
+import { taskspaceTable, namespaceTable } from "../schema.js";
+import { eq } from "drizzle-orm";
 
 async function setup() {
   const db = await createTestDB();
@@ -20,6 +24,20 @@ async function setup() {
 }
 
 describe("addTaskspace", () => {
+  it("rolls back shared identity when local attachment insertion fails", async () => {
+    const { db, namespaceId } = await setup();
+    await expect(
+      addTaskspace({
+        db,
+        namespaceId,
+        name: "Uncommitted",
+        path: "local",
+        pathKind: null as never,
+      }),
+    ).rejects.toBeInstanceOf(Error);
+    expect(await getAllTaskspaces({ db })).toEqual([]);
+    expect(await getAllTaskspaceLocalMetadata({ db })).toEqual([]);
+  });
   it("returns a non-empty id", async () => {
     const { db, namespaceId, scopeId } = await setup();
     const id = await addTaskspace({ db, namespaceId, scopeId });
@@ -102,6 +120,35 @@ describe("getAllTaskspaces", () => {
 });
 
 describe("updateTaskspace", () => {
+  it("rolls back the label when an accompanying local metadata update fails", async () => {
+    const { db, namespaceId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, name: "Before", path: "local" });
+    const before = await getTaskspace({ db, taskspaceId: id });
+    await expect(
+      updateTaskspace({ db, taskspaceId: id, name: "After", pathKind: null as never }),
+    ).rejects.toBeInstanceOf(Error);
+    expect(await getTaskspace({ db, taskspaceId: id })).toEqual(before);
+  });
+  it("preserves shared timestamps for ordinary location, observation and unchanged-label updates", async () => {
+    const { db, namespaceId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, name: "Label", path: "before" });
+    await db.run(sql`UPDATE taskspace SET created_at=1000,updated_at=2000 WHERE id=${id}`);
+    await updateTaskspace({ db, taskspaceId: id, path: "after", lastSeenAt: new Date(3000000) });
+    await updateTaskspace({ db, taskspaceId: id, name: "Label" });
+    expect(await getTaskspace({ db, taskspaceId: id })).toMatchObject({
+      name: "Label",
+      path: "after",
+      lastSeenAt: new Date(3000000),
+      createdAt: new Date(1000000),
+      updatedAt: new Date(2000000),
+    });
+    await updateTaskspace({ db, taskspaceId: id, name: "Changed" });
+    const changed = (await getTaskspace({ db, taskspaceId: id }))!;
+    expect(changed.createdAt).toEqual(new Date(1000000));
+    expect(changed.updatedAt.getTime()).toBeGreaterThan(2000000);
+    expect(changed.lastSeenAt).toEqual(new Date(3000000));
+  });
+
   it("updates name", async () => {
     const { db, namespaceId, scopeId } = await setup();
     const id = await addTaskspace({ db, namespaceId, scopeId, name: "old" });
@@ -137,6 +184,29 @@ describe("updateTaskspace", () => {
 });
 
 describe("deleteTaskspace", () => {
+  it("retains hidden local metadata through deletion, identity restoration and namespace cascades", async () => {
+    const { db, namespaceId } = await setup();
+    const id = await addTaskspace({
+      db,
+      namespaceId,
+      name: "Label",
+      path: "local",
+      lastSeenAt: new Date(100000),
+    });
+    const local = await getAllTaskspaceLocalMetadata({ db });
+    await deleteTaskspace({ db, taskspaceId: id });
+    expect(await getAllTaskspaces({ db })).toEqual([]);
+    expect(await getAllTaskspaceLocalMetadata({ db })).toEqual(local);
+    await db.insert(taskspaceTable).values({ id, namespaceId, name: "Restored" });
+    expect(await getTaskspace({ db, taskspaceId: id })).toMatchObject({
+      name: "Restored",
+      path: "local",
+      lastSeenAt: new Date(100000),
+    });
+    await db.delete(namespaceTable).where(eq(namespaceTable.id, namespaceId));
+    expect(await getAllTaskspaces({ db })).toEqual([]);
+    expect(await getAllTaskspaceLocalMetadata({ db })).toEqual(local);
+  });
   it("removes the taskspace", async () => {
     const { db, namespaceId, scopeId } = await setup();
     const id = await addTaskspace({ db, namespaceId, scopeId });

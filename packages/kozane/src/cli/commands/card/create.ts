@@ -1,5 +1,4 @@
-import { statSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { statSync } from "node:fs";
 import { storeImage, maintainImageAssets } from "../../../lib/server/image-assets.js";
 import { createInTx as createBatchInTx } from "../../../services/card-batch.js";
 import { createInTx } from "../../../services/cards.js";
@@ -38,12 +37,10 @@ async function addCard(
   imageFile?: string,
 ): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
-    let imagePath: string | undefined;
     if (imageFile !== undefined) {
       const stat = statSync(imageFile);
       if (!stat.isFile() || stat.size > 10 * 1024 * 1024) throw new Error("Invalid image file");
-      const path = await storeImage(root, imageFile, readFileSync(imageFile));
-      imagePath = join(root, ".kozane", "assets", "images", path.split("/").pop()!);
+      const path = await storeImage(root, db, imageFile, readFileSync(imageFile));
       rawContent = "kozane-image:" + path;
     }
     const context = createServiceContext({
@@ -70,10 +67,7 @@ async function addCard(
         });
         return { id: cardId, namespaceId, partitionId, layerId, scopeId };
       },
-    ).catch((error) => {
-      if (imagePath) unlinkSync(imagePath);
-      throw error;
-    });
+    );
     const [namespaces, partitions, cards, scopes, layers] = await Promise.all([
       db.select({ id: namespaceTable.id }).from(namespaceTable),
       db.select({ id: partitionTable.id }).from(partitionTable),

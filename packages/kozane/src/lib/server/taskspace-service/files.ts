@@ -28,11 +28,12 @@ export async function createDirectory(
   params: Params,
   body: Record<string, unknown>,
 ) {
-  const subPath = requireString(await body, "path");
+  const subPath = requireString(body, "path");
   const created = await queuedFilesChange(
     locals,
     params,
     "Failed to create taskspace directory",
+    { operation: "create-directory", subPath },
     (baseDir) => createTaskspaceDirectory({ baseDir, subPath }),
   );
   return created;
@@ -45,6 +46,7 @@ export async function renameEntry(locals: Context, params: Params, body: Record<
     locals,
     params,
     "Failed to rename taskspace entry",
+    { operation: "rename-entry", subPath, name },
     (baseDir) => renameTaskspaceEntry({ baseDir, subPath, name }),
   );
   return renamed;
@@ -58,6 +60,7 @@ export async function removeEntry(locals: Context, params: Params, requestedPath
     locals,
     params,
     "Failed to delete taskspace entry",
+    { operation: "remove-entry", subPath },
     (baseDir) => deleteTaskspaceEntry({ baseDir, subPath }),
   );
   return deleted;

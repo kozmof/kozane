@@ -54,6 +54,7 @@ export interface TaskspacesApi {
   /** Synchronous availability from current metadata. Performs no I/O. */
   access(namespaceId: string, taskspace: Pick<TaskspaceSummary, "id" | "path">): TaskspaceAccess;
   create(namespaceId: string, input: TaskspaceCreateInput): Promise<TaskspaceCreateResult>;
+  /** Rename the shared label while keeping the attached local directory in place. */
   rename(
     namespaceId: string,
     taskspaceId: string,

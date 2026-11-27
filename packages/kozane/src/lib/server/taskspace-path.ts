@@ -22,7 +22,7 @@ export function storedLocation(
  * Why a stored taskspace path cannot be used, or null when it can. A `workspace_relative`
  * path must stay inside the workspace root, and an `absolute` path must be absolute.
  *
- * Only `kozane taskspace create --dir` and `kozane taskspace scan` store absolute paths, and
+ * CLI taskspace creation, attachment and scanning store absolute paths, and
  * `kozane db import` refuses them without `--allow-absolute-paths`. This check runs on every
  * read so a row written by hand or by an older import cannot reach outside the root by
  * using `..` in a relative path.

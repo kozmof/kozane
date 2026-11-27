@@ -3,11 +3,13 @@ import { mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSyn
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
+import { sql } from "drizzle-orm";
 import { GET, POST, PUT } from "./+server.js";
 import { addNamespace } from "$db/api/namespace.js";
 import { addTaskspace } from "$db/api/taskspace.js";
 import { createTestDB } from "../../../../../../test-utils/db.js";
 import type { DB } from "$db/tx.js";
+import { taskspaceLocalTable, localFileOperationTable } from "$db/schema.js";
 import { _resetWorkspaceRootForTest } from "$db/internal/config.js";
 import { TASKSPACE_FILE_BYTES_MAX } from "$lib/constants";
 
@@ -88,6 +90,30 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]/file", () => {
     else process.env.KOZANE_WORKSPACE_ROOT = prevEnv;
     _resetWorkspaceRootForTest();
     rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it("retains saved bytes and reports recovery when confirmation changes the attachment", async () => {
+    const original = await body(GET(getEvent(db, namespaceId, taskspaceId, "README.md")));
+    await db.run(sql`CREATE TRIGGER change_attachment AFTER UPDATE ON local_file_operation
+      WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN UPDATE taskspace_local SET path='outside'; END`);
+    await expectHttpRejection(
+      PUT(
+        putEvent(db, namespaceId, taskspaceId, {
+          path: "README.md",
+          content: "Saved contents",
+          signature: original.signature,
+        }),
+      ),
+      500,
+      "File change needs recovery. Run 'kozane doctor' before repeating it.",
+    );
+    expect(readFileSync(join(demo, "README.md"), "utf8")).toBe("Saved contents");
+    expect(await db.select().from(taskspaceLocalTable)).toMatchObject([
+      { taskspaceId, path: "demo" },
+    ]);
+    expect(await db.select().from(localFileOperationTable)).toMatchObject([
+      { state: "pending", error: null, confirmedAt: null },
+    ]);
   });
 
   describe("GET", () => {

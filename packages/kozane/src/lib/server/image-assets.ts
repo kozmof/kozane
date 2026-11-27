@@ -2,16 +2,26 @@ import { and, eq, inArray, like } from "drizzle-orm";
 import { composeWrite } from "../../db/database.js";
 import { validPng, validJpeg } from "./raster-validation.js";
 import { activeServerProcess } from "./runtime-state.js";
-import { mkdir, readFile, writeFile, readdir, stat, rename, rm } from "node:fs/promises";
+import { readFile, readdir, lstat, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { imagePath, IMAGE_MAX_BYTES } from "@kozane/core";
 import type { DB, Tx } from "../../db/tx.js";
 import { cardTable, partitionTable } from "../../db/schema.js";
 
-export function imageDirectory(root: string): string {
-  return join(root, ".kozane", "assets", "images");
-}
+import { imageDirectory, installImageUpload, syncImageDirectory } from "./image-upload.js";
+import {
+  archiveUnusedImage,
+  imageCleanupDirectories,
+  openImageDeletionRequest,
+  queueImageDeletion,
+} from "./image-cleanup.js";
+import { retainedImageNames } from "../../db/api/asset-manifest.js";
+import {
+  lockImageAssetWork,
+  pinnedImageNames,
+  abandonedImageNames,
+} from "../../db/api/image-upload.js";
+export { imageDirectory } from "./image-upload.js";
 export class ImageValidationError extends Error {}
 
 export async function validateImage(name: string, bytes: Uint8Array): Promise<string> {
@@ -98,41 +108,70 @@ function validSvg(source: string): boolean {
   }
   return roots === 1 && stack.length === 0 && clean.slice(offset).trim() === "";
 }
-export async function storeImage(root: string, name: string, bytes: Uint8Array): Promise<string> {
-  const extension = await validateImage(name, bytes);
-  const filename = randomUUID() + "." + extension;
-  await mkdir(imageDirectory(root), { recursive: true });
-  await writeFile(join(imageDirectory(root), filename), bytes, { flag: "wx" });
-  return "/api/images/" + filename;
+export async function storeImage(
+  root: string,
+  db: DB,
+  name: string,
+  bytes: Uint8Array,
+): Promise<string> {
+  const owned = new Uint8Array(bytes);
+  const extension = await validateImage(name, owned);
+  return installImageUpload(root, db, extension, owned);
 }
 /** Keep fresh uploads for a day so concurrent card creation cannot lose its image. */
 export async function collectUnusedImages(root: string, db: DB, now = Date.now()): Promise<void> {
   if (process.env.KOZANE_MEMORY_MODE === "1" || activeServerProcess(root)?.memory) return;
-  const referenced = new Set(
-    (await db.select({ content: cardTable.content }).from(cardTable)).map((row) =>
-      imagePath(row.content),
-    ),
-  );
-  let names: string[];
-  try {
-    names = await readdir(imageDirectory(root));
-  } catch {
-    return;
-  }
-  for (const name of names) {
-    const path = "/api/images/" + name;
-    if (!imagePath("kozane-image:" + path) || referenced.has(path)) continue;
-    const filename = join(imageDirectory(root), name);
+  await composeWrite(db, async (tx) => {
+    await lockImageAssetWork(tx);
+    const pins = await pinnedImageNames(tx);
+    for (const filename of await retainedImageNames(tx)) pins.add(filename);
+    const abandoned = await abandonedImageNames(tx);
+    const referenced = new Set(
+      (await tx.select({ content: cardTable.content }).from(cardTable)).map((row) =>
+        imagePath(row.content),
+      ),
+    );
+    let names: string[];
+    let directories: Awaited<ReturnType<typeof imageCleanupDirectories>>;
     try {
-      if ((await stat(filename)).mtimeMs < now - 86400000) {
-        const archive = join(imageDirectory(root), ".retained");
-        await mkdir(archive, { recursive: true });
-        await rename(filename, join(archive, name));
-      }
-    } catch {
-      /* Another collector may have removed it. */
+      directories = await imageCleanupDirectories(root);
+      names = await readdir(directories.images);
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return;
+      throw error;
     }
-  }
+    for (const name of names) {
+      if (name.startsWith(".upload-")) {
+        const filename = name.slice(".upload-".length);
+        if (
+          !abandoned.has(filename) ||
+          pins.has(filename) ||
+          referenced.has("/api/images/" + filename)
+        )
+          continue;
+        try {
+          const path = join(directories.images, name);
+          const entry = await lstat(path);
+          if (entry.isFile() && entry.mtimeMs < now - 86400000) {
+            if ((await imageCleanupDirectories(root)).images !== directories.images)
+              throw new Error("Image cleanup directory changed");
+            await rm(path);
+            await syncImageDirectory(directories.images);
+          }
+        } catch {
+          /* Leave unreadable or concurrently removed temporary entries alone. */
+        }
+        continue;
+      }
+      const path = "/api/images/" + name;
+      if (!imagePath("kozane-image:" + path) || referenced.has(path) || pins.has(name)) continue;
+      try {
+        await archiveUnusedImage(root, name, now - 86400000);
+      } catch {
+        /* Preserve collisions, unsafe entries and interrupted archive publication. */
+      }
+    }
+  });
 }
 export async function readImage(root: string, name: string): Promise<Uint8Array> {
   if (!imagePath("kozane-image:/api/images/" + name)) throw new Error("Invalid image name");
@@ -222,12 +261,7 @@ export async function withImageDeletion<T>(
       const paths = new Set(
         before.filter((row) => !remaining.has(row.id)).map((row) => imagePath(row.content)),
       );
-      const queue = join(imageDirectory(root), ".pending-delete");
-      for (const path of paths)
-        if (path) {
-          await mkdir(queue, { recursive: true });
-          await writeFile(join(queue, path.split("/").pop()!), "", { flag: "a" });
-        }
+      for (const path of paths) if (path) await queueImageDeletion(root, path.split("/").pop()!);
     }
     return result;
   });
@@ -240,10 +274,12 @@ export async function withImageDeletion<T>(
 
 export async function retryImageDeletions(root: string, db: DB): Promise<void> {
   if (process.env.KOZANE_MEMORY_MODE === "1" || activeServerProcess(root)?.memory) return;
-  const queue = join(imageDirectory(root), ".pending-delete");
+  let directories: Awaited<ReturnType<typeof imageCleanupDirectories>>;
   let names: string[];
   try {
-    names = await readdir(queue);
+    directories = await imageCleanupDirectories(root);
+    if (!directories.pending) return;
+    names = await readdir(directories.pending);
   } catch (cause) {
     if (cause && typeof cause === "object" && "code" in cause && cause.code === "ENOENT") return;
     throw cause;
@@ -252,6 +288,10 @@ export async function retryImageDeletions(root: string, db: DB): Promise<void> {
   for (let offset = 0; offset < candidates.length; offset += 400) {
     const batch = candidates.slice(offset, offset + 400);
     await composeWrite(db, async (tx) => {
+      await lockImageAssetWork(tx);
+      const pins = await pinnedImageNames(tx);
+      for (const filename of await retainedImageNames(tx)) pins.add(filename);
+      const abandoned = await abandonedImageNames(tx);
       const referenced = new Set(
         (
           await tx
@@ -266,13 +306,38 @@ export async function retryImageDeletions(root: string, db: DB): Promise<void> {
         ).map((row) => row.content),
       );
       for (const name of batch) {
-        if (referenced.has("kozane-image:/api/images/" + name)) continue;
+        if (referenced.has("kozane-image:/api/images/" + name) || pins.has(name)) continue;
+        let request: Awaited<ReturnType<typeof openImageDeletionRequest>>;
         try {
-          await rm(join(imageDirectory(root), name), { force: true });
-          await rm(join(imageDirectory(root), ".retained", name), { force: true });
-          await rm(join(queue, name), { force: true });
+          const current = await imageCleanupDirectories(root);
+          if (current.images !== directories.images || current.pending !== directories.pending)
+            throw new Error("Image cleanup directory changed");
+          const requestPath = join(current.pending!, name);
+          request = await openImageDeletionRequest(current.pending!, name);
+          if (!request) continue;
+          await rm(join(current.images, name), { force: true });
+          if (current.retained) await rm(join(current.retained, name), { force: true });
+          if (abandoned.has(name))
+            await rm(join(current.images, `.upload-${name}`), { force: true });
+          await syncImageDirectory(current.images);
+          if (current.retained) await syncImageDirectory(current.retained);
+          const finalDirectories = await imageCleanupDirectories(root);
+          const finalRequest = await lstat(requestPath, { bigint: true });
+          if (
+            finalDirectories.images !== current.images ||
+            finalDirectories.pending !== current.pending ||
+            !finalRequest.isFile() ||
+            finalRequest.size !== 0n ||
+            finalRequest.dev !== request.identity.dev ||
+            finalRequest.ino !== request.identity.ino
+          )
+            throw new Error("Image deletion request changed");
+          await rm(requestPath, { force: true });
+          await syncImageDirectory(current.pending!);
         } catch (cause) {
           console.warn("Pending image deletion failed:", cause);
+        } finally {
+          await request?.handle.close();
         }
       }
     });

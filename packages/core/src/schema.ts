@@ -181,9 +181,6 @@ export const taskspaceTable = sqliteTable(
       onUpdate: "cascade",
     }),
     name: text().notNull().default(""),
-    path: text("path"),
-    pathKind: text("path_kind", { enum: PATH_KINDS }).notNull().default("workspace_relative"),
-    lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -194,6 +191,453 @@ export const taskspaceTable = sqliteTable(
   // Support `getScopesInNamespace` lookups for any linked taskspace and for one in this
   // namespace. Without this index, each board poll scans the taskspace table twice per scope.
   (t) => [index("taskspace_scope").on(t.scopeId)],
+);
+
+/** Device-local attachments survive shared taskspace deletion and restoration. */
+export const taskspaceLocalTable = sqliteTable("taskspace_local", {
+  // Deliberately no FK. Metadata for absent taskspaces remains available to local recovery.
+  taskspaceId: text("taskspace_id").primaryKey().notNull(),
+  path: text("path"),
+  pathKind: text("path_kind", { enum: PATH_KINDS }).notNull().default("workspace_relative"),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
+});
+
+/** Local filesystem intent and completion evidence, retained independently of shared rows. */
+export const localFileOperationTable = sqliteTable(
+  "local_file_operation",
+  {
+    id: text("id").primaryKey().notNull(),
+    kind: text("kind", {
+      enum: ["taskspace.claim", "taskspace.file", "taskspace.directory"],
+    }).notNull(),
+    version: integer("version").notNull(),
+    taskspaceId: text("taskspace_id").notNull(),
+    namespaceId: text("namespace_id").notNull(),
+    path: text("path").notNull(),
+    pathKind: text("path_kind", { enum: PATH_KINDS }).notNull(),
+    state: text("state", { enum: ["pending", "confirmed", "abandoned"] }).notNull(),
+    intent: text("intent").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    confirmedAt: integer("confirmed_at", { mode: "timestamp" }),
+    error: text("error"),
+    abandonedAt: integer("abandoned_at", { mode: "timestamp" }),
+    abandonReason: text("abandon_reason"),
+  },
+  (t) => [
+    index("local_file_operation_state").on(t.state),
+    check(
+      "local_file_operation_kind",
+      sql`${t.kind} IN ('taskspace.claim', 'taskspace.file', 'taskspace.directory') AND ${t.version} = 1`,
+    ),
+    check(
+      "local_file_operation_path_kind",
+      sql`${t.pathKind} IN ('workspace_relative', 'absolute')`,
+    ),
+    check(
+      "local_file_operation_state",
+      sql`(${t.state} = 'pending' AND ${t.confirmedAt} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state} = 'confirmed' AND ${t.confirmedAt} IS NOT NULL AND ${t.error} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state} = 'abandoned' AND ${t.confirmedAt} IS NULL AND ${t.abandonedAt} IS NOT NULL AND ${t.abandonReason} IS NOT NULL AND length(trim(${t.abandonReason})) > 0)`,
+    ),
+  ],
+);
+
+/** Local upload pins survive failed publication and shared row restoration. */
+export const localImageUploadTable = sqliteTable(
+  "local_image_upload",
+  {
+    filename: text("filename").primaryKey().notNull(),
+    byteLength: integer("byte_length").notNull(),
+    sha256: text("sha256").notNull(),
+    state: text("state", { enum: ["pending", "installed", "completed", "abandoned"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    installedAt: integer("installed_at", { mode: "timestamp" }),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    error: text("error"),
+    abandonedAt: integer("abandoned_at", { mode: "timestamp" }),
+    abandonReason: text("abandon_reason"),
+  },
+  (t) => [
+    index("local_image_upload_state").on(t.state),
+    check(
+      "local_image_upload_name",
+      sql`length(${t.filename}) IN (40,41) AND substr(${t.filename},37,1)='.' AND substr(${t.filename},1,36) NOT GLOB '*[^a-f0-9-]*' AND substr(${t.filename},38) IN ('jpg','jpeg','png','svg')`,
+    ),
+    check(
+      "local_image_upload_bytes",
+      sql`typeof(${t.byteLength})='integer' AND ${t.byteLength} BETWEEN 1 AND 10485760 AND length(${t.sha256})=64 AND ${t.sha256} NOT GLOB '*[^a-f0-9]*'`,
+    ),
+    check(
+      "local_image_upload_state",
+      sql`(${t.state}='pending' AND ${t.installedAt} IS NULL AND ${t.completedAt} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state}='installed' AND ${t.installedAt} IS NOT NULL AND ${t.completedAt} IS NULL AND ${t.error} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state}='completed' AND ${t.installedAt} IS NOT NULL AND ${t.completedAt} IS NOT NULL AND ${t.error} IS NULL AND ${t.abandonedAt} IS NULL AND ${t.abandonReason} IS NULL) OR (${t.state}='abandoned' AND ${t.completedAt} IS NULL AND ${t.abandonedAt} IS NOT NULL AND ${t.abandonReason} IS NOT NULL AND length(trim(${t.abandonReason})) > 0)`,
+    ),
+  ],
+);
+
+/** Device-local owners retain manifests independently of shared rows and selections. */
+export const localAssetManifestTable = sqliteTable(
+  "local_asset_manifest",
+  {
+    ownerKind: text("owner_kind", {
+      enum: ["baseline", "effect-set", "pending-work", "transfer", "recovery"],
+    }).notNull(),
+    ownerId: text("owner_id").notNull(),
+    manifest: text("manifest").notNull(),
+    state: text("state", { enum: ["pending", "retained", "released"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    verifiedAt: integer("verified_at", { mode: "timestamp" }),
+    releasedAt: integer("released_at", { mode: "timestamp" }),
+    releaseReason: text("release_reason"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerKind, t.ownerId] }),
+    index("local_asset_manifest_state").on(t.state),
+    check(
+      "local_asset_manifest_owner",
+      sql`${t.ownerKind} IN ('baseline','effect-set','pending-work','transfer','recovery') AND length(trim(${t.ownerId})) BETWEEN 1 AND 1000 AND instr(${t.ownerId},char(0))=0`,
+    ),
+    check("local_asset_manifest_json", sql`json_valid(${t.manifest})`),
+    check(
+      "local_asset_manifest_state",
+      sql`(${t.state}='pending' AND ${t.verifiedAt} IS NULL AND ${t.releasedAt} IS NULL AND ${t.releaseReason} IS NULL) OR (${t.state}='retained' AND ${t.verifiedAt} IS NOT NULL AND ${t.releasedAt} IS NULL AND ${t.releaseReason} IS NULL) OR (${t.state}='released' AND ${t.releasedAt} IS NOT NULL AND ${t.releaseReason} IS NOT NULL AND length(trim(${t.releaseReason})) > 0)`,
+    ),
+  ],
+);
+
+/** Trusted checkpoint descriptors are local bookkeeping, independent of shared rows and file pins. */
+export const localRecoveryCheckpointTable = sqliteTable(
+  "local_recovery_checkpoint",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_checkpoint_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_checkpoint_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_extract(${t.descriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.identity.checkpointId') IS ${t.checkpointId}`,
+    ),
+  ],
+);
+
+/** Trusted shared-history descriptors retain the original local checkpoint binding. */
+export const localRecoverySharedHistoryTable = sqliteTable(
+  "local_recovery_shared_history",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    localDescriptor: text("local_descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_shared_history_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_shared_history_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_extract(${t.descriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.identity.checkpointId') IS ${t.checkpointId}`,
+    ),
+    check(
+      "local_recovery_shared_history_local_descriptor",
+      sql`json_valid(${t.localDescriptor}) AND json_type(${t.localDescriptor},'$.version') IS 'integer' AND json_extract(${t.localDescriptor},'$.version') IS 1 AND json_extract(${t.localDescriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.localDescriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.localDescriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.localDescriptor},'$.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.localDescriptor},'$.identity.schemaId') IS json_extract(${t.descriptor},'$.identity.schemaId')`,
+    ),
+  ],
+);
+
+/** Trusted asset descriptors preserve the exact original shared and local checkpoint pair. */
+export const localRecoveryAssetsTable = sqliteTable(
+  "local_recovery_assets",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_assets_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_assets_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.binding.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.binding.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.binding.localCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.binding.localCheckpoint.version') IS 1 AND json_extract(${t.descriptor},'$.binding.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.binding.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.binding.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.binding.checkpoint.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.schemaId') IS json_extract(${t.descriptor},'$.binding.checkpoint.identity.schemaId')`,
+    ),
+  ],
+);
+
+/** Retained asset descriptors preserve the original retained-history, current asset and local bindings. */
+export const localRecoveryRetainedAssetsTable = sqliteTable(
+  "local_recovery_retained_assets",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_retained_assets_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_retained_assets_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.binding.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.binding.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.binding.localCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.binding.localCheckpoint.version') IS 1 AND json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.schemaId') IS json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.identity.schemaId') AND json_type(${t.descriptor},'$.assetCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.assetCheckpoint.version') IS 1 AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.checkpointId') IS ${t.checkpointId} AND json_type(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.version') IS 1 AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.schemaId') IS json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.schemaId') AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.schemaId') IS json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.schemaId')`,
+    ),
+  ],
+);
+
+/** Destination installation authority is never transported in recovery snapshots or JSON dumps. */
+export const localRecoveryInstallationTable = sqliteTable(
+  "local_recovery_installation",
+  {
+    id: integer("id").primaryKey().notNull(),
+    descriptor: text("descriptor").notNull(),
+    installedAt: integer("installed_at").notNull(),
+  },
+  (t) => [
+    check("local_recovery_installation_singleton", sql`${t.id} IS 1`),
+    check(
+      "local_recovery_installation_time",
+      sql`typeof(${t.installedAt})='integer' AND ${t.installedAt}>=0`,
+    ),
+    check(
+      "local_recovery_installation_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.runAssetCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.runAssetCheckpoint.version') IS 1 AND json_type(${t.descriptor},'$.byteLength') IS 'integer' AND json_extract(${t.descriptor},'$.byteLength') BETWEEN 1 AND 9007199254740991 AND json_type(${t.descriptor},'$.sha256') IS 'text' AND length(json_extract(${t.descriptor},'$.sha256')) IS 64 AND json_extract(${t.descriptor},'$.sha256') NOT GLOB '*[^0-9a-f]*'`,
+    ),
+  ],
+);
+
+/** Destination installation authority is never transported in recovery snapshots or JSON dumps. */
+export const sharedRecoveryInstallationTable = sqliteTable(
+  "shared_recovery_installation",
+  {
+    id: integer("id").primaryKey().notNull(),
+    descriptor: text("descriptor").notNull(),
+    installedAt: integer("installed_at").notNull(),
+  },
+  (t) => [
+    check("shared_recovery_installation_singleton", sql`${t.id} IS 1`),
+    check(
+      "shared_recovery_installation_time",
+      sql`typeof(${t.installedAt})='integer' AND ${t.installedAt}>=0`,
+    ),
+    check(
+      "shared_recovery_installation_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.runAssetCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.runAssetCheckpoint.version') IS 1 AND json_type(${t.descriptor},'$.byteLength') IS 'integer' AND json_extract(${t.descriptor},'$.byteLength') BETWEEN 1 AND 9007199254740991 AND json_type(${t.descriptor},'$.sha256') IS 'text' AND length(json_extract(${t.descriptor},'$.sha256')) IS 64 AND json_extract(${t.descriptor},'$.sha256') NOT GLOB '*[^0-9a-f]*'`,
+    ),
+  ],
+);
+
+/** Destination installation authority is never transported in recovery snapshots or JSON dumps. */
+export const sharedOnlyRecoveryInstallationTable = sqliteTable(
+  "shared_only_recovery_installation",
+  {
+    id: integer("id").primaryKey().notNull(),
+    descriptor: text("descriptor").notNull(),
+    destinationIdentity: text("destination_identity").notNull(),
+    installedAt: integer("installed_at").notNull(),
+  },
+  (t) => [
+    check(
+      "shared_only_recovery_installation_identity",
+      sql`json_valid(${t.destinationIdentity}) AND json_type(${t.destinationIdentity},'$.workspaceId') IS 'text' AND json_type(${t.destinationIdentity},'$.deviceId') IS 'text' AND json_type(${t.destinationIdentity},'$.epochId') IS 'text' AND json_type(${t.destinationIdentity},'$.checkpointId') IS 'text' AND json_type(${t.destinationIdentity},'$.schemaId') IS 'text' AND json_extract(${t.descriptor},'$.runAssetCheckpoint.binding.localCheckpoint.identity.workspaceId') IS json_extract(${t.destinationIdentity},'$.workspaceId') AND json_extract(${t.descriptor},'$.runAssetCheckpoint.binding.localCheckpoint.identity.epochId') IS json_extract(${t.destinationIdentity},'$.epochId') AND json_extract(${t.descriptor},'$.runAssetCheckpoint.binding.localCheckpoint.identity.checkpointId') IS json_extract(${t.destinationIdentity},'$.checkpointId') AND json_extract(${t.descriptor},'$.runAssetCheckpoint.binding.localCheckpoint.identity.schemaId') IS json_extract(${t.destinationIdentity},'$.schemaId')`,
+    ),
+    check("shared_only_recovery_installation_singleton", sql`${t.id} IS 1`),
+    check(
+      "shared_only_recovery_installation_time",
+      sql`typeof(${t.installedAt})='integer' AND ${t.installedAt}>=0`,
+    ),
+    check(
+      "shared_only_recovery_installation_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.runAssetCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.runAssetCheckpoint.version') IS 1 AND json_type(${t.descriptor},'$.byteLength') IS 'integer' AND json_extract(${t.descriptor},'$.byteLength') BETWEEN 1 AND 9007199254740991 AND json_type(${t.descriptor},'$.sha256') IS 'text' AND length(json_extract(${t.descriptor},'$.sha256')) IS 64 AND json_extract(${t.descriptor},'$.sha256') NOT GLOB '*[^0-9a-f]*'`,
+    ),
+  ],
+);
+
+/** Broader run manifests retain all seven original source expectations. */
+export const localRecoveryRunAssetsTable = sqliteTable(
+  "local_recovery_run_assets",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_run_assets_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_run_assets_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.binding.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.binding.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.binding.localCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.binding.localCheckpoint.version') IS 1 AND json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.checkpoint.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.schemaId') IS json_extract(${t.descriptor},'$.binding.checkpoint.checkpoint.checkpoint.checkpoint.checkpoint.identity.schemaId') AND json_type(${t.descriptor},'$.assetCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.assetCheckpoint.version') IS 1 AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.checkpointId') IS ${t.checkpointId} AND json_type(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.version') IS 1 AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.localCheckpoint.identity.schemaId') IS json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.schemaId') AND json_extract(${t.descriptor},'$.assetCheckpoint.binding.checkpoint.identity.schemaId') IS json_extract(${t.descriptor},'$.binding.localCheckpoint.identity.schemaId')`,
+    ),
+  ],
+);
+
+/** Execution expectations retain the original local descriptor alongside their shared content binding. */
+export const localRecoveryExecutionsTable = sqliteTable(
+  "local_recovery_executions",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    localDescriptor: text("local_descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_executions_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_executions_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.version') IS 1 AND json_extract(${t.descriptor},'$.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.checkpoint.identity.checkpointId') IS ${t.checkpointId}`,
+    ),
+    check(
+      "local_recovery_executions_local_descriptor",
+      sql`json_valid(${t.localDescriptor}) AND json_type(${t.localDescriptor},'$.version') IS 'integer' AND json_extract(${t.localDescriptor},'$.version') IS 1 AND json_extract(${t.localDescriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.localDescriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.localDescriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.localDescriptor},'$.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.localDescriptor},'$.identity.schemaId') IS json_extract(${t.descriptor},'$.checkpoint.identity.schemaId')`,
+    ),
+  ],
+);
+
+/** Original-action expectations retain the original local descriptor alongside execution and shared bindings. */
+export const localRecoveryActionsTable = sqliteTable(
+  "local_recovery_actions",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    localDescriptor: text("local_descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_actions_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_actions_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.version') IS 1 AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.identity.checkpointId') IS ${t.checkpointId}`,
+    ),
+    check(
+      "local_recovery_actions_local_descriptor",
+      sql`json_valid(${t.localDescriptor}) AND json_type(${t.localDescriptor},'$.version') IS 'integer' AND json_extract(${t.localDescriptor},'$.version') IS 1 AND json_extract(${t.localDescriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.localDescriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.localDescriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.localDescriptor},'$.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.localDescriptor},'$.identity.schemaId') IS json_extract(${t.descriptor},'$.checkpoint.checkpoint.identity.schemaId')`,
+    ),
+  ],
+);
+
+/** Retained-history expectations retain the original local descriptor and all nested source bindings. */
+export const localRecoveryRetainedHistoryTable = sqliteTable(
+  "local_recovery_retained_history",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    localDescriptor: text("local_descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_retained_history_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_retained_history_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.version') IS 1 AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.checkpointId') IS ${t.checkpointId}`,
+    ),
+    check(
+      "local_recovery_retained_history_local_descriptor",
+      sql`json_valid(${t.localDescriptor}) AND json_type(${t.localDescriptor},'$.version') IS 'integer' AND json_extract(${t.localDescriptor},'$.version') IS 1 AND json_extract(${t.localDescriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.localDescriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.localDescriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.localDescriptor},'$.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.localDescriptor},'$.identity.schemaId') IS json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.schemaId')`,
+    ),
+  ],
+);
+
+/** Action-archive expectations retain the original local descriptor and all nested source bindings. */
+export const localRecoveryActionArchivesTable = sqliteTable(
+  "local_recovery_action_archives",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    localDescriptor: text("local_descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_action_archives_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_action_archives_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.version') IS 1 AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.checkpointId') IS ${t.checkpointId}`,
+    ),
+    check(
+      "local_recovery_action_archives_local_descriptor",
+      sql`json_valid(${t.localDescriptor}) AND json_type(${t.localDescriptor},'$.version') IS 'integer' AND json_extract(${t.localDescriptor},'$.version') IS 1 AND json_extract(${t.localDescriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.localDescriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.localDescriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.localDescriptor},'$.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.localDescriptor},'$.identity.schemaId') IS json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.identity.schemaId')`,
+    ),
+  ],
+);
+
+/** Run-archive expectations retain the original local descriptor and all nested source bindings. */
+export const localRecoveryRunArchivesTable = sqliteTable(
+  "local_recovery_run_archives",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    epochId: text("epoch_id").notNull(),
+    checkpointId: text("checkpoint_id").notNull(),
+    descriptor: text("descriptor").notNull(),
+    localDescriptor: text("local_descriptor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.deviceId, t.epochId, t.checkpointId] }),
+    check(
+      "local_recovery_run_archives_identity",
+      sql`length(trim(${t.workspaceId})) BETWEEN 1 AND 1000 AND instr(${t.workspaceId},char(0))=0 AND length(trim(${t.deviceId})) BETWEEN 1 AND 1000 AND instr(${t.deviceId},char(0))=0 AND length(trim(${t.epochId})) BETWEEN 1 AND 1000 AND instr(${t.epochId},char(0))=0 AND length(trim(${t.checkpointId})) BETWEEN 1 AND 1000 AND instr(${t.checkpointId},char(0))=0`,
+    ),
+    check(
+      "local_recovery_run_archives_descriptor",
+      sql`json_valid(${t.descriptor}) AND json_type(${t.descriptor},'$.version') IS 'integer' AND json_extract(${t.descriptor},'$.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.checkpoint.version') IS 1 AND json_type(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.version') IS 'integer' AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.version') IS 1 AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.checkpoint.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.checkpoint.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.checkpoint.identity.epochId') IS ${t.epochId} AND json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.checkpoint.identity.checkpointId') IS ${t.checkpointId}`,
+    ),
+    check(
+      "local_recovery_run_archives_local_descriptor",
+      sql`json_valid(${t.localDescriptor}) AND json_type(${t.localDescriptor},'$.version') IS 'integer' AND json_extract(${t.localDescriptor},'$.version') IS 1 AND json_extract(${t.localDescriptor},'$.identity.workspaceId') IS ${t.workspaceId} AND json_extract(${t.localDescriptor},'$.identity.deviceId') IS ${t.deviceId} AND json_extract(${t.localDescriptor},'$.identity.epochId') IS ${t.epochId} AND json_extract(${t.localDescriptor},'$.identity.checkpointId') IS ${t.checkpointId} AND json_extract(${t.localDescriptor},'$.identity.schemaId') IS json_extract(${t.descriptor},'$.checkpoint.checkpoint.checkpoint.checkpoint.identity.schemaId')`,
+    ),
+  ],
 );
 
 export const cardTable = sqliteTable(

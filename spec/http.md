@@ -481,7 +481,15 @@ or configure an external `taskspace.defaultDir` or `taskspace.namespacePaths` en
 | 400    | Parent symlink points outside the workspace or has no target               |
 | 404    | Unknown namespace                                                          |
 | 409    | Directory already exists or target is inside another taskspace             |
+| 500    | Claim confirmation or compensation needs recovery. Run `kozane doctor` before creating again |
 | 503    | No workspace                                                               |
+
+Confirmation requires exact intended marker bytes through a path without symbolic
+links and unchanged shared creation fields. Changed confirmation evidence retains
+the directory and pending claim without publishing an attachment. Failed directory
+creation removes the new shared record only while its original fields, journal
+evidence and absence of local metadata and linked cards still match. See
+[local filesystem operation records](../docs/local-file-operations.md).
 
 ### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]`
 
@@ -503,6 +511,32 @@ a former namespace folder also change only their label after a namespace rename.
 Return 400 for an invalid name, 404 for a taskspace not on this board, and 409 when the new
 directory name is taken.
 
+Managed moves verify the final shared record, attachment and directory evidence
+after confirmation triggers finish. Failed publication returns 500 with a recovery
+message, restores prior database state and keeps the completed disk move pending.
+Run `kozane doctor` before repeating the change.
+
+Local observations retain their exact SQL values. Directory nesting checks do not
+read shared or local timestamps from other taskspaces. Database context and
+routing are captured before waiting for other taskspace changes.
+
+### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]/label`
+
+Change the shared label without moving a directory. Body requires exactly
+`{ name }` with a non-empty trimmed name. Return `{ id, name, path, pathKind }`.
+Preserve creation time, the local attachment and local observation time. Advance
+the shared update time only when the label changes. No workspace or directory
+configuration is required.
+
+The reply reads only identity and attachment fields. Local observation values
+remain unchanged without JavaScript number conversion. The request is copied
+before waiting for other taskspace changes.
+
+The taskspace must be visible in the requested namespace. Unplaced taskspaces are
+visible in every existing namespace. Return 400 for invalid input and 404 for an
+unknown namespace or a taskspace outside this board. A failed write or reply read
+rolls back the label change.
+
 ### `DELETE /[namespaceId]/api/taskspaces/[taskspaceId]`
 
 Delete a taskspace. A managed directory, as for PATCH, is deleted with everything in it.
@@ -510,6 +544,15 @@ Other directories stay on disk with a `kept` result. This also applies to symlin
 files, and directories holding another taskspace. Directory contents are deleted before the
 `.taskspace.json` marker so a failure preserves the record and allows a retry.
 Cards linked to the taskspace keep their text and lose the link.
+
+Retained local observations preserve their exact SQL values. Directory nesting
+checks read only identities and paths. Database context and routing are captured
+before waiting for other taskspace changes.
+
+Managed removal verifies that the shared identity and card links are absent and
+the local metadata is retained after confirmation triggers finish. Changed
+publication returns 500 with a recovery message and rolls back database changes.
+Completed deletion stays on disk and its tracking record remains pending.
 
 Return `{ ok: true, directory }`, where `directory` is `deleted`, `missing`, or `kept`.
 Return 404 for a taskspace not on this board, and 409 when the directory at a managed path
@@ -528,6 +571,17 @@ past 500 entries. Taskspaces must be visible on this namespace's board.
 All taskspace file routes check containment before and after path resolution.
 Return 400 for traversal, 403 for unreadable paths, 404 for unknown namespace,
 taskspace, or directory, and 503 without a workspace.
+
+File mutations capture database context, namespace and taskspace IDs, and mutation
+fields before waiting for earlier taskspace changes. The directory is resolved
+when queued work starts, so a preceding move applies to the original taskspace.
+Save intent retains the requested content hash and read signature.
+
+File mutations recheck visibility, the current attachment and the recorded disk
+outcome after confirmation triggers finish. Failed verification returns 500 with
+a recovery message. Completed disk work and newer file edits stay in place, and
+the operation remains pending. Run `kozane doctor` before repeating the change.
+See [local filesystem operation records](../docs/local-file-operations.md).
 
 ### `POST /[namespaceId]/api/taskspaces/[taskspaceId]/files`
 
@@ -608,20 +662,47 @@ decoding pixels. Invalid files return 400.
 
 Returns `{ "url": "/api/images/<uuid>.<extension>" }` with status 200.
 Files are stored in the active workspace under `.kozane/assets/images`.
+The host records a local staging pin before publishing a filename and verifies
+installed bytes before returning the URL. Card creation or update completes the
+installed pin in the same transaction as the reference. Failed writes retain it.
 A missing workspace or a storage failure returns 500. Storage failures use a generic message.
+
+Reservation and installation verify their final receipts after database triggers.
+Installation rechecks published bytes, safe directories and temporary-file absence
+before returning a URL. A failure after file publication retains the pending pin
+and current disk state. Card writes verify the complete pin-transfer batch and
+preserve other unfinished pins. Changed completion rolls back the card write and
+pin changes together.
 
 ### Storage and deletion
 
 Uploads and CLI card creation trigger maintenance at most once per hour per
 workspace in each process. Memory sessions preserve workspace image files.
 
-Maintenance moves images with no card reference to
+Maintenance moves images with no card reference or unfinished upload pin to
 `.kozane/assets/images/.retained` after 24 hours. Archived images remain readable
 at their original URLs. Maintenance does not permanently delete archives.
 
+Archive publication never replaces an existing entry. Conflicting entries and
+unsafe paths remain available for manual review. Matching interrupted hard links
+can finish without copying or replacing image bytes.
+
 Deleting a card through the card endpoints or CLI removes its image from both
 directories when the last card reference is deleted. CLI namespace deletion uses
-the same cleanup. The database deletion commits before file removal.
+the same cleanup. The database deletion commits before file removal. Unfinished
+upload pins prevent removal even when no card refers to the file. Installation,
+pin transfer and cleanup share the database writer lock. Upload pins have no
+automatic expiry. The [image recovery commands](cli.md#kozane-image-uploads)
+preview verification and explicit release of reviewed upload pins. Abandonment
+leaves files and card references unchanged. Unreferenced abandoned temporary
+files become eligible for normal cleanup after 24 hours.
+Deletion requests are synced before the card transaction commits. Cleanup checks
+managed directories and requires an empty regular request. It acknowledges the
+original request only after file removals and supported directory syncs finish.
+Unsafe or replaced requests remain in place.
+Pending and retained manifest owners also protect their images. Releasing an
+upload pin does not release independent history or recovery ownership. Cleanup
+refuses malformed active manifests before changing files.
 
 Failed file removals are recorded in `.kozane/assets/images/.pending-delete`.
 Subsequent deletions and maintenance retry them. Maintenance failures do not fail

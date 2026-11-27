@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "crypto";
+import { sql } from "drizzle-orm";
 import { tmpdir } from "os";
 import { POST } from "./+server.js";
 import { addNamespace } from "$db/api/namespace.js";
@@ -11,7 +12,7 @@ import { createTestDB } from "../../../../test-utils/db.js";
 import type { DB } from "$db/tx.js";
 import { TASKSPACE_MARKER_FILE } from "../../../../lib/taskspace-marker.js";
 import { _resetWorkspaceRootForTest } from "$db/internal/config.js";
-import { namespaceTable } from "$db/schema.js";
+import { namespaceTable, localFileOperationTable } from "$db/schema.js";
 import { shortIdKey } from "$lib/short-id-key.js";
 
 function jsonRequest(body: unknown): Request {
@@ -325,5 +326,24 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
       "not a dir",
     );
     expect(await getAllTaskspaces({ db })).toHaveLength(0);
+  });
+
+  it("directs callers to recovery if failed creation cannot remove its shared identity", async () => {
+    mkdirSync(join(tmpRoot, "taskspaces", "Test-Namespace", "blocked"), { recursive: true });
+    writeFileSync(join(tmpRoot, "taskspaces", "Test-Namespace", "blocked", "user.txt"), "Keep");
+    await db.run(sql`CREATE TRIGGER reject_compensation BEFORE DELETE ON taskspace
+      BEGIN SELECT RAISE(ABORT,'compensation refused'); END`);
+    await expectHttpRejection(
+      POST(event(db, namespaceId, jsonRequest({ name: "blocked", scopeId }))),
+      500,
+      "Directory creation needs recovery. Run 'kozane doctor' before creating it again.",
+    );
+    expect(await getAllTaskspaces({ db })).toMatchObject([{ name: "blocked", path: null }]);
+    expect(await db.select().from(localFileOperationTable)).toMatchObject([
+      { state: "pending", error: null },
+    ]);
+    expect(
+      readFileSync(join(tmpRoot, "taskspaces", "Test-Namespace", "blocked", "user.txt"), "utf8"),
+    ).toBe("Keep");
   });
 });

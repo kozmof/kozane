@@ -13,3 +13,5 @@ export const updateNamespaceName: typeof records.namespace.updateNamespaceName =
   records.namespace.updateNamespaceName;
 
 export const deleteNamespaceInTx = records.namespace.deleteNamespaceInTx;
+export const createNamespaceInTx = records.namespace.createNamespaceInTx;
+export const setDefaultNamespaceInTx = records.namespace.setDefaultNamespaceInTx;

@@ -3,6 +3,10 @@ import { existsSync, accessSync, constants } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { DEFAULT_TASKSPACE_DIR, NAME_MAX } from "../../../lib/constants.js";
 import { openDb } from "../../../db/client.js";
+import { pendingLocalClaims } from "../../../lib/server/local-file-operations.js";
+import { pendingTaskspaceFileOperations } from "../../../lib/server/taskspace-file-operations.js";
+import { pendingTaskspaceDirectoryOperations } from "../../../lib/server/taskspace-directory-operations.js";
+import { pendingImageUploads } from "../../../lib/server/image-upload-recovery.js";
 import { getAllNamespaces } from "../../../db/api/namespace.js";
 import type { DB } from "../../../db/tx.js";
 import { errorMessage } from "../../../lib/error-message.js";
@@ -141,6 +145,82 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
 
   // Check timestamps only after migrations are current. Older schemas may lack the columns,
   // and the migration check already reports that problem.
+  if (dbOk && migrationOk) {
+    let complete = false;
+    let detail: string | undefined;
+    try {
+      const connection = await openDb(workspaceDbUrl);
+      try {
+        const pending = await pendingLocalClaims(connection.db, root);
+        complete = pending.total === 0;
+        if (!complete)
+          detail = `${plural(pending.total, "pending directory claim")}: ${pending.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}; inspect with kozane taskspace recover <operationId>; --fix does not retry claims`;
+      } finally {
+        connection.close();
+      }
+    } catch (error) {
+      detail = errorMessage(error);
+    }
+    checks.push(check("Local directory claims complete", complete, detail));
+  }
+
+  if (dbOk && migrationOk) {
+    let complete = false;
+    let detail: string | undefined;
+    try {
+      const connection = await openDb(workspaceDbUrl);
+      try {
+        const pending = await pendingTaskspaceFileOperations(connection.db, root);
+        complete = pending.total === 0;
+        if (!complete)
+          detail = `${plural(pending.total, "pending file operation")}: ${pending.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}; inspect with kozane taskspace recover <operationId>; --fix does not retry file operations`;
+      } finally {
+        connection.close();
+      }
+    } catch (error) {
+      detail = errorMessage(error);
+    }
+    checks.push(check("Taskspace file operations complete", complete, detail));
+  }
+
+  if (dbOk && migrationOk) {
+    let complete = false;
+    let detail: string | undefined;
+    try {
+      const connection = await openDb(workspaceDbUrl);
+      try {
+        const pending = await pendingTaskspaceDirectoryOperations(connection.db, root);
+        complete = pending.total === 0;
+        if (!complete)
+          detail = `${plural(pending.total, "pending directory operation")}: ${pending.named.map(({ id, observation }) => `${id} (${observation})`).join(", ")}; inspect with kozane taskspace recover <operationId>; --fix does not retry directory operations`;
+      } finally {
+        connection.close();
+      }
+    } catch (error) {
+      detail = errorMessage(error);
+    }
+    checks.push(check("Taskspace directory operations complete", complete, detail));
+  }
+
+  if (dbOk && migrationOk) {
+    let complete = false;
+    let detail: string | undefined;
+    try {
+      const connection = await openDb(workspaceDbUrl);
+      try {
+        const pending = await pendingImageUploads(connection.db, root);
+        complete = pending.total === 0;
+        if (!complete)
+          detail = `${plural(pending.total, "unfinished image upload")}: ${pending.named.map(({ filename, state, evidence }) => `${filename} (${state}, ${evidence.published}; temporary ${evidence.temporary})`).join(", ")}; inspect with kozane image recover <filename>; --fix does not retry uploads`;
+      } finally {
+        connection.close();
+      }
+    } catch (error) {
+      detail = errorMessage(error);
+    }
+    checks.push(check("Image uploads resolved", complete, detail));
+  }
+
   if (dbOk && migrationOk) {
     let stampOk = false;
     let detail: string | undefined;
@@ -363,8 +443,9 @@ function namespacePathsCheck(keys: readonly string[], namespaces: readonly { id:
   );
 }
 
-function printLayoutFix({ config, moved, failed }: LayoutResult): void {
+function printLayoutFix({ config, moved, failed, blocked }: LayoutResult): void {
   console.log("Taskspace layout:");
+  if (blocked) console.log(`  ! ${blocked}`);
   if (config === "updated") console.log(`  set taskspace.defaultDir to "${DEFAULT_TASKSPACE_DIR}"`);
   if (config === "kept")
     console.log('  kept "defaultDir": "." until every directory has moved; run --fix again');

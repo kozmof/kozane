@@ -21,3 +21,19 @@ export type TaskspaceMarker = {
    */
   ownsDirectory?: true;
 };
+
+/** Exact bytes used by directory claims and their durable content hashes. */
+export function taskspaceMarkerText(
+  taskspaceId: string,
+  namespaceId: string,
+  ownsDirectory: boolean,
+): string {
+  const marker: TaskspaceMarker = {
+    kind: TASKSPACE_MARKER_KIND,
+    version: TASKSPACE_MARKER_VERSION,
+    taskspaceId,
+    namespaceId,
+    ...(ownsDirectory && { ownsDirectory: true }),
+  };
+  return JSON.stringify(marker, null, 2) + "\n";
+}

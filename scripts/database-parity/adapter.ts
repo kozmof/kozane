@@ -1,11 +1,16 @@
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import * as schema from "@kozane/core/schema";
-import { createDatabaseAdapter, type DatabaseHandle } from "@kozane/core/database";
+import {
+  configureActionConnection,
+  verifyActionConnection,
+  createDatabaseAdapter,
+  type DatabaseHandle,
+} from "@kozane/core/database";
 import { applyMigrations } from "@kozane/core/migrations";
 
 export type Execute = (sql: string, args?: unknown[]) => Promise<unknown[][]>;
 export async function createWasmDatabase(execute: Execute) {
-  await execute("PRAGMA foreign_keys=ON");
+  await configureActionConnection(execute);
   const handle = drizzle(
     async (sql, args, method) => {
       const rows = await execute(sql, args);
@@ -36,6 +41,7 @@ export async function createWasmDatabase(execute: Execute) {
         });
       } finally {
         await execute("PRAGMA foreign_keys=ON");
+        await verifyActionConnection(execute);
       }
     },
   });

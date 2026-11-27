@@ -17,3 +17,10 @@ export type ScopeAddMembersInput = service.ScopeAddMembersInput;
 export type ScopeRemoveMembersInput = service.ScopeRemoveMembersInput;
 export type ScopeCreateAreaInput = service.ScopeCreateAreaInput;
 export type ScopeUpdateAreaInput = service.ScopeUpdateAreaInput;
+
+export const createInTx: typeof service.createInTx = service.createInTx;
+export const renameInTx: typeof service.renameInTx = service.renameInTx;
+export const createAreaInTx: typeof service.createAreaInTx = service.createAreaInTx;
+export const updateAreaInTx: typeof service.updateAreaInTx = service.updateAreaInTx;
+export const removeAreaInTx: typeof service.removeAreaInTx = service.removeAreaInTx;
+export const removeInTx = service.removeInTx;

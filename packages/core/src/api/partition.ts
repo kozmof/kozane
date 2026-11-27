@@ -1,3 +1,4 @@
+import { boundEntityId } from "../actions/allocations.js";
 import { partitionTable, cardTable } from "../schema.js";
 import { and, asc, count, eq } from "drizzle-orm";
 import type {
@@ -77,7 +78,7 @@ export async function addPartition({
   assertNameWithinLimit(name, "Partition name");
   const [row] = await db
     .insert(partitionTable)
-    .values({ namespaceId, name, isDefault })
+    .values({ id: boundEntityId(db, "partition"), namespaceId, name, isDefault })
     .returning({ id: partitionTable.id });
   return row.id;
 }

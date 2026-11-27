@@ -18,6 +18,7 @@ import {
 } from "./lib/server/security";
 import { authenticateRequest } from "./lib/server/request-auth";
 import { LOGIN_PATH } from "./lib/server/login";
+import { reportPendingLocalClaims } from "./lib/server/local-claim-startup";
 
 // Set a loopback fallback for direct use of adapter-node's generated entry. This depends on
 // hooks loading before that entry reads HOST.
@@ -244,6 +245,7 @@ const handleRequest: Handle = async ({ event, resolve }) => {
     console.error("[kozane] Failed to open database:", e);
     throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
   }
+  if (root) await reportPendingLocalClaims(event.locals.db, root);
   return applySecurityHeaders(await resolve(event));
 };
 

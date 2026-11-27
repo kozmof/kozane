@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Client, InStatement, Transaction } from "@libsql/client";
+import { configureActionConnection } from "../database.js";
+import { classifyLibsqlFailure } from "./classify-failure.js";
 export interface CommitRevision {
   readonly nonce: string;
   revision: number;
@@ -41,13 +43,39 @@ export function trackedClient(client: Client, state: CommitRevision): Client {
         };
       if (key === "transaction")
         return async (mode?: "write" | "read" | "deferred") => {
-          const transaction = await target.transaction(mode);
+          let transaction: Transaction;
+          try {
+            transaction = await target.transaction(mode);
+          } catch (cause) {
+            if (target.protocol === "file" && classifyLibsqlFailure(cause).kind === "transient") {
+              // A failed prepared BEGIN can leave a busy VM on the idle libsql connection.
+              // Replace that connection, without entering or retrying the application callback.
+              try {
+                await target.reconnect();
+                await configureActionConnection(
+                  async (statement) => (await target.execute(statement)).rows,
+                );
+              } catch (reconnectError) {
+                target.close();
+                throw new AggregateError(
+                  [cause, reconnectError],
+                  "Transaction start and connection recovery failed",
+                  { cause: reconnectError },
+                );
+              }
+            }
+            throw cause;
+          }
           let committed = false;
           return new Proxy(transaction, {
             get(tx, prop) {
               if (prop === "commit")
                 return async () => {
-                  await tx.commit();
+                  // Local libsql's prepared COMMIT retains a lock after a deferred
+                  // constraint failure, even after rollback. Its exec path releases
+                  // the failed statement so the next transaction can commit.
+                  if (target.protocol === "file") await tx.executeMultiple("COMMIT");
+                  else await tx.commit();
                   if (!committed && mode !== "read" && mode !== "deferred") {
                     committed = true;
                     state.revision++;

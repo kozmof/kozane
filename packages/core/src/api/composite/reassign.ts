@@ -1,5 +1,5 @@
 /** Deleting a partition or layer after moving its cards to the default one. */
-import { withTx, type DB } from "../../database.js";
+import { withTx, type DB, type Tx } from "../../database.js";
 import { reassignPartitionCards, reassignCardsToLayerInTx, type CardStacking } from "../card.js";
 import { deletePartitionCascadingInTx, getPartition, getDefaultPartition } from "../partition.js";
 import { deleteLayerCascadingInTx, getLayer, getDefaultLayer } from "../layer.js";
@@ -15,28 +15,33 @@ type DeletePartitionWithReassign = { db: DB; namespaceId: string; partitionId: s
  */
 export async function deletePartitionWithReassign({
   db,
+  ...fields
+}: DeletePartitionWithReassign): Promise<{ defaultPartitionId: string }> {
+  return withTx(db, (tx) => deletePartitionWithReassignInTx({ ...fields, db: tx }));
+}
+
+export async function deletePartitionWithReassignInTx({
+  db: tx,
   namespaceId,
   partitionId,
-}: DeletePartitionWithReassign): Promise<{ defaultPartitionId: string }> {
-  return withTx(db, async (tx) => {
-    const partition = await getPartition({ db: tx, namespaceId, partitionId });
-    if (!partition)
-      throw new NotFoundError(`Partition namespaceId=${namespaceId} partitionId=${partitionId}`);
-    if (partition.isDefault) throw new DefaultPartitionError();
+}: Omit<DeletePartitionWithReassign, "db"> & { db: Tx }): Promise<{ defaultPartitionId: string }> {
+  const partition = await getPartition({ db: tx, namespaceId, partitionId });
+  if (!partition)
+    throw new NotFoundError(`Partition namespaceId=${namespaceId} partitionId=${partitionId}`);
+  if (partition.isDefault) throw new DefaultPartitionError();
 
-    const defaultPartition = await getDefaultPartition({ db: tx, namespaceId });
-    if (!defaultPartition) throw new Error("No default partition found for this namespace");
+  const defaultPartition = await getDefaultPartition({ db: tx, namespaceId });
+  if (!defaultPartition) throw new Error("No default partition found for this namespace");
 
-    await reassignPartitionCards({
-      db: tx,
-      namespaceId,
-      fromPartitionId: partitionId,
-      toPartitionId: defaultPartition.id,
-    });
-    await deletePartitionCascadingInTx({ db: tx, namespaceId, partitionId });
-
-    return { defaultPartitionId: defaultPartition.id };
+  await reassignPartitionCards({
+    db: tx,
+    namespaceId,
+    fromPartitionId: partitionId,
+    toPartitionId: defaultPartition.id,
   });
+  await deletePartitionCascadingInTx({ db: tx, namespaceId, partitionId });
+
+  return { defaultPartitionId: defaultPartition.id };
 }
 
 type DeleteLayerWithReassign = { db: DB; namespaceId: string; layerId: string };
@@ -52,30 +57,38 @@ type DeleteLayerWithReassign = { db: DB; namespaceId: string; layerId: string };
  */
 export async function deleteLayerWithReassign({
   db,
+  ...fields
+}: DeleteLayerWithReassign): Promise<{ defaultLayerId: string; stacking: CardStacking[] }> {
+  return withTx(db, (tx) => deleteLayerWithReassignInTx({ ...fields, db: tx }));
+}
+
+export async function deleteLayerWithReassignInTx({
+  db: tx,
   namespaceId,
   layerId,
-}: DeleteLayerWithReassign): Promise<{ defaultLayerId: string; stacking: CardStacking[] }> {
-  return withTx(db, async (tx) => {
-    const layer = await getLayer({ db: tx, namespaceId, layerId });
-    if (!layer) throw new NotFoundError(`Layer namespaceId=${namespaceId} layerId=${layerId}`);
-    if (layer.isDefault) throw new DefaultLayerError();
+}: Omit<DeleteLayerWithReassign, "db"> & { db: Tx }): Promise<{
+  defaultLayerId: string;
+  stacking: CardStacking[];
+}> {
+  const layer = await getLayer({ db: tx, namespaceId, layerId });
+  if (!layer) throw new NotFoundError(`Layer namespaceId=${namespaceId} layerId=${layerId}`);
+  if (layer.isDefault) throw new DefaultLayerError();
 
-    const defaultLayer = await getDefaultLayer({ db: tx, namespaceId });
-    if (!defaultLayer) throw new Error("No default layer found for this namespace");
+  const defaultLayer = await getDefaultLayer({ db: tx, namespaceId });
+  if (!defaultLayer) throw new Error("No default layer found for this namespace");
 
-    const cardIds = (
-      await tx.select({ id: cardTable.id }).from(cardTable).where(eq(cardTable.layerId, layerId))
-    ).map(({ id }) => id);
-    const moved = await reassignCardsToLayerInTx({
-      db: tx,
-      namespaceId,
-      cardIds,
-      layerId: defaultLayer.id,
-    });
-    // Both layers and every card on them belong to this namespace, so a refusal is a bug.
-    if (!moved.ok) throw new Error(`reassignCardsToLayerInTx refused: ${moved.reason}`);
-    await deleteLayerCascadingInTx({ db: tx, namespaceId, layerId });
-
-    return { defaultLayerId: defaultLayer.id, stacking: moved.stacking };
+  const cardIds = (
+    await tx.select({ id: cardTable.id }).from(cardTable).where(eq(cardTable.layerId, layerId))
+  ).map(({ id }) => id);
+  const moved = await reassignCardsToLayerInTx({
+    db: tx,
+    namespaceId,
+    cardIds,
+    layerId: defaultLayer.id,
   });
+  // Both layers and every card on them belong to this namespace, so a refusal is a bug.
+  if (!moved.ok) throw new Error(`reassignCardsToLayerInTx refused: ${moved.reason}`);
+  await deleteLayerCascadingInTx({ db: tx, namespaceId, layerId });
+
+  return { defaultLayerId: defaultLayer.id, stacking: moved.stacking };
 }

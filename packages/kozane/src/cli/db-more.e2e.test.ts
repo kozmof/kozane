@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeServerState } from "../lib/server/runtime-state.js";
+import { UNDO_TASKSPACE_LOCAL_SQL } from "../test-utils/legacy-migrations.js";
 
 const cliEntry = resolve("packages/kozane/src/cli/index.ts");
 const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("tsx");
@@ -51,6 +52,7 @@ function outputId(output: string): string {
  * names migration 0014 expects to remove.
  */
 const ROLLBACK_TO_0004 = [
+  ...UNDO_TASKSPACE_LOCAL_SQL,
   "ALTER TABLE `namespace` RENAME TO `project`",
   "ALTER TABLE `partition` RENAME TO `bundle`",
   "ALTER TABLE `bundle` RENAME COLUMN `namespace_id` TO `project_id`",

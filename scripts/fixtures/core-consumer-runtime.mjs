@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import * as core from "@kozane/core";
+import * as recovery from "@kozane/core/recovery";
 import {
   ValidationError,
   domainErrorCode,
@@ -35,11 +37,1042 @@ import {
 } from "@kozane/core/migrations";
 import { DatabaseSync } from "node:sqlite";
 assert.equal(ValidationError, services.ValidationError);
+assert.equal(recovery.LocalRecoveryError, core.LocalRecoveryError);
+assert.equal(recovery.parseLocalRecoveryCheckpoint, core.parseLocalRecoveryCheckpoint);
+assert.equal(typeof recovery.validateStoredLocalRecoveryCheckpoint, "function");
+assert.equal(typeof recovery.validateSharedRecoveryProjection, "function");
+assert.equal(recovery.SHARED_RECOVERY_PROJECTION_VERSION, 1);
+const sharedProjection = recovery.parseSharedRecoveryProjection({
+  version: 1,
+  rowEncodingVersion: 1,
+  schemaId: migrations.at(-1).id,
+  tables: [
+    "namespace",
+    "partition",
+    "layer",
+    "scope",
+    "taskspace",
+    "inventory",
+    "card",
+    "glue",
+    "glue_rel",
+    "scope_rel",
+    "scope_area",
+    "warp",
+  ].map((name) => ({ name, rows: [] })),
+});
+assert.equal(sharedProjection.tables.length, 12);
+assert.ok(Object.isFrozen(sharedProjection.tables[0].rows));
+const sharedHistory = {
+  baseline: { id: "baseline", projection: sharedProjection },
+  effectSets: [{ id: "empty", effects: [] }],
+};
+const sharedIdentity = {
+  workspaceId: "workspace",
+  deviceId: "device",
+  epochId: "epoch",
+  checkpointId: "shared-checkpoint",
+  schemaId: migrations.at(-1).id,
+};
+const sharedSelection = { baselineId: "baseline", effectSets: [{ id: "empty", effectCount: 0 }] };
+const sharedDescription = await recovery.describeSharedRecoveryHistory(
+  sharedHistory,
+  sharedIdentity,
+  sharedSelection,
+);
+assert.equal(sharedDescription.checkpoint.version, recovery.SHARED_RECOVERY_CHECKPOINT_VERSION);
+assert.equal(sharedDescription.payload.version, recovery.SHARED_RECOVERY_HISTORY_VERSION);
+const emptyExecutionInvocation = {
+  id: "empty-root",
+  kind: "future.noop",
+  contractVersion: 99,
+  input: { text: "Preserved 🪁" },
+};
+const executionDescription = await recovery.describeSharedRecoveryExecutions({
+  checkpoint: sharedDescription.checkpoint,
+  sharedHistory: sharedDescription.payload,
+  selection: {
+    baselineId: "baseline",
+    effectSets: [{ id: "empty", rootId: "empty-root", executionCount: 1 }],
+  },
+  effectSets: [
+    {
+      id: "empty",
+      invocation: emptyExecutionInvocation,
+      generated: {},
+      executions: [{ ...emptyExecutionInvocation, parentId: null, executionOrd: 0, generated: {} }],
+      effects: [],
+    },
+  ],
+});
+assert.equal(executionDescription.payload.version, recovery.SHARED_RECOVERY_EXECUTIONS_VERSION);
+assert.equal(
+  executionDescription.checkpoint.version,
+  recovery.SHARED_RECOVERY_EXECUTION_CHECKPOINT_VERSION,
+);
+assert.equal(
+  executionDescription.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(executionDescription.payload), "utf8").digest("hex"),
+);
+assert.equal(
+  executionDescription.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(executionDescription.payload), "utf8"),
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryExecutionHistory(executionDescription.payload),
+  executionDescription.payload,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryExecutionCheckpoint(executionDescription.checkpoint),
+  executionDescription.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryExecutionCheckpoint(
+    executionDescription.payload,
+    executionDescription.checkpoint,
+    sharedIdentity,
+    sharedDescription.payload,
+  ),
+  executionDescription.payload,
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryExecutionCheckpoint(
+    executionDescription.payload,
+    { ...executionDescription.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    sharedDescription.payload,
+  ),
+  recovery.SharedRecoveryError,
+);
+const actionDescription = await recovery.describeSharedRecoveryActions({
+  checkpoint: executionDescription.checkpoint,
+  selection: { actionIds: ["empty-root"] },
+  actions: [
+    {
+      ...emptyExecutionInvocation,
+      rootId: "empty-root",
+      parentId: null,
+      generated: {},
+      seq: "9007199254740993",
+      hlc: "opaque:first-record",
+      deviceId: "first-record-device",
+      epochId: sharedIdentity.epochId,
+      schemaId: sharedIdentity.schemaId,
+    },
+  ],
+  executions: executionDescription.payload,
+  sharedHistory: sharedDescription.payload,
+});
+assert.equal(actionDescription.payload.version, recovery.SHARED_RECOVERY_ACTIONS_VERSION);
+assert.equal(
+  actionDescription.checkpoint.version,
+  recovery.SHARED_RECOVERY_ACTION_CHECKPOINT_VERSION,
+);
+assert.equal(actionDescription.payload.actions[0].seq, "9007199254740993");
+assert.equal(
+  actionDescription.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(actionDescription.payload), "utf8"),
+);
+assert.equal(
+  actionDescription.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(actionDescription.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryActionHistory(actionDescription.payload),
+  actionDescription.payload,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryActionCheckpoint(actionDescription.checkpoint),
+  actionDescription.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryActionCheckpoint(
+    actionDescription.payload,
+    actionDescription.checkpoint,
+    sharedIdentity,
+    executionDescription.payload,
+    sharedDescription.payload,
+  ),
+  actionDescription.payload,
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryActionCheckpoint(
+    actionDescription.payload,
+    { ...actionDescription.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    executionDescription.payload,
+    sharedDescription.payload,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(
+  recovery.sharedRecoveryActionAssetManifest(actionDescription.payload, {
+    version: 1,
+    entries: [],
+  }),
+  { version: 1, entries: [] },
+);
+const sharedHistoryImages = {
+  baseline: { id: "baseline", manifest: { version: 1, entries: [] } },
+  effectSets: [{ id: "empty", manifest: { version: 1, entries: [] } }],
+};
+const actionArchiveSources = {
+  originals: actionDescription.payload,
+  executions: executionDescription.payload,
+  sharedHistory: sharedDescription.payload,
+};
+const actionArchive = await recovery.describeSharedRecoveryActionArchive({
+  ...actionArchiveSources,
+  checkpoint: actionDescription.checkpoint,
+  selection: {
+    rootIds: ["empty-root", "unselected-root"],
+    actionIds: ["empty-root", "unselected-root"],
+  },
+  actions: [
+    ...actionDescription.payload.actions,
+    {
+      ...actionDescription.payload.actions[0],
+      id: "unselected-root",
+      rootId: "unselected-root",
+      kind: "future.unselected",
+      contractVersion: 77,
+      input: { text: "Archived 🪁" },
+      seq: "9223372036854775807",
+    },
+  ],
+});
+assert.equal(actionArchive.payload.version, recovery.SHARED_RECOVERY_ACTION_ARCHIVE_VERSION);
+assert.equal(
+  actionArchive.checkpoint.version,
+  recovery.SHARED_RECOVERY_ACTION_ARCHIVE_CHECKPOINT_VERSION,
+);
+assert.equal(
+  actionArchive.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(actionArchive.payload), "utf8"),
+);
+assert.equal(
+  actionArchive.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(actionArchive.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryActionArchive(actionArchive.payload),
+  actionArchive.payload,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryActionArchiveCheckpoint(actionArchive.checkpoint),
+  actionArchive.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryActionArchiveCheckpoint(
+    actionArchive.payload,
+    actionArchive.checkpoint,
+    sharedIdentity,
+    actionArchiveSources,
+  ),
+  actionArchive.payload,
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryActionArchiveCheckpoint(
+    actionArchive.payload,
+    { ...actionArchive.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    actionArchiveSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(
+  recovery.sharedRecoveryActionArchiveAssetManifest(actionArchive.payload, {
+    version: 1,
+    entries: [],
+  }),
+  { version: 1, entries: [] },
+);
+const retainedDescription = await recovery.describeSharedRecoveryRetainedHistory({
+  checkpoint: actionDescription.checkpoint,
+  selection: {
+    effectSets: [
+      {
+        id: "empty",
+        rootId: "empty-root",
+        source: "authoritative",
+        baselineId: "baseline",
+        effectCount: 0,
+        executionCount: 1,
+      },
+    ],
+  },
+  effectSets: [
+    {
+      id: "empty",
+      rootId: "empty-root",
+      source: "authoritative",
+      history: sharedDescription.payload,
+      executions: executionDescription.payload,
+    },
+  ],
+  originals: actionDescription.payload,
+  executions: executionDescription.payload,
+  sharedHistory: sharedDescription.payload,
+});
+assert.equal(
+  retainedDescription.payload.version,
+  recovery.SHARED_RECOVERY_RETAINED_HISTORY_VERSION,
+);
+assert.equal(
+  retainedDescription.checkpoint.version,
+  recovery.SHARED_RECOVERY_RETAINED_CHECKPOINT_VERSION,
+);
+assert.equal(
+  retainedDescription.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(retainedDescription.payload), "utf8"),
+);
+assert.equal(
+  retainedDescription.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(retainedDescription.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryRetainedHistory(retainedDescription.payload),
+  retainedDescription.payload,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryRetainedCheckpoint(retainedDescription.checkpoint),
+  retainedDescription.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryRetainedCheckpoint(
+    retainedDescription.payload,
+    retainedDescription.checkpoint,
+    sharedIdentity,
+    actionDescription.payload,
+    executionDescription.payload,
+    sharedDescription.payload,
+  ),
+  retainedDescription.payload,
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryRetainedCheckpoint(
+    retainedDescription.payload,
+    { ...retainedDescription.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    actionDescription.payload,
+    executionDescription.payload,
+    sharedDescription.payload,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(
+  recovery.sharedRecoveryRetainedAssetManifest(retainedDescription.payload, {
+    effectSets: [{ id: "empty", history: sharedHistoryImages }],
+  }),
+  { version: 1, entries: [] },
+);
+assert.equal(typeof recovery.validateSharedRecoveryRetainedHistory, "function");
+const archivedInvocation = {
+  id: "unselected-root",
+  kind: "future.unselected",
+  contractVersion: 77,
+  input: { text: "Archived 🪁" },
+};
+const archivedHistory = await recovery.describeSharedRecoveryHistory(
+  {
+    baseline: { id: "unselected-before", projection: sharedProjection },
+    effectSets: [{ id: "unselected-origin", effects: [] }],
+  },
+  sharedIdentity,
+  { baselineId: "unselected-before", effectSets: [{ id: "unselected-origin", effectCount: 0 }] },
+);
+const archivedExecutions = await recovery.describeSharedRecoveryExecutions({
+  checkpoint: archivedHistory.checkpoint,
+  sharedHistory: archivedHistory.payload,
+  selection: {
+    baselineId: "unselected-before",
+    effectSets: [{ id: "unselected-origin", rootId: "unselected-root", executionCount: 1 }],
+  },
+  effectSets: [
+    {
+      id: "unselected-origin",
+      invocation: archivedInvocation,
+      generated: {},
+      executions: [{ ...archivedInvocation, parentId: null, executionOrd: 0, generated: {} }],
+      effects: [],
+    },
+  ],
+});
+const runArchiveSources = { ...actionArchiveSources, actionArchive: actionArchive.payload };
+const runArchive = await recovery.describeSharedRecoveryRunArchive({
+  ...runArchiveSources,
+  checkpoint: actionArchive.checkpoint,
+  selection: {
+    effectSets: [
+      {
+        id: "unselected-origin",
+        rootId: "unselected-root",
+        source: "origin",
+        baselineId: "unselected-before",
+        effectCount: 0,
+        executionCount: 1,
+      },
+      ...retainedDescription.payload.selection.effectSets,
+    ],
+  },
+  effectSets: [
+    {
+      id: "unselected-origin",
+      rootId: "unselected-root",
+      source: "origin",
+      history: archivedHistory.payload,
+      executions: archivedExecutions.payload,
+    },
+    ...retainedDescription.payload.effectSets,
+  ],
+});
+assert.equal(runArchive.payload.version, recovery.SHARED_RECOVERY_RUN_ARCHIVE_VERSION);
+assert.equal(
+  runArchive.checkpoint.version,
+  recovery.SHARED_RECOVERY_RUN_ARCHIVE_CHECKPOINT_VERSION,
+);
+assert.equal(
+  runArchive.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(runArchive.payload), "utf8"),
+);
+assert.equal(
+  runArchive.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(runArchive.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(recovery.parseSharedRecoveryRunArchive(runArchive.payload), runArchive.payload);
+assert.deepEqual(
+  recovery.parseSharedRecoveryRunArchiveCheckpoint(runArchive.checkpoint),
+  runArchive.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryRunArchiveCheckpoint(
+    runArchive.payload,
+    runArchive.checkpoint,
+    sharedIdentity,
+    runArchiveSources,
+  ),
+  runArchive.payload,
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryRunArchiveCheckpoint(
+    runArchive.payload,
+    { ...runArchive.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    runArchiveSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(
+  recovery.sharedRecoveryRunArchiveAssetManifest(runArchive.payload, {
+    effectSets: [
+      {
+        id: "unselected-origin",
+        history: {
+          baseline: { id: "unselected-before", manifest: { version: 1, entries: [] } },
+          effectSets: [{ id: "unselected-origin", manifest: { version: 1, entries: [] } }],
+        },
+      },
+      { id: "empty", history: sharedHistoryImages },
+    ],
+  }),
+  { version: 1, entries: [] },
+);
+assert.equal(typeof recovery.validateSharedRecoveryRunArchive, "function");
+for (const name of [
+  "parseRecoveryRetainedSelection",
+  "parseRecoveryRetainedSets",
+  "requireRecoveryRetainedSourceRelations",
+  "requireRecoveryRetainedRelations",
+  "requireRecoveryRetainedContents",
+  "validateRecoveryRetainedSets",
+  "recoveryRetainedAssetManifest",
+])
+  assert.equal(name in recovery, false);
+
+assert.deepEqual(
+  recovery.sharedRecoveryExecutionAssetManifest(executionDescription.payload, sharedHistoryImages),
+  { version: 1, entries: [] },
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryHistoryImages(sharedHistoryImages),
+  sharedHistoryImages,
+);
+assert.deepEqual(
+  recovery.sharedRecoveryAssetManifest(sharedDescription.payload, sharedHistoryImages),
+  { version: 1, entries: [] },
+);
+assert.throws(
+  () =>
+    recovery.sharedRecoveryAssetManifest(sharedDescription.payload, {
+      ...sharedHistoryImages,
+      effectSets: [],
+    }),
+  recovery.SharedRecoveryError,
+);
+const sharedLocalDescriptor = {
+  version: 1,
+  identity: sharedIdentity,
+  selection: {
+    baselineId: sharedSelection.baselineId,
+    effectSetIds: sharedSelection.effectSets.map(({ id }) => id),
+  },
+  byteLength: 697,
+  sha256: "a".repeat(64),
+};
+const assetLocal = await recovery.describeLocalRecoverySnapshot({
+  version: 1,
+  rowEncodingVersion: 1,
+  identity: sharedIdentity,
+  selection: sharedLocalDescriptor.selection,
+  tables: [
+    "taskspace_local",
+    "local_file_operation",
+    "local_image_upload",
+    "local_asset_manifest",
+    "local_recovery_checkpoint",
+    "local_recovery_shared_history",
+    "local_recovery_assets",
+    "local_recovery_executions",
+    "local_recovery_actions",
+    "local_recovery_retained_history",
+    "local_recovery_retained_assets",
+    "local_recovery_action_archives",
+    "local_recovery_run_archives",
+    "local_recovery_run_assets",
+  ].map((name) => ({ name, rows: [] })),
+});
+const assetSources = {
+  localSnapshot: assetLocal.snapshot,
+  sharedHistory: sharedDescription.payload,
+};
+assert.deepEqual(
+  recovery.parseSharedRecoveryActionArchiveCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(actionArchive.checkpoint),
+    JSON.stringify(assetLocal.checkpoint),
+  ),
+  { checkpoint: actionArchive.checkpoint, localCheckpoint: assetLocal.checkpoint },
+);
+for (const helper of [
+  recovery.rememberSharedRecoveryActionArchiveCheckpoint,
+  recovery.rememberSharedRecoveryActionArchiveCheckpointInTx,
+  recovery.readSharedRecoveryActionArchiveCheckpoint,
+  recovery.inspectSharedRecoveryActionArchiveCheckpoint,
+  recovery.requireStoredSharedRecoveryActionArchiveCheckpoint,
+])
+  assert.equal(typeof helper, "function");
+assert.deepEqual(
+  recovery.parseSharedRecoveryRunArchiveCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(runArchive.checkpoint),
+    JSON.stringify(assetLocal.checkpoint),
+  ),
+  { checkpoint: runArchive.checkpoint, localCheckpoint: assetLocal.checkpoint },
+);
+for (const helper of [
+  recovery.rememberSharedRecoveryRunArchiveCheckpoint,
+  recovery.rememberSharedRecoveryRunArchiveCheckpointInTx,
+  recovery.readSharedRecoveryRunArchiveCheckpoint,
+  recovery.inspectSharedRecoveryRunArchiveCheckpoint,
+  recovery.requireStoredSharedRecoveryRunArchiveCheckpoint,
+])
+  assert.equal(typeof helper, "function");
+const assets = await recovery.describeRecoveryAssets({
+  ...assetSources,
+  binding: { checkpoint: sharedDescription.checkpoint, localCheckpoint: assetLocal.checkpoint },
+  history: sharedHistoryImages,
+});
+const retainedAssetSources = {
+  ...assetSources,
+  executions: executionDescription.payload,
+  originalActions: actionDescription.payload,
+  retainedHistory: retainedDescription.payload,
+  currentAssets: assets.payload,
+};
+const retainedAssets = await recovery.describeRetainedRecoveryAssets({
+  ...retainedAssetSources,
+  binding: { checkpoint: retainedDescription.checkpoint, localCheckpoint: assetLocal.checkpoint },
+  assetCheckpoint: assets.checkpoint,
+  history: { effectSets: [{ id: "empty", history: sharedHistoryImages }] },
+  originalImages: { version: 1, entries: [] },
+});
+assert.equal(retainedAssets.payload.version, recovery.RETAINED_RECOVERY_ASSET_PAYLOAD_VERSION);
+assert.equal(
+  retainedAssets.checkpoint.version,
+  recovery.RETAINED_RECOVERY_ASSET_CHECKPOINT_VERSION,
+);
+assert.equal(
+  retainedAssets.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(retainedAssets.payload), "utf8"),
+);
+assert.equal(
+  retainedAssets.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(retainedAssets.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryRetainedImages(retainedAssets.payload.history),
+  retainedAssets.payload.history,
+);
+assert.deepEqual(
+  recovery.parseRetainedRecoveryAssetPayload(retainedAssets.payload),
+  retainedAssets.payload,
+);
+assert.deepEqual(
+  recovery.parseRetainedRecoveryAssetCheckpoint(retainedAssets.checkpoint),
+  retainedAssets.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireRetainedRecoveryAssetCheckpoint(
+    retainedAssets.payload,
+    retainedAssets.checkpoint,
+    sharedIdentity,
+    retainedAssetSources,
+  ),
+  retainedAssets.payload,
+);
+await assert.rejects(
+  recovery.requireRetainedRecoveryAssetCheckpoint(
+    retainedAssets.payload,
+    { ...retainedAssets.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    retainedAssetSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(retainedAssets.payload.manifest, { version: 1, entries: [] });
+const runAssetSources = {
+  ...assetSources,
+  executions: executionDescription.payload,
+  originalActions: actionDescription.payload,
+  actionArchive: actionArchive.payload,
+  runArchive: runArchive.payload,
+  currentAssets: assets.payload,
+};
+const runAssetImages = {
+  effectSets: [
+    {
+      id: "unselected-origin",
+      history: {
+        baseline: { id: "unselected-before", manifest: { version: 1, entries: [] } },
+        effectSets: [{ id: "unselected-origin", manifest: { version: 1, entries: [] } }],
+      },
+    },
+    { id: "empty", history: sharedHistoryImages },
+  ],
+};
+const runAssets = await recovery.describeRunArchiveAssets({
+  ...runAssetSources,
+  binding: { checkpoint: runArchive.checkpoint, localCheckpoint: assetLocal.checkpoint },
+  assetCheckpoint: assets.checkpoint,
+  history: runAssetImages,
+  originalImages: { version: 1, entries: [] },
+});
+assert.equal(runAssets.payload.version, recovery.RUN_ARCHIVE_ASSET_PAYLOAD_VERSION);
+assert.equal(runAssets.checkpoint.version, recovery.RUN_ARCHIVE_ASSET_CHECKPOINT_VERSION);
+assert.equal(
+  runAssets.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(runAssets.payload), "utf8"),
+);
+assert.equal(
+  runAssets.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(runAssets.payload), "utf8").digest("hex"),
+);
+assert.deepEqual(recovery.parseRunArchiveAssetPayload(runAssets.payload), runAssets.payload);
+assert.deepEqual(
+  recovery.parseRunArchiveAssetCheckpoint(runAssets.checkpoint),
+  runAssets.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireRunArchiveAssetCheckpoint(
+    runAssets.payload,
+    runAssets.checkpoint,
+    sharedIdentity,
+    runAssetSources,
+  ),
+  runAssets.payload,
+);
+await assert.rejects(
+  recovery.requireRunArchiveAssetCheckpoint(
+    runAssets.payload,
+    { ...runAssets.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    runAssetSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(runAssets.payload.manifest, { version: 1, entries: [] });
+const bundleSources = { ...runAssetSources, runAssets: runAssets.payload };
+const bundleIndex = await recovery.describeRecoveryBundleIndex(runAssets.checkpoint, bundleSources);
+assert.equal(bundleIndex.index.version, recovery.RECOVERY_BUNDLE_INDEX_VERSION);
+assert.equal(bundleIndex.checkpoint.version, recovery.RECOVERY_BUNDLE_CHECKPOINT_VERSION);
+assert.equal(bundleIndex.index.payloads.length, 8);
+assert.deepEqual(
+  bundleIndex.index.payloads.map(({ kind }) => kind),
+  [
+    "local-snapshot",
+    "shared-history",
+    "executions",
+    "original-actions",
+    "action-archive",
+    "run-archive",
+    "current-assets",
+    "run-assets",
+  ],
+);
+assert.deepEqual(bundleIndex.index.manifest, runAssets.payload.manifest);
+assert.equal(
+  bundleIndex.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(bundleIndex.index), "utf8"),
+);
+assert.equal(
+  bundleIndex.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(bundleIndex.index), "utf8").digest("hex"),
+);
+assert.deepEqual(recovery.parseRecoveryBundleIndex(bundleIndex.index), bundleIndex.index);
+assert.deepEqual(
+  recovery.parseRecoveryBundleCheckpoint(bundleIndex.checkpoint),
+  bundleIndex.checkpoint,
+);
+assert.deepEqual(
+  await recovery.requireRecoveryBundleCheckpoint(
+    bundleIndex.index,
+    bundleIndex.checkpoint,
+    sharedIdentity,
+    bundleSources,
+  ),
+  bundleIndex.index,
+);
+await assert.rejects(
+  recovery.requireRecoveryBundleCheckpoint(
+    bundleIndex.index,
+    { ...bundleIndex.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    bundleSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.equal("parseRecoveryBundleSources" in recovery, false);
+assert.equal(typeof recovery.captureRecoveryCheckpoint, "function");
+assert.equal("readLocalRecoverySnapshot" in recovery, false);
+await assert.rejects(
+  recovery.captureRecoveryCheckpoint(
+    {},
+    { ...sharedIdentity, schemaId: "unsupported" },
+    async () => {
+      throw new Error("Unexpected history read");
+    },
+  ),
+  recovery.LocalRecoveryError,
+);
+assert.equal(typeof recovery.readRecoveryStagingDestination, "function");
+assert.equal(typeof recovery.inspectRecoveryStagingDestination, "function");
+assert.equal(typeof recovery.inspectPendingRecoveryFileOperations, "function");
+assert.equal(typeof recovery.readPendingRecoveryFileOperations, "function");
+const receivingIdentity = {
+  ...bundleIndex.checkpoint.runAssetCheckpoint.binding.localCheckpoint.identity,
+  deviceId: "receiving-device",
+};
+assert.deepEqual(
+  recovery.parseSharedOnlyRecoveryInstallationRecord(
+    JSON.stringify(bundleIndex.checkpoint),
+    JSON.stringify(receivingIdentity),
+  ),
+  { checkpoint: bundleIndex.checkpoint, destinationIdentity: receivingIdentity },
+);
+for (const helper of [
+  recovery.readSharedOnlyRecoveryInstallation,
+  recovery.inspectSharedOnlyRecoveryInstallation,
+  recovery.checkSharedOnlyRecoveryInstallation,
+  recovery.installSharedOnlyRecoverySnapshot,
+])
+  assert.equal(typeof helper, "function");
+assert.deepEqual(
+  recovery.parseSharedRecoveryInstallationRecord(JSON.stringify(bundleIndex.checkpoint)),
+  bundleIndex.checkpoint,
+);
+for (const name of [
+  recovery.readSharedRecoveryInstallation,
+  recovery.inspectSharedRecoveryInstallation,
+  recovery.checkSharedRecoveryInstallation,
+  recovery.installSharedRecoverySnapshot,
+])
+  assert.equal(typeof name, "function");
+assert.deepEqual(
+  recovery.parseLocalRecoveryInstallationRecord(JSON.stringify(bundleIndex.checkpoint)),
+  bundleIndex.checkpoint,
+);
+for (const helper of [
+  recovery.readLocalRecoveryInstallation,
+  recovery.inspectLocalRecoveryInstallation,
+  recovery.checkLocalRecoveryInstallation,
+  recovery.installLocalRecoverySnapshot,
+])
+  assert.equal(typeof helper, "function");
+assert.equal("parseRunArchiveAssetSources" in recovery, false);
+assert.equal("requireSharedRecoveryRunArchiveSources" in recovery, false);
+assert.deepEqual(
+  recovery.parseRunArchiveAssetCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(runAssets.checkpoint),
+  ),
+  runAssets.checkpoint,
+);
+for (const helper of [
+  recovery.rememberRunArchiveAssetCheckpoint,
+  recovery.rememberRunArchiveAssetCheckpointInTx,
+  recovery.readRunArchiveAssetCheckpoint,
+  recovery.inspectRunArchiveAssetCheckpoint,
+  recovery.requireStoredRunArchiveAssetCheckpoint,
+])
+  assert.equal(typeof helper, "function");
+
+assert.deepEqual(
+  recovery.parseRetainedRecoveryAssetCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(retainedAssets.checkpoint),
+  ),
+  retainedAssets.checkpoint,
+);
+for (const helper of [
+  recovery.rememberRetainedRecoveryAssetCheckpoint,
+  recovery.rememberRetainedRecoveryAssetCheckpointInTx,
+  recovery.readRetainedRecoveryAssetCheckpoint,
+  recovery.inspectRetainedRecoveryAssetCheckpoint,
+  recovery.requireStoredRetainedRecoveryAssetCheckpoint,
+])
+  assert.equal(typeof helper, "function");
+assert.equal(assets.payload.version, recovery.RECOVERY_ASSET_PAYLOAD_VERSION);
+assert.equal(assets.checkpoint.version, recovery.RECOVERY_ASSET_CHECKPOINT_VERSION);
+assert.equal(
+  assets.checkpoint.sha256,
+  createHash("sha256").update(JSON.stringify(assets.payload), "utf8").digest("hex"),
+);
+assert.equal(
+  assets.checkpoint.byteLength,
+  Buffer.byteLength(JSON.stringify(assets.payload), "utf8"),
+);
+assert.deepEqual(recovery.parseRecoveryAssetPayload(assets.payload), assets.payload);
+assert.deepEqual(recovery.parseRecoveryAssetCheckpoint(assets.checkpoint), assets.checkpoint);
+assert.deepEqual(
+  recovery.parseSharedRecoveryExecutionCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(executionDescription.checkpoint),
+    JSON.stringify(assetLocal.checkpoint),
+  ),
+  { checkpoint: executionDescription.checkpoint, localCheckpoint: assetLocal.checkpoint },
+);
+for (const helper of [
+  recovery.rememberSharedRecoveryExecutionCheckpoint,
+  recovery.rememberSharedRecoveryExecutionCheckpointInTx,
+  recovery.readSharedRecoveryExecutionCheckpoint,
+  recovery.inspectSharedRecoveryExecutionCheckpoint,
+  recovery.requireStoredSharedRecoveryExecutionCheckpoint,
+])
+  assert.equal(typeof helper, "function");
+assert.deepEqual(
+  recovery.parseSharedRecoveryActionCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(actionDescription.checkpoint),
+    JSON.stringify(sharedLocalDescriptor),
+  ),
+  {
+    checkpoint: actionDescription.checkpoint,
+    localCheckpoint: sharedLocalDescriptor,
+  },
+);
+for (const helper of [
+  recovery.rememberSharedRecoveryRetainedCheckpoint,
+  recovery.rememberSharedRecoveryRetainedCheckpointInTx,
+  recovery.readSharedRecoveryRetainedCheckpoint,
+  recovery.inspectSharedRecoveryRetainedCheckpoint,
+  recovery.requireStoredSharedRecoveryRetainedCheckpoint,
+  recovery.rememberSharedRecoveryActionCheckpoint,
+  recovery.rememberSharedRecoveryActionCheckpointInTx,
+  recovery.readSharedRecoveryActionCheckpoint,
+  recovery.inspectSharedRecoveryActionCheckpoint,
+  recovery.requireStoredSharedRecoveryActionCheckpoint,
+])
+  assert.equal(typeof helper, "function");
+assert.deepEqual(
+  recovery.parseSharedRecoveryRetainedCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(retainedDescription.checkpoint),
+    JSON.stringify(sharedLocalDescriptor),
+  ),
+  { checkpoint: retainedDescription.checkpoint, localCheckpoint: sharedLocalDescriptor },
+);
+assert.deepEqual(
+  recovery.parseRecoveryAssetCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(assets.checkpoint),
+  ),
+  assets.checkpoint,
+);
+for (const helper of [
+  recovery.rememberRecoveryAssetCheckpoint,
+  recovery.rememberRecoveryAssetCheckpointInTx,
+  recovery.readRecoveryAssetCheckpoint,
+  recovery.inspectRecoveryAssetCheckpoint,
+  recovery.requireStoredRecoveryAssetCheckpoint,
+])
+  assert.equal(typeof helper, "function");
+assert.deepEqual(
+  await recovery.requireRecoveryAssetCheckpoint(
+    assets.payload,
+    assets.checkpoint,
+    sharedIdentity,
+    assetSources,
+  ),
+  assets.payload,
+);
+await assert.rejects(
+  recovery.requireRecoveryAssetCheckpoint(
+    assets.payload,
+    { ...assets.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+    assetSources,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryCheckpointRecord(
+    {
+      workspaceId: sharedIdentity.workspaceId,
+      deviceId: sharedIdentity.deviceId,
+      epochId: sharedIdentity.epochId,
+      checkpointId: sharedIdentity.checkpointId,
+    },
+    JSON.stringify(sharedDescription.checkpoint),
+    JSON.stringify(sharedLocalDescriptor),
+  ),
+  { checkpoint: sharedDescription.checkpoint, localCheckpoint: sharedLocalDescriptor },
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryCheckpoint(sharedDescription.checkpoint),
+  sharedDescription.checkpoint,
+);
+assert.deepEqual(
+  recovery.parseSharedRecoveryHistoryPayload(sharedDescription.payload),
+  sharedDescription.payload,
+);
+assert.deepEqual(
+  await recovery.requireSharedRecoveryCheckpoint(
+    sharedDescription.payload,
+    sharedDescription.checkpoint,
+    sharedIdentity,
+  ),
+  { payload: sharedDescription.payload, projection: sharedProjection },
+);
+await assert.rejects(
+  recovery.requireSharedRecoveryCheckpoint(
+    sharedDescription.payload,
+    { ...sharedDescription.checkpoint, sha256: "b".repeat(64) },
+    sharedIdentity,
+  ),
+  recovery.SharedRecoveryError,
+);
+assert.deepEqual(
+  recovery.reconstructSharedRecoveryProjection(sharedHistory, {
+    baselineId: "baseline",
+    effectSets: [{ id: "empty", effectCount: 0 }],
+  }),
+  sharedProjection,
+);
+assert.throws(
+  () =>
+    recovery.reconstructSharedRecoveryProjection(sharedHistory, {
+      baselineId: "baseline",
+      effectSets: [{ id: "empty", effectCount: 1 }],
+    }),
+  recovery.SharedRecoveryError,
+);
+assert.throws(
+  () =>
+    recovery.parseSharedRecoveryProjection({
+      version: 1,
+      rowEncodingVersion: 1,
+      schemaId: "unknown",
+      tables: [],
+    }),
+  recovery.SharedRecoveryError,
+);
 assert.equal(domainErrorCode(new ValidationError("invalid")), "validation");
 assert.equal(createServiceContext, services.createServiceContext);
 assert.throws(() => createServiceContext({ contentMax: 1 }), ValidationError);
 assert.ok(schema.cardTable);
 assert.equal(typeof services.cards.create, "function");
+const checkpointKey = {
+  workspaceId: "workspace",
+  deviceId: "device",
+  epochId: "epoch",
+  checkpointId: "checkpoint",
+};
+const checkpoint = {
+  version: core.LOCAL_RECOVERY_CHECKPOINT_VERSION,
+  identity: { ...checkpointKey, schemaId: migrations.at(-1).id },
+  selection: { baselineId: "baseline", effectSetIds: [] },
+  byteLength: 642,
+  sha256: "a".repeat(64),
+};
+assert.deepEqual(core.parseLocalRecoveryCheckpoint(checkpoint), checkpoint);
+assert.deepEqual(recovery.parseLocalRecoveryIdentity(checkpoint.identity), checkpoint.identity);
+assert.throws(
+  () => recovery.parseLocalRecoveryIdentity({ ...checkpoint.identity, schemaId: "unknown" }),
+  core.LocalRecoveryError,
+);
+assert.deepEqual(
+  core.parseLocalRecoveryCheckpointRecord(checkpointKey, JSON.stringify(checkpoint)),
+  checkpoint,
+);
+assert.throws(
+  () =>
+    core.parseLocalRecoveryCheckpointRecord(
+      { ...checkpointKey, checkpointId: "other" },
+      JSON.stringify(checkpoint),
+    ),
+  core.LocalRecoveryError,
+);
+assert.ok(Object.isFrozen(core.parseLocalRecoveryCheckpoint(checkpoint).identity));
 assert.equal(INVENTORY_COLUMNS, 6);
 assert.equal(cardSpan("short"), 1);
 assert.deepEqual(
@@ -150,7 +1183,10 @@ const db = createDatabaseAdapter(handle, {
     return operation(handle);
   },
 });
-assert.equal(await withTx(db, async (tx) => tx), handle);
+await withTx(db, async (tx) => {
+  assert.notEqual(tx, handle);
+  assert.equal(tx.select(), handle);
+});
 await withReadTx(db, async (tx) => {
   assert.notEqual(tx, handle);
   assert.ok(Object.isFrozen(tx));
@@ -175,7 +1211,24 @@ try {
   for (const record of migrations)
     for (const statement of record.statements) sqlite.exec(statement);
   sqlite.exec("COMMIT; PRAGMA foreign_keys=ON");
-  for (const name of ["namespace", "scope_area", "inventory"])
+  for (const name of [
+    "namespace",
+    "scope_area",
+    "inventory",
+    "local_recovery_checkpoint",
+    "local_recovery_shared_history",
+    "local_recovery_assets",
+    "local_recovery_executions",
+    "local_recovery_actions",
+    "local_recovery_retained_history",
+    "local_recovery_retained_assets",
+    "local_recovery_action_archives",
+    "local_recovery_run_archives",
+    "local_recovery_run_assets",
+    "local_recovery_installation",
+    "shared_recovery_installation",
+    "shared_only_recovery_installation",
+  ])
     assert.ok(sqlite.prepare("SELECT name FROM sqlite_schema WHERE name=?").get(name));
   assert.ok(
     sqlite

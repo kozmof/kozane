@@ -5,7 +5,7 @@ import * as schema from "../../../db/schema.js";
 
 export const EXPORT_KIND = "kozane.db.export";
 
-export const EXPORT_VERSION = 9;
+export const EXPORT_VERSION = 26;
 
 /**
  * Oldest supported dump version. Version 7 uses the `namespace` and `partition` table names.
@@ -17,6 +17,25 @@ export const EXPORT_VERSION = 9;
  * Version 9 adds `inventory` and the `card.inventory_id` and `card.inventory_slot` columns.
  * Older dumps read as having no inventories and no stored cards. {@link COLUMNS_SINCE} records
  * each added column's first version.
+ *
+ * Version 10 moves inline taskspace paths and observations into `taskspace_local`.
+ * Local rows may outlive shared taskspaces. Imports of older dumps split those fields.
+ * Version 11 adds retained local filesystem operation records.
+ * Version 12 includes taskspace file mutation intents in the same local journal.
+ * Version 13 adds managed taskspace directory move and removal intents.
+ * Version 14 adds explicit abandonment metadata and planned CLI layout paths.
+ * Version 15 includes local image upload pins and their installation evidence.
+ * Version 16 includes retained asset manifest owners and explicit release decisions.
+ * Version 17 includes the local trusted checkpoint descriptor catalog.
+ * Version 18 includes shared-history descriptors and their original local checkpoint bindings.
+ * Version 19 includes trusted recovery asset descriptors bound to both original checkpoints.
+ * Version 20 includes trusted selected-execution descriptors and their original local bindings.
+ * Version 21 includes trusted original-action descriptors and their original local bindings.
+ * Version 22 includes trusted retained-history descriptors and their original local bindings.
+ * Version 23 includes retained-manifest descriptors with all original source bindings.
+ * Version 24 includes broader original-action archive descriptors and original local bindings.
+ * Version 25 includes broader retained-run archive descriptors and original local bindings.
+ * Version 26 includes broader run-manifest descriptors with all original source bindings.
  *
  * Dumps before version 7 are rejected. Migrate an old workspace database in place before
  * exporting it. Migration 0014 renames the tables without discarding rows.
@@ -40,6 +59,60 @@ const TABLE_ORDER = [
   // Before `card`, whose `inventory_id` points at it.
   { name: "inventory", orderBy: ["id"], since: 9 },
   { name: "taskspace", orderBy: ["id"] },
+  { name: "taskspace_local", orderBy: ["taskspace_id"], since: 10 },
+  { name: "local_file_operation", orderBy: ["id"], since: 11 },
+  { name: "local_image_upload", orderBy: ["filename"], since: 15 },
+  { name: "local_asset_manifest", orderBy: ["owner_kind", "owner_id"], since: 16 },
+  {
+    name: "local_recovery_checkpoint",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 17,
+  },
+  {
+    name: "local_recovery_shared_history",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 18,
+  },
+  {
+    name: "local_recovery_assets",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 19,
+  },
+  {
+    name: "local_recovery_executions",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 20,
+  },
+  {
+    name: "local_recovery_actions",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 21,
+  },
+  {
+    name: "local_recovery_retained_history",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 22,
+  },
+  {
+    name: "local_recovery_retained_assets",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 23,
+  },
+  {
+    name: "local_recovery_action_archives",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 24,
+  },
+  {
+    name: "local_recovery_run_archives",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 25,
+  },
+  {
+    name: "local_recovery_run_assets",
+    orderBy: ["workspace_id", "device_id", "epoch_id", "checkpoint_id"],
+    since: 26,
+  },
   { name: "card", orderBy: ["id"] },
   { name: "glue", orderBy: ["id"] },
   // Keep glue members beside their groups in the dump.
@@ -53,6 +126,7 @@ const TABLE_ORDER = [
  */
 export const COLUMNS_SINCE: Partial<Record<string, Record<string, number>>> = {
   card: { inventory_id: 9, inventory_slot: 9 },
+  local_file_operation: { abandoned_at: 14, abandon_reason: 14 },
 };
 
 /** Every table in the Drizzle schema, by its SQL name, with the columns it declares. */
@@ -65,7 +139,8 @@ const schemaColumns = new Map(
 
 /**
  * Exported tables, their schema-derived columns, and row ordering. Export this list so tests
- * can verify that it includes every schema table.
+ * can verify that it includes every portable schema table. Destination installation
+ * authority is deliberately excluded and survives imports into the same database.
  */
 export const TABLES = TABLE_ORDER.map((table) => ({
   ...table,

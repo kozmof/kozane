@@ -1,3 +1,4 @@
+import { configureActionConnection } from "@kozane/core/database";
 import type { Client } from "@libsql/client";
 import { isMemoryDbUrl } from "../lib/db-url.js";
 
@@ -22,6 +23,6 @@ export const BUSY_TIMEOUT_MS = 5_000;
  */
 export async function applyConnectionPragmas(client: Client, url: string): Promise<void> {
   await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
-  await client.execute("PRAGMA foreign_keys = ON");
+  await configureActionConnection(async (statement) => (await client.execute(statement)).rows);
   if (!isMemoryDbUrl(url)) await client.execute("PRAGMA journal_mode = WAL");
 }

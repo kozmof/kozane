@@ -57,6 +57,7 @@ if (mode === "prepare") {
   ]);
   run("pnpm", ["audit:production"]);
   if (!skipBrowserTests) {
+    run("pnpm", ["test:capture:browser"]);
     run("pnpm", ["test:e2e"]);
     for (const config of [
       "scripts/restoration-harness/playwright.config.ts",

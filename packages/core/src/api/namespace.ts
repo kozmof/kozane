@@ -1,3 +1,4 @@
+import { boundEntityId } from "../actions/allocations.js";
 import { partitionTable, cardTable, glueRelTable, namespaceTable } from "../schema.js";
 import { and, asc, eq } from "drizzle-orm";
 import type { ReadsNamespace, NeedsDB, Namespace, NeedsReader } from "../database-types.js";
@@ -26,24 +27,26 @@ export async function addNamespace({ db, name, isDefault = false }: AddNamespace
   assertNameWithinLimit(name, "Namespace name");
   const [row] = await db
     .insert(namespaceTable)
-    .values({ name, isDefault })
+    .values({ id: boundEntityId(db, "namespace"), name, isDefault })
     .returning({ id: namespaceTable.id });
   return row.id;
 }
 
 type CreateNamespace = { db: DB; name: string; isDefault?: boolean };
 /** Create the namespace, default partition, and default layer in one transaction. */
-export async function createNamespace({
-  db,
+export async function createNamespace({ db, ...fields }: CreateNamespace): Promise<string> {
+  return withTx(db, (tx) => createNamespaceInTx({ ...fields, db: tx }));
+}
+
+export async function createNamespaceInTx({
+  db: tx,
   name,
   isDefault = false,
-}: CreateNamespace): Promise<string> {
-  return withTx(db, async (tx) => {
-    const namespaceId = await addNamespace({ db: tx, name, isDefault });
-    await addPartition({ db: tx, namespaceId, name: DEFAULT_PARTITION_NAME, isDefault: true });
-    await addLayer({ db: tx, namespaceId, name: DEFAULT_LAYER_NAME, isDefault: true });
-    return namespaceId;
-  });
+}: Omit<CreateNamespace, "db"> & { db: Tx }): Promise<string> {
+  const namespaceId = await addNamespace({ db: tx, name, isDefault });
+  await addPartition({ db: tx, namespaceId, name: DEFAULT_PARTITION_NAME, isDefault: true });
+  await addLayer({ db: tx, namespaceId, name: DEFAULT_LAYER_NAME, isDefault: true });
+  return namespaceId;
 }
 
 export async function setDefaultNamespace({
@@ -53,18 +56,26 @@ export async function setDefaultNamespace({
   db: DB;
   namespaceId: string;
 }): Promise<void> {
-  await withTx(db, async (tx) => {
-    await tx
-      .update(namespaceTable)
-      .set({ isDefault: false })
-      .where(eq(namespaceTable.isDefault, true));
-    const updated = await tx
-      .update(namespaceTable)
-      .set({ isDefault: true })
-      .where(eq(namespaceTable.id, namespaceId))
-      .returning({ id: namespaceTable.id });
-    assertFound(updated, `Namespace namespaceId=${namespaceId}`);
-  });
+  return withTx(db, (tx) => setDefaultNamespaceInTx({ db: tx, namespaceId }));
+}
+
+export async function setDefaultNamespaceInTx({
+  db: tx,
+  namespaceId,
+}: {
+  db: Tx;
+  namespaceId: string;
+}): Promise<void> {
+  await tx
+    .update(namespaceTable)
+    .set({ isDefault: false })
+    .where(eq(namespaceTable.isDefault, true));
+  const updated = await tx
+    .update(namespaceTable)
+    .set({ isDefault: true })
+    .where(eq(namespaceTable.id, namespaceId))
+    .returning({ id: namespaceTable.id });
+  assertFound(updated, `Namespace namespaceId=${namespaceId}`);
 }
 
 /** The glue groups this namespace's cards belong to, read before the cascade removes them. */

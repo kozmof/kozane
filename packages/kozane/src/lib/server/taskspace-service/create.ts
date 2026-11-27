@@ -66,6 +66,11 @@ export async function createTaskspace(db: DB, namespaceId: string, body: Record<
     );
   } catch (failure) {
     if (!(failure instanceof TaskspaceClaimError)) throw failure;
+    if (failure.phase === "attach" || failure.cause instanceof AggregateError)
+      throw new TaskspaceServiceError(
+        500,
+        "Directory creation needs recovery. Run 'kozane doctor' before creating it again.",
+      );
     const e = failure.cause;
     console.error("Failed to initialize taskspace directory:", e);
     if (e instanceof TaskspaceFilesError && e.reason === "invalid-path")

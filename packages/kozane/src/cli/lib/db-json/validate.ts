@@ -3,13 +3,164 @@ import { INVENTORY_SLOT_MAX } from "../../../lib/constants.js";
 import { plural } from "../plural.js";
 import { taskspacePathIssue } from "../../../lib/server/taskspace-path.js";
 import { type TableRows } from "./format.js";
+import {
+  imagePath,
+  IMAGE_MAX_BYTES,
+  mergeAssetManifests,
+  parseAssetManifest,
+  parseLocalRecoveryCheckpointRecord,
+} from "@kozane/core";
 import { type ImportDbJsonOptions } from "./import.js";
+import {
+  parseSharedRecoveryCheckpointRecord,
+  parseRecoveryAssetCheckpointRecord,
+  parseSharedRecoveryExecutionCheckpointRecord,
+  parseSharedRecoveryActionCheckpointRecord,
+  parseSharedRecoveryRetainedCheckpointRecord,
+  parseSharedRecoveryActionArchiveCheckpointRecord,
+  parseSharedRecoveryRunArchiveCheckpointRecord,
+  parseRetainedRecoveryAssetCheckpointRecord,
+  parseRunArchiveAssetCheckpointRecord,
+} from "@kozane/core/recovery";
 
 /**
  * Validate every foreign key before inserting rows. SQLite also enforces these constraints
  * during import, but this check identifies the offending row.
  */
 export function validateDumpRefs(tables: TableRows): void {
+  for (const row of tables.local_recovery_action_archives)
+    parseSharedRecoveryActionArchiveCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+      row.local_descriptor,
+    );
+  for (const row of tables.local_recovery_run_archives)
+    parseSharedRecoveryRunArchiveCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+      row.local_descriptor,
+    );
+  for (const row of tables.local_recovery_retained_history)
+    parseSharedRecoveryRetainedCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+      row.local_descriptor,
+    );
+  for (const row of tables.local_recovery_actions)
+    parseSharedRecoveryActionCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+      row.local_descriptor,
+    );
+  for (const row of tables.local_recovery_executions)
+    parseSharedRecoveryExecutionCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+      row.local_descriptor,
+    );
+  for (const row of tables.local_recovery_retained_assets)
+    parseRetainedRecoveryAssetCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+    );
+  for (const row of tables.local_recovery_run_assets)
+    parseRunArchiveAssetCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+    );
+  for (const row of tables.local_recovery_assets)
+    parseRecoveryAssetCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+    );
+  for (const row of tables.local_recovery_shared_history)
+    parseSharedRecoveryCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+      row.local_descriptor,
+    );
+  for (const row of tables.local_recovery_checkpoint)
+    parseLocalRecoveryCheckpointRecord(
+      {
+        workspaceId: row.workspace_id,
+        deviceId: row.device_id,
+        epochId: row.epoch_id,
+        checkpointId: row.checkpoint_id,
+      },
+      row.descriptor,
+    );
+  for (const row of tables.local_image_upload) {
+    if (
+      typeof row.filename !== "string" ||
+      !imagePath("kozane-image:/api/images/" + row.filename) ||
+      typeof row.byte_length !== "number" ||
+      !Number.isSafeInteger(row.byte_length) ||
+      row.byte_length < 1 ||
+      row.byte_length > IMAGE_MAX_BYTES ||
+      typeof row.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(row.sha256)
+    )
+      throw new Error("Invalid local image upload metadata");
+  }
+  mergeAssetManifests([
+    ...tables.local_asset_manifest.map((row) => {
+      if (typeof row.manifest !== "string") throw new Error("Invalid local asset manifest");
+      return parseAssetManifest(JSON.parse(row.manifest));
+    }),
+    {
+      version: 1,
+      entries: tables.local_image_upload.map((row) => ({
+        name: `.kozane/assets/images/${row.filename}`,
+        byteLength: row.byte_length,
+        sha256: row.sha256,
+      })),
+    },
+  ]);
   const namespaceIds = new Set(tables.namespace.map((r) => r.id as string));
   const partitionIds = new Set(tables.partition.map((r) => r.id as string));
   const layerIds = new Set(tables.layer.map((r) => r.id as string));
@@ -134,17 +285,38 @@ export function validateDumpPaths(
   { allowAbsolutePaths = false }: ImportDbJsonOptions,
 ) {
   const absolute: string[] = [];
-  for (const row of tables.taskspace) {
+  for (const row of [...tables.taskspace_local, ...tables.local_file_operation]) {
     if (row.path === null || row.path === undefined) continue;
     if (typeof row.path !== "string")
-      throw new Error(`taskspace ${row.id}: path must be a string or null`);
+      throw new Error(`taskspace ${row.taskspace_id}: path must be a string or null`);
     const issue = taskspacePathIssue(row.path, String(row.path_kind));
-    if (issue) throw new Error(`taskspace ${row.id}: ${issue}`);
-    if (row.path_kind === "absolute") absolute.push(`${row.id} (${row.path})`);
+    if (issue) throw new Error(`taskspace ${row.taskspace_id}: ${issue}`);
+    if (row.path_kind === "absolute") absolute.push(`${row.taskspace_id} (${row.path})`);
   }
   if (absolute.length > 0 && !allowAbsolutePaths)
     throw new Error(
       `Export has ${plural(absolute.length, "taskspace")} with an absolute path outside the workspace: ${absolute.join(", ")}. ` +
         "Kozane serves files from these directories. Rerun with --allow-absolute-paths if you trust them.",
     );
+  for (const row of tables.local_file_operation) {
+    if (row.kind !== "taskspace.directory" || typeof row.intent !== "string") continue;
+    let intent: unknown;
+    try {
+      intent = JSON.parse(row.intent);
+    } catch {
+      continue;
+    }
+    if (!intent || typeof intent !== "object" || !("targetPath" in intent)) continue;
+    if (typeof intent.targetPath !== "string")
+      throw new Error(`directory operation ${row.id}: targetPath must be a string`);
+    const issue = taskspacePathIssue(intent.targetPath, String(row.path_kind));
+    if (issue) throw new Error(`directory operation ${row.id}: ${issue}`);
+    if ("paths" in intent && Array.isArray(intent.paths))
+      for (const path of intent.paths) {
+        if (typeof path !== "string")
+          throw new Error(`directory operation ${row.id}: paths must contain strings`);
+        const pathIssue = taskspacePathIssue(path, String(row.path_kind));
+        if (pathIssue) throw new Error(`directory operation ${row.id}: ${pathIssue}`);
+      }
+  }
 }

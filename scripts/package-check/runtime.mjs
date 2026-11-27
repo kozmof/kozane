@@ -14,7 +14,12 @@ export async function checkCoreRuntime({
 }) {
   const publicTypes = readFileSync(resolve(installed, manifest.exports["."].types), "utf8");
   // Each fresh process must initialize the public entry without a prior root import.
-  for (const entry of ["@kozane/core/database", "@kozane/core/services", "@kozane/core/schema"])
+  for (const entry of [
+    "@kozane/core/database",
+    "@kozane/core/services",
+    "@kozane/core/schema",
+    "@kozane/core/recovery",
+  ])
     run(
       process.execPath,
       ["--input-type=module", "--eval", `await import(${JSON.stringify(entry)})`],

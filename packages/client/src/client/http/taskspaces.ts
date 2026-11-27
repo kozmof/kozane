@@ -79,7 +79,7 @@ export function createTaskspaces(
       context.writeTaskspace(context.ns(ns, "/taskspaces"), "POST", input, readTaskspaceCreated),
     rename: async (ns, id, input) => {
       const result = await context.writeTaskspace(
-        context.ns(ns, `/taskspaces/${encodeURIComponent(id)}`),
+        context.ns(ns, `/taskspaces/${encodeURIComponent(id)}/label`),
         "PATCH",
         input,
         readTaskspaceRenamed,
