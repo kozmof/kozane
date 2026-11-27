@@ -683,6 +683,10 @@ Maintenance moves images with no card reference or unfinished upload pin to
 `.kozane/assets/images/.retained` after 24 hours. Archived images remain readable
 at their original URLs. Maintenance does not permanently delete archives.
 
+Archive publication never replaces an existing entry. Conflicting entries and
+unsafe paths remain available for manual review. Matching interrupted hard links
+can finish without copying or replacing image bytes.
+
 Deleting a card through the card endpoints or CLI removes its image from both
 directories when the last card reference is deleted. CLI namespace deletion uses
 the same cleanup. The database deletion commits before file removal. Unfinished
@@ -692,6 +696,10 @@ automatic expiry. The [image recovery commands](cli.md#kozane-image-uploads)
 preview verification and explicit release of reviewed upload pins. Abandonment
 leaves files and card references unchanged. Unreferenced abandoned temporary
 files become eligible for normal cleanup after 24 hours.
+Deletion requests are synced before the card transaction commits. Cleanup checks
+managed directories and requires an empty regular request. It acknowledges the
+original request only after file removals and supported directory syncs finish.
+Unsafe or replaced requests remain in place.
 Pending and retained manifest owners also protect their images. Releasing an
 upload pin does not release independent history or recovery ownership. Cleanup
 refuses malformed active manifests before changing files.

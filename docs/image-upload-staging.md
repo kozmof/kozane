@@ -121,6 +121,21 @@ unreferenced published files and abandoned regular temporary files after 24 hour
 A queued deletion may remove both after references and pins are gone. Untracked
 temporary names are left alone. Evidence and decision records remain.
 
+Cleanup checks the managed image, archive and deletion-request directories before
+filesystem changes. Symlinked directory components refuse cleanup. The collector
+archives only regular files and never replaces an existing retained entry. It
+syncs the file, publishes an exclusive hard link and syncs the archive directory
+where supported before removing the live entry. An existing hard link to the same
+file can finish an interrupted archive. Other entries preserve both paths for
+manual review, including separate files with identical bytes.
+
+Deletion requests are empty regular files synced before the card transaction
+commits. Their directory is also synced where supported. A failed database commit
+can leave a request, but live references and active pins still protect the image.
+The worker keeps requests until removals and supported directory syncs finish.
+It checks the request's file identity before acknowledging it. Replaced, nonempty
+or unsafe request entries remain available for review.
+
 `image uploads --all` includes completed and abandoned records. Startup and
 `doctor` report at most five unfinished filenames and their published and
 temporary file observations. They never confirm, abandon or retry upload work.

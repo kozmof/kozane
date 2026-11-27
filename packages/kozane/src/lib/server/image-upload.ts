@@ -48,6 +48,7 @@ async function syncDirectory(path: string) {
     await handle.close();
   }
 }
+export { syncDirectory as syncImageDirectory };
 
 export class ImageUploadVerificationError extends Error {
   override readonly name = "ImageUploadVerificationError";

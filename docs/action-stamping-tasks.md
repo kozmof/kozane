@@ -198,6 +198,13 @@ doctor inspect unfinished records without retrying work. Production history
 manifests and transfer pins remain pending. See
 [local image upload staging](image-upload-staging.md).
 
+Image cleanup now preserves archive collisions and refuses symlinked managed
+directories. It archives regular files through synced exclusive hard links and
+can finish an interrupted link without replacing retained bytes. Deletion
+requests are synced before card commits and checked by file identity before
+acknowledgment. Unsafe or replaced requests remain available for review. Process
+crash verification across all cleanup boundaries remains pending.
+
 Migration 0026 adds a durable local manifest ledger. Pending and retained owners
 protect registered baseline, effect-set, pending-work, transfer and recovery images
 from cleanup. The host verifies live or archived bytes under the image writer lock
@@ -1061,6 +1068,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Recover verified published uploads or explicitly abandon reviewed pins without repeating filesystem work. Preserve intent, errors and decisions, and keep live references protected during cleanup.
 - [x] Verify image upload recovery and abandonment receipts and card-reference presence after database triggers. Preserve exact intended metadata and decision evidence, recheck recovered bytes and temporary-file absence, and retain prior pins and newer disk state after refused publication.
 - [x] Verify upload reservation, installation, error recording and card-reference completion after database triggers. Preserve separately committed errors, verify the whole completion batch and other unfinished pins, retain exact SQL timestamps and refuse changed disk publication without repeating installation.
+- [x] Archive unused regular images through synced exclusive hard links. Preserve conflicting archive entries, resume matching interrupted links and refuse symlinked managed directories without changing outside bytes.
+- [x] Sync deletion requests before card commits and acknowledge only the original empty regular request after removal sync checks. Preserve requests after failed commits, unsafe entries, interrupted publication and request replacement.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.
 - [ ] Enable mandatory guards and ship version one only after phases 1–5 and their verification pass.
 
