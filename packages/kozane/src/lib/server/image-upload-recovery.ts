@@ -37,10 +37,25 @@ function identity(row: Upload) {
     row.installedAt === null
       ? isNull(localImageUploadTable.installedAt)
       : eq(localImageUploadTable.installedAt, row.installedAt),
+    row.completedAt === null
+      ? isNull(localImageUploadTable.completedAt)
+      : eq(localImageUploadTable.completedAt, row.completedAt),
     row.error === null
       ? isNull(localImageUploadTable.error)
       : eq(localImageUploadTable.error, row.error),
+    row.abandonedAt === null
+      ? isNull(localImageUploadTable.abandonedAt)
+      : eq(localImageUploadTable.abandonedAt, row.abandonedAt),
+    row.abandonReason === null
+      ? isNull(localImageUploadTable.abandonReason)
+      : eq(localImageUploadTable.abandonReason, row.abandonReason),
   );
+}
+/** Read after triggers with the expected predicate before decoding any changed timestamps. */
+async function receipt(tx: Tx, expected: Upload) {
+  const upload = await tx.select().from(localImageUploadTable).where(identity(expected)).get();
+  if (!upload) throw new Error("Image upload publication changed or is missing");
+  return upload;
 }
 function safeDates(row: Upload) {
   return [row.createdAt, row.installedAt, row.completedAt, row.abandonedAt].every(
@@ -92,17 +107,31 @@ export async function recoverImageUpload(db: DB, root: string, name: string, app
       throw new Error(`Image upload cannot be recovered: ${current.reason}`);
     if (current.status !== "confirmable") return current;
     const now = new Date();
-    const [upload] = await tx
+    const expected: Upload = {
+      ...current.upload,
+      state: current.linked ? "completed" : "installed",
+      installedAt: current.upload.installedAt ?? now,
+      completedAt: current.linked ? now : current.upload.completedAt,
+    };
+    const [changed] = await tx
       .update(localImageUploadTable)
       .set({
-        state: current.linked ? "completed" : "installed",
-        installedAt: current.upload.installedAt ?? now,
-        ...(current.linked && { completedAt: now }),
+        state: expected.state,
+        installedAt: expected.installedAt,
+        completedAt: expected.completedAt,
       })
       .where(identity(current.upload))
-      .returning();
-    if (!upload) throw new Error("Image upload intent changed or is missing");
-    return { ...current, upload, status: "confirmed" as const };
+      .returning({ filename: localImageUploadTable.filename });
+    if (!changed) throw new Error("Image upload intent changed or is missing");
+    const evidence = await inspectImageUpload(root, expected);
+    if (evidence.published !== "matching-content" || evidence.temporary !== "absent")
+      throw new Error(
+        `Image upload bytes changed during recovery: published ${evidence.published}, temporary ${evidence.temporary}`,
+      );
+    if ((await referenced(tx, name)) !== current.linked)
+      throw new Error("Image upload references changed during recovery");
+    const upload = await receipt(tx, expected);
+    return { ...current, upload, evidence, status: "confirmed" as const };
   });
 }
 
@@ -126,12 +155,25 @@ export async function abandonImageUpload(db: DB, name: string, inputReason: stri
     await lockImageAssetWork(tx);
     const current = await inspect(tx);
     if (current.upload.state === "abandoned") return current;
-    const [upload] = await tx
+    const expected: Upload = {
+      ...current.upload,
+      state: "abandoned",
+      abandonedAt: new Date(),
+      abandonReason: reason,
+    };
+    const [changed] = await tx
       .update(localImageUploadTable)
-      .set({ state: "abandoned", abandonedAt: new Date(), abandonReason: reason })
+      .set({
+        state: expected.state,
+        abandonedAt: expected.abandonedAt,
+        abandonReason: expected.abandonReason,
+      })
       .where(identity(current.upload))
-      .returning();
-    if (!upload) throw new Error("Image upload intent changed or is missing");
+      .returning({ filename: localImageUploadTable.filename });
+    if (!changed) throw new Error("Image upload intent changed or is missing");
+    if ((await referenced(tx, name)) !== current.linked)
+      throw new Error("Image upload references changed during abandonment");
+    const upload = await receipt(tx, expected);
     return { ...current, upload, changed: true };
   });
 }

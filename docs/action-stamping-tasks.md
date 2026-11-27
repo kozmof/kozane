@@ -186,9 +186,12 @@ Application card create and update commit staging completion with the reference.
 Cleanup checks live references and unfinished pins under the same writer lock.
 JSON version 15 retains upload records without installing files. Image commands
 now preview and explicitly recover verified installation or abandon a reviewed
-pin while preserving evidence. Startup and doctor inspect unfinished records
-without retrying work. Production history manifests and transfer pins remain
-pending. See [local image upload staging](image-upload-staging.md).
+pin while preserving evidence. Both operations verify the final receipt and
+card-reference presence after database triggers. Recovery also rechecks published
+bytes and temporary-file absence. Changed publication preserves the prior pin
+and current disk state without repeating installation. Startup and doctor inspect
+unfinished records without retrying work. Production history manifests and transfer
+pins remain pending. See [local image upload staging](image-upload-staging.md).
 
 Migration 0026 adds a durable local manifest ledger. Pending and retained owners
 protect registered baseline, effect-set, pending-work, transfer and recovery images
@@ -1051,6 +1054,8 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Connect prototype baseline and effect-set publication to local manifest ownership. Verify protected files, atomic staging handoff and upload completion, cleanup contention and retained images after history is deselected.
 - [x] Connect prototype epoch candidates to durable baseline image owners. Reserve protection before image reads, retain it with candidate publication, require exact retained protection at activation and preserve earlier owners and pins after failed validation or commits. Verify restart, cleanup contention and protection after the last live reference disappears.
 - [x] Recover verified published uploads or explicitly abandon reviewed pins without repeating filesystem work. Preserve intent, errors and decisions, and keep live references protected during cleanup.
+- [x] Verify image upload recovery and abandonment receipts and card-reference presence after database triggers. Preserve exact intended metadata and decision evidence, recheck recovered bytes and temporary-file absence, and retain prior pins and newer disk state after refused publication.
+- [ ] Verify upload reservation, installation, error recording and card-reference completion after database triggers.
 - [ ] Verify cleanup races and crashes before file creation, after installation and after action commit.
 - [ ] Enable mandatory guards and ship version one only after phases 1–5 and their verification pass.
 

@@ -68,6 +68,13 @@ to complete its installed pin with the card transaction.
 kozane card add "kozane-image:/api/images/<filename>"
 ```
 
+Before committing recovery, the host rechecks published bytes, absence of a
+temporary file and card-reference presence after database triggers finish. The
+final receipt must match the intended state, filename, length, hash, timestamps
+and retained evidence. A changed receipt or reference rolls back database changes
+and preserves the earlier pin. Changed disk bytes, temporary files and symlinks
+remain available for review without repeating installation.
+
 Review blocked or unused uploads before abandoning their pin.
 
 ```sh
@@ -80,6 +87,12 @@ and installation time and records a separate decision time and reason. Repeating
 the same decision makes no changes. Another reason cannot replace it. Completed
 records cannot be abandoned. Failed statements or commits retain the prior state
 and pin. The shared writer lock prevents release during an active installation.
+
+Abandonment verifies the final decision and retained metadata after database
+triggers finish. Card-reference presence must still match the inspected state.
+Changed intent, evidence, reason, decision time or references roll back the
+decision and triggered database changes together. Files stay unchanged and the
+earlier pin remains in place.
 
 Abandonment changes no files or card references and does not run cleanup. Live
 references still protect abandoned files. Normal maintenance can collect

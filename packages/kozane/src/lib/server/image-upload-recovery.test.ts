@@ -222,6 +222,175 @@ it("rechecks bytes after preview and safely resolves competing confirmations", a
   expect((await recover(pending.filename, true)).status).toBe("already-installed");
 });
 
+it.each([false, true])(
+  "rolls back altered recovery publication and preserves its pin (linked=%s)",
+  async (linked) => {
+    const pending = await interrupted();
+    if (linked) await reference(pending.filename);
+    const before = await shared();
+    await db.run(sql`CREATE TRIGGER change_recovery AFTER UPDATE ON local_image_upload
+    WHEN OLD.state='pending' AND NEW.state IN ('installed','completed')
+    BEGIN UPDATE local_image_upload SET state='abandoned',completed_at=NULL,
+    abandoned_at=123,abandon_reason='Changed' WHERE filename=NEW.filename; END`);
+    await expect(recover(pending.filename, true)).rejects.toThrow("changed");
+    expect(await rows()).toEqual([pending]);
+    expect(await shared()).toEqual(before);
+    await fs.utimes(path(pending.filename), new Date(0), new Date(0));
+    await collectUnusedImages(root, db);
+    await retryImageDeletions(root, db);
+    expect(await fs.readFile(path(pending.filename), "utf8")).toBe(source);
+  },
+);
+
+it.each(
+  [false, true].flatMap((linked) =>
+    [
+      "filename",
+      "hash",
+      "length",
+      "created",
+      "large-created",
+      "installed",
+      "completed",
+      "error",
+      "deleted",
+      "references",
+    ].map((field) => ({ linked, field })),
+  ),
+)("refuses changed recovery $field after triggers (linked=$linked)", async ({ linked, field }) => {
+  const pending = await interrupted();
+  await reference(linked ? pending.filename : "00000000-0000-4000-8000-000000000000.svg");
+  const before = await shared();
+  const statements: Record<string, string> = {
+    filename:
+      "UPDATE local_image_upload SET filename='00000000-0000-4000-8000-000000000001.svg' WHERE filename=NEW.filename",
+    hash: "UPDATE local_image_upload SET sha256=printf('%064d',0) WHERE filename=NEW.filename",
+    length: "UPDATE local_image_upload SET byte_length=byte_length+1 WHERE filename=NEW.filename",
+    created: "UPDATE local_image_upload SET created_at=created_at+1 WHERE filename=NEW.filename",
+    "large-created":
+      "UPDATE local_image_upload SET created_at=9007199254740993 WHERE filename=NEW.filename",
+    installed:
+      "UPDATE local_image_upload SET installed_at=installed_at+1 WHERE filename=NEW.filename",
+    completed: linked
+      ? "UPDATE local_image_upload SET completed_at=completed_at+1 WHERE filename=NEW.filename"
+      : "UPDATE local_image_upload SET state='completed',completed_at=123 WHERE filename=NEW.filename",
+    error:
+      "UPDATE local_image_upload SET state='pending',installed_at=NULL,completed_at=NULL,error='Later failure' WHERE filename=NEW.filename",
+    deleted: "DELETE FROM local_image_upload WHERE filename=NEW.filename",
+    references: linked
+      ? "UPDATE card SET content='Changed reference' WHERE id='linked'"
+      : "UPDATE card SET content='kozane-image:/api/images/' || NEW.filename WHERE id='linked'",
+  };
+  await db.run(
+    sql.raw(`CREATE TRIGGER change_recovery AFTER UPDATE ON local_image_upload
+  WHEN OLD.state='pending' AND NEW.state IN ('installed','completed')
+  BEGIN ${statements[field]}; END`),
+  );
+  await expect(recover(pending.filename, true)).rejects.toThrow("changed");
+  expect(await rows()).toEqual([pending]);
+  expect(await shared()).toEqual(before);
+  expect(await fs.readFile(path(pending.filename), "utf8")).toBe(source);
+  await db.run(sql`DROP TRIGGER change_recovery`);
+  expect((await recover(pending.filename, true)).status).toBe("confirmed");
+  expect((await recover(pending.filename, true)).status).toBe(
+    linked ? "already-completed" : "already-installed",
+  );
+});
+
+it.each(["bytes", "temporary", "symlink"] as const)(
+  "retains current disk state when %s changes during final recovery verification",
+  async (field) => {
+    const pending = await interrupted();
+    const open = fs.open;
+    let reads = 0;
+    vi.spyOn(fs, "open").mockImplementation(async (...args) => {
+      if (String(args[0]) === path(pending.filename) && ++reads === 2) {
+        if (field === "bytes") await fs.writeFile(path(pending.filename), "Later bytes");
+        if (field === "temporary") await fs.writeFile(path(`.upload-${pending.filename}`), bytes);
+        if (field === "symlink") {
+          await fs.rename(path(pending.filename), join(root, "retained.svg"));
+          await fs.symlink(join(root, "retained.svg"), path(pending.filename));
+        }
+      }
+      return open(...args);
+    });
+    await expect(recover(pending.filename, true)).rejects.toThrow("changed");
+    expect(await rows()).toEqual([pending]);
+    if (field === "symlink") {
+      expect((await fs.lstat(path(pending.filename))).isSymbolicLink()).toBe(true);
+      expect(await fs.readFile(join(root, "retained.svg"), "utf8")).toBe(source);
+    } else {
+      expect(await fs.readFile(path(pending.filename), "utf8")).toBe(
+        field === "bytes" ? "Later bytes" : source,
+      );
+      if (field === "temporary")
+        expect(await fs.readFile(path(`.upload-${pending.filename}`), "utf8")).toBe(source);
+    }
+  },
+);
+
+it.each(
+  [false, true].flatMap((installed) =>
+    [
+      "state",
+      "filename",
+      "hash",
+      "length",
+      "created",
+      "large-created",
+      "installed",
+      "error",
+      "reason",
+      "time",
+      "deleted",
+      "references",
+    ].map((field) => ({ installed, field })),
+  ),
+)(
+  "refuses changed abandonment $field after triggers (installed=$installed)",
+  async ({ installed, field }) => {
+    const pending = installed ? (await store(), (await rows())[0]) : await interrupted();
+    if (!installed)
+      await db.update(localImageUploadTable).set({ error: "Original filesystem failure" });
+    const original = await rows();
+    await reference(pending.filename);
+    const before = await shared();
+    const statements: Record<string, string> = {
+      state:
+        "UPDATE local_image_upload SET state='pending',installed_at=NULL,abandoned_at=NULL,abandon_reason=NULL WHERE filename=NEW.filename",
+      filename:
+        "UPDATE local_image_upload SET filename='00000000-0000-4000-8000-000000000001.svg' WHERE filename=NEW.filename",
+      hash: "UPDATE local_image_upload SET sha256=printf('%064d',0) WHERE filename=NEW.filename",
+      length: "UPDATE local_image_upload SET byte_length=byte_length+1 WHERE filename=NEW.filename",
+      created: "UPDATE local_image_upload SET created_at=created_at+1 WHERE filename=NEW.filename",
+      "large-created":
+        "UPDATE local_image_upload SET created_at=9007199254740993 WHERE filename=NEW.filename",
+      installed:
+        "UPDATE local_image_upload SET installed_at=coalesce(installed_at,0)+1 WHERE filename=NEW.filename",
+      error: "UPDATE local_image_upload SET error='Rewritten failure' WHERE filename=NEW.filename",
+      reason:
+        "UPDATE local_image_upload SET abandon_reason='Different decision' WHERE filename=NEW.filename",
+      time: "UPDATE local_image_upload SET abandoned_at=abandoned_at+1 WHERE filename=NEW.filename",
+      deleted: "DELETE FROM local_image_upload WHERE filename=NEW.filename",
+      references: "UPDATE card SET content='Changed reference' WHERE id='linked'",
+    };
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_abandonment AFTER UPDATE ON local_image_upload
+  WHEN NEW.state='abandoned' AND OLD.state IN ('pending','installed')
+  BEGIN ${statements[field]}; END`),
+    );
+    await expect(abandon(pending.filename, true)).rejects.toThrow("changed");
+    expect(await rows()).toEqual(original);
+    expect(await shared()).toEqual(before);
+    expect(await fs.readFile(path(pending.filename), "utf8")).toBe(source);
+    await db.run(sql`DROP TRIGGER change_abandonment`);
+    expect((await abandon(pending.filename, true)).changed).toBe(true);
+    const decision = await rows();
+    expect((await abandon(pending.filename, true)).changed).toBe(false);
+    expect(await rows()).toEqual(decision);
+  },
+);
+
 it("previews abandonment and retains immutable intent, errors, reason and decision time", async () => {
   const pending = await interrupted();
   await db.update(localImageUploadTable).set({ error: "Original filesystem failure" });

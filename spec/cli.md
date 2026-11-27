@@ -797,6 +797,11 @@ The command returns the verified URL. Create an image card from it with
 copies, renames or removes files. Interrupted temporary-only or ambiguous publication
 requires manual review. Failed database confirmation retains pending evidence.
 
+Recovery verifies the final receipt and card-reference presence after database
+triggers finish. It rechecks matching published bytes and absence of a temporary
+file before commit. Changed publication rolls back database changes and keeps the
+prior pin and current disk state for review without repeating installation.
+
 ### `kozane image abandon <filename>`
 
 Preview release of a reviewed image upload pin. The default is read-only.
@@ -812,6 +817,11 @@ Live references still protect the bytes. Completed uploads cannot be abandoned.
 Repeating the same decision is idempotent. Another reason cannot replace it. Applying
 shares the installation writer lock and may refuse during contention without retrying
 callbacks. A failed statement or commit leaves the pin intact.
+
+Abandonment verifies the final reason, decision time, retained metadata and
+card-reference presence after database triggers finish. Changed evidence rolls
+back the decision and triggered database changes together, preserving the prior
+pin and files.
 
 Unreferenced abandoned files become normal cleanup candidates. Regular temporary
 files belonging to abandoned uploads are collected after 24 hours. Queued deletion
