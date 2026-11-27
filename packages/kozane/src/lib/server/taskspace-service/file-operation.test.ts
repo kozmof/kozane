@@ -337,3 +337,190 @@ it.each(cases)(
     expect(await getAllTaskspaceLocalMetadata({ db })).toEqual(local);
   },
 );
+
+it.each(cases)(
+  "refuses %s confirmation when a trigger changes its attachment",
+  async (operation) => {
+    mkdirSync(join(root, "other"));
+    await db.run(sql`CREATE TRIGGER change_attachment AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN UPDATE taskspace_local SET path='other'; END`);
+    const before = await shared();
+    const local = await getAllTaskspaceLocalMetadata({ db });
+    await expect(change(operation)).rejects.toMatchObject({
+      status: 500,
+      message: expect.stringContaining("needs recovery"),
+    });
+    const [row] = await operations();
+    expect(row).toMatchObject({ state: "pending", confirmedAt: null, error: null });
+    expect(inspectTaskspaceFileOperation(row, root)).toBe(observation(operation));
+    expect(await shared()).toEqual(before);
+    expect(await getAllTaskspaceLocalMetadata({ db })).toEqual(local);
+  },
+);
+
+it.each(cases)(
+  "keeps newer disk state when %s no longer has its intended outcome",
+  async (operation) => {
+    switch (operation) {
+      case "create-file": {
+        const original = disk.createTaskspaceFile;
+        vi.spyOn(disk, "createTaskspaceFile").mockImplementation((input) => {
+          const result = original(input);
+          writeFileSync(join(root, "demo", "new.txt"), "Newer edit");
+          return result;
+        });
+        break;
+      }
+      case "save-file": {
+        const original = disk.writeTaskspaceFile;
+        vi.spyOn(disk, "writeTaskspaceFile").mockImplementation((input) => {
+          const result = original(input);
+          writeFileSync(join(root, "demo", "original.txt"), "Newer edit");
+          return result;
+        });
+        break;
+      }
+      case "create-directory": {
+        const original = disk.createTaskspaceDirectory;
+        vi.spyOn(disk, "createTaskspaceDirectory").mockImplementation((input) => {
+          const result = original(input);
+          rmSync(join(root, "demo", "new-directory"), { recursive: true });
+          writeFileSync(join(root, "demo", "new-directory"), "Newer file");
+          return result;
+        });
+        break;
+      }
+      case "rename-entry": {
+        const original = disk.renameTaskspaceEntry;
+        vi.spyOn(disk, "renameTaskspaceEntry").mockImplementation((input) => {
+          const result = original(input);
+          writeFileSync(join(root, "demo", "original.txt"), "Newer source");
+          return result;
+        });
+        break;
+      }
+      case "remove-entry": {
+        const original = disk.deleteTaskspaceEntry;
+        vi.spyOn(disk, "deleteTaskspaceEntry").mockImplementation((input) => {
+          const result = original(input);
+          writeFileSync(join(root, "demo", "original.txt"), "Recreated");
+          return result;
+        });
+      }
+    }
+    await expect(change(operation)).rejects.toMatchObject({
+      status: 500,
+      message: expect.stringContaining("needs recovery"),
+    });
+    expect(await operations()).toMatchObject([{ state: "pending", error: null }]);
+    const file =
+      operation === "create-file"
+        ? "new.txt"
+        : operation === "create-directory"
+          ? "new-directory"
+          : "original.txt";
+    const expected = {
+      "create-file": "Newer edit",
+      "save-file": "Newer edit",
+      "create-directory": "Newer file",
+      "rename-entry": "Newer source",
+      "remove-entry": "Recreated",
+    }[operation];
+    expect(readFileSync(join(root, "demo", file), "utf8")).toBe(expected);
+  },
+);
+
+it.each(cases)(
+  "confirms %s while leaving unrelated unsafe timestamps unchanged",
+  async (operation) => {
+    await db.run(
+      sql`UPDATE taskspace SET created_at=9007199254740993,updated_at=-9007199254740995`,
+    );
+    await db.run(sql`UPDATE taskspace_local SET last_seen_at=9007199254740997`);
+    const before = await shared();
+    await change(operation);
+    expect(await shared()).toEqual(before);
+    expect(
+      (await db.values(sql`SELECT CAST(last_seen_at AS TEXT) FROM taskspace_local`))[0][0],
+    ).toBe("9007199254740997");
+    expect((await operations())[0].state).toBe("confirmed");
+  },
+);
+
+it("retains a separately committed attachment change after disk work", async () => {
+  mkdirSync(join(root, "other"));
+  await expect(
+    journalTaskspaceFileChange(
+      {
+        db,
+        ...params,
+        root,
+        baseDir: join(root, "demo"),
+        request: { operation: "create-file", subPath: "new.txt" },
+        currentBaseDir: async () => join(root, "demo"),
+      },
+      async (baseDir) => {
+        const result = disk.createTaskspaceFile({ baseDir, subPath: "new.txt" });
+        await updateTaskspaceLocation({ db, taskspaceId: params.taskspaceId, path: "other" });
+        return result;
+      },
+    ),
+  ).rejects.toMatchObject({ phase: "confirm" });
+  expect(await getAllTaskspaceLocalMetadata({ db })).toMatchObject([{ path: "other" }]);
+  expect(await operations()).toMatchObject([{ state: "pending", error: null }]);
+  expect(readFileSync(join(root, "demo", "new.txt"), "utf8")).toBe("");
+});
+
+it("owns file intent and its resolver before asynchronous journal work", async () => {
+  const input = {
+    db,
+    ...params,
+    root,
+    baseDir: join(root, "demo"),
+    request: { operation: "create-file" as const, subPath: "owned.txt" },
+    currentBaseDir: async () => join(root, "demo"),
+  };
+  const callback = vi.fn((baseDir: string) =>
+    disk.createTaskspaceFile({ baseDir, subPath: "owned.txt" }),
+  );
+  const changing = journalTaskspaceFileChange(input, callback);
+  input.request.subPath = "changed.txt";
+  input.currentBaseDir = async () => {
+    throw Error("Changed resolver");
+  };
+  await changing;
+  expect(callback).toHaveBeenCalledTimes(1);
+  expect((await operations())[0]).toMatchObject({
+    path: join("demo", "owned.txt"),
+    state: "confirmed",
+  });
+  expect(existsSync(join(root, "demo", "changed.txt"))).toBe(false);
+});
+
+it.each(["namespace", "taskspace", "missing-namespace"] as const)(
+  "refuses final %s changes without confirming file work",
+  async (field) => {
+    await db.run(
+      sql`INSERT INTO namespace(id,name,is_default) VALUES('other-namespace','Other',0)`,
+    );
+    const statement = {
+      namespace: "UPDATE taskspace SET namespace_id='other-namespace'",
+      taskspace: "DELETE FROM taskspace",
+      "missing-namespace": `DELETE FROM namespace WHERE id='${params.namespaceId}'`,
+    };
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_visibility AFTER UPDATE ON local_file_operation
+    WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN ${statement[field]}; END`),
+    );
+    const before = await shared();
+    const attachment = await getAllTaskspaceLocalMetadata({ db });
+    await expect(change("create-file")).rejects.toMatchObject({
+      status: 500,
+      message: expect.stringContaining("needs recovery"),
+    });
+    expect(await shared()).toEqual(before);
+    expect(await getAllTaskspaceLocalMetadata({ db })).toEqual(attachment);
+    expect(await operations()).toMatchObject([{ state: "pending", error: null }]);
+    expect(readFileSync(join(root, "demo", "new.txt"), "utf8")).toBe("");
+  },
+);

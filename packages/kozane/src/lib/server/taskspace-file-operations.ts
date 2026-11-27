@@ -19,7 +19,6 @@ export type TaskspaceFileChange = { subPath: string } & (
   | { operation: "save-file"; content: string; signature: string | null }
   | { operation: "rename-entry"; name: string }
 );
-type Operation = typeof localFileOperationTable.$inferSelect;
 export type TaskspaceFileIntent = { requestedPath: string } & (
   | { operation: "create-file"; contentHash: string }
   | { operation: "save-file"; contentHash: string; signature: string | null }
@@ -214,7 +213,11 @@ export function inspectTaskspaceFileOperation(
 }
 
 /** Bind recorded evidence to the current attachment before inspecting affected entries. */
-export function inspectTaskspaceFileRecovery(operation: Operation, root: string, baseDir: string) {
+export function inspectTaskspaceFileRecovery(
+  operation: LocalFileOperationEvidence,
+  root: string,
+  baseDir: string,
+) {
   const intent = parseTaskspaceFileIntent(operation);
   if (!intent) return "invalid-intent" as const;
   try {

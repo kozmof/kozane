@@ -5,6 +5,7 @@ import {
 } from "../taskspace-file-operations.js";
 import { TaskspaceFilesError } from "../taskspace-files.js";
 import { journalLocalOperation } from "./journal-operation.js";
+import { taskspaceFileOutcomeIssue } from "./file-outcome.js";
 export { LocalOperationError as TaskspaceFileOperationError } from "./journal-operation.js";
 
 /** Called inside the taskspace queue. Filesystem work runs once, between durable boundaries. */
@@ -20,20 +21,23 @@ export async function journalTaskspaceFileChange<T>(
   },
   change: (baseDir: string) => T | Promise<T>,
 ): Promise<T> {
-  const { db, namespaceId, taskspaceId, root, baseDir, request } = input;
+  const { db, namespaceId, taskspaceId, root, baseDir, currentBaseDir } = input;
+  const request = Object.freeze({ ...input.request });
   const prepared = prepareTaskspaceFileChange(root, baseDir, request);
+  const evidence = Object.freeze({
+    kind: "taskspace.file" as const,
+    version: 1,
+    namespaceId,
+    taskspaceId,
+    path: prepared.storedPath,
+    pathKind: prepared.pathKind,
+    intent: prepared.intent,
+  });
   return journalLocalOperation(
     db,
-    {
-      kind: "taskspace.file",
-      namespaceId,
-      taskspaceId,
-      path: prepared.storedPath,
-      pathKind: prepared.pathKind,
-      intent: prepared.intent,
-    },
+    evidence,
     async () => {
-      const currentBase = await input.currentBaseDir();
+      const currentBase = await currentBaseDir();
       const current = prepareTaskspaceFileChange(root, currentBase, request);
       if (
         current.base !== prepared.base ||
@@ -47,5 +51,10 @@ export async function journalTaskspaceFileChange<T>(
       return change(currentBase);
     },
     (_tx, result) => result,
+    undefined,
+    async (tx) => {
+      const issue = await taskspaceFileOutcomeIssue(tx, root, evidence);
+      if (issue !== null) throw new TaskspaceFilesError("stale", issue);
+    },
   );
 }

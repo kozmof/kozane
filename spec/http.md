@@ -511,6 +511,19 @@ a former namespace folder also change only their label after a namespace rename.
 Return 400 for an invalid name, 404 for a taskspace not on this board, and 409 when the new
 directory name is taken.
 
+### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]/label`
+
+Change the shared label without moving a directory. Body requires exactly
+`{ name }` with a non-empty trimmed name. Return `{ id, name, path, pathKind }`.
+Preserve creation time, the local attachment and local observation time. Advance
+the shared update time only when the label changes. No workspace or directory
+configuration is required.
+
+The taskspace must be visible in the requested namespace. Unplaced taskspaces are
+visible in every existing namespace. Return 400 for invalid input and 404 for an
+unknown namespace or a taskspace outside this board. A failed write or reply read
+rolls back the label change.
+
 ### `DELETE /[namespaceId]/api/taskspaces/[taskspaceId]`
 
 Delete a taskspace. A managed directory, as for PATCH, is deleted with everything in it.
@@ -536,6 +549,12 @@ past 500 entries. Taskspaces must be visible on this namespace's board.
 All taskspace file routes check containment before and after path resolution.
 Return 400 for traversal, 403 for unreadable paths, 404 for unknown namespace,
 taskspace, or directory, and 503 without a workspace.
+
+File mutations recheck visibility, the current attachment and the recorded disk
+outcome after confirmation triggers finish. Failed verification returns 500 with
+a recovery message. Completed disk work and newer file edits stay in place, and
+the operation remains pending. Run `kozane doctor` before repeating the change.
+See [local filesystem operation records](../docs/local-file-operations.md).
 
 ### `POST /[namespaceId]/api/taskspaces/[taskspaceId]/files`
 

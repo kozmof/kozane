@@ -1,7 +1,7 @@
 import type { DB } from "../../../db/database.js";
 import { TaskspaceServiceError } from "./errors.js";
-import { getNamespace } from "../../../db/api/namespace.js";
-import { getTaskspaceInNamespace } from "../../../db/api/taskspace.js";
+import { and, eq, isNull, or } from "drizzle-orm";
+import { namespaceTable, taskspaceTable, taskspaceLocalTable } from "../../../db/schema.js";
 import { getWorkspaceRoot } from "../../../db/internal/config.js";
 import { resolveTaskspacePath } from "../taskspace-path.js";
 import { TASKSPACE_FILES_STATUS, TaskspaceFilesError } from "../taskspace-files.js";
@@ -21,11 +21,28 @@ export async function taskspaceBaseDir(
   taskspaceId: string,
 ): Promise<string> {
   const { db } = locals;
-  if (!(await getNamespace({ db, namespaceId })))
+  if (
+    !(await db
+      .select({ id: namespaceTable.id })
+      .from(namespaceTable)
+      .where(eq(namespaceTable.id, namespaceId))
+      .get())
+  )
     throw new TaskspaceServiceError(404, "Namespace not found");
-  const taskspace = await getTaskspaceInNamespace({ db, namespaceId, taskspaceId });
+  const taskspace = await db
+    .select({ path: taskspaceLocalTable.path, pathKind: taskspaceLocalTable.pathKind })
+    .from(taskspaceTable)
+    .leftJoin(taskspaceLocalTable, eq(taskspaceLocalTable.taskspaceId, taskspaceTable.id))
+    .where(
+      and(
+        eq(taskspaceTable.id, taskspaceId),
+        or(eq(taskspaceTable.namespaceId, namespaceId), isNull(taskspaceTable.namespaceId)),
+      ),
+    )
+    .get();
   if (!taskspace) throw new TaskspaceServiceError(404, "Taskspace not found");
-  if (!taskspace.path) throw new TaskspaceServiceError(404, "Taskspace has no directory");
+  if (!taskspace.path || taskspace.pathKind === null)
+    throw new TaskspaceServiceError(404, "Taskspace has no directory");
   const root = getWorkspaceRoot();
   if (!root)
     throw new TaskspaceServiceError(503, "No Kozane workspace found. Run 'kozane init' first.");
