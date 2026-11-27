@@ -40,6 +40,24 @@ it("previews and explicitly abandons tracking while retaining evidence and disk 
     expect((await client.execute("SELECT state FROM local_file_operation")).rows[0].state).toBe(
       "pending",
     );
+    const pending = (await client.execute("SELECT * FROM local_file_operation")).rows;
+    await client.execute(
+      "CREATE TRIGGER change_abandonment AFTER UPDATE ON local_file_operation WHEN NEW.state='abandoned' AND OLD.state='pending' BEGIN UPDATE local_file_operation SET error='Different failure' WHERE id=NEW.id; END",
+    );
+    const refused = run(
+      root,
+      "taskspace",
+      "abandon",
+      "reviewed",
+      "--reason",
+      "Reviewed on disk",
+      "--apply",
+    );
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toContain("abandonment changed");
+    expect((await client.execute("SELECT * FROM local_file_operation")).rows).toEqual(pending);
+    expect(readFileSync(join(root, "notes.txt"), "utf8")).toBe("Keep notes");
+    await client.execute("DROP TRIGGER change_abandonment");
     const applied = run(
       root,
       "taskspace",

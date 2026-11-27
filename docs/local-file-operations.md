@@ -240,6 +240,13 @@ reason cannot replace the recorded one. Abandoned operations cannot be confirmed
 by the recovery command. Abandoned records stay in recovery exports and
 shared restoration preserves them. Pending diagnostics exclude them.
 
+Applying compares the operation with the evidence read before entering the
+taskspace queue. Changed identity, intent, creation time or error requires another
+inspection. Before committing, the host rereads the abandonment record and verifies
+the reason, timestamp and original evidence after database triggers finish.
+Trigger changes roll back the abandonment transaction. Identical concurrent
+decisions remain idempotent.
+
 The journal has no foreign keys to shared rows. Shared action capture, isolated
 validation and shared replacement exclude it alongside `taskspace_local`.
 Recovery JSON version 26 includes both tables, local image upload staging,

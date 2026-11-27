@@ -1000,6 +1000,11 @@ It does not complete, retry, reverse or cancel filesystem work. Confirmed operat
 refused. Repeating the same abandonment reason makes no changes. A different reason for an
 already abandoned operation is refused.
 
+Applying refuses evidence changed while waiting for the taskspace queue. Before
+commit, verify the final abandonment state, reason, timestamp and original intent
+and error after database triggers finish. Changed evidence aborts this decision.
+Earlier committed evidence remains available for review.
+
 ### `kozane taskspace attach <taskspaceId>`
 
 Attach a directory on this device to an existing shared taskspace. Accept a full or
