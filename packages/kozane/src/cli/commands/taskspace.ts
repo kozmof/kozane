@@ -403,7 +403,7 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       );
     } catch (failure) {
       if (!(failure instanceof TaskspaceClaimError)) throw failure;
-      if (failure.phase === "attach") {
+      if (failure.phase === "attach" || failure.cause instanceof AggregateError) {
         console.error(
           "Directory creation needs recovery. Run 'kozane doctor' before creating it again.",
         );

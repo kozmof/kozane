@@ -66,7 +66,7 @@ export async function createTaskspace(db: DB, namespaceId: string, body: Record<
     );
   } catch (failure) {
     if (!(failure instanceof TaskspaceClaimError)) throw failure;
-    if (failure.phase === "attach")
+    if (failure.phase === "attach" || failure.cause instanceof AggregateError)
       throw new TaskspaceServiceError(
         500,
         "Directory creation needs recovery. Run 'kozane doctor' before creating it again.",

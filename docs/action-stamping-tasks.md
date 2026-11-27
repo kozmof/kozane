@@ -997,6 +997,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 
 - [ ] Add pending and confirmed local file-operation records with affected paths and intended content hashes where applicable.
 - [x] Journal taskspace directory claims before disk work, atomically confirm local attachments, retain interrupted evidence and report it through `doctor` without retrying callbacks. See [local filesystem operation records](local-file-operations.md).
+- [x] Guard creation's separate claim journal with owned inputs, original shared fields and exact intent. Refuse compensation after shared edits, local metadata, new card links or changed error evidence, verify compensation and final attachment publication after triggers, preserve completed disk work and report recovery needs through HTTP and CLI creation.
 - [x] Attach a device-local directory to an existing namespaced shared taskspace through `taskspace attach`. Commit local intent before disk work, preserve shared rows on success and failure, and recover interrupted confirmation without retrying directory creation.
 - [x] Bind claim recovery confirmation to the inspected immutable intent and recorded error. Verify the final receipt, namespace and attachment after database triggers, roll back changed evidence, preserve large shared timestamps and leave later edits alone after an already confirmed receipt.
 - [x] Journal all five file mutation methods with intended hashes where applicable, preserve evidence after statement and commit failures, and inspect disk state without retrying callbacks.

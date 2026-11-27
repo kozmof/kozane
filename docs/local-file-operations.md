@@ -34,10 +34,23 @@ transaction. The pending operation survives compensation, including when its
 taskspace or namespace no longer exists. If compensation also fails, the caller
 receives both errors and the original pending intent remains.
 
+Creation copies record and directory inputs before awaiting database work.
+Initial publication and the check before disk work require the original shared
+record, exact pending intent and no local metadata. Compensation deletes only an
+unchanged shared record without local metadata or linked cards. Later shared
+edits, attachments, card links or separately recorded errors block compensation.
+Its error record and final shared-row absence are verified after database triggers.
+
 If attachment or confirmation fails after the marker was written, the host keeps
 the directory, shared identity and pending operation. It rolls back attachment
 changes. The caller receives a recovery message rather than success. A process
 interruption at either durable boundary likewise leaves a pending operation.
+
+Creation confirmation requires the intended marker bytes through a path without
+symbolic links. It verifies the final journal receipt, original shared fields,
+attachment, observation and marker after database triggers finish. Changed
+evidence rolls back attachment publication. HTTP and CLI creation direct callers
+to `doctor` when confirmation or compensation needs recovery.
 
 Attach a directory to an existing shared taskspace with an explicit path.
 

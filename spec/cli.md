@@ -1085,8 +1085,15 @@ folder, since deleting that taskspace would delete the new one too. Inside the w
 is decided by the `.taskspace.json` markers on disk. For a target outside it, such as with an
 absolute `defaultDir`, it is decided by the taskspace records. It is also refused when a
 parent folder inside the workspace is a symlink that leads outside it or nowhere.
-With `--dir` the create goes ahead, since the user chose the directory, but prints a warning.
+With `--dir`, a target inside another taskspace is permitted and prints a warning.
 Kozane then never moves or deletes the outer directory, because it holds another taskspace.
+
+Claim confirmation requires the intended marker bytes through a path without
+symbolic links and unchanged shared creation fields. A failed claim compensates
+shared creation only while the original record and journal evidence remain
+unchanged and no local metadata or linked cards have appeared. Confirmation or
+compensation failures report that recovery is needed. Run `kozane doctor` before
+creating again. See [local filesystem operation records](../docs/local-file-operations.md).
 
 ```bash
 kozane taskspace create <name> [--scope <scopeId>] [--no-scope]

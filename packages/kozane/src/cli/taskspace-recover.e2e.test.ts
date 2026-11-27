@@ -24,6 +24,32 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
+it("directs CLI callers to recovery when failed creation cannot compensate shared state", async () => {
+  const root = mkdtempSync(join(tmpdir(), "kozane-cli-claim-compensation-"));
+  roots.push(root);
+  expect(run(root, "init").status).toBe(0);
+  writeFileSync(join(root, "blocked"), "Keep this file");
+  const client = createClient({ url: `file:${join(root, ".kozane", "kozane.db")}` });
+  try {
+    await client.execute(
+      "CREATE TRIGGER reject_compensation BEFORE DELETE ON taskspace BEGIN SELECT RAISE(ABORT,'compensation refused'); END",
+    );
+    const creation = run(root, "taskspace", "create", "Blocked", "--no-scope", "--dir", "blocked");
+    expect(creation.status).toBe(1);
+    expect(creation.stderr).toContain("needs recovery");
+    expect((await client.execute("SELECT name FROM taskspace")).rows).toEqual([
+      { name: "Blocked" },
+    ]);
+    expect((await client.execute("SELECT * FROM taskspace_local")).rows).toEqual([]);
+    expect((await client.execute("SELECT state,error FROM local_file_operation")).rows).toEqual([
+      { state: "pending", error: null },
+    ]);
+    expect(readFileSync(join(root, "blocked"), "utf8")).toBe("Keep this file");
+  } finally {
+    client.close();
+  }
+}, 30000);
+
 it("inspects and explicitly confirms a real interrupted CLI creation without retrying it", async () => {
   const root = mkdtempSync(join(tmpdir(), "kozane-cli-recover-"));
   roots.push(root);
@@ -31,7 +57,7 @@ it("inspects and explicitly confirms a real interrupted CLI creation without ret
   const client = createClient({ url: `file:${join(root, ".kozane", "kozane.db")}` });
   try {
     await client.execute(
-      "CREATE TRIGGER interrupt_claim BEFORE UPDATE ON local_file_operation BEGIN SELECT RAISE(ABORT,'interrupted'); END",
+      "CREATE TRIGGER interrupt_claim AFTER UPDATE ON local_file_operation WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN UPDATE local_file_operation SET created_at=created_at+1 WHERE id=NEW.id; END",
     );
     const creation = run(root, "taskspace", "create", "Interrupted", "--no-scope");
     expect(creation.status).toBe(1);

@@ -481,7 +481,15 @@ or configure an external `taskspace.defaultDir` or `taskspace.namespacePaths` en
 | 400    | Parent symlink points outside the workspace or has no target               |
 | 404    | Unknown namespace                                                          |
 | 409    | Directory already exists or target is inside another taskspace             |
+| 500    | Claim confirmation or compensation needs recovery. Run `kozane doctor` before creating again |
 | 503    | No workspace                                                               |
+
+Confirmation requires exact intended marker bytes through a path without symbolic
+links and unchanged shared creation fields. Changed confirmation evidence retains
+the directory and pending claim without publishing an attachment. Failed directory
+creation removes the new shared record only while its original fields, journal
+evidence and absence of local metadata and linked cards still match. See
+[local filesystem operation records](../docs/local-file-operations.md).
 
 ### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]`
 
