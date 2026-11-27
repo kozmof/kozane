@@ -1027,6 +1027,10 @@ shared identity and recovery evidence. Inspect the printed operation ID with
 `--apply`, which changes no files. See
 [local filesystem operation records](../docs/local-file-operations.md).
 
+Before committing attachment, recheck the namespace, path, path kind, observation
+and marker after confirmation triggers finish. Changed publication rolls back
+database changes while keeping the completed directory claim and pending intent.
+
 ### `kozane taskspace create <name>`
 
 Create a database record, target directory, and `.taskspace.json` identity marker. Require

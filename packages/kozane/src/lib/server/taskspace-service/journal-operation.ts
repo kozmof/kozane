@@ -19,13 +19,17 @@ export class LocalOperationError extends Error {
   }
 }
 
-/** The caller owns its taskspace queue. Disk work runs once between database transactions. */
+/**
+ * The caller owns its taskspace queue. Disk work runs once between database transactions.
+ * Verify published results after confirmation triggers, then recheck the receipt before commit.
+ */
 export async function journalLocalOperation<T, R>(
   db: DB,
   intent: Intent,
   change: (operationId: string) => T | Promise<T>,
   commit: (tx: Tx, result: T, operationId: string) => R | Promise<R>,
   beforeRecord?: (tx: Tx) => Promise<void>,
+  verify?: (tx: Tx, response: R) => void | Promise<void>,
 ): Promise<R> {
   const owned = Object.freeze({
     kind: intent.kind,
@@ -117,6 +121,7 @@ export async function journalLocalOperation<T, R>(
         .where(pending)
         .returning({ id: localFileOperationTable.id });
       if (confirmed.length !== 1) throw new Error("Local filesystem intent changed or is missing");
+      await verify?.(tx, response);
       // RETURNING precedes AFTER triggers. Read back the durable confirmation before success.
       const receipt = await tx
         .select({ id: localFileOperationTable.id })

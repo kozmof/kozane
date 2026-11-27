@@ -55,7 +55,7 @@ export async function claimExistingTaskspace(
     }),
   });
   const evidence = Object.freeze({ ...intent, version: 1 });
-  async function requireTarget(tx: Tx | ReadTx) {
+  async function requireShared(tx: Tx | ReadTx) {
     const namespace = await tx
       .select({ id: namespaceTable.id })
       .from(namespaceTable)
@@ -70,6 +70,9 @@ export async function claimExistingTaskspace(
     if (!shared) throw Error("Taskspace not found");
     if (shared.namespaceId !== record.namespaceId)
       throw Error("Taskspace namespace does not match directory claim");
+  }
+  async function requireTarget(tx: Tx | ReadTx) {
+    await requireShared(tx);
     const attachment = await tx
       .select({ path: taskspaceLocalTable.path })
       .from(taskspaceLocalTable)
@@ -98,8 +101,8 @@ export async function claimExistingTaskspace(
       .get();
     if (!pending) throw Error("Directory claim intent changed or is missing");
   }
-  return oneAtATime(record.taskspaceId, () =>
-    journalLocalOperation(
+  return oneAtATime(record.taskspaceId, async () => {
+    const published = await journalLocalOperation(
       record.db,
       intent,
       async (operationId) => {
@@ -119,14 +122,15 @@ export async function claimExistingTaskspace(
         const observed = inspectLocalClaim(evidence, directory.workspaceRoot);
         if (observed !== "matching-marker")
           throw Error(`Directory claim cannot be confirmed: ${observed}`);
+        const observedAt = record.lastSeenAt ?? new Date();
         await updateTaskspaceLocationInTx({
           db: tx,
           taskspaceId: record.taskspaceId,
           path: location.storedPath,
           pathKind: location.pathKind,
-          lastSeenAt: record.lastSeenAt ?? new Date(),
+          lastSeenAt: observedAt,
         });
-        return record.taskspaceId;
+        return { taskspaceId: record.taskspaceId, observedAt };
       },
       async (tx) => {
         await requireTarget(tx);
@@ -148,6 +152,26 @@ export async function claimExistingTaskspace(
         )
           throw Error(`Directory cannot be claimed: ${observed}`);
       },
-    ),
-  );
+      async (tx, response) => {
+        await requireShared(tx);
+        const attachment = await tx
+          .select({ taskspaceId: taskspaceLocalTable.taskspaceId })
+          .from(taskspaceLocalTable)
+          .where(
+            and(
+              eq(taskspaceLocalTable.taskspaceId, response.taskspaceId),
+              eq(taskspaceLocalTable.path, location.storedPath),
+              eq(taskspaceLocalTable.pathKind, location.pathKind),
+              eq(taskspaceLocalTable.lastSeenAt, response.observedAt),
+            ),
+          )
+          .get();
+        if (!attachment) throw Error("Directory attachment changed or is missing");
+        const observed = inspectLocalClaim(evidence, directory.workspaceRoot);
+        if (observed !== "matching-marker")
+          throw Error(`Directory claim cannot be confirmed: ${observed}`);
+      },
+    );
+    return published.taskspaceId;
+  });
 }

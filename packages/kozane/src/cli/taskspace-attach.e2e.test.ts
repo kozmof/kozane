@@ -86,7 +86,7 @@ it("recovers interrupted attachment of a new external directory without recreati
       "SELECT id,namespace_id,scope_id,name,CAST(created_at AS TEXT) AS created_at,CAST(updated_at AS TEXT) AS updated_at FROM taskspace";
     const shared = (await client.execute(sharedQuery)).rows;
     await client.execute(
-      "CREATE TRIGGER interrupt_claim BEFORE UPDATE ON local_file_operation BEGIN SELECT RAISE(ABORT,'interrupted'); END",
+      "CREATE TRIGGER interrupt_claim AFTER UPDATE ON local_file_operation WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN UPDATE taskspace_local SET path='different'; END",
     );
     const attached = run(root, "taskspace", "attach", taskspaceId, "--dir", target);
     expect(attached.status).toBe(1);

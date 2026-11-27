@@ -210,3 +210,43 @@ it("preserves a separately recorded error when disk work also fails", async () =
   expect((await rows())[0]).toMatchObject({ state: "pending", error: "Separate failure" });
   expect(await attachments()).toEqual([]);
 });
+
+it("verifies confirmed publication in the same transaction before returning its response", async () => {
+  const verify = vi.fn(async (tx: Tx, response: string) => {
+    expect(response).toBe("published");
+    expect((await tx.select().from(localFileOperationTable))[0].state).toBe("confirmed");
+    expect(await tx.select().from(taskspaceLocalTable)).toMatchObject([{ path: "target" }]);
+  });
+  expect(await journalLocalOperation(db, intent(), applyDisk, publish, undefined, verify)).toBe(
+    "published",
+  );
+  expect(verify).toHaveBeenCalledTimes(1);
+});
+
+it("rolls back publication and confirmation when final verification refuses the result", async () => {
+  const callback = vi.fn(applyDisk);
+  await expect(
+    journalLocalOperation(db, intent(), callback, publish, undefined, () => {
+      throw Error("Verification refused");
+    }),
+  ).rejects.toMatchObject({
+    phase: "confirm",
+    cause: expect.objectContaining({ message: "Verification refused" }),
+  });
+  expect(callback).toHaveBeenCalledTimes(1);
+  expect(await attachments()).toEqual([]);
+  expect(await rows()).toMatchObject([{ state: "pending", error: null, confirmedAt: null }]);
+  expect(readFileSync(join(root, "result"), "utf8")).toBe("Applied once");
+});
+
+it("checks the final receipt after the verification callback settles", async () => {
+  await expect(
+    journalLocalOperation(db, intent(), applyDisk, publish, undefined, async (tx) => {
+      await tx.update(localFileOperationTable).set({ intent: "changed" });
+    }),
+  ).rejects.toMatchObject({ phase: "confirm" });
+  expect(await attachments()).toEqual([]);
+  expect(await rows()).toMatchObject([
+    { intent: "original evidence", state: "pending", error: null },
+  ]);
+});

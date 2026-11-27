@@ -66,6 +66,11 @@ deletes the shared identity after failure. A user-chosen directory remains
 user-owned even when the command creates it. Interrupted attachment uses the
 claim recovery flow below, which never repeats directory creation.
 
+Existing-taskspace attachment rechecks the namespace, exact attachment path and
+kind, local observation and marker after confirmation triggers finish. Changed
+publication rolls back the attachment and journal confirmation together. The
+completed directory claim and pending intent remain available for recovery.
+
 File mutations, managed directory operations, layout moves and attachment to an
 existing taskspace share a journal boundary. It copies intent fields before
 asynchronous preparation and verifies the pending row after insertion, before

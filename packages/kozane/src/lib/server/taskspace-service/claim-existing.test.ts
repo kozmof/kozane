@@ -280,3 +280,49 @@ it.each(["path", "date"])("refuses invalid %s inputs before queuing disk work", 
   expect(await db.select().from(localFileOperationTable)).toEqual([]);
   expect(existsSync(join(root, "target"))).toBe(false);
 });
+
+it.each(["namespace", "path", "path-kind", "observation", "attachment", "taskspace"] as const)(
+  "rolls back attachment when confirmation triggers change final %s state",
+  async (field) => {
+    const statements = {
+      namespace: "UPDATE taskspace SET namespace_id=NULL",
+      path: "UPDATE taskspace_local SET path='different'",
+      "path-kind": "UPDATE taskspace_local SET path_kind='absolute'",
+      observation: "UPDATE taskspace_local SET last_seen_at=NULL",
+      attachment: "DELETE FROM taskspace_local",
+      taskspace: "DELETE FROM taskspace",
+    };
+    await db.run(
+      sql.raw(`CREATE TRIGGER change_attachment AFTER UPDATE ON local_file_operation
+      WHEN NEW.state='confirmed' AND OLD.state='pending' BEGIN ${statements[field]}; END`),
+    );
+    const before = await shared();
+    const callback = vi.spyOn(directories, "claimTaskspaceDirectory");
+    await expect(claim()).rejects.toMatchObject({ phase: "confirm" });
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(await shared()).toEqual(before);
+    expect(await db.select().from(taskspaceLocalTable)).toEqual([]);
+    expect(await operation()).toMatchObject({ state: "pending", confirmedAt: null, error: null });
+    expect(inspectLocalClaim(await operation(), root)).toBe("matching-marker");
+  },
+);
+
+it("keeps newer marker bytes when they change during attachment publication", async () => {
+  const evidence = await import("../local-file-operations.js");
+  const inspect = evidence.inspectLocalClaim;
+  let changed = false;
+  vi.spyOn(evidence, "inspectLocalClaim").mockImplementation((...args) => {
+    const result = inspect(...args);
+    if (!changed && result === "matching-marker") {
+      changed = true;
+      writeFileSync(join(root, "target", TASKSPACE_MARKER_FILE), "Newer marker");
+    }
+    return result;
+  });
+  const before = await shared();
+  await expect(claim()).rejects.toMatchObject({ phase: "confirm" });
+  expect(await shared()).toEqual(before);
+  expect(await db.select().from(taskspaceLocalTable)).toEqual([]);
+  expect(await operation()).toMatchObject({ state: "pending", error: null });
+  expect(readFileSync(join(root, "target", TASKSPACE_MARKER_FILE), "utf8")).toBe("Newer marker");
+});
