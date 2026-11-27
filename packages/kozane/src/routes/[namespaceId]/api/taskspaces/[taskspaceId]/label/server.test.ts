@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { PATCH } from "./+server.js";
 import { POST as createFile } from "../file/+server.js";
 import { createTestDB } from "../../../../../../test-utils/db.js";
@@ -19,18 +19,20 @@ import {
   TASKSPACE_MARKER_VERSION,
 } from "$lib/taskspace-marker.js";
 import { HttpClient } from "../../../../../../../../client/src/client/http-client.js";
+import { renameTaskspaceLabel } from "$lib/server/taskspace-service/label.js";
+import { oneAtATime } from "$lib/server/taskspace-service/queue.js";
 
 const failRead = vi.hoisted(() => ({ next: false }));
-vi.mock("$db/api/taskspace", async (original) => {
-  const real = await original<typeof import("$db/api/taskspace")>();
+vi.mock("$lib/server/taskspace-service/attachment.js", async (original) => {
+  const real = await original<typeof import("$lib/server/taskspace-service/attachment.js")>();
   return {
     ...real,
-    getTaskspace: async (input: Parameters<typeof real.getTaskspace>[0]) => {
+    readTaskspaceAttachment: async (...input: Parameters<typeof real.readTaskspaceAttachment>) => {
       if (failRead.next) {
         failRead.next = false;
         throw new Error("Reply read failed");
       }
-      return real.getTaskspace(input);
+      return real.readTaskspaceAttachment(...input);
     },
   };
 });
@@ -40,6 +42,15 @@ let taskspaceId: string;
 let root: string;
 let previousRoot: string | undefined;
 const stamp = new Date(1600000000000);
+async function observation() {
+  return Array.from(
+    (
+      await db.values(sql`SELECT typeof(last_seen_at),hex(last_seen_at),
+    CASE WHEN typeof(last_seen_at)='real' THEN last_seen_at ELSE NULL END
+    FROM taskspace_local WHERE taskspace_id=${taskspaceId}`)
+    )[0],
+  );
+}
 function event(
   input: unknown,
   namespace = namespaceId,
@@ -260,4 +271,87 @@ it("requires a JSON object request before changing the label", async () => {
   ).rejects.toMatchObject({ status: 415 });
   await expect(PATCH(event([]))).rejects.toMatchObject({ status: 400 });
   expect((await getTaskspace({ db, taskspaceId }))!.name).toBe("draft");
+});
+
+it.each([
+  "9007199254740993",
+  "-9007199254740995",
+  "1.0000000000000002",
+  "CAST(x'610062' AS TEXT)",
+  "x'80ff00'",
+  "NULL",
+])("changes the shared label while preserving the local SQL observation %s", async (value) => {
+  await db.run(sql.raw(`UPDATE taskspace_local SET last_seen_at=${value}`));
+  const before = await observation();
+  const marker = readFileSync(join(root, "tasks", "draft", TASKSPACE_MARKER_FILE));
+  expect(await (await PATCH(event({ name: "New shared label" }))).json()).toEqual({
+    id: taskspaceId,
+    name: "New shared label",
+    path: "tasks/draft",
+    pathKind: "workspace_relative",
+  });
+  expect(await observation()).toEqual(before);
+  expect(readFileSync(join(root, "tasks", "draft", TASKSPACE_MARKER_FILE))).toEqual(marker);
+  expect((await db.select().from(taskspaceTable))[0]).toMatchObject({
+    name: "New shared label",
+    createdAt: stamp,
+  });
+});
+
+it("renames and writes at the same attachment without decoding a large local observation", async () => {
+  await db.run(sql`UPDATE taskspace_local SET last_seen_at=9007199254740993`);
+  const before = await observation();
+  const replies = await Promise.all([
+    PATCH(event({ name: "New shared label" })),
+    createFile({
+      locals: { db },
+      params: { namespaceId, taskspaceId },
+      request: new Request("http://localhost/file", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "new.md" }),
+      }),
+    } as never),
+  ]);
+  expect(replies.map((reply) => reply.status)).toEqual([200, 201]);
+  expect(await observation()).toEqual(before);
+  expect(readFileSync(join(root, "tasks", "draft", "new.md"), "utf8")).toBe("");
+});
+
+it("owns the database, routing and label input before waiting for taskspace work", async () => {
+  let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const held = oneAtATime(taskspaceId, async () => {
+    entered();
+    await waiting;
+  });
+  await started;
+  const locals = { db };
+  const params = { namespaceId, taskspaceId };
+  const input = { name: "Intended label" };
+  const changing = renameTaskspaceLabel(locals, params, input);
+  locals.db = null as never;
+  params.namespaceId = "missing";
+  params.taskspaceId = "missing";
+  input.name = "Changed label";
+  try {
+    release();
+    await held;
+    expect(await changing).toEqual({
+      id: taskspaceId,
+      name: "Intended label",
+      path: "tasks/draft",
+      pathKind: "workspace_relative",
+    });
+    expect((await getTaskspace({ db, taskspaceId }))!.name).toBe("Intended label");
+  } finally {
+    release();
+    await held;
+  }
 });

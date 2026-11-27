@@ -524,6 +524,10 @@ Preserve creation time, the local attachment and local observation time. Advance
 the shared update time only when the label changes. No workspace or directory
 configuration is required.
 
+The reply reads only identity and attachment fields. Local observation values
+remain unchanged without JavaScript number conversion. The request is copied
+before waiting for other taskspace changes.
+
 The taskspace must be visible in the requested namespace. Unplaced taskspaces are
 visible in every existing namespace. Return 400 for invalid input and 404 for an
 unknown namespace or a taskspace outside this board. A failed write or reply read

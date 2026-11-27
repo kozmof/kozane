@@ -123,9 +123,12 @@ Application lifecycle routing and durable filesystem recovery remain pending.
 The board's taskspace rename now uses a dedicated label endpoint backed by the
 shared service. It preserves directory paths, marker bytes and local observation
 timestamps, including while an editor file remains open. Response assembly shares
-the label transaction. The old combined endpoint retains its directory behavior
-for earlier clients. Creation, removal, durable local recovery and production
-action persistence still need application integration.
+the label transaction and reads only identity and attachment fields. Local
+observations retain their exact SQL storage class and value, including integers
+outside JavaScript's safe range. Database context, routing and label input are
+captured before waiting for other taskspace work. A failed reply read rolls back
+the label change. The old combined endpoint retains its directory behavior for
+earlier clients. Production action persistence remains pending.
 
 Migration 0021 now journals taskspace directory claims before disk work. Creation
 publishes the local attachment and confirmation together, preserves pending
@@ -904,6 +907,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Reject local-only and unknown roots before opening opt-in action boundaries, and reject children before allocating IDs or calling persistence hooks. Verify caught failures still roll back named handlers and generic compositions on native and Node WASM adapters.
 - [x] Move taskspace paths and observations into local metadata storage before baseline capture. Preserve metadata for absent taskspaces without cascading deletion.
 - [x] Keep shared taskspace rename independent of directory movement and local observation timestamps.
+- [x] Assemble shared-label replies without decoding local observations. Preserve exact SQL values, capture database context and request inputs before waiting for the taskspace queue, and verify concurrent file writes and reply-read rollback.
 - [ ] Verify write coverage, caught failures, overlapping calls, outstanding children, nested execution order and serialized composition replay.
 - [x] Verify all five taskspace file methods remain local-only and cannot mutate shared application rows.
 - [ ] Verify shared restoration preserves local taskspace metadata and installs no remote directory attachments.
