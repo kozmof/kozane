@@ -10,6 +10,7 @@ import {
 import { updateTaskspaceLocationInTx } from "../../../db/api/taskspace.js";
 import { inspectLocalClaim } from "../local-file-operations.js";
 import { oneAtATime } from "./queue.js";
+import { requireReviewedRecovery } from "./reviewed-operation.js";
 
 type Operation = typeof localFileOperationTable.$inferSelect;
 
@@ -78,19 +79,18 @@ async function inspect(db: ReadTx | Tx, root: string, operationId: string) {
 /** Preview is read-only. Apply repeats every check inside its serialized write transaction. */
 export async function recoverLocalClaim(db: DB, root: string, operationId: string, apply = false) {
   if (!apply) return withReadTx(db, (tx) => inspect(tx, root, operationId));
-  const identity = await withReadTx(db, (tx) =>
+  const reviewed = await withReadTx(db, (tx) =>
     tx
-      .select({ taskspaceId: localFileOperationTable.taskspaceId })
+      .select()
       .from(localFileOperationTable)
       .where(eq(localFileOperationTable.id, operationId))
       .get(),
   );
-  if (!identity) throw new Error("Local directory claim not found");
-  return oneAtATime(identity.taskspaceId, () =>
+  if (!reviewed) throw new Error("Local directory claim not found");
+  return oneAtATime(reviewed.taskspaceId, () =>
     withTx(db, async (tx) => {
+      await requireReviewedRecovery(tx, reviewed);
       const current = await inspect(tx, root, operationId);
-      if (current.operation.taskspaceId !== identity.taskspaceId)
-        throw new Error("Directory claim identity changed");
       if (current.status === "already-confirmed") return current;
       if (current.status === "blocked")
         throw new Error(`Directory claim cannot be confirmed: ${current.reason}`);

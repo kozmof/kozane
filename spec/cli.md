@@ -938,6 +938,13 @@ and any intended content hash or destination.
 | --- | --- |
 | `--apply` | Finish verified database changes and confirm the journal entry together |
 
+An apply call captures journal identity, intent, creation time, state and recorded
+error before waiting for this taskspace's earlier work. It verifies that evidence
+before inspecting disk or publishing changes. Changed evidence preserves current
+state and requires another inspection. A confirmed receipt reset to pending while
+the call waits is refused. An identical concurrent confirmation returns an already
+confirmed result, including when claim confirmation clears the reviewed error.
+
 Claim confirmation requires the exact intended marker bytes, an existing shared taskspace in
 the recorded namespace and no conflicting attachment. It refuses missing or changed
 markers, unsafe paths, symlinks, invalid intent and absent or reassigned taskspaces.

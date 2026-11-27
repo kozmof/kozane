@@ -98,6 +98,18 @@ kozane taskspace recover <operationId>
 kozane taskspace recover <operationId> --apply
 ```
 
+Each apply call captures the journal's identity, intent, creation time, state and
+recorded error before waiting in the taskspace queue. It verifies that evidence
+inside the write transaction before inspecting disk or publishing changes.
+Changed evidence leaves current database and disk state intact. Inspect again
+before confirming. Resetting a confirmed receipt to pending while the call waits
+also blocks that call.
+
+An identical pending operation confirmed while the call waits returns an already
+confirmed result. This remains idempotent when the first claim confirmation clears
+its reviewed error. Abandonment uses the same identity and error comparison for
+its reviewed decision.
+
 The default is read-only. Applying repeats verification inside the database write
 transaction and serializes with this process's taskspace operations. It requires
 the exact marker bytes, hashes derived from the recorded identity and claim

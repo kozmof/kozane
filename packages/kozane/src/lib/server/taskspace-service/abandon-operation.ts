@@ -1,26 +1,9 @@
 /** Retain an operator's decision without running, reversing or confirming filesystem work. */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withReadTx, withTx, type DB, type ReadTx, type Tx } from "../../../db/database.js";
 import { localFileOperationTable } from "../../../db/schema.js";
 import { oneAtATime } from "./queue.js";
-
-/** The decision covers this exact inspected evidence, including any recorded error. */
-function reviewedIdentity(operation: typeof localFileOperationTable.$inferSelect) {
-  return and(
-    eq(localFileOperationTable.id, operation.id),
-    eq(localFileOperationTable.kind, operation.kind),
-    eq(localFileOperationTable.version, operation.version),
-    eq(localFileOperationTable.taskspaceId, operation.taskspaceId),
-    eq(localFileOperationTable.namespaceId, operation.namespaceId),
-    eq(localFileOperationTable.path, operation.path),
-    eq(localFileOperationTable.pathKind, operation.pathKind),
-    eq(localFileOperationTable.intent, operation.intent),
-    eq(localFileOperationTable.createdAt, operation.createdAt),
-    operation.error === null
-      ? isNull(localFileOperationTable.error)
-      : eq(localFileOperationTable.error, operation.error),
-  );
-}
+import { reviewedOperationIdentity } from "./reviewed-operation.js";
 
 async function inspect(db: ReadTx | Tx, operationId: string, reason: string) {
   const operation = await db
@@ -54,7 +37,7 @@ export async function abandonLocalOperation(
       const reviewed = await tx
         .select({ id: localFileOperationTable.id })
         .from(localFileOperationTable)
-        .where(reviewedIdentity(preview))
+        .where(reviewedOperationIdentity(preview))
         .get();
       if (!reviewed) throw new Error("Operation evidence changed. Inspect again before abandoning");
       if (current.state === "abandoned") return { operation: current, changed: false };
@@ -62,7 +45,9 @@ export async function abandonLocalOperation(
       const abandoned = await tx
         .update(localFileOperationTable)
         .set({ state: "abandoned", abandonedAt: now, abandonReason: reason })
-        .where(and(reviewedIdentity(preview), eq(localFileOperationTable.state, "pending")))
+        .where(
+          and(reviewedOperationIdentity(preview), eq(localFileOperationTable.state, "pending")),
+        )
         .returning({ id: localFileOperationTable.id });
       if (abandoned.length !== 1) throw new Error("Operation is no longer pending");
       // RETURNING precedes AFTER triggers. Read the final decision and original evidence.
@@ -71,7 +56,7 @@ export async function abandonLocalOperation(
         .from(localFileOperationTable)
         .where(
           and(
-            reviewedIdentity(preview),
+            reviewedOperationIdentity(preview),
             eq(localFileOperationTable.state, "abandoned"),
             eq(localFileOperationTable.abandonedAt, now),
             eq(localFileOperationTable.abandonReason, reason),

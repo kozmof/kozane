@@ -5,6 +5,7 @@ import { localFileOperationTable } from "../../../db/schema.js";
 import { parseTaskspaceFileIntent } from "../taskspace-file-operations.js";
 import { taskspaceFileOutcomeIssue } from "./file-outcome.js";
 import { oneAtATime } from "./queue.js";
+import { requireReviewedRecovery } from "./reviewed-operation.js";
 
 type Operation = typeof localFileOperationTable.$inferSelect;
 
@@ -58,19 +59,18 @@ export async function recoverFileOperation(
   apply = false,
 ) {
   if (!apply) return withReadTx(db, (tx) => inspect(tx, root, operationId));
-  const identity = await withReadTx(db, (tx) =>
+  const reviewed = await withReadTx(db, (tx) =>
     tx
-      .select({ taskspaceId: localFileOperationTable.taskspaceId })
+      .select()
       .from(localFileOperationTable)
       .where(eq(localFileOperationTable.id, operationId))
       .get(),
   );
-  if (!identity) throw new Error("Local file operation not found");
-  return oneAtATime(identity.taskspaceId, () =>
+  if (!reviewed) throw new Error("Local file operation not found");
+  return oneAtATime(reviewed.taskspaceId, () =>
     withTx(db, async (tx) => {
+      await requireReviewedRecovery(tx, reviewed);
       const current = await inspect(tx, root, operationId);
-      if (current.operation.taskspaceId !== identity.taskspaceId)
-        throw new Error("File operation identity changed");
       if (current.status === "already-confirmed") return current;
       if (current.status === "blocked")
         throw new Error(`File operation cannot be confirmed: ${current.reason}`);

@@ -162,7 +162,12 @@ database changes and confirmation together without repeating filesystem work.
 File recovery now explicitly confirms matching outcomes for all five file methods
 after binding the requested path to the current attachment. Confirmation changes
 only tracking and never repeats filesystem callbacks. Recorded filesystem errors
-still require manual review. See
+still require manual review. Claim, file and directory recovery now bind each
+apply call to journal evidence captured before waiting for the taskspace queue.
+Changed identity, intent, creation time or pending error prevents disk inspection
+and publication. A confirmed receipt reset to pending is refused. Identical
+concurrent confirmations stay idempotent, including
+claims whose first confirmation clears the reviewed error. See
 [local filesystem operation records](local-file-operations.md).
 
 Internal image-manifest builders now collect requirements from tagged baselines,
@@ -1015,6 +1020,7 @@ prototype in phase 2 as a gate before finalizing the log format.
 - [x] Attach a device-local directory to an existing namespaced shared taskspace through `taskspace attach`. Commit local intent before disk work, preserve shared rows on success and failure, and recover interrupted confirmation without retrying directory creation.
 - [x] Verify existing-taskspace attachment's namespace, exact path and path kind, observation and marker after confirmation triggers. Run host publication checks before final journal receipt verification, roll back changed publication without repeating directory work and cover external-directory CLI recovery with large shared timestamps.
 - [x] Bind claim recovery confirmation to the inspected immutable intent and recorded error. Verify the final receipt, namespace and attachment after database triggers, roll back changed evidence, preserve large shared timestamps and leave later edits alone after an already confirmed receipt.
+- [x] Bind claim, file and directory recovery to journal evidence captured before queueing. Refuse changed identity, intent, creation time, pending errors and receipt resets before disk inspection, retain current files and database rows, and keep identical concurrent confirmation idempotent when claim errors are cleared.
 - [x] Journal all five file mutation methods with intended hashes where applicable, preserve evidence after statement and commit failures, and inspect disk state without retrying callbacks.
 - [x] Own shared journal inputs before asynchronous preparation, verify pending identity and creation time before disk work and publication, and verify final confirmation and error records after triggers. Roll back altered publication, preserve separately committed errors and cover all five file methods plus managed move/removal without repeating disk work.
 - [x] Journal managed-directory deletion and legacy combined rename, retain marker and directory identity evidence, and commit shared changes and confirmation atomically.

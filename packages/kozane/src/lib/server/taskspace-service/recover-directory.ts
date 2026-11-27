@@ -17,6 +17,7 @@ import {
   type DirectorySnapshot,
 } from "./directory-state.js";
 import { oneAtATime } from "./queue.js";
+import { requireReviewedRecovery } from "./reviewed-operation.js";
 
 type Operation = typeof localFileOperationTable.$inferSelect;
 type Before = DirectorySnapshot;
@@ -134,19 +135,18 @@ export async function recoverDirectoryOperation(
   apply = false,
 ) {
   if (!apply) return withReadTx(db, (tx) => inspect(tx, root, operationId));
-  const identity = await withReadTx(db, (tx) =>
+  const reviewed = await withReadTx(db, (tx) =>
     tx
-      .select({ taskspaceId: localFileOperationTable.taskspaceId })
+      .select()
       .from(localFileOperationTable)
       .where(eq(localFileOperationTable.id, operationId))
       .get(),
   );
-  if (!identity) throw new Error("Local directory operation not found");
-  return oneAtATime(identity.taskspaceId, () =>
+  if (!reviewed) throw new Error("Local directory operation not found");
+  return oneAtATime(reviewed.taskspaceId, () =>
     withTx(db, async (tx) => {
+      await requireReviewedRecovery(tx, reviewed);
       const current = await inspect(tx, root, operationId);
-      if (current.operation.taskspaceId !== identity.taskspaceId)
-        throw new Error("Directory operation identity changed");
       if (current.status === "already-confirmed") return current;
       if (current.status === "blocked")
         throw new Error(`Directory operation cannot be confirmed: ${current.reason}`);
